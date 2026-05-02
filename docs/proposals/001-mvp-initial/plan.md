@@ -1,6 +1,8 @@
-# SQLFlow 开发任务规划
+# Plan: SQLFlow MVP 初始开发
 
-> 版本: v1 | 日期: 2026-05-02 | 基于: PRD v4 + ARCHITECTURE v4 + UI-DESIGN v4
+> 状态: 待启动
+> 更新日期: 2026-05-02
+> 关联 Spec: spec/PRD.md v4, spec/ARCHITECTURE.md v4, spec/UI-DESIGN.md v4
 
 ## 开发原则
 
@@ -17,6 +19,8 @@
 
 ### Task 0.1 后端脚手架
 
+> Spec: `spec/ARCHITECTURE.md` 技术选型 + 项目结构
+
 - [ ] 初始化 Go module (`go mod init`)
 - [ ] 集成 Echo 框架、中间件 (CORS、Logger、Recovery)
 - [ ] 集成 Ent ORM + SQLite WAL 配置
@@ -26,9 +30,11 @@
 - [ ] 健康检查端点 `GET /api/health`
 - [ ] Dockerfile + docker-compose.yaml
 
-**验收**：`docker-compose up` → `curl /api/health` 返回 200
+**验收**：`docker-compose up` → `curl /api/health` 返回 `200 {"status":"ok"}`
 
 ### Task 0.2 前端脚手架
+
+> Spec: `spec/UI-DESIGN.md` 第 2 节整体布局 + 第 10 节 Design Token
 
 - [ ] Vite + React 19 + TypeScript 初始化
 - [ ] TailwindCSS + Shadcn/ui 配置
@@ -38,7 +44,7 @@
 - [ ] 全局布局组件（顶栏 + 侧边栏 + 工作区）
 - [ ] 代理配置 (Vite proxy → 后端 8080)
 
-**验收**：`npm run dev` → 显示空白三栏布局，侧边栏导航可点击切换占位页
+**验收**：`npm run dev` → 显示三栏布局（侧边栏 5 个导航项 + 顶栏 + 工作区），点击导航切换占位页，Design Token 色板符合 spec/UI-DESIGN.md 第 10 节
 
 ---
 
@@ -47,6 +53,8 @@
 > 目标：用户能登录、管理员能增删改用户
 
 ### Task 1.1 认证系统
+
+> Spec: `spec/ARCHITECTURE.md` 第 2.1 节 JWT + `spec/PRD.md` 第 4 节认证
 
 - [ ] Ent Schema: User（id, username, password_hash, role, created_at）
 - [ ] 初始管理员创建逻辑（启动参数/环境变量）
@@ -61,6 +69,8 @@
 
 ### Task 1.2 用户管理 API
 
+> Spec: `spec/ARCHITECTURE.md` API 端点 + `spec/PRD.md` 第 3 节权限模型
+
 - [ ] `POST /api/users` 创建用户
 - [ ] `GET /api/users` 用户列表
 - [ ] `GET /api/users/:id` 用户详情
@@ -71,6 +81,8 @@
 
 ### Task 1.3 前端 - 登录页
 
+> Spec: `spec/UI-DESIGN.md` 第 12 节组件选型（登录 P0）
+
 - [ ] 登录表单（用户名 + 密码）
 - [ ] 表单验证（3-32 字符 / 8-128 字符）
 - [ ] 登录失败 inline 错误提示
@@ -79,6 +91,8 @@
 - [ ] 401 统一拦截 → 跳转登录页 + toast
 
 ### Task 1.4 前端 - 权限管理（用户 Tab）
+
+> Spec: `spec/UI-DESIGN.md` 第 6 节权限管理页
 
 - [ ] 用户列表表格（用户名 / 角色 / 创建时间 / 操作）
 - [ ] 添加用户弹窗（用户名 + 密码 + 角色）
@@ -89,13 +103,15 @@
 
 ### Task 1.5 前端 - 个人设置
 
+> Spec: `spec/UI-DESIGN.md` 第 8 节个人设置
+
 - [ ] 头像下拉菜单（个人设置 / 修改密码 / 登出）
 - [ ] 个人设置弹窗（用户名+角色只读 + 修改密码表单）
 - [ ] 表单验证（当前密码必填 / 新密码 8-128+字母数字 / 确认一致）
 - [ ] 保存成功 toast
 - [ ] 登出清除 localStorage + 跳转登录页
 
-**验收**：admin 登录 → 添加用户 → 新用户登录 → 修改密码 → 登出
+**验收**：admin 登录 → 添加 developer 用户 → developer 登录成功 → developer 修改密码成功 → 登出跳转登录页 → 新密码登录成功
 
 ---
 
@@ -104,6 +120,8 @@
 > 目标：管理员能注册数据源、配置权限策略，用户有正确的访问控制
 
 ### Task 2.1 数据源管理
+
+> Spec: `spec/ARCHITECTURE.md` 第 2 节目标数据库连接 + `spec/PRD.md` 第 1 节数据源管理
 
 - [ ] Ent Schema: DataSource（id, name, type, host, port, username, password_encrypted, max_open, max_idle, max_lifetime, max_idle_time, status, created_at）
 - [ ] MySQL 连接池管理 (`connpool/mysql.go`)
@@ -119,6 +137,8 @@
 
 ### Task 2.2 Casbin 权限系统
 
+> Spec: `spec/ARCHITECTURE.md` 第 2.2 节 Casbin RBAC + `spec/PRD.md` 第 3 节权限模型
+
 - [ ] Casbin 模型定义 (`model.conf` — RBAC with domains)
 - [ ] 初始策略种子数据 (`policy.csv`)
 - [ ] `permission.go` 中间件（按路由配置所需 action）
@@ -131,6 +151,8 @@
 
 ### Task 2.3 前端 - 设置页（数据源）
 
+> Spec: `spec/UI-DESIGN.md` 第 9 节设置页
+
 - [ ] 设置页二级导航（数据源 / 脱敏规则 / AI 配置）
 - [ ] 数据源列表（名称 / 类型 / 地址 / 状态 / 连接测试按钮）
 - [ ] 添加/编辑数据源弹窗（表单 + 验证规则）
@@ -139,6 +161,8 @@
 
 ### Task 2.4 前端 - 权限管理（角色 Tab + 策略 Tab）
 
+> Spec: `spec/UI-DESIGN.md` 第 6 节权限管理页（策略卡片式布局）
+
 - [ ] 角色管理表格（角色 / 用户数 / 描述 / 查看权限）
 - [ ] 查看权限展开：显示该角色下所有策略列表
 - [ ] 权限策略卡片式布局
@@ -146,7 +170,7 @@
 - [ ] `desensitize:bypass` 特殊标签样式
 - [ ] 编辑/删除策略
 
-**验收**：admin 注册 MySQL 数据源 → 测试连接 → 为 developer 分配只读权限 → developer 登录确认只能查不能改
+**验收**：admin 注册 MySQL 数据源 → `POST /api/datasources/:id/test` 返回 200 → 为 developer 分配 `select` 权限 → developer 调用 `POST /api/query/execute` 对无权限表返回 403
 
 ---
 
@@ -155,6 +179,8 @@
 > 目标：核心功能——用户能在编辑器中执行 SQL 查询并看到结果
 
 ### Task 3.1 SQL 解析与静态规则
+
+> Spec: `spec/ARCHITECTURE.md` 第 3 节 SQL 解析
 
 - [ ] MySQL 解析器封装 (`pkg/sqlparser/` + pingcap/parser)
 - [ ] MongoDB 解析器封装（BSON filter 解析 + 自定义规则）
@@ -167,6 +193,8 @@
 
 ### Task 3.2 查询执行
 
+> Spec: `spec/ARCHITECTURE.md` 第 7 节查询执行 + `spec/PRD.md` 第 2 节在线查询
+
 - [ ] `POST /api/query/execute` — 执行 SQL
 - [ ] SELECT 查询执行 + 结果集返回（分页，默认 1000 行上限）
 - [ ] DDL/DML 拦截 → 返回"请提交工单"提示
@@ -176,6 +204,8 @@
 
 ### Task 3.3 查询历史
 
+> Spec: `spec/ARCHITECTURE.md` 第 7 节查询历史
+
 - [ ] Ent Schema: QueryHistory（id, user_id, datasource_id, database, sql_content, sql_summary, db_type, execution_time, result_rows, affected_rows, created_at）
 - [ ] `GET /api/query/history` 查询历史列表（分页，按用户隔离）
 - [ ] `DELETE /api/query/history/:id` 删除单条
@@ -184,6 +214,8 @@
 
 ### Task 3.4 数据导出
 
+> Spec: `spec/UI-DESIGN.md` 第 3.7 节导出交互 + `spec/PRD.md` 第 2 节导出
+
 - [ ] `POST /api/query/export` 导出查询结果
 - [ ] CSV 格式导出（后端流式返回）
 - [ ] JSON 格式导出
@@ -191,6 +223,8 @@
 - [ ] 导出记录写入审计日志
 
 ### Task 3.5 前端 - SQL 查询页
+
+> Spec: `spec/UI-DESIGN.md` 第 3 节 SQL 查询页（核心页面）
 
 - [ ] 数据源选择区（类型下拉 + 库名下拉）
 - [ ] CodeMirror 6 编辑器集成（MySQL 语法高亮 + 自动补全）
@@ -205,6 +239,8 @@
 
 ### Task 3.6 前端 - MongoDB 查询模式
 
+> Spec: `spec/UI-DESIGN.md` 第 3.1.2 节 MongoDB 查询
+
 - [ ] 编辑器切换 JSON 模式
 - [ ] 操作类型下拉（find / aggregation / update）
 - [ ] Filter/Pipeline JSON 编辑器
@@ -212,7 +248,7 @@
 - [ ] 预设常用模板
 - [ ] update 操作提示"提交工单"
 
-**验收**：developer 登录 → 选数据源 → 写 SELECT → 执行 → 看到结果 → 切换 Tab → 从历史恢复查询 → 导出 CSV
+**验收**：developer 登录 → 选择 MySQL 数据源 → 执行 `SELECT * FROM users LIMIT 10` → 结果表格显示 ≤10 行 → 新建 Tab → 从历史面板点击恢复查询 → 导出 CSV 文件可下载
 
 ---
 
@@ -222,6 +258,8 @@
 
 ### Task 4.1 AI 评审服务
 
+> Spec: `spec/ARCHITECTURE.md` 第 4 节 AI 评审流程 + `spec/PRD.md` 第 6 节 AI 评审
+
 - [ ] 外部 LLM API 调用封装（SSE 流式）
 - [ ] 评审 prompt 工程（风险分级 + 优化建议 + 影响分析）
 - [ ] 风险判定逻辑（操作类型 + 敏感等级 + WHERE 条件 + 影响范围）
@@ -229,6 +267,8 @@
 - [ ] 降级策略（超时→中风险 / 离线→静态规则兜底 / 不可达→提示重试）
 
 ### Task 4.2 工单系统
+
+> Spec: `spec/ARCHITECTURE.md` 第 6 节工单状态机 + `spec/PRD.md` 第 5 节变更审批
 
 - [ ] Ent Schema: Ticket（id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result JSON, reviewer_id, reviewed_at, executed_at, created_at, updated_at）
 - [ ] `POST /api/tickets` 提交工单
@@ -243,6 +283,8 @@
 
 ### Task 4.3 脱敏引擎
 
+> Spec: `spec/ARCHITECTURE.md` 第 5 节数据脱敏 + `spec/PRD.md` 第 7 节数据脱敏
+
 - [ ] Ent Schema: MaskRule（id, datasource_id, database, table, field, mask_type, custom_regex, custom_template）
 - [ ] Ent Schema: SensitiveTable（id, datasource_id, database, table, sensitivity_level）
 - [ ] 脱敏规则引擎 (`pkg/mask/`) — 库.表.字段三级匹配
@@ -253,6 +295,8 @@
 
 ### Task 4.4 前端 - AI 评审交互
 
+> Spec: `spec/UI-DESIGN.md` 第 4 节 AI 评审交互设计
+
 - [ ] SSE 连接（fetch + ReadableStream + POST + JWT）
 - [ ] 评审中动画（脉冲 + 实时建议追加）
 - [ ] 评审完成卡片（风险等级 + 建议 + 影响分析）
@@ -260,6 +304,8 @@
 - [ ] 高风险工单提交抽屉（填变更原因，不跳转页面）
 
 ### Task 4.5 前端 - 变更工单页
+
+> Spec: `spec/UI-DESIGN.md` 第 5 节变更工单页
 
 - [ ] 工单列表（状态 Tab + 未读角标 + 快捷筛选 + 高级筛选 + SQL 搜索）
 - [ ] 工单详情抽屉（60% 宽度 + 列表不消失）
@@ -270,13 +316,15 @@
 
 ### Task 4.6 前端 - 脱敏规则配置
 
+> Spec: `spec/UI-DESIGN.md` 第 9 节设置页（脱敏规则子页面）
+
 - [ ] 敏感表标记列表（敏感等级 badge + 筛选 + 标记/取消）
 - [ ] 脱敏字段规则列表（按表筛选 + 卡片展示）
 - [ ] 添加敏感表表单（数据源+库+表+敏感等级）
 - [ ] 添加脱敏规则表单（数据源+库+表+字段+脱敏类型）
 - [ ] 自定义正则配置
 
-**验收**：developer 写 DDL → AI 评审高风险 → 提交工单 → dba 审批通过 → 手动执行 → 审计日志可查
+**验收**：developer 写 `ALTER TABLE users ADD COLUMN phone VARCHAR(20)` → AI 评审返回高风险卡片 → 点击提交工单填变更原因 → dba 登录看到待审批工单 → 审批通过 → 手动执行 → 审计日志含该 DDL 记录
 
 ---
 
@@ -286,12 +334,16 @@
 
 ### Task 5.1 审计日志
 
+> Spec: `spec/ARCHITECTURE.md` 审计日志 + `spec/PRD.md` 第 8 节审计日志
+
 - [ ] Ent Schema: AuditLog（id, user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, ai_review_result JSON, ticket_id, desensitized_fields, ip_address, created_at）
 - [ ] 异步写入（内存队列 + 批量刷盘：1s 或 100 条）
 - [ ] `GET /api/audit-logs` 审计日志（分页 + 多维筛选）
 - [ ] 应用层禁止删除审计日志
 
 ### Task 5.2 钉钉通知
+
+> Spec: `spec/PRD.md` 第 9 节通知
 
 - [ ] `notify.go` 钉钉 Webhook 集成（签名验证）
 - [ ] 工单提交/审批结果通知
@@ -301,6 +353,8 @@
 
 ### Task 5.3 前端 - 审计日志页
 
+> Spec: `spec/UI-DESIGN.md` 第 7 节审计日志页
+
 - [ ] 审计日志表格（时间 / 用户 / 操作类型 / 数据库 / SQL 摘要）
 - [ ] 多维筛选（用户 / 操作类型 / 日期范围）
 - [ ] SQL 模糊搜索
@@ -309,11 +363,15 @@
 
 ### Task 5.4 前端 - 设置页收尾
 
+> Spec: `spec/UI-DESIGN.md` 第 9 节设置页（AI 配置子页面）
+
 - [ ] AI 配置页面（API 地址 / 模型 / 超时 / 风险阈值 / 评审开关）
 - [ ] 脱敏规则页（已在 Task 4.6 完成）
 - [ ] 数据源管理优化（状态指示灯 + 健康检查结果显示）
 
 ### Task 5.5 前端 - 全局交互
+
+> Spec: `spec/UI-DESIGN.md` 第 11 节全局交互规范
 
 - [ ] Cmd+K 全局搜索弹窗（搜索工单/审计日志/页面导航）
 - [ ] 403 / 404 错误页面
@@ -321,7 +379,7 @@
 - [ ] 二次确认弹窗组件（统一 AlertDialog）
 - [ ] 侧边栏折叠/展开
 
-**验收**：执行查询 → 审计日志记录完整 → 钉钉收到通知 → Cmd+K 搜索审计日志
+**验收**：执行 3 次不同类型查询（SELECT/DDL/DML）→ 审计日志页显示 3 条记录，筛选操作类型可精确过滤 → 钉钉 Webhook URL 配置后触发通知 → Cmd+K 搜索 SQL 摘要可定位到对应审计记录
 
 ---
 
@@ -330,6 +388,8 @@
 > 目标：MVP 可交付，Docker 一键部署
 
 ### Task 6.1 后端集成测试
+
+> Spec: `spec/ARCHITECTURE.md` 第 8 节错误处理 + 各 API 端点
 
 - [ ] 认证流程测试（登录/JWT/过期）
 - [ ] 权限测试（RBAC 路由校验）
@@ -340,11 +400,15 @@
 
 ### Task 6.2 前端 E2E
 
+> Spec: `spec/UI-DESIGN.md` 第 11 节全局交互规范
+
 - [ ] 登录→查询→工单完整流程
 - [ ] 权限隔离验证（developer 不能访问管理功能）
 - [ ] 全局交互验证（401 跳转 / 404 页面 / 网络断开）
 
 ### Task 6.3 Docker 部署
+
+> Spec: `spec/ARCHITECTURE.md` 项目结构 + `spec/PRD.md` MVP 约束
 
 - [ ] 多阶段 Dockerfile（Go build + 前端 build → 单二进制 + 静态文件）
 - [ ] docker-compose.yaml（环境变量注入敏感配置）
@@ -357,7 +421,7 @@
 - [ ] API 文档（OpenAPI/Swagger 或 Markdown）
 - [ ] 部署文档
 
-**验收**：`docker-compose up -d` → 打开浏览器登录 → 完整使用流程验证
+**验收**：全新环境 `docker-compose up -d` → 浏览器打开 `http://localhost:3000` → 管理员登录 → 完整走一遍查询+工单+审计流程 → 无报错
 
 ---
 
