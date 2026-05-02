@@ -37,6 +37,10 @@ func main() {
 	}
 	log.Println("permission service initialized")
 
+	historySvc := service.NewQueryHistoryService(database.DB)
+	querySvc := service.NewQueryService(database.DB, dsSvc, historySvc, cfg.EncryptionKey)
+	log.Println("query service initialized")
+
 	// Seed initial admin if users table is empty
 	count, err := authSvc.UserCount()
 	if err != nil {
@@ -53,7 +57,7 @@ func main() {
 	}
 
 	// Start server
-	e := api.NewRouter(authSvc, dsSvc, permSvc)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc)
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	log.Printf("starting server on %s", addr)
 	if err := e.Start(addr); err != nil {

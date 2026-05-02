@@ -93,5 +93,30 @@ CREATE TABLE IF NOT EXISTS casbin_rule (
 	if err != nil {
 		return fmt.Errorf("migrate casbin_rule: %w", err)
 	}
+
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS query_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL,
+    datasource_id   INTEGER NOT NULL,
+    database        TEXT    NOT NULL DEFAULT '',
+    sql_content     TEXT    NOT NULL,
+    sql_summary     TEXT    NOT NULL DEFAULT '',
+    db_type         TEXT    NOT NULL DEFAULT 'mysql',
+    execution_time  INTEGER NOT NULL DEFAULT 0,
+    result_rows     INTEGER NOT NULL DEFAULT 0,
+    affected_rows   INTEGER NOT NULL DEFAULT 0,
+    created_at      DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate query_history: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_query_history_user_id ON query_history(user_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate query_history index: %w", err)
+	}
+
 	return nil
 }

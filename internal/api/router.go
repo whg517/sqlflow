@@ -10,7 +10,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -27,6 +27,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	userHandler := handler.NewUserHandler(authSvc)
 	dsHandler := handler.NewDatasourceHandler(dsSvc)
 	permHandler := handler.NewPermissionHandler(permSvc)
+	queryHandler := handler.NewQueryHandler(querySvc, historySvc)
 
 	// Public routes
 	e.POST("/api/auth/login", userHandler.Login)
@@ -38,6 +39,12 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 
 	// Tables endpoint: authenticated users can access
 	authGroup.GET("/api/datasources/:id/tables", dsHandler.GetTables)
+
+	// Query execution & history (authenticated users)
+	authGroup.POST("/api/query/execute", queryHandler.ExecuteQuery)
+	authGroup.GET("/api/query/history", queryHandler.ListHistory)
+	authGroup.DELETE("/api/query/history/:id", queryHandler.DeleteHistory)
+	authGroup.DELETE("/api/query/history", queryHandler.ClearHistory)
 
 	// Admin-only routes
 	adminGroup := e.Group("", middleware.JWT(authSvc), middleware.Admin())

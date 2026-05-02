@@ -12,6 +12,21 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// QueryHistory represents a user's query execution history record.
+type QueryHistory struct {
+	ID             int64     `json:"id"`
+	UserID         int64     `json:"user_id"`
+	DatasourceID   int64     `json:"datasource_id"`
+	Database       string    `json:"database"`
+	SQLContent     string    `json:"sql_content"`
+	SQLSummary     string    `json:"sql_summary"`
+	DBType         string    `json:"db_type"`
+	ExecutionTime  int64     `json:"execution_time"` // ms
+	ResultRows     int64     `json:"result_rows"`
+	AffectedRows   int64     `json:"affected_rows"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
 // DataSource represents a registered database instance.
 type DataSource struct {
 	ID                int64     `json:"id"`
