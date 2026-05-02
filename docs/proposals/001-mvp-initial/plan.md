@@ -56,16 +56,16 @@
 
 > Spec: `spec/ARCHITECTURE.md` 第 2.1 节 JWT + `spec/PRD.md` 第 4 节认证
 
-- [ ] Ent Schema: User（id, username, password_hash, role, created_at）
-- [ ] 初始管理员创建逻辑（启动参数/环境变量）
-- [ ] 密码 bcrypt 哈希
-- [ ] JWT 签发/验证（HS256, 24h）
+- [x] Ent Schema: User（id, username, password_hash, role, created_at）
+- [x] 初始管理员创建逻辑（启动参数/环境变量）
+- [x] 密码 bcrypt 哈希
+- [x] JWT 签发/验证（HS256, 24h）
 - [ ] `POST /api/auth/login` 登录
 - [ ] `GET /api/auth/me` 获取当前用户
 - [ ] `PUT /api/auth/password` 修改密码
 - [ ] `auth.go` 中间件（JWT 验证 + 用户信息注入上下文）
-- [ ] Ent Adapter for Casbin（基础结构，策略后续填充）
-- [ ] 密码策略校验（8-128 字符，至少字母+数字）
+- [x] Ent Adapter for Casbin（基础结构，策略后续填充）
+- [x] 密码策略校验（8-128 字符，至少字母+数字）
 
 ### Task 1.2 用户管理 API
 
@@ -77,39 +77,39 @@
 - [ ] `PUT /api/users/:id` 编辑用户（角色）
 - [ ] `DELETE /api/users/:id` 删除用户（不能删自己、不能删 admin）
 - [ ] `PUT /api/users/:id/reset-password` 重置密码
-- [ ] 权限校验：仅 admin 可操作
+- [x] 权限校验：仅 admin 可操作
 
 ### Task 1.3 前端 - 登录页
 
 > Spec: `spec/UI-DESIGN.md` 第 12 节组件选型（登录 P0）
 
-- [ ] 登录表单（用户名 + 密码）
-- [ ] 表单验证（3-32 字符 / 8-128 字符）
-- [ ] 登录失败 inline 错误提示
-- [ ] 登录中 loading 状态
-- [ ] JWT 存 localStorage + 自动跳转
-- [ ] 401 统一拦截 → 跳转登录页 + toast
+- [x] 登录表单（用户名 + 密码）
+- [x] 表单验证（3-32 字符 / 8-128 字符）
+- [x] 登录失败 inline 错误提示
+- [x] 登录中 loading 状态
+- [x] JWT 存 localStorage + 自动跳转
+- [x] 401 统一拦截 → 跳转登录页 + toast
 
 ### Task 1.4 前端 - 权限管理（用户 Tab）
 
 > Spec: `spec/UI-DESIGN.md` 第 6 节权限管理页
 
-- [ ] 用户列表表格（用户名 / 角色 / 创建时间 / 操作）
-- [ ] 添加用户弹窗（用户名 + 密码 + 角色）
-- [ ] 编辑角色（下拉选择）
-- [ ] 重置密码（二次确认弹窗）
-- [ ] 删除用户（二次确认，admin 不可删）
-- [ ] 角色中文名映射（admin→管理员, dba→DBA, developer→开发人员）
+- [x] 用户列表表格（用户名 / 角色 / 创建时间 / 操作）
+- [x] 添加用户弹窗（用户名 + 密码 + 角色）
+- [x] 编辑角色（下拉选择）
+- [x] 重置密码（二次确认弹窗）
+- [x] 删除用户（二次确认，admin 不可删）
+- [x] 角色中文名映射（admin→管理员, dba→DBA, developer→开发人员）
 
 ### Task 1.5 前端 - 个人设置
 
 > Spec: `spec/UI-DESIGN.md` 第 8 节个人设置
 
-- [ ] 头像下拉菜单（个人设置 / 修改密码 / 登出）
-- [ ] 个人设置弹窗（用户名+角色只读 + 修改密码表单）
-- [ ] 表单验证（当前密码必填 / 新密码 8-128+字母数字 / 确认一致）
-- [ ] 保存成功 toast
-- [ ] 登出清除 localStorage + 跳转登录页
+- [x] 头像下拉菜单（个人设置 / 修改密码 / 登出）
+- [x] 个人设置弹窗（用户名+角色只读 + 修改密码表单）
+- [x] 表单验证（当前密码必填 / 新密码 8-128+字母数字 / 确认一致）
+- [x] 保存成功 toast
+- [x] 登出清除 localStorage + 跳转登录页
 
 **验收**：admin 登录 → 添加 developer 用户 → developer 登录成功 → developer 修改密码成功 → 登出跳转登录页 → 新密码登录成功
 

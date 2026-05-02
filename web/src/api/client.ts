@@ -8,6 +8,7 @@ function getToken(): string | null {
 
 function handleUnauthorized() {
   localStorage.removeItem('token')
+  toast.error('登录已过期，请重新登录')
   window.location.href = '/login'
 }
 

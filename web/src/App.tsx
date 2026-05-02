@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Layout from './components/Layout'
+import AuthGuard from './components/AuthGuard'
 import QueryPage from './pages/Query'
 import TicketPage from './pages/Ticket'
 import TicketNewPage from './pages/TicketNew'
@@ -19,7 +20,7 @@ function App() {
       <TooltipProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route element={<Layout />}>
+          <Route element={<AuthGuard><Layout /></AuthGuard>}>
             <Route path="/query" element={<QueryPage />} />
             <Route path="/tickets" element={<TicketPage />} />
             <Route path="/tickets/new" element={<TicketNewPage />} />
