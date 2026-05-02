@@ -1,0 +1,14 @@
+services:
+  sqlflow:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - sqlflow-data:/app/data
+    environment:
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+    restart: unless-stopped
+
+volumes:
+  sqlflow-data:
