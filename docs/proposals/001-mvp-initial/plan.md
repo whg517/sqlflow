@@ -123,11 +123,11 @@
 
 > Spec: `spec/ARCHITECTURE.md` 第 2 节目标数据库连接 + `spec/PRD.md` 第 1 节数据源管理
 
-- [ ] Ent Schema: DataSource（id, name, type, host, port, username, password_encrypted, max_open, max_idle, max_lifetime, max_idle_time, status, created_at）
-- [ ] MySQL 连接池管理 (`connpool/mysql.go`)
-- [ ] MongoDB 连接池管理 (`connpool/mongodb.go`)
-- [ ] 密码 AES 加密/解密 (`pkg/crypto/`)
-- [ ] 健康检查（每 30s ping，3 次失败标记不可用）
+- [x] Ent Schema: DataSource（id, name, type, host, port, username, password_encrypted, max_open, max_idle, max_lifetime, max_idle_time, status, created_at）
+- [x] MySQL 连接池管理 (`connpool/mysql.go`)
+- [x] MongoDB 连接池管理 (`connpool/mongodb.go`)
+- [x] 密码 AES 加密/解密 (`pkg/crypto/`)
+- [x] 健康检查（每 30s ping，3 次失败标记不可用）
 - [ ] `POST /api/datasources` 添加数据源
 - [ ] `GET /api/datasources` 数据源列表
 - [ ] `PUT /api/datasources/:id` 编辑数据源
@@ -139,8 +139,8 @@
 
 > Spec: `spec/ARCHITECTURE.md` 第 2.2 节 Casbin RBAC + `spec/PRD.md` 第 3 节权限模型
 
-- [ ] Casbin 模型定义 (`model.conf` — RBAC with domains)
-- [ ] 初始策略种子数据 (`policy.csv`)
+- [x] Casbin 模型定义 (`model.conf` — RBAC with domains)
+- [x] 初始策略种子数据 (`policy.csv`)
 - [ ] `permission.go` 中间件（按路由配置所需 action）
 - [ ] `GET /api/roles` 角色列表
 - [ ] `GET /api/roles/:id` 角色详情（含权限策略）
@@ -153,22 +153,22 @@
 
 > Spec: `spec/UI-DESIGN.md` 第 9 节设置页
 
-- [ ] 设置页二级导航（数据源 / 脱敏规则 / AI 配置）
-- [ ] 数据源列表（名称 / 类型 / 地址 / 状态 / 连接测试按钮）
-- [ ] 添加/编辑数据源弹窗（表单 + 验证规则）
-- [ ] 连接测试结果反馈
-- [ ] 禁用数据源二次确认
+- [x] 设置页二级导航（数据源 / 脱敏规则 / AI 配置）
+- [x] 数据源列表（名称 / 类型 / 地址 / 状态 / 连接测试按钮）
+- [x] 添加/编辑数据源弹窗（表单 + 验证规则）
+- [x] 连接测试结果反馈
+- [x] 禁用数据源二次确认
 
 ### Task 2.4 前端 - 权限管理（角色 Tab + 策略 Tab）
 
 > Spec: `spec/UI-DESIGN.md` 第 6 节权限管理页（策略卡片式布局）
 
-- [ ] 角色管理表格（角色 / 用户数 / 描述 / 查看权限）
-- [ ] 查看权限展开：显示该角色下所有策略列表
-- [ ] 权限策略卡片式布局
-- [ ] 添加策略表单（角色 + 数据源 + 表名 + 操作类型多选）
+- [x] 角色管理表格（角色 / 用户数 / 描述 / 查看权限）
+- [x] 查看权限展开：显示该角色下所有策略列表
+- [x] 权限策略卡片式布局
+- [x] 添加策略表单（角色 + 数据源 + 表名 + 操作类型多选）
 - [ ] `desensitize:bypass` 特殊标签样式
-- [ ] 编辑/删除策略
+- [x] 编辑/删除策略
 
 **验收**：admin 注册 MySQL 数据源 → `POST /api/datasources/:id/test` 返回 200 → 为 developer 分配 `select` 权限 → developer 调用 `POST /api/query/execute` 对无权限表返回 403
 

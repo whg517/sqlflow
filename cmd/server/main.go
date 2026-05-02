@@ -28,8 +28,14 @@ func main() {
 	}
 	log.Println("database migrated successfully")
 
-	// Initialize auth service
+	// Initialize services
 	authSvc := service.NewAuthService(database.DB, cfg.JWT.Secret, cfg.JWT.Expiry)
+	dsSvc := service.NewDatasourceService(database.DB, cfg.EncryptionKey)
+	permSvc, err := service.NewPermissionService(database.DB)
+	if err != nil {
+		log.Fatalf("failed to initialize permission service: %v", err)
+	}
+	log.Println("permission service initialized")
 
 	// Seed initial admin if users table is empty
 	count, err := authSvc.UserCount()
@@ -47,7 +53,7 @@ func main() {
 	}
 
 	// Start server
-	e := api.NewRouter(authSvc)
+	e := api.NewRouter(authSvc, dsSvc, permSvc)
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	log.Printf("starting server on %s", addr)
 	if err := e.Start(addr); err != nil {

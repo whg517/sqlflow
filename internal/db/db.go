@@ -20,22 +20,21 @@ func Open(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("create db directory: %w", err)
 	}
 
-	conn, err := sql.Open("sqlite", dbPath)
+	// Use file: URI with WAL pragma so every connection from the pool
+	// automatically gets the correct settings. modernc.org/sqlite
+	// requires this because PRAGMAs set via Exec only apply to the
+	// single connection that executed them, not to pooled connections.
+	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)", dbPath)
+
+	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 
-	// Enable WAL mode for better concurrent read performance.
-	if _, err := conn.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("set WAL mode: %w", err)
-	}
-
-	// Enable foreign keys.
-	if _, err := conn.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("enable foreign keys: %w", err)
-	}
+	// SQLite only allows one writer at a time. Limit the pool to 1
+	// open connection to avoid "database is locked" / I/O errors
+	// when multiple goroutines write concurrently.
+	conn.SetMaxOpenConns(1)
 
 	return &DB{conn}, nil
 }
@@ -54,6 +53,45 @@ CREATE TABLE IF NOT EXISTS users (
 	`)
 	if err != nil {
 		return fmt.Errorf("migrate users: %w", err)
+	}
+
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS datasources (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    name                TEXT    NOT NULL UNIQUE,
+    type                TEXT    NOT NULL,
+    host                TEXT    NOT NULL,
+    port                INTEGER NOT NULL,
+    username            TEXT    NOT NULL DEFAULT '',
+    password_encrypted  TEXT    NOT NULL DEFAULT '',
+    database            TEXT    NOT NULL DEFAULT '',
+    max_open            INTEGER NOT NULL DEFAULT 10,
+    max_idle            INTEGER NOT NULL DEFAULT 5,
+    max_lifetime        INTEGER NOT NULL DEFAULT 3600,
+    max_idle_time       INTEGER NOT NULL DEFAULT 600,
+    status              TEXT    NOT NULL DEFAULT 'active',
+    created_at          DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at          DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate datasources: %w", err)
+	}
+
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS casbin_rule (
+    id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    ptype TEXT    NOT NULL DEFAULT '',
+    v0    TEXT    NOT NULL DEFAULT '',
+    v1    TEXT    NOT NULL DEFAULT '',
+    v2    TEXT    NOT NULL DEFAULT '',
+    v3    TEXT    NOT NULL DEFAULT '',
+    v4    TEXT    NOT NULL DEFAULT '',
+    v5    TEXT    NOT NULL DEFAULT ''
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate casbin_rule: %w", err)
 	}
 	return nil
 }

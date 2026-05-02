@@ -1,17 +1,20 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"time"
 
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Server         ServerConfig `mapstructure:"server"`
-	JWT            JWTConfig    `mapstructure:"jwt"`
-	Admin          AdminConfig  `mapstructure:"admin"`
-	DB             DBConfig     `mapstructure:"db"`
-	QueryHistoryMax int         `mapstructure:"query_history_max"`
+	Server          ServerConfig `mapstructure:"server"`
+	JWT             JWTConfig    `mapstructure:"jwt"`
+	Admin           AdminConfig  `mapstructure:"admin"`
+	DB              DBConfig     `mapstructure:"db"`
+	QueryHistoryMax int          `mapstructure:"query_history_max"`
+	EncryptionKey   string       `mapstructure:"encryption_key"`
 }
 
 type ServerConfig struct {
@@ -70,6 +73,11 @@ func Load(configPath string) (*Config, error) {
 	}
 	if cfg.QueryHistoryMax == 0 {
 		cfg.QueryHistoryMax = 200
+	}
+	if cfg.EncryptionKey == "" {
+		key := make([]byte, 16)
+		_, _ = rand.Read(key)
+		cfg.EncryptionKey = hex.EncodeToString(key)
 	}
 
 	return &cfg, nil

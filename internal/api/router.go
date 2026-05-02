@@ -4,13 +4,13 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/api/handler"
+	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/service"
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -25,6 +25,8 @@ func NewRouter(authSvc *service.AuthService) *echo.Echo {
 
 	// Auth handlers
 	userHandler := handler.NewUserHandler(authSvc)
+	dsHandler := handler.NewDatasourceHandler(dsSvc)
+	permHandler := handler.NewPermissionHandler(permSvc)
 
 	// Public routes
 	e.POST("/api/auth/login", userHandler.Login)
@@ -34,6 +36,9 @@ func NewRouter(authSvc *service.AuthService) *echo.Echo {
 	authGroup.GET("/api/auth/me", userHandler.Me)
 	authGroup.PUT("/api/auth/password", userHandler.ChangePassword)
 
+	// Tables endpoint: authenticated users can access
+	authGroup.GET("/api/datasources/:id/tables", dsHandler.GetTables)
+
 	// Admin-only routes
 	adminGroup := e.Group("", middleware.JWT(authSvc), middleware.Admin())
 	adminGroup.POST("/api/users", userHandler.CreateUser)
@@ -42,6 +47,22 @@ func NewRouter(authSvc *service.AuthService) *echo.Echo {
 	adminGroup.PUT("/api/users/:id", userHandler.UpdateUser)
 	adminGroup.DELETE("/api/users/:id", userHandler.DeleteUser)
 	adminGroup.PUT("/api/users/:id/reset-password", userHandler.ResetPassword)
+
+	// Datasource management (admin)
+	adminGroup.POST("/api/datasources", dsHandler.CreateDatasource)
+	adminGroup.GET("/api/datasources", dsHandler.ListDatasources)
+	adminGroup.GET("/api/datasources/:id", dsHandler.GetDatasource)
+	adminGroup.PUT("/api/datasources/:id", dsHandler.UpdateDatasource)
+	adminGroup.DELETE("/api/datasources/:id", dsHandler.DisableDatasource)
+	adminGroup.POST("/api/datasources/:id/test", dsHandler.TestConnection)
+
+	// Role & permission management (admin)
+	adminGroup.GET("/api/roles", permHandler.ListRoles)
+	adminGroup.GET("/api/roles/:role", permHandler.GetRole)
+	adminGroup.POST("/api/policies", permHandler.AddPolicy)
+	adminGroup.GET("/api/policies", permHandler.ListPolicies)
+	adminGroup.DELETE("/api/policies/:id", permHandler.DeletePolicy)
+	adminGroup.POST("/api/policies/sync", permHandler.SyncPolicies)
 
 	return e
 }
