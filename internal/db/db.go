@@ -118,5 +118,50 @@ CREATE TABLE IF NOT EXISTS query_history (
 		return fmt.Errorf("migrate query_history index: %w", err)
 	}
 
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id             INTEGER NOT NULL,
+    action              TEXT    NOT NULL DEFAULT '',
+    datasource_id       INTEGER NOT NULL DEFAULT 0,
+    database            TEXT    NOT NULL DEFAULT '',
+    sql_content         TEXT    NOT NULL DEFAULT '',
+    sql_summary         TEXT    NOT NULL DEFAULT '',
+    result_rows         INTEGER NOT NULL DEFAULT 0,
+    affected_rows       INTEGER NOT NULL DEFAULT 0,
+    execution_time_ms   INTEGER NOT NULL DEFAULT 0,
+    error_message       TEXT    NOT NULL DEFAULT '',
+    desensitized_fields TEXT    NOT NULL DEFAULT '',
+    ip_address          TEXT    NOT NULL DEFAULT '',
+    created_at          DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate audit_logs: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate audit_logs index: %w", err)
+	}
+
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS mask_rules (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    datasource_id   INTEGER NOT NULL DEFAULT 0,
+    database        TEXT    NOT NULL DEFAULT '',
+    table_name      TEXT    NOT NULL DEFAULT '',
+    field           TEXT    NOT NULL DEFAULT '',
+    mask_type       TEXT    NOT NULL DEFAULT '',
+    custom_regex    TEXT    NOT NULL DEFAULT '',
+    custom_template TEXT    NOT NULL DEFAULT '',
+    created_at      DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at      DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate mask_rules: %w", err)
+	}
+
 	return nil
 }

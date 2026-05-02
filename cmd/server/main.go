@@ -38,7 +38,7 @@ func main() {
 	log.Println("permission service initialized")
 
 	historySvc := service.NewQueryHistoryService(database.DB)
-	querySvc := service.NewQueryService(database.DB, dsSvc, historySvc, cfg.EncryptionKey)
+	querySvc := service.NewQueryService(database.DB, dsSvc, historySvc, permSvc, cfg.EncryptionKey)
 	log.Println("query service initialized")
 
 	// Seed initial admin if users table is empty

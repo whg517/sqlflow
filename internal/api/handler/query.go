@@ -27,8 +27,7 @@ func NewQueryHandler(querySvc *service.QueryService, historySvc *service.QueryHi
 type executeQueryRequest struct {
 	DatasourceID int64  `json:"datasource_id"`
 	Database     string `json:"database"`
-	SQLContent   string `json:"sql_content"`
-	DBType       string `json:"db_type"`
+	SQL          string `json:"sql"`
 }
 
 // ExecuteQuery handles POST /api/query/execute.
@@ -41,22 +40,23 @@ func (h *QueryHandler) ExecuteQuery(c echo.Context) error {
 	if req.DatasourceID == 0 {
 		return resp.BadRequest(c, "数据源ID不能为空")
 	}
-	if req.SQLContent == "" {
+	if req.SQL == "" {
 		return resp.BadRequest(c, "SQL不能为空")
-	}
-	if req.DBType == "" {
-		req.DBType = "mysql"
 	}
 
 	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	username := c.Get(middleware.ContextKeyUsername).(string)
+	role := c.Get(middleware.ContextKeyRole).(string)
 
-	result, err := h.querySvc.ExecuteQuery(userID, req.DatasourceID, req.Database, req.SQLContent, req.DBType)
+	result, err := h.querySvc.ExecuteQuery(userID, username, role, req.DatasourceID, req.Database, req.SQL, "")
 	if err != nil {
 		switch err {
 		case service.ErrSQLOperationForbidden:
 			return resp.Forbidden(c, "该操作需要提交工单，仅允许 SELECT 查询")
 		case service.ErrSQLHighRisk:
 			return resp.Forbidden(c, "高风险操作被拦截，请提交工单")
+		case service.ErrSQLBlocked:
+			return resp.Forbidden(c, "SQL操作被拦截")
 		case service.ErrSQLTimeout:
 			return resp.BadRequest(c, "查询超时（30秒），请优化查询或缩小范围")
 		case service.ErrEmptySQL:
