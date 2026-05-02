@@ -242,4 +242,4 @@ m = g(r.sub, p.sub, r.dom) && r.dom == p.dom && (r.obj == p.obj || p.obj == "*")
 
 ## 非功能性需求
 
-> 技术架构和非功能性需求见 [ARCHITECTURE.md](./ARCHITECTURE.md)
+> 技术架构和非功能性需求见 [ARCHITECTURE.md](./docs/ARCHITECTURE.md)
