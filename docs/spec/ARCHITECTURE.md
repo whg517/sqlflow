@@ -265,11 +265,15 @@ DELETE /api/query/history             # 清空当前用户所有历史
 
 ```
 sql-platform/
-├── docs/                        # 项目文档
-│   ├── PRD.md                  # 产品需求文档
-│   ├── ARCHITECTURE.md         # 技术架构
-│   ├── UI-DESIGN.md            # UI 设计规范
-│   └── DEVELOPMENT.md          # 开发任务规划
+├── docs/
+│   ├── spec/                    # 系统规格（真相来源）
+│   │   ├── PRD.md              # 产品规格
+│   │   ├── ARCHITECTURE.md     # 技术架构
+│   │   └── UI-DESIGN.md        # UI 规格设计
+│   └── proposals/               # 开发提案
+│       └── 001-mvp-initial/    # MVP 初始开发
+│           ├── proposal.md     # 提案描述
+│           └── plan.md         # 实现计划
 ├── cmd/server/
 │   └── main.go                  # 入口
 ├── internal/
