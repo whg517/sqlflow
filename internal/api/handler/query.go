@@ -1,7 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/api/middleware"
@@ -119,4 +123,114 @@ func (h *QueryHandler) ClearHistory(c echo.Context) error {
 	}
 
 	return resp.OKWithMessage(c, "已清空所有查询历史", nil)
+}
+
+type exportQueryRequest struct {
+	DatasourceID int64  `json:"datasource_id"`
+	Database     string `json:"database"`
+	SQL          string `json:"sql"`
+	Format       string `json:"format"` // "csv" or "json"
+}
+
+// ExportQuery handles POST /api/query/export.
+func (h *QueryHandler) ExportQuery(c echo.Context) error {
+	var req exportQueryRequest
+	if err := c.Bind(&req); err != nil {
+		return resp.BadRequest(c, "请求格式错误")
+	}
+
+	if req.DatasourceID == 0 {
+		return resp.BadRequest(c, "数据源ID不能为空")
+	}
+	if req.SQL == "" {
+		return resp.BadRequest(c, "SQL不能为空")
+	}
+	if req.Format != "csv" && req.Format != "json" {
+		return resp.BadRequest(c, "导出格式仅支持 csv 或 json")
+	}
+
+	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	username := c.Get(middleware.ContextKeyUsername).(string)
+	role := c.Get(middleware.ContextKeyRole).(string)
+
+	result, err := h.querySvc.ExportQuery(userID, username, role, req.DatasourceID, req.Database, req.SQL, "")
+	if err != nil {
+		switch err {
+		case service.ErrSQLOperationForbidden:
+			return resp.Forbidden(c, "该操作需要提交工单，仅允许 SELECT 查询")
+		case service.ErrSQLHighRisk:
+			return resp.Forbidden(c, "高风险操作被拦截，请提交工单")
+		case service.ErrSQLBlocked:
+			return resp.Forbidden(c, "SQL操作被拦截")
+		case service.ErrSQLTimeout:
+			return resp.BadRequest(c, "查询超时（30秒），请优化查询或缩小范围")
+		case service.ErrEmptySQL:
+			return resp.BadRequest(c, "SQL不能为空")
+		case service.ErrExportRowLimit:
+			return resp.BadRequest(c, "导出数据超过10000行上限，请添加 LIMIT 条件缩小范围")
+		default:
+			return resp.InternalError(c, err.Error())
+		}
+	}
+
+	switch req.Format {
+	case "csv":
+		return writeCSV(c, result)
+	case "json":
+		return writeExportJSON(c, result)
+	default:
+		return resp.BadRequest(c, "不支持的导出格式")
+	}
+}
+
+// csvEscape escapes a value for CSV format.
+func csvEscape(s string) string {
+	if strings.Contains(s, ",") || strings.Contains(s, "\"") || strings.Contains(s, "\n") || strings.Contains(s, "\r") {
+		return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
+	}
+	return s
+}
+
+// writeCSV writes the query result as a CSV file download.
+func writeCSV(c echo.Context, result *service.QueryResult) error {
+	c.Response().Header().Set(echo.HeaderContentType, "text/csv; charset=utf-8")
+	c.Response().Header().Set(echo.HeaderContentDisposition, "attachment; filename=export.csv")
+	c.Response().WriteHeader(http.StatusOK)
+
+	w := c.Response().Writer
+
+	// Write header row
+	for i, col := range result.Columns {
+		if i > 0 {
+			w.Write([]byte{','})
+		}
+		w.Write([]byte(csvEscape(col)))
+	}
+	w.Write([]byte{'\n'})
+
+	// Write data rows
+	for _, row := range result.Rows {
+		for i, col := range result.Columns {
+			if i > 0 {
+				w.Write([]byte{','})
+			}
+			val := ""
+			if v, ok := row[col]; ok && v != nil {
+				val = fmt.Sprintf("%v", v)
+			}
+			w.Write([]byte(csvEscape(val)))
+		}
+		w.Write([]byte{'\n'})
+	}
+
+	return nil
+}
+
+// writeExportJSON writes the query result as a JSON file download.
+func writeExportJSON(c echo.Context, result *service.QueryResult) error {
+	c.Response().Header().Set(echo.HeaderContentType, "application/json")
+	c.Response().Header().Set(echo.HeaderContentDisposition, "attachment; filename=export.json")
+	c.Response().WriteHeader(http.StatusOK)
+
+	return json.NewEncoder(c.Response().Writer).Encode(result.Rows)
 }

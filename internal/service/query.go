@@ -145,9 +145,9 @@ func (s *QueryService) ExecuteQuery(userID int64, username, role string, datasou
 	var result *QueryResult
 	switch dbType {
 	case "mysql":
-		result, err = s.executeMySQL(datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password)
+		result, err = s.executeMySQL(datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, defaultRowLimit)
 	case "mongodb":
-		result, err = s.executeMongoDB(datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password)
+		result, err = s.executeMongoDB(datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, defaultRowLimit)
 	default:
 		return nil, ErrDatasourceType
 	}
@@ -208,7 +208,7 @@ func (s *QueryService) ExecuteQuery(userID int64, username, role string, datasou
 	return result, nil
 }
 
-func (s *QueryService) executeMySQL(datasourceID int64, database, sqlContent, host string, port int, user, password string) (*QueryResult, error) {
+func (s *QueryService) executeMySQL(datasourceID int64, database, sqlContent, host string, port int, user, password string, rowLimit int) (*QueryResult, error) {
 	dbName := database
 	if dbName == "" {
 		dbName = "information_schema"
@@ -240,10 +240,10 @@ func (s *QueryService) executeMySQL(datasourceID int64, database, sqlContent, ho
 		return nil, fmt.Errorf("获取列信息失败: %w", err)
 	}
 
-	resultRows := make([]map[string]interface{}, 0, defaultRowLimit)
+	resultRows := make([]map[string]interface{}, 0, rowLimit)
 	rowCount := 0
 	for rows.Next() {
-		if rowCount >= defaultRowLimit {
+		if rowCount >= rowLimit {
 			break
 		}
 
@@ -284,7 +284,7 @@ func (s *QueryService) executeMySQL(datasourceID int64, database, sqlContent, ho
 	}, nil
 }
 
-func (s *QueryService) executeMongoDB(datasourceID int64, database, body, host string, port int, user, password string) (*QueryResult, error) {
+func (s *QueryService) executeMongoDB(datasourceID int64, database, body, host string, port int, user, password string, rowLimit int) (*QueryResult, error) {
 	uri := buildMongoURI(host, port, user, password)
 
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
@@ -323,7 +323,7 @@ func (s *QueryService) executeMongoDB(datasourceID int64, database, body, host s
 	var cursor *mongo.Cursor
 	switch mongoResult.Operation {
 	case sqlparser.MongoOpFind:
-		findOpts := options.Find().SetLimit(int64(defaultRowLimit))
+		findOpts := options.Find().SetLimit(int64(rowLimit))
 		filter := bson.M{}
 		if mongoResult.HasFilter && !mongoResult.HasEmptyFilter {
 			bodyMap := parseMongoBody(body)
@@ -355,10 +355,10 @@ func (s *QueryService) executeMongoDB(datasourceID int64, database, body, host s
 	}
 	defer cursor.Close(ctx)
 
-	resultRows := make([]map[string]interface{}, 0, defaultRowLimit)
+	resultRows := make([]map[string]interface{}, 0, rowLimit)
 	rowCount := 0
 	for cursor.Next(ctx) {
-		if rowCount >= defaultRowLimit {
+		if rowCount >= rowLimit {
 			break
 		}
 		var doc bson.M
