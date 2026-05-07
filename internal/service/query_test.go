@@ -6,8 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
@@ -1103,5 +1107,200 @@ func TestExecuteQuery_CancelledContext(t *testing.T) {
 	_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1", "mysql")
 	if err == nil {
 		t.Error("expected error with cancelled context, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// executeMySQL: direct tests via SQLite injection
+// ---------------------------------------------------------------------------
+
+func TestExecuteMySQL_Success(t *testing.T) {
+	qs, _ := setupQueryService(t)
+	ctx := context.Background()
+
+	// Use a real SQLite DB as the mock MySQL target
+	sqliteDB := setupQueryTestDB(t)
+	qs.connMgr.InjectMySQLForTest(1, "localhost", 3306, "testdb", sqliteDB)
+
+	poolCfg := connpool.MySQLPoolConfig{MaxOpen: 10, MaxIdle: 5}
+	result, err := qs.executeMySQL(ctx, 1, "testdb", "SELECT 1 AS id, 'hello' AS name", "localhost", 3306, "root", "pass", poolCfg, 100)
+	if err != nil {
+		t.Fatalf("executeMySQL() error: %v", err)
+	}
+	if result.Total != 1 {
+		t.Errorf("Total = %d, want 1", result.Total)
+	}
+	if len(result.Columns) != 2 {
+		t.Errorf("Columns = %v, want 2 columns", result.Columns)
+	}
+	if len(result.Rows) != 1 {
+		t.Fatalf("Rows count = %d, want 1", len(result.Rows))
+	}
+	if result.Rows[0]["id"] == nil {
+		t.Error("id column should not be nil")
+	}
+	if result.Rows[0]["name"] == nil {
+		t.Error("name column should not be nil")
+	}
+	if result.ExecutionTime < 0 {
+		t.Errorf("ExecutionTime = %d, want >= 0", result.ExecutionTime)
+	}
+}
+
+func TestExecuteMySQL_EmptyResult(t *testing.T) {
+	qs, _ := setupQueryService(t)
+	ctx := context.Background()
+
+	sqliteDB := setupQueryTestDB(t)
+	qs.connMgr.InjectMySQLForTest(1, "localhost", 3306, "testdb", sqliteDB)
+
+	poolCfg := connpool.MySQLPoolConfig{}
+	result, err := qs.executeMySQL(ctx, 1, "testdb", "SELECT 1 AS id WHERE 1=0", "localhost", 3306, "root", "pass", poolCfg, 100)
+	if err != nil {
+		t.Fatalf("executeMySQL() error: %v", err)
+	}
+	if result.Total != 0 {
+		t.Errorf("Total = %d, want 0", result.Total)
+	}
+	if len(result.Rows) != 0 {
+		t.Errorf("Rows count = %d, want 0", len(result.Rows))
+	}
+	if len(result.Columns) != 1 {
+		t.Errorf("Columns = %v, want 1 column", result.Columns)
+	}
+}
+
+func TestExecuteMySQL_ConnectionError(t *testing.T) {
+	qs, _ := setupQueryService(t)
+	ctx := context.Background()
+
+	poolCfg := connpool.MySQLPoolConfig{}
+	_, err := qs.executeMySQL(ctx, 999, "testdb", "SELECT 1", "127.0.0.1", 19999, "root", "pass", poolCfg, 100)
+	if err == nil {
+		t.Error("expected connection error, got nil")
+	}
+}
+
+func TestExecuteMySQL_DefaultDatabase(t *testing.T) {
+	qs, _ := setupQueryService(t)
+	ctx := context.Background()
+
+	sqliteDB := setupQueryTestDB(t)
+	// When database is empty, executeMySQL defaults to "information_schema"
+	qs.connMgr.InjectMySQLForTest(1, "localhost", 3306, "information_schema", sqliteDB)
+
+	poolCfg := connpool.MySQLPoolConfig{}
+	result, err := qs.executeMySQL(ctx, 1, "", "SELECT 42 AS val", "localhost", 3306, "root", "pass", poolCfg, 100)
+	if err != nil {
+		t.Fatalf("executeMySQL() error: %v", err)
+	}
+	if result.Total != 1 {
+		t.Errorf("Total = %d, want 1", result.Total)
+	}
+}
+
+func TestExecuteMySQL_MultipleRows(t *testing.T) {
+	qs, _ := setupQueryService(t)
+	ctx := context.Background()
+
+	sqliteDB := setupQueryTestDB(t)
+	qs.connMgr.InjectMySQLForTest(1, "localhost", 3306, "testdb", sqliteDB)
+
+	poolCfg := connpool.MySQLPoolConfig{}
+	result, err := qs.executeMySQL(ctx, 1, "testdb", "SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3", "localhost", 3306, "root", "pass", poolCfg, 100)
+	if err != nil {
+		t.Fatalf("executeMySQL() error: %v", err)
+	}
+	if result.Total != 3 {
+		t.Errorf("Total = %d, want 3", result.Total)
+	}
+	if len(result.Rows) != 3 {
+		t.Errorf("Rows count = %d, want 3", len(result.Rows))
+	}
+}
+
+func TestExecuteMySQL_RowLimit(t *testing.T) {
+	qs, _ := setupQueryService(t)
+	ctx := context.Background()
+
+	sqliteDB := setupQueryTestDB(t)
+	qs.connMgr.InjectMySQLForTest(1, "localhost", 3306, "testdb", sqliteDB)
+
+	poolCfg := connpool.MySQLPoolConfig{}
+	// Generate 10 rows but limit to 3
+	result, err := qs.executeMySQL(ctx, 1, "testdb",
+		"SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10",
+		"localhost", 3306, "root", "pass", poolCfg, 3)
+	if err != nil {
+		t.Fatalf("executeMySQL() error: %v", err)
+	}
+	if result.Total != 3 {
+		t.Errorf("Total = %d, want 3 (limited by rowLimit)", result.Total)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// executeMongoDB: direct tests
+// ---------------------------------------------------------------------------
+
+func TestExecuteMongoDB_ConnectionError(t *testing.T) {
+	qs, _ := setupQueryService(t)
+	ctx := context.Background()
+
+	_, err := qs.executeMongoDB(ctx, 999, "testdb", `{"operation":"find","collection":"users"}`, "127.0.0.1", 19999, "root", "pass", 100)
+	if err == nil {
+		t.Error("expected connection error for non-existent MongoDB, got nil")
+	}
+}
+
+func TestExecuteMongoDB_ParseError(t *testing.T) {
+	qs, _ := setupQueryService(t)
+	ctx := context.Background()
+
+	// Inject a disconnected mongo client to get past connection step
+	mongoClient, _ := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	uri := buildMongoURI("127.0.0.1", 19999, "root", "pass")
+	qs.connMgr.InjectMongoForTest(1, uri, mongoClient)
+
+	_, err := qs.executeMongoDB(ctx, 1, "testdb", "not valid json", "127.0.0.1", 19999, "root", "pass", 100)
+	if err == nil {
+		t.Error("expected parse error for invalid JSON, got nil")
+	}
+	if !strings.Contains(err.Error(), "解析MongoDB命令失败") {
+		t.Errorf("error = %v, want parse error", err)
+	}
+}
+
+func TestExecuteMongoDB_MissingDatabase(t *testing.T) {
+	qs, _ := setupQueryService(t)
+	ctx := context.Background()
+
+	mongoClient, _ := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	uri := buildMongoURI("127.0.0.1", 19999, "root", "pass")
+	qs.connMgr.InjectMongoForTest(1, uri, mongoClient)
+
+	_, err := qs.executeMongoDB(ctx, 1, "", `{"operation":"find","collection":"users"}`, "127.0.0.1", 19999, "root", "pass", 100)
+	if err == nil {
+		t.Error("expected error for missing database, got nil")
+	}
+	if !strings.Contains(err.Error(), "必须指定数据库") {
+		t.Errorf("error = %v, want missing database error", err)
+	}
+}
+
+func TestExecuteMongoDB_MissingCollection(t *testing.T) {
+	qs, _ := setupQueryService(t)
+	ctx := context.Background()
+
+	mongoClient, _ := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	uri := buildMongoURI("127.0.0.1", 19999, "root", "pass")
+	qs.connMgr.InjectMongoForTest(1, uri, mongoClient)
+
+	_, err := qs.executeMongoDB(ctx, 1, "testdb", `{"operation":"find"}`, "127.0.0.1", 19999, "root", "pass", 100)
+	if err == nil {
+		t.Error("expected error for missing collection, got nil")
+	}
+	if !strings.Contains(err.Error(), "必须指定集合名称") {
+		t.Errorf("error = %v, want missing collection error", err)
 	}
 }

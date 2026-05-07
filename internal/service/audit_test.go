@@ -388,3 +388,165 @@ func TestAuditService_CloseIsNoop(t *testing.T) {
 		t.Errorf("expected 1 record, got %d", count)
 	}
 }
+
+func TestAuditService_Write_NilReceiver(t *testing.T) {
+	// Nil receiver should not panic.
+	var svc *AuditService
+	svc.Write(context.Background(), AuditRecord{UserID: 1, Action: "test"})
+}
+
+func TestAuditService_Close_NilReceiver(t *testing.T) {
+	// Nil receiver should not panic.
+	var svc *AuditService
+	svc.Close()
+}
+
+func TestAuditService_Close_MultipleTimes(t *testing.T) {
+	db := newAuditTestDB(t)
+	defer db.Close()
+
+	svc := NewAuditService(db, 0, 0)
+	svc.Write(context.Background(), AuditRecord{UserID: 1, Action: "query_execute"})
+
+	// Calling Close multiple times should not panic
+	svc.Close()
+	svc.Close()
+	svc.Close()
+
+	var count int64
+	if err := db.QueryRow("SELECT COUNT(*) FROM audit_logs").Scan(&count); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 record, got %d", count)
+	}
+}
+
+func TestAuditService_Write_AllFields(t *testing.T) {
+	db := newAuditTestDB(t)
+	defer db.Close()
+
+	svc := NewAuditService(db, 0, 0)
+
+	rec := AuditRecord{
+		UserID:             42,
+		Action:             "export",
+		DatasourceID:       7,
+		Database:           "production",
+		SQLContent:         "SELECT * FROM users WHERE active = 1",
+		SQLSummary:         "SELECT * FROM users WHERE active = 1",
+		ResultRows:         100,
+		AffectedRows:       0,
+		ExecutionTimeMs:    250,
+		ErrorMessage:       "",
+		DesensitizedFields: "email,phone",
+		IPAddress:          "192.168.1.100",
+	}
+	svc.Write(context.Background(), rec)
+
+	var (
+		id                int64
+		userID            int64
+		action            string
+		datasourceID      int64
+		database          string
+		sqlContent        string
+		sqlSummary        string
+		resultRows        int64
+		affectedRows      int64
+		executionTimeMs   int64
+		errorMessage      string
+		desensitizedFields string
+		ipAddress         string
+	)
+	err := db.QueryRow(
+		`SELECT id, user_id, action, datasource_id, database, sql_content, sql_summary,
+		        result_rows, affected_rows, execution_time_ms, error_message,
+		        desensitized_fields, ip_address
+		 FROM audit_logs WHERE user_id = 42`,
+	).Scan(&id, &userID, &action, &datasourceID, &database, &sqlContent, &sqlSummary,
+		&resultRows, &affectedRows, &executionTimeMs, &errorMessage, &desensitizedFields, &ipAddress)
+	if err != nil {
+		t.Fatalf("query row: %v", err)
+	}
+
+	if id <= 0 {
+		t.Errorf("id = %d, want > 0", id)
+	}
+	if userID != rec.UserID {
+		t.Errorf("user_id = %d, want %d", userID, rec.UserID)
+	}
+	if action != rec.Action {
+		t.Errorf("action = %q, want %q", action, rec.Action)
+	}
+	if datasourceID != rec.DatasourceID {
+		t.Errorf("datasource_id = %d, want %d", datasourceID, rec.DatasourceID)
+	}
+	if database != rec.Database {
+		t.Errorf("database = %q, want %q", database, rec.Database)
+	}
+	if sqlContent != rec.SQLContent {
+		t.Errorf("sql_content = %q, want %q", sqlContent, rec.SQLContent)
+	}
+	if resultRows != rec.ResultRows {
+		t.Errorf("result_rows = %d, want %d", resultRows, rec.ResultRows)
+	}
+	if executionTimeMs != rec.ExecutionTimeMs {
+		t.Errorf("execution_time_ms = %d, want %d", executionTimeMs, rec.ExecutionTimeMs)
+	}
+	if desensitizedFields != rec.DesensitizedFields {
+		t.Errorf("desensitized_fields = %q, want %q", desensitizedFields, rec.DesensitizedFields)
+	}
+	if ipAddress != rec.IPAddress {
+		t.Errorf("ip_address = %q, want %q", ipAddress, rec.IPAddress)
+	}
+}
+
+func TestAuditService_List_FilterByTimeRange(t *testing.T) {
+	db := newAuditTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('alice', 'hash', 'developer')")
+	if err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+
+	svc := NewAuditService(db, 0, 0)
+
+	svc.Write(context.Background(), AuditRecord{UserID: 1, Action: "query_execute", SQLContent: "SELECT 1"})
+
+	logs, total, err := svc.List(context.Background(), 1, 10, "", "", "", "2000-01-01", "2099-12-31", "")
+	if err != nil {
+		t.Fatalf("list with time range: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("expected 1 log within time range, got %d", total)
+	}
+	if len(logs) != 1 {
+		t.Errorf("expected 1 log, got %d", len(logs))
+	}
+}
+
+func TestAuditService_List_UsernameJoin(t *testing.T) {
+	db := newAuditTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('testuser', 'hash', 'admin')")
+	if err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+
+	svc := NewAuditService(db, 0, 0)
+	svc.Write(context.Background(), AuditRecord{UserID: 1, Action: "query_execute", SQLContent: "SELECT 1"})
+
+	logs, _, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(logs) == 0 {
+		t.Fatal("expected at least 1 log")
+	}
+	if logs[0].Username != "testuser" {
+		t.Errorf("username = %q, want %q", logs[0].Username, "testuser")
+	}
+}

@@ -100,6 +100,18 @@ func (m *Manager) Remove(dsID int64, host string, port int, database string) {
 	}
 }
 
+// InjectMySQLForTest stores a pre-built *sql.DB in the pool for testing.
+func (m *Manager) InjectMySQLForTest(dsID int64, host string, port int, database string, db *sql.DB) {
+	key := poolKey(dsID, host, port, database)
+	m.mysqlPools.Store(key, db)
+}
+
+// InjectMongoForTest stores a pre-built *mongo.Client in the pool for testing.
+func (m *Manager) InjectMongoForTest(dsID int64, uri string, client *mongo.Client) {
+	key := mongoPoolKey(dsID, uri)
+	m.mongoPools.Store(key, client)
+}
+
 // Close closes all cached connection pools (MySQL and MongoDB).
 func (m *Manager) Close() {
 	m.mysqlPools.Range(func(key, value interface{}) bool {

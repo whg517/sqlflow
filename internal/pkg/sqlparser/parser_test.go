@@ -1,8 +1,12 @@
 package sqlparser
 
 import (
+	"context"
+	"database/sql"
 	"strings"
 	"testing"
+
+	_ "modernc.org/sqlite"
 )
 
 // ---------------------------------------------------------------------------
@@ -861,6 +865,162 @@ func TestGetRiskLevel_Comprehensive(t *testing.T) {
 			got := GetRiskLevel(tt.sql, tt.op)
 			if got != tt.want {
 				t.Errorf("GetRiskLevel(%q, %q) = %q, want %q", tt.sql, tt.op, got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CheckSensitiveTables — integration tests with SQLite in-memory DB
+// ---------------------------------------------------------------------------
+
+func setupMaskRulesDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS mask_rules (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			datasource_id INTEGER NOT NULL,
+			database TEXT NOT NULL DEFAULT '',
+			table_name TEXT NOT NULL,
+			field TEXT NOT NULL,
+			mask_type TEXT NOT NULL,
+			custom_regex TEXT NOT NULL DEFAULT '',
+			custom_template TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+			updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
+		)
+	`)
+	if err != nil {
+		t.Fatalf("create mask_rules table: %v", err)
+	}
+	return db
+}
+
+func TestCheckSensitiveTables(t *testing.T) {
+	db := setupMaskRulesDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type) VALUES (1, '', 'users', 'phone', 'phone')`)
+	if err != nil {
+		t.Fatalf("insert mask_rule: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type) VALUES (1, '', 'orders', 'credit_card', 'credit_card')`)
+	if err != nil {
+		t.Fatalf("insert mask_rule: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type) VALUES (2, '', 'users', 'email', 'email')`)
+	if err != nil {
+		t.Fatalf("insert mask_rule: %v", err)
+	}
+
+	tests := []struct {
+		name         string
+		tables       []string
+		datasourceID int
+		want         []string
+	}{
+		{"matches_sensitive_tables", []string{"users", "products", "orders"}, 1, []string{"users", "orders"}},
+		{"no_matches", []string{"products", "categories"}, 1, nil},
+		{"different_datasource", []string{"users"}, 2, []string{"users"}},
+		{"wrong_datasource_no_match", []string{"orders"}, 2, nil},
+		{"empty_tables", []string{}, 1, nil},
+		{"single_table_match", []string{"users"}, 1, []string{"users"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CheckSensitiveTables(context.Background(), db, tt.tables, tt.datasourceID)
+			if err != nil {
+				t.Fatalf("CheckSensitiveTables() error = %v", err)
+			}
+			if tt.want == nil && len(got) > 0 {
+				t.Errorf("CheckSensitiveTables() = %v, want nil/empty", got)
+			}
+			if tt.want != nil && !equalStringSlices(got, tt.want) {
+				t.Errorf("CheckSensitiveTables() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCheckSensitiveTables_NilDB(t *testing.T) {
+	got, err := CheckSensitiveTables(context.Background(), nil, []string{"users"}, 1)
+	if err != nil {
+		t.Fatalf("CheckSensitiveTables with nil db: %v", err)
+	}
+	if got != nil {
+		t.Errorf("CheckSensitiveTables with nil db = %v, want nil", got)
+	}
+}
+
+func TestCheckSensitiveTables_EmptyTables(t *testing.T) {
+	db := setupMaskRulesDB(t)
+	defer db.Close()
+
+	got, err := CheckSensitiveTables(context.Background(), db, nil, 1)
+	if err != nil {
+		t.Fatalf("CheckSensitiveTables with nil tables: %v", err)
+	}
+	if got != nil {
+		t.Errorf("CheckSensitiveTables with nil tables = %v, want nil", got)
+	}
+}
+
+func TestCheckSensitiveTables_DistinctDedup(t *testing.T) {
+	db := setupMaskRulesDB(t)
+	defer db.Close()
+
+	// Insert two rules for same table+datasource — should deduplicate
+	_, _ = db.Exec(`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type) VALUES (1, '', 'users', 'phone', 'phone')`)
+	_, _ = db.Exec(`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type) VALUES (1, '', 'users', 'email', 'email')`)
+
+	got, err := CheckSensitiveTables(context.Background(), db, []string{"users"}, 1)
+	if err != nil {
+		t.Fatalf("CheckSensitiveTables() error = %v", err)
+	}
+	if len(got) != 1 || got[0] != "users" {
+		t.Errorf("CheckSensitiveTables() = %v, want exactly [users] (deduplicated)", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// extractOperationRegex — direct unit tests
+// ---------------------------------------------------------------------------
+
+func TestExtractOperationRegex_Direct(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+		want OperationType
+	}{
+		{"select", "SELECT * FROM t", OpSelect},
+		{"with_cte", "WITH cte AS (SELECT 1) SELECT * FROM cte", OpSelect},
+		{"insert", "INSERT INTO t VALUES (1)", OpDML},
+		{"replace", "REPLACE INTO t VALUES (1)", OpDML},
+		{"update", "UPDATE t SET x = 1", OpUpdate},
+		{"delete", "DELETE FROM t", OpDelete},
+		{"drop", "DROP TABLE t", OpDDL},
+		{"alter", "ALTER TABLE t ADD x INT", OpDDL},
+		{"create", "CREATE TABLE t (id INT)", OpDDL},
+		{"truncate", "TRUNCATE TABLE t", OpDDL},
+		{"unknown_defaults_select", "UNKNOWN something", OpSelect},
+		{"with_semicolon", "SELECT 1;", OpSelect},
+		{"lowercase_select", "select * from t", OpSelect},
+		{"mixed_case_insert", "Insert Into t Values (1)", OpDML},
+		{"leading_whitespace", "  SELECT 1", OpSelect},
+		{"comment_before_sql", "-- comment\nSELECT 1", OpSelect},
+		{"block_comment_before_sql", "/* hint */ SELECT 1", OpSelect},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractOperationRegex(tt.sql)
+			if got != tt.want {
+				t.Errorf("extractOperationRegex(%q) = %q, want %q", tt.sql, got, tt.want)
 			}
 		})
 	}

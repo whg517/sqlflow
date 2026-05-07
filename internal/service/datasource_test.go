@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
@@ -974,5 +975,160 @@ func TestListDataSources_CancelledContext(t *testing.T) {
 	_, err := svc.ListDataSources(ctx)
 	if err == nil {
 		t.Error("expected error with cancelled context, got nil")
+	}
+}
+
+// ─── GetTables: Success paths with sqlmock ────────────────────────────────────
+
+func TestGetTables_MySQLSuccess(t *testing.T) {
+	testDB := setupDatasourceTestDB(t)
+	connMgr := connpool.NewManager()
+	svc := NewDatasourceService(testDB, testEncKey, connMgr)
+	ctx := ctxWithTimeout(t)
+
+	ds := &model.DataSource{
+		Name: "mysql-tables-ok", Type: "mysql", Host: "10.0.0.1", Port: 3306,
+		Username: "root", PasswordEncrypted: "secret", Database: "testdb",
+	}
+	if err := svc.CreateDataSource(ctx, ds); err != nil {
+		t.Fatalf("CreateDataSource() error: %v", err)
+	}
+
+	mockDB, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error: %v", err)
+	}
+	connMgr.InjectMySQLForTest(ds.ID, ds.Host, ds.Port, "testdb", mockDB)
+
+	mock.ExpectQuery("SHOW TABLES").WillReturnRows(
+		sqlmock.NewRows([]string{"Tables_in_testdb"}).AddRow("users").AddRow("orders").AddRow("products"),
+	)
+
+	tables, err := svc.GetTables(ctx, ds.ID)
+	if err != nil {
+		t.Fatalf("GetTables() error: %v", err)
+	}
+	if len(tables) != 3 {
+		t.Fatalf("expected 3 tables, got %d", len(tables))
+	}
+	if tables[0] != "users" || tables[1] != "orders" || tables[2] != "products" {
+		t.Errorf("tables = %v, want [users orders products]", tables)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestGetTables_MySQLEmptyResult(t *testing.T) {
+	testDB := setupDatasourceTestDB(t)
+	connMgr := connpool.NewManager()
+	svc := NewDatasourceService(testDB, testEncKey, connMgr)
+	ctx := ctxWithTimeout(t)
+
+	ds := &model.DataSource{
+		Name: "mysql-empty", Type: "mysql", Host: "10.0.0.1", Port: 3306,
+		Username: "root", PasswordEncrypted: "secret", Database: "emptydb",
+	}
+	if err := svc.CreateDataSource(ctx, ds); err != nil {
+		t.Fatalf("CreateDataSource() error: %v", err)
+	}
+
+	mockDB, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error: %v", err)
+	}
+	connMgr.InjectMySQLForTest(ds.ID, ds.Host, ds.Port, "emptydb", mockDB)
+
+	mock.ExpectQuery("SHOW TABLES").WillReturnRows(
+		sqlmock.NewRows([]string{"Tables_in_emptydb"}),
+	)
+
+	tables, err := svc.GetTables(ctx, ds.ID)
+	if err != nil {
+		t.Fatalf("GetTables() error: %v", err)
+	}
+	if len(tables) != 0 {
+		t.Errorf("expected 0 tables, got %d", len(tables))
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestGetTables_InvalidDatasourceType(t *testing.T) {
+	testDB := setupDatasourceTestDB(t)
+	connMgr := connpool.NewManager()
+	svc := NewDatasourceService(testDB, testEncKey, connMgr)
+	ctx := ctxWithTimeout(t)
+
+	// Manually insert a datasource with invalid type (bypassing validation)
+	encrypted, err := crypto.Encrypt("secret", testEncKey)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	result, err := testDB.ExecContext(ctx,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, status)
+		 VALUES (?, 'postgres', ?, ?, ?, ?, ?, 'active')`,
+		"invalid-type-ds", "10.0.0.1", 5432, "root", encrypted, "testdb",
+	)
+	if err != nil {
+		t.Fatalf("insert datasource: %v", err)
+	}
+	dsID, _ := result.LastInsertId()
+
+	_, err = svc.GetTables(ctx, dsID)
+	if err != ErrInvalidDatasourceType {
+		t.Errorf("GetTables(invalid type) error = %v, want ErrInvalidDatasourceType", err)
+	}
+}
+
+func TestGetTables_MongoDBConnectionFails(t *testing.T) {
+	testDB := setupDatasourceTestDB(t)
+	connMgr := connpool.NewManager()
+	svc := NewDatasourceService(testDB, testEncKey, connMgr)
+	ctx := ctxWithTimeout(t)
+
+	ds := &model.DataSource{
+		Name: "mongo-tables", Type: "mongodb", Host: "127.0.0.1", Port: 19999,
+		Username: "root", PasswordEncrypted: "secret",
+	}
+	if err := svc.CreateDataSource(ctx, ds); err != nil {
+		t.Fatalf("CreateDataSource() error: %v", err)
+	}
+
+	_, err := svc.GetTables(ctx, ds.ID)
+	if err == nil {
+		t.Error("expected connection error for non-existent MongoDB, got nil")
+	}
+}
+
+func TestGetTables_MySQLQueryError(t *testing.T) {
+	testDB := setupDatasourceTestDB(t)
+	connMgr := connpool.NewManager()
+	svc := NewDatasourceService(testDB, testEncKey, connMgr)
+	ctx := ctxWithTimeout(t)
+
+	ds := &model.DataSource{
+		Name: "mysql-query-err", Type: "mysql", Host: "10.0.0.1", Port: 3306,
+		Username: "root", PasswordEncrypted: "secret", Database: "testdb",
+	}
+	if err := svc.CreateDataSource(ctx, ds); err != nil {
+		t.Fatalf("CreateDataSource() error: %v", err)
+	}
+
+	mockDB, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error: %v", err)
+	}
+	connMgr.InjectMySQLForTest(ds.ID, ds.Host, ds.Port, "testdb", mockDB)
+
+	mock.ExpectQuery("SHOW TABLES").WillReturnError(sql.ErrTxDone)
+
+	_, err = svc.GetTables(ctx, ds.ID)
+	if err == nil {
+		t.Error("expected query error, got nil")
+	}
+	if !strings.Contains(err.Error(), "show tables") {
+		t.Errorf("error should mention show tables, got: %v", err)
 	}
 }

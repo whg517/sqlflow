@@ -391,6 +391,207 @@ func TestAdminCount(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// UserCount
+// ---------------------------------------------------------------------------
+
+func TestUserCount(t *testing.T) {
+	svc, _ := newTestAuthService(t)
+	ctx := context.Background()
+
+	t.Run("empty database", func(t *testing.T) {
+		count, err := svc.UserCount(ctx)
+		if err != nil {
+			t.Fatalf("UserCount() error: %v", err)
+		}
+		if count != 0 {
+			t.Errorf("UserCount() = %d, want 0", count)
+		}
+	})
+
+	t.Run("with users", func(t *testing.T) {
+		_, _ = svc.CreateUser(ctx, "uc1", "pass1234", "admin")
+		_, _ = svc.CreateUser(ctx, "uc2", "pass1234", "developer")
+
+		count, err := svc.UserCount(ctx)
+		if err != nil {
+			t.Fatalf("UserCount() error: %v", err)
+		}
+		if count != 2 {
+			t.Errorf("UserCount() = %d, want 2", count)
+		}
+	})
+
+	t.Run("count decreases after delete", func(t *testing.T) {
+		svc, _ := newTestAuthService(t)
+		ctx := context.Background()
+
+		user, _ := svc.CreateUser(ctx, "tempuser", "pass1234", "developer")
+		svc.CreateUser(ctx, "keepuser", "pass1234", "admin")
+
+		countBefore, _ := svc.UserCount(ctx)
+		if err := svc.DeleteUser(ctx, user.ID); err != nil {
+			t.Fatalf("DeleteUser() error: %v", err)
+		}
+		countAfter, _ := svc.UserCount(ctx)
+		if countAfter != countBefore-1 {
+			t.Errorf("UserCount after delete = %d, want %d", countAfter, countBefore-1)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// UpdateUserRole
+// ---------------------------------------------------------------------------
+
+func TestUpdateUserRole(t *testing.T) {
+	svc, _ := newTestAuthService(t)
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		user, err := svc.CreateUser(ctx, "roleuser", "pass1234", "developer")
+		if err != nil {
+			t.Fatalf("CreateUser() error: %v", err)
+		}
+
+		updated, err := svc.UpdateUserRole(ctx, user.ID, "dba")
+		if err != nil {
+			t.Fatalf("UpdateUserRole() error: %v", err)
+		}
+		if updated.Role != "dba" {
+			t.Errorf("Role = %q, want %q", updated.Role, "dba")
+		}
+		if updated.ID != user.ID {
+			t.Errorf("ID = %d, want %d", updated.ID, user.ID)
+		}
+	})
+
+	t.Run("nonexistent user", func(t *testing.T) {
+		_, err := svc.UpdateUserRole(ctx, 99999, "admin")
+		if err != ErrUserNotFound {
+			t.Errorf("UpdateUserRole() error = %v, want ErrUserNotFound", err)
+		}
+	})
+
+	t.Run("update to same role", func(t *testing.T) {
+		svc, _ := newTestAuthService(t)
+		ctx := context.Background()
+
+		user, _ := svc.CreateUser(ctx, "sameuser", "pass1234", "developer")
+		updated, err := svc.UpdateUserRole(ctx, user.ID, "developer")
+		if err != nil {
+			t.Fatalf("UpdateUserRole() error: %v", err)
+		}
+		if updated.Role != "developer" {
+			t.Errorf("Role = %q, want %q", updated.Role, "developer")
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// DeleteUser
+// ---------------------------------------------------------------------------
+
+func TestDeleteUser(t *testing.T) {
+	svc, _ := newTestAuthService(t)
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		user, err := svc.CreateUser(ctx, "deluser", "pass1234", "developer")
+		if err != nil {
+			t.Fatalf("CreateUser() error: %v", err)
+		}
+
+		err = svc.DeleteUser(ctx, user.ID)
+		if err != nil {
+			t.Fatalf("DeleteUser() error: %v", err)
+		}
+
+		// Verify user is gone
+		_, err = svc.GetUserByID(ctx, user.ID)
+		if err != ErrUserNotFound {
+			t.Errorf("GetUserByID() error = %v, want ErrUserNotFound", err)
+		}
+	})
+
+	t.Run("nonexistent user", func(t *testing.T) {
+		err := svc.DeleteUser(ctx, 99999)
+		if err != ErrUserNotFound {
+			t.Errorf("DeleteUser() error = %v, want ErrUserNotFound", err)
+		}
+	})
+
+	t.Run("double delete same user", func(t *testing.T) {
+		svc, _ := newTestAuthService(t)
+		ctx := context.Background()
+
+		user, _ := svc.CreateUser(ctx, "dblDel", "pass1234", "developer")
+		if err := svc.DeleteUser(ctx, user.ID); err != nil {
+			t.Fatalf("first DeleteUser() error: %v", err)
+		}
+		err := svc.DeleteUser(ctx, user.ID)
+		if err != ErrUserNotFound {
+			t.Errorf("second DeleteUser() error = %v, want ErrUserNotFound", err)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// ResetPassword
+// ---------------------------------------------------------------------------
+
+func TestResetPassword(t *testing.T) {
+	svc, _ := newTestAuthService(t)
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		_, err := svc.CreateUser(ctx, "resetuser", "oldpass12", "developer")
+		if err != nil {
+			t.Fatalf("CreateUser() error: %v", err)
+		}
+
+		err = svc.ResetPassword(ctx, 1, "newpass12")
+		if err != nil {
+			t.Fatalf("ResetPassword() error: %v", err)
+		}
+
+		// Verify new password works
+		_, _, err = svc.Authenticate(ctx, "resetuser", "newpass12")
+		if err != nil {
+			t.Fatalf("Authenticate() with new password error: %v", err)
+		}
+
+		// Verify old password no longer works
+		_, _, err = svc.Authenticate(ctx, "resetuser", "oldpass12")
+		if err != ErrInvalidCredentials {
+			t.Errorf("Authenticate() with old password error = %v, want ErrInvalidCredentials", err)
+		}
+	})
+
+	t.Run("nonexistent user", func(t *testing.T) {
+		err := svc.ResetPassword(ctx, 99999, "newpass12")
+		if err != ErrUserNotFound {
+			t.Errorf("ResetPassword() error = %v, want ErrUserNotFound", err)
+		}
+	})
+
+	t.Run("empty new password accepted", func(t *testing.T) {
+		svc, _ := newTestAuthService(t)
+		ctx := context.Background()
+
+		user, _ := svc.CreateUser(ctx, "emptyPwUser", "oldpass12", "dba")
+		err := svc.ResetPassword(ctx, user.ID, "")
+		if err != nil {
+			t.Fatalf("ResetPassword() with empty password error: %v", err)
+		}
+		// Should authenticate with empty password
+		_, _, err = svc.Authenticate(ctx, "emptyPwUser", "")
+		if err != nil {
+			t.Fatalf("Authenticate() with empty password error: %v", err)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
 // ParseToken (bonus: covers token validation edge cases)
 // ---------------------------------------------------------------------------
 
