@@ -9,7 +9,7 @@
 - **Go 版本**: 1.25（需要 `/usr/local/go/bin` 在 PATH 中）
 - **技术栈**: Go (Echo) + Ent ORM + SQLite WAL | React 19 + Vite + TypeScript + TailwindCSS + Shadcn/ui
 - **Spec 文档**: `docs/spec/PRD.md`、`docs/spec/ARCHITECTURE.md`、`docs/spec/UI-DESIGN.md`
-- **开发计划**: `docs/proposals/001-mvp-initial/plan.md`
+- **开发计划**: `docs/proposals/002-code-review/plan.md`（当前进行中）
 
 ## 🔴 强制规则（最高优先级）
 

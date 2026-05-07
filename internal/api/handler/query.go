@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -52,7 +53,7 @@ func (h *QueryHandler) ExecuteQuery(c echo.Context) error {
 	username := c.Get(middleware.ContextKeyUsername).(string)
 	role := c.Get(middleware.ContextKeyRole).(string)
 
-	result, err := h.querySvc.ExecuteQuery(userID, username, role, req.DatasourceID, req.Database, req.SQL, "")
+	result, err := h.querySvc.ExecuteQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, "")
 	if err != nil {
 		switch err {
 		case service.ErrSQLOperationForbidden:
@@ -66,7 +67,8 @@ func (h *QueryHandler) ExecuteQuery(c echo.Context) error {
 		case service.ErrEmptySQL:
 			return resp.BadRequest(c, "SQL不能为空")
 		default:
-			return resp.InternalError(c, err.Error())
+			log.Printf("ExecuteQuery failed: %v", err)
+			return resp.InternalError(c, "查询执行失败")
 		}
 	}
 
@@ -86,7 +88,7 @@ func (h *QueryHandler) ListHistory(c echo.Context) error {
 		pageSize = 50
 	}
 
-	list, total, err := h.historySvc.ListHistory(userID, page, pageSize)
+	list, total, err := h.historySvc.ListHistory(c.Request().Context(), userID, page, pageSize)
 	if err != nil {
 		return resp.InternalError(c, "获取查询历史失败")
 	}
@@ -107,8 +109,9 @@ func (h *QueryHandler) DeleteHistory(c echo.Context) error {
 		return resp.BadRequest(c, "无效的历史记录ID")
 	}
 
-	if err := h.historySvc.DeleteHistory(id, userID); err != nil {
-		return resp.BadRequest(c, err.Error())
+	if err := h.historySvc.DeleteHistory(c.Request().Context(), id, userID); err != nil {
+		log.Printf("DeleteHistory failed: %v", err)
+		return resp.BadRequest(c, "删除失败，记录不存在或无权操作")
 	}
 
 	return resp.OKWithMessage(c, "删除成功", nil)
@@ -118,7 +121,7 @@ func (h *QueryHandler) DeleteHistory(c echo.Context) error {
 func (h *QueryHandler) ClearHistory(c echo.Context) error {
 	userID := c.Get(middleware.ContextKeyUserID).(int64)
 
-	if err := h.historySvc.ClearHistory(userID); err != nil {
+	if err := h.historySvc.ClearHistory(c.Request().Context(), userID); err != nil {
 		return resp.InternalError(c, "清空查询历史失败")
 	}
 
@@ -153,7 +156,7 @@ func (h *QueryHandler) ExportQuery(c echo.Context) error {
 	username := c.Get(middleware.ContextKeyUsername).(string)
 	role := c.Get(middleware.ContextKeyRole).(string)
 
-	result, err := h.querySvc.ExportQuery(userID, username, role, req.DatasourceID, req.Database, req.SQL, "")
+	result, err := h.querySvc.ExportQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, "")
 	if err != nil {
 		switch err {
 		case service.ErrSQLOperationForbidden:
@@ -169,7 +172,8 @@ func (h *QueryHandler) ExportQuery(c echo.Context) error {
 		case service.ErrExportRowLimit:
 			return resp.BadRequest(c, "导出数据超过10000行上限，请添加 LIMIT 条件缩小范围")
 		default:
-			return resp.InternalError(c, err.Error())
+			log.Printf("ExportQuery failed: %v", err)
+			return resp.InternalError(c, "导出失败")
 		}
 	}
 

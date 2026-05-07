@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -24,15 +25,16 @@ var ValidDatasourceTypes = map[string]bool{"mysql": true, "mongodb": true}
 type DatasourceService struct {
 	db            *sql.DB
 	encryptionKey string
+	connMgr       *connpool.Manager
 }
 
 // NewDatasourceService creates a new DatasourceService.
-func NewDatasourceService(db *sql.DB, encryptionKey string) *DatasourceService {
-	return &DatasourceService{db: db, encryptionKey: encryptionKey}
+func NewDatasourceService(db *sql.DB, encryptionKey string, connMgr *connpool.Manager) *DatasourceService {
+	return &DatasourceService{db: db, encryptionKey: encryptionKey, connMgr: connMgr}
 }
 
 // CreateDataSource creates a new datasource with encrypted password.
-func (s *DatasourceService) CreateDataSource(ds *model.DataSource) error {
+func (s *DatasourceService) CreateDataSource(ctx context.Context, ds *model.DataSource) error {
 	if !ValidDatasourceTypes[ds.Type] {
 		return ErrInvalidDatasourceType
 	}
@@ -59,7 +61,7 @@ func (s *DatasourceService) CreateDataSource(ds *model.DataSource) error {
 		ds.Status = "active"
 	}
 
-	result, err := s.db.Exec(
+	result, err := s.db.ExecContext(ctx,
 		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, max_open, max_idle, max_lifetime, max_idle_time, status)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database,
@@ -70,7 +72,7 @@ func (s *DatasourceService) CreateDataSource(ds *model.DataSource) error {
 	}
 
 	id, _ := result.LastInsertId()
-	created, err := s.GetDataSource(id)
+	created, err := s.GetDataSource(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -79,8 +81,8 @@ func (s *DatasourceService) CreateDataSource(ds *model.DataSource) error {
 }
 
 // ListDataSources returns all datasources without encrypted passwords.
-func (s *DatasourceService) ListDataSources() ([]model.DataSource, error) {
-	rows, err := s.db.Query(
+func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSource, error) {
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, name, type, host, port, username, database, max_open, max_idle, max_lifetime, max_idle_time, status, created_at, updated_at
 		 FROM datasources ORDER BY id`,
 	)
@@ -102,9 +104,9 @@ func (s *DatasourceService) ListDataSources() ([]model.DataSource, error) {
 }
 
 // GetDataSource returns a single datasource by ID (password not decrypted).
-func (s *DatasourceService) GetDataSource(id int64) (*model.DataSource, error) {
+func (s *DatasourceService) GetDataSource(ctx context.Context, id int64) (*model.DataSource, error) {
 	ds := &model.DataSource{}
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT id, name, type, host, port, username, password_encrypted, database, max_open, max_idle, max_lifetime, max_idle_time, status, created_at, updated_at
 		 FROM datasources WHERE id = ?`, id,
 	).Scan(&ds.ID, &ds.Name, &ds.Type, &ds.Host, &ds.Port, &ds.Username, &ds.PasswordEncrypted, &ds.Database,
@@ -119,9 +121,15 @@ func (s *DatasourceService) GetDataSource(id int64) (*model.DataSource, error) {
 }
 
 // UpdateDataSource updates an existing datasource.
-func (s *DatasourceService) UpdateDataSource(id int64, ds *model.DataSource) error {
+func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *model.DataSource) error {
 	if !ValidDatasourceTypes[ds.Type] {
 		return ErrInvalidDatasourceType
+	}
+
+	// Get existing datasource for pool invalidation
+	existing, err := s.GetDataSource(ctx, id)
+	if err != nil {
+		return err
 	}
 
 	// Build update query — if password is provided, re-encrypt; otherwise keep existing
@@ -133,14 +141,10 @@ func (s *DatasourceService) UpdateDataSource(id int64, ds *model.DataSource) err
 		}
 		encrypted = enc
 	} else {
-		existing, err := s.GetDataSource(id)
-		if err != nil {
-			return err
-		}
 		encrypted = existing.PasswordEncrypted
 	}
 
-	result, err := s.db.Exec(
+	result, err := s.db.ExecContext(ctx,
 		`UPDATE datasources SET name=?, type=?, host=?, port=?, username=?, password_encrypted=?, database=?,
 		 max_open=?, max_idle=?, max_lifetime=?, max_idle_time=?, updated_at=datetime('now') WHERE id=?`,
 		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database,
@@ -153,12 +157,31 @@ func (s *DatasourceService) UpdateDataSource(id int64, ds *model.DataSource) err
 	if n == 0 {
 		return ErrDatasourceNotFound
 	}
+
+	// Invalidate cached connection pool since config may have changed
+	if ds.Type == "mysql" {
+		s.connMgr.Remove(id, ds.Host, ds.Port, ds.Database)
+		// Also remove pool for old config in case host/port/database changed
+		if existing.Host != ds.Host || existing.Port != ds.Port || existing.Database != ds.Database {
+			s.connMgr.Remove(id, existing.Host, existing.Port, existing.Database)
+		}
+	}
+	if ds.Type == "mongodb" || existing.Type == "mongodb" {
+		s.connMgr.RemoveMongo(id)
+	}
+
 	return nil
 }
 
 // DisableDataSource marks a datasource as disabled.
-func (s *DatasourceService) DisableDataSource(id int64) error {
-	result, err := s.db.Exec(
+func (s *DatasourceService) DisableDataSource(ctx context.Context, id int64) error {
+	// Get existing datasource for pool cleanup
+	existing, err := s.GetDataSource(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	result, err := s.db.ExecContext(ctx,
 		`UPDATE datasources SET status='disabled', updated_at=datetime('now') WHERE id=?`, id,
 	)
 	if err != nil {
@@ -168,16 +191,25 @@ func (s *DatasourceService) DisableDataSource(id int64) error {
 	if n == 0 {
 		return ErrDatasourceNotFound
 	}
+
+	// Clean up cached connection pool
+	if existing.Type == "mysql" {
+		s.connMgr.Remove(id, existing.Host, existing.Port, existing.Database)
+	}
+	if existing.Type == "mongodb" {
+		s.connMgr.RemoveMongo(id)
+	}
+
 	return nil
 }
 
 // TestConnection attempts to connect to the datasource.
-func (s *DatasourceService) TestConnection(ds *model.DataSource) error {
+func (s *DatasourceService) TestConnection(ctx context.Context, ds *model.DataSource) error {
 	password := ds.PasswordEncrypted
 
 	// If the datasource has an ID, try to decrypt the stored password
 	if ds.ID > 0 {
-		stored, err := s.GetDataSource(ds.ID)
+		stored, err := s.GetDataSource(ctx, ds.ID)
 		if err != nil {
 			return err
 		}
@@ -190,18 +222,18 @@ func (s *DatasourceService) TestConnection(ds *model.DataSource) error {
 
 	switch ds.Type {
 	case "mysql":
-		return connpool.MySQLPing(ds.Host, ds.Port, ds.Username, password)
+		return connpool.MySQLPing(ctx, ds.Host, ds.Port, ds.Username, password)
 	case "mongodb":
 		uri := buildMongoURI(ds.Host, ds.Port, ds.Username, password)
-		return connpool.MongoPing(uri)
+		return connpool.MongoPing(ctx, uri)
 	default:
 		return ErrInvalidDatasourceType
 	}
 }
 
 // GetTables returns table names for a MySQL datasource or database names for MongoDB.
-func (s *DatasourceService) GetTables(id int64) ([]string, error) {
-	ds, err := s.GetDataSource(id)
+func (s *DatasourceService) GetTables(ctx context.Context, id int64) ([]string, error) {
+	ds, err := s.GetDataSource(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -217,18 +249,46 @@ func (s *DatasourceService) GetTables(id int64) ([]string, error) {
 
 	switch ds.Type {
 	case "mysql":
-		return connpool.MySQLGetTables(ds.Host, ds.Port, ds.Username, password, ds.Database)
+		dbName := ds.Database
+		if dbName == "" {
+			dbName = "information_schema"
+		}
+		poolCfg := connpool.MySQLPoolConfig{
+			MaxOpen:     ds.MaxOpen,
+			MaxIdle:     ds.MaxIdle,
+			MaxLifetime: ds.MaxLifetime,
+			MaxIdleTime: ds.MaxIdleTime,
+		}
+		targetDB, err := s.connMgr.GetMySQL(id, ds.Host, ds.Port, ds.Username, password, dbName, poolCfg)
+		if err != nil {
+			return nil, fmt.Errorf("connect mysql: %w", err)
+		}
+		rows, err := targetDB.QueryContext(ctx, "SHOW TABLES")
+		if err != nil {
+			return nil, fmt.Errorf("show tables: %w", err)
+		}
+		defer rows.Close()
+
+		tables := make([]string, 0)
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				return nil, fmt.Errorf("scan table name: %w", err)
+			}
+			tables = append(tables, name)
+		}
+		return tables, rows.Err()
 	case "mongodb":
 		uri := buildMongoURI(ds.Host, ds.Port, ds.Username, password)
-		return connpool.MongoGetDatabases(uri)
+		return s.connMgr.GetMongoDatabaseNames(ctx, id, uri)
 	default:
 		return nil, ErrInvalidDatasourceType
 	}
 }
 
 // GetDataSourceSafe returns a datasource without the encrypted password for API responses.
-func (s *DatasourceService) GetDataSourceSafe(id int64) (*model.DataSource, error) {
-	ds, err := s.GetDataSource(id)
+func (s *DatasourceService) GetDataSourceSafe(ctx context.Context, id int64) (*model.DataSource, error) {
+	ds, err := s.GetDataSource(ctx, id)
 	if err != nil {
 		return nil, err
 	}

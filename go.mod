@@ -3,7 +3,6 @@ module github.com/whg517/sqlflow
 go 1.25.0
 
 require (
-	entgo.io/ent v0.14.6
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/labstack/echo/v4 v4.15.2

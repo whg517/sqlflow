@@ -1,0 +1,60 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+server
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Data
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Node
+web/node_modules/
+web/dist/
+web/.webpack/
+
+# State & env
+state/
+.env
+.env.local
+config.yaml
+
+# Docs & meta
+docs/
+*.md
+!README.md
+CLAUDE.md
+AGENTS.md
+
+# Test & coverage
+web/test-results/
+web/playwright-report/
+coverage.txt
+
+# Docker
+Dockerfile
+docker-compose*.yaml
+.dockerignore
+
+# Misc
+*.bak
+vendor/

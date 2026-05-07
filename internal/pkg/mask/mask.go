@@ -2,6 +2,7 @@ package mask
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
@@ -56,6 +57,8 @@ func ApplyField(value interface{}, rule Rule) interface{} {
 		return maskAddress(s)
 	case MaskFull:
 		return maskFull(s)
+	case MaskCustom:
+		return maskCustomRegex(s, rule.CustomRegex, rule.CustomTemplate)
 	default:
 		return value
 	}
@@ -177,4 +180,42 @@ func maskAddress(s string) string {
 
 func maskFull(s string) string {
 	return strings.Repeat("*", utf8.RuneCountInString(s))
+}
+
+// maskCustomRegex applies a user-defined regex pattern and replacement template.
+// If the regex is invalid or does not match, returns the original value.
+func maskCustomRegex(s, pattern, template string) string {
+	if pattern == "" {
+		return maskFull(s)
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return maskFull(s)
+	}
+	if !re.MatchString(s) {
+		return maskFull(s)
+	}
+	if template == "" {
+		return re.ReplaceAllString(s, strings.Repeat("*", utf8.RuneCountInString(s)))
+	}
+	return re.ReplaceAllString(s, template)
+}
+
+// ValidMaskTypes returns the list of valid mask type strings.
+func ValidMaskTypes() []string {
+	return []string{
+		string(MaskPhone), string(MaskIDCard), string(MaskName),
+		string(MaskEmail), string(MaskBankCard), string(MaskAddress),
+		string(MaskFull), string(MaskCustom),
+	}
+}
+
+// IsValidMaskType checks if a mask type string is valid.
+func IsValidMaskType(t string) bool {
+	for _, v := range ValidMaskTypes() {
+		if v == t {
+			return true
+		}
+	}
+	return false
 }

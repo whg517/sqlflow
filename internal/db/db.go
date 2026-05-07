@@ -145,6 +145,21 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 		return fmt.Errorf("migrate audit_logs index: %w", err)
 	}
 
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`)
+	if err != nil {
+		return fmt.Errorf("migrate audit_logs action index: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_datasource_id ON audit_logs(datasource_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate audit_logs datasource_id index: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at)`)
+	if err != nil {
+		return fmt.Errorf("migrate audit_logs created_at index: %w", err)
+	}
+
 	_, err = db.Exec(`
 CREATE TABLE IF NOT EXISTS mask_rules (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -161,6 +176,65 @@ CREATE TABLE IF NOT EXISTS mask_rules (
 	`)
 	if err != nil {
 		return fmt.Errorf("migrate mask_rules: %w", err)
+	}
+
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS sensitive_tables (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    datasource_id     INTEGER NOT NULL DEFAULT 0,
+    database          TEXT    NOT NULL DEFAULT '',
+    table_name        TEXT    NOT NULL DEFAULT '',
+    sensitivity_level TEXT    NOT NULL DEFAULT 'medium',
+    created_at        DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at        DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate sensitive_tables: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sensitive_tables_unique ON sensitive_tables(datasource_id, database, table_name)`)
+	if err != nil {
+		return fmt.Errorf("migrate sensitive_tables index: %w", err)
+	}
+
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS tickets (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    submitter_id     INTEGER NOT NULL,
+    datasource_id    INTEGER NOT NULL,
+    database         TEXT    NOT NULL DEFAULT '',
+    sql_content      TEXT    NOT NULL,
+    sql_summary      TEXT    NOT NULL DEFAULT '',
+    db_type          TEXT    NOT NULL DEFAULT 'mysql',
+    change_reason    TEXT    NOT NULL DEFAULT '',
+    status           TEXT    NOT NULL DEFAULT 'SUBMITTED',
+    risk_level       TEXT    NOT NULL DEFAULT '',
+    ai_review_result TEXT    NOT NULL DEFAULT '',
+    reviewer_id      INTEGER NOT NULL DEFAULT 0,
+    review_comment   TEXT    NOT NULL DEFAULT '',
+    executed_at      DATETIME,
+    created_at       DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at       DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate tickets: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tickets_submitter_id ON tickets(submitter_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate tickets index submitter_id: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status)`)
+	if err != nil {
+		return fmt.Errorf("migrate tickets index status: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tickets_datasource_id ON tickets(datasource_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate tickets index datasource_id: %w", err)
 	}
 
 	return nil

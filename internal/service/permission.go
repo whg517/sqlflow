@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"errors"
@@ -57,8 +58,8 @@ func newSQLiteAdapter(db *sql.DB) *sqliteAdapter {
 	return &sqliteAdapter{db: db}
 }
 
-func (a *sqliteAdapter) loadPolicyData() ([]CasbinRule, error) {
-	rows, err := a.db.Query(`SELECT id, ptype, v0, v1, v2, v3, v4, v5 FROM casbin_rule ORDER BY id`)
+func (a *sqliteAdapter) loadPolicyData(ctx context.Context) ([]CasbinRule, error) {
+	rows, err := a.db.QueryContext(ctx, `SELECT id, ptype, v0, v1, v2, v3, v4, v5 FROM casbin_rule ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +77,7 @@ func (a *sqliteAdapter) loadPolicyData() ([]CasbinRule, error) {
 }
 
 func (a *sqliteAdapter) LoadPolicy(model model.Model) error {
-	rules, err := a.loadPolicyData()
+	rules, err := a.loadPolicyData(context.Background())
 	if err != nil {
 		return err
 	}
@@ -94,11 +95,11 @@ func (a *sqliteAdapter) LoadPolicy(model model.Model) error {
 }
 
 func (a *sqliteAdapter) SavePolicy(model model.Model) error {
-	tx, err := a.db.Begin()
+	tx, err := a.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(`DELETE FROM casbin_rule`)
+	_, err = tx.ExecContext(context.Background(), `DELETE FROM casbin_rule`)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -106,7 +107,7 @@ func (a *sqliteAdapter) SavePolicy(model model.Model) error {
 
 	for ptype, ast := range model["p"] {
 		for _, rule := range ast.Policy {
-			_, err := tx.Exec(
+			_, err := tx.ExecContext(context.Background(),
 				`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 				ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
 			)
@@ -119,7 +120,7 @@ func (a *sqliteAdapter) SavePolicy(model model.Model) error {
 
 	for ptype, ast := range model["g"] {
 		for _, rule := range ast.Policy {
-			_, err := tx.Exec(
+			_, err := tx.ExecContext(context.Background(),
 				`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 				ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
 			)
@@ -134,7 +135,7 @@ func (a *sqliteAdapter) SavePolicy(model model.Model) error {
 }
 
 func (a *sqliteAdapter) AddPolicy(sec string, ptype string, rule []string) error {
-	_, err := a.db.Exec(
+	_, err := a.db.ExecContext(context.Background(),
 		`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
 	)
@@ -142,7 +143,7 @@ func (a *sqliteAdapter) AddPolicy(sec string, ptype string, rule []string) error
 }
 
 func (a *sqliteAdapter) RemovePolicy(sec string, ptype string, rule []string) error {
-	_, err := a.db.Exec(
+	_, err := a.db.ExecContext(context.Background(),
 		`DELETE FROM casbin_rule WHERE ptype=? AND v0=? AND v1=? AND v2=? AND v3=? AND v4=? AND v5=?`,
 		ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
 	)
@@ -195,7 +196,7 @@ func NewPermissionService(db *sql.DB) (*PermissionService, error) {
 	}
 
 	// Seed initial policies if table is empty
-	if err := svc.seedIfEmpty(); err != nil {
+	if err := svc.seedIfEmpty(context.Background()); err != nil {
 		return nil, fmt.Errorf("seed policies: %w", err)
 	}
 
@@ -203,9 +204,9 @@ func NewPermissionService(db *sql.DB) (*PermissionService, error) {
 }
 
 // seedIfEmpty loads initial policies from policy.csv if casbin_rule table is empty.
-func (s *PermissionService) seedIfEmpty() error {
+func (s *PermissionService) seedIfEmpty(ctx context.Context) error {
 	var count int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM casbin_rule`).Scan(&count)
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM casbin_rule`).Scan(&count)
 	if err != nil {
 		return err
 	}
@@ -276,9 +277,9 @@ func (s *PermissionService) AddPolicy(sub, dom, obj, act string) error {
 }
 
 // RemovePolicy removes a policy rule by its database ID.
-func (s *PermissionService) RemovePolicy(id int64) error {
+func (s *PermissionService) RemovePolicy(ctx context.Context, id int64) error {
 	var r CasbinRule
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT id, ptype, v0, v1, v2, v3, v4, v5 FROM casbin_rule WHERE id = ?`, id,
 	).Scan(&r.ID, &r.PType, &r.V0, &r.V1, &r.V2, &r.V3, &r.V4, &r.V5)
 	if err != nil {
@@ -293,31 +294,32 @@ func (s *PermissionService) RemovePolicy(id int64) error {
 }
 
 // GetPolicies returns all policy rules with pagination and optional filtering.
-func (s *PermissionService) GetPolicies(page, pageSize int64, ptype, sub string) ([]Policy, int64, error) {
-	var args []interface{}
-	where := "WHERE ptype = 'p'"
+func (s *PermissionService) GetPolicies(ctx context.Context, page, pageSize int64, ptype, sub string) ([]Policy, int64, error) {
+	p := ParsePagination(int(page), int(pageSize))
+
+	var filters []FilterClause
+	filters = append(filters, FilterClause{Condition: "ptype = 'p'"})
 	if ptype != "" {
-		where += " AND ptype = ?"
-		args = append(args, ptype)
+		filters = append(filters, FilterClause{Condition: "ptype = ?", Args: []interface{}{ptype}})
 	}
 	if sub != "" {
-		where += " AND v0 = ?"
-		args = append(args, sub)
+		filters = append(filters, FilterClause{Condition: "v0 = ?", Args: []interface{}{sub}})
 	}
 
+	whereClause, args := BuildWhereClause(filters)
+
 	var total int64
-	countSQL := fmt.Sprintf(`SELECT COUNT(*) FROM casbin_rule %s`, where)
-	if err := s.db.QueryRow(countSQL, args...).Scan(&total); err != nil {
+	countSQL := PaginatedCountSQL("casbin_rule", whereClause)
+	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	offset := (page - 1) * pageSize
 	querySQL := fmt.Sprintf(
 		`SELECT id, ptype, v0, v1, v2, v3 FROM casbin_rule %s ORDER BY id LIMIT ? OFFSET ?`,
-		where,
+		whereClause,
 	)
-	args = append(args, pageSize, offset)
-	rows, err := s.db.Query(querySQL, args...)
+	queryArgs := AppendLimitArgs(args, p)
+	rows, err := s.db.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -335,8 +337,8 @@ func (s *PermissionService) GetPolicies(page, pageSize int64, ptype, sub string)
 }
 
 // GetPoliciesForRole returns all policies for a given role (v0 matches).
-func (s *PermissionService) GetPoliciesForRole(role string) ([]Policy, error) {
-	rows, err := s.db.Query(
+func (s *PermissionService) GetPoliciesForRole(ctx context.Context, role string) ([]Policy, error) {
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, ptype, v0, v1, v2, v3 FROM casbin_rule WHERE ptype = 'p' AND v0 = ? ORDER BY id`, role,
 	)
 	if err != nil {

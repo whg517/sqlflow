@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
@@ -35,7 +36,7 @@ func (h *PermissionHandler) GetRole(c echo.Context) error {
 		return resp.BadRequest(c, "角色名称不能为空")
 	}
 
-	policies, err := h.permSvc.GetPoliciesForRole(role)
+	policies, err := h.permSvc.GetPoliciesForRole(c.Request().Context(), role)
 	if err != nil {
 		return resp.InternalError(c, "获取角色策略失败")
 	}
@@ -65,7 +66,11 @@ func (h *PermissionHandler) AddPolicy(c echo.Context) error {
 	}
 
 	if err := h.permSvc.AddPolicy(req.Sub, req.Dom, req.Obj, req.Act); err != nil {
-		return resp.BadRequest(c, err.Error())
+		if err.Error() == "策略已存在" {
+			return resp.BadRequest(c, err.Error())
+		}
+		log.Printf("AddPolicy failed: %v", err)
+		return resp.InternalError(c, "添加策略失败")
 	}
 
 	return resp.Created(c, map[string]string{"message": "策略添加成功"})
@@ -85,7 +90,7 @@ func (h *PermissionHandler) ListPolicies(c echo.Context) error {
 		pageSize = 50
 	}
 
-	policies, total, err := h.permSvc.GetPolicies(page, pageSize, ptype, sub)
+	policies, total, err := h.permSvc.GetPolicies(c.Request().Context(), page, pageSize, ptype, sub)
 	if err != nil {
 		return resp.InternalError(c, "获取策略列表失败")
 	}
@@ -100,8 +105,12 @@ func (h *PermissionHandler) DeletePolicy(c echo.Context) error {
 		return resp.BadRequest(c, "无效的策略ID")
 	}
 
-	if err := h.permSvc.RemovePolicy(id); err != nil {
-		return resp.BadRequest(c, err.Error())
+	if err := h.permSvc.RemovePolicy(c.Request().Context(), id); err != nil {
+		if err.Error() == "策略不存在" {
+			return resp.NotFound(c, err.Error())
+		}
+		log.Printf("RemovePolicy failed: %v", err)
+		return resp.InternalError(c, "删除策略失败")
 	}
 
 	return resp.OKWithMessage(c, "策略已删除", nil)

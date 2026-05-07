@@ -1,4 +1,49 @@
 package handler
 
+import (
+	"log"
+	"strconv"
+
+	"github.com/labstack/echo/v4"
+	"github.com/whg517/sqlflow/internal/resp"
+	"github.com/whg517/sqlflow/internal/service"
+)
+
 // AuditHandler handles audit log related requests.
-type AuditHandler struct{}
+type AuditHandler struct {
+	auditSvc *service.AuditService
+}
+
+// NewAuditHandler creates a new AuditHandler.
+func NewAuditHandler(auditSvc *service.AuditService) *AuditHandler {
+	return &AuditHandler{auditSvc: auditSvc}
+}
+
+// ListAuditLogs handles GET /api/audit-logs.
+func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+
+	logs, total, err := h.auditSvc.List(
+		c.Request().Context(),
+		page, pageSize,
+		c.QueryParam("user_id"),
+		c.QueryParam("action"),
+		c.QueryParam("datasource_id"),
+		c.QueryParam("start"),
+		c.QueryParam("end"),
+		c.QueryParam("keyword"),
+	)
+	if err != nil {
+		log.Printf("ListAuditLogs failed: %v", err)
+		return resp.InternalError(c, "获取审计日志失败")
+	}
+
+	return resp.OKPage(c, logs, int64(page), int64(pageSize), total)
+}

@@ -65,7 +65,7 @@ func (h *UserHandler) Login(c echo.Context) error {
 		return resp.BadRequest(c, err.Error())
 	}
 
-	token, user, err := h.authSvc.Authenticate(req.Username, req.Password)
+	token, user, err := h.authSvc.Authenticate(c.Request().Context(), req.Username, req.Password)
 	if err != nil {
 		return resp.Unauthorized(c, "用户名或密码错误")
 	}
@@ -84,7 +84,7 @@ func (h *UserHandler) Login(c echo.Context) error {
 func (h *UserHandler) Me(c echo.Context) error {
 	userID := c.Get(middleware.ContextKeyUserID).(int64)
 
-	user, err := h.authSvc.GetUserByID(userID)
+	user, err := h.authSvc.GetUserByID(c.Request().Context(), userID)
 	if err != nil {
 		return resp.Unauthorized(c, "用户不存在")
 	}
@@ -110,7 +110,7 @@ func (h *UserHandler) ChangePassword(c echo.Context) error {
 		return resp.BadRequest(c, err.Error())
 	}
 
-	if err := h.authSvc.ChangePassword(userID, req.OldPassword, req.NewPassword); err != nil {
+	if err := h.authSvc.ChangePassword(c.Request().Context(), userID, req.OldPassword, req.NewPassword); err != nil {
 		if err == service.ErrInvalidCredentials {
 			return resp.Unauthorized(c, "旧密码错误")
 		}
@@ -198,7 +198,7 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 		return resp.BadRequest(c, "角色必须是 admin、dba 或 developer")
 	}
 
-	user, err := h.authSvc.CreateUser(req.Username, req.Password, req.Role)
+	user, err := h.authSvc.CreateUser(c.Request().Context(), req.Username, req.Password, req.Role)
 	if err != nil {
 		return resp.InternalError(c, "创建用户失败")
 	}
@@ -215,7 +215,7 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 func (h *UserHandler) ListUsers(c echo.Context) error {
 	page, pageSize := parsePagination(c)
 
-	users, total, err := h.authSvc.ListUsers(page, pageSize)
+	users, total, err := h.authSvc.ListUsers(c.Request().Context(), page, pageSize)
 	if err != nil {
 		return resp.InternalError(c, "获取用户列表失败")
 	}
@@ -240,7 +240,7 @@ func (h *UserHandler) GetUser(c echo.Context) error {
 		return resp.BadRequest(c, "无效的用户ID")
 	}
 
-	user, err := h.authSvc.GetUserByID(id)
+	user, err := h.authSvc.GetUserByID(c.Request().Context(), id)
 	if err != nil {
 		return resp.NotFound(c, "用户不存在")
 	}
@@ -276,7 +276,7 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	}
 
 	// Check target user is not admin
-	targetUser, err := h.authSvc.GetUserByID(id)
+	targetUser, err := h.authSvc.GetUserByID(c.Request().Context(), id)
 	if err != nil {
 		return resp.NotFound(c, "用户不存在")
 	}
@@ -284,7 +284,7 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 		return resp.Forbidden(c, "不能编辑管理员角色的信息")
 	}
 
-	user, err := h.authSvc.UpdateUserRole(id, req.Role)
+	user, err := h.authSvc.UpdateUserRole(c.Request().Context(), id, req.Role)
 	if err != nil {
 		return resp.InternalError(c, "更新用户失败")
 	}
@@ -312,14 +312,14 @@ func (h *UserHandler) DeleteUser(c echo.Context) error {
 	}
 
 	// Check target user exists
-	targetUser, err := h.authSvc.GetUserByID(id)
+	targetUser, err := h.authSvc.GetUserByID(c.Request().Context(), id)
 	if err != nil {
 		return resp.NotFound(c, "用户不存在")
 	}
 
 	// Cannot delete last admin
 	if targetUser.Role == "admin" {
-		adminCount, err := h.authSvc.AdminCount()
+		adminCount, err := h.authSvc.AdminCount(c.Request().Context())
 		if err != nil {
 			return resp.InternalError(c, "删除用户失败")
 		}
@@ -328,7 +328,7 @@ func (h *UserHandler) DeleteUser(c echo.Context) error {
 		}
 	}
 
-	if err := h.authSvc.DeleteUser(id); err != nil {
+	if err := h.authSvc.DeleteUser(c.Request().Context(), id); err != nil {
 		return resp.InternalError(c, "删除用户失败")
 	}
 
@@ -351,7 +351,7 @@ func (h *UserHandler) ResetPassword(c echo.Context) error {
 		return resp.BadRequest(c, err.Error())
 	}
 
-	if err := h.authSvc.ResetPassword(id, req.Password); err != nil {
+	if err := h.authSvc.ResetPassword(c.Request().Context(), id, req.Password); err != nil {
 		if err == service.ErrUserNotFound {
 			return resp.NotFound(c, "用户不存在")
 		}

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -42,13 +43,13 @@ func NewAuthService(db *sql.DB, jwtSecret string, jwtExpiry time.Duration) *Auth
 }
 
 // CreateUser inserts a new user with a bcrypt-hashed password.
-func (s *AuthService) CreateUser(username, password, role string) (*model.User, error) {
+func (s *AuthService) CreateUser(ctx context.Context, username, password, role string) (*model.User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	result, err := s.db.Exec(
+	result, err := s.db.ExecContext(ctx,
 		`INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)`,
 		username, string(hash), role,
 	)
@@ -57,13 +58,13 @@ func (s *AuthService) CreateUser(username, password, role string) (*model.User, 
 	}
 
 	id, _ := result.LastInsertId()
-	return s.GetUserByID(id)
+	return s.GetUserByID(ctx, id)
 }
 
 // GetUserByUsername finds a user by username.
-func (s *AuthService) GetUserByUsername(username string) (*model.User, error) {
+func (s *AuthService) GetUserByUsername(ctx context.Context, username string) (*model.User, error) {
 	u := &model.User{}
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE username = ?`,
 		username,
 	).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt)
@@ -77,9 +78,9 @@ func (s *AuthService) GetUserByUsername(username string) (*model.User, error) {
 }
 
 // GetUserByID finds a user by ID.
-func (s *AuthService) GetUserByID(id int64) (*model.User, error) {
+func (s *AuthService) GetUserByID(ctx context.Context, id int64) (*model.User, error) {
 	u := &model.User{}
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE id = ?`,
 		id,
 	).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt)
@@ -93,8 +94,8 @@ func (s *AuthService) GetUserByID(id int64) (*model.User, error) {
 }
 
 // Authenticate validates credentials and returns a signed JWT token.
-func (s *AuthService) Authenticate(username, password string) (string, *model.User, error) {
-	u, err := s.GetUserByUsername(username)
+func (s *AuthService) Authenticate(ctx context.Context, username, password string) (string, *model.User, error) {
+	u, err := s.GetUserByUsername(ctx, username)
 	if err != nil {
 		return "", nil, ErrInvalidCredentials
 	}
@@ -112,8 +113,8 @@ func (s *AuthService) Authenticate(username, password string) (string, *model.Us
 }
 
 // ChangePassword changes a user's password after verifying the old one.
-func (s *AuthService) ChangePassword(userID int64, oldPassword, newPassword string) error {
-	u, err := s.GetUserByID(userID)
+func (s *AuthService) ChangePassword(ctx context.Context, userID int64, oldPassword, newPassword string) error {
+	u, err := s.GetUserByID(ctx, userID)
 	if err != nil {
 		return ErrUserNotFound
 	}
@@ -127,7 +128,7 @@ func (s *AuthService) ChangePassword(userID int64, oldPassword, newPassword stri
 		return fmt.Errorf("hash password: %w", err)
 	}
 
-	_, err = s.db.Exec(
+	_, err = s.db.ExecContext(ctx,
 		`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`,
 		string(hash), userID,
 	)
@@ -135,24 +136,28 @@ func (s *AuthService) ChangePassword(userID int64, oldPassword, newPassword stri
 }
 
 // UserCount returns the number of users in the database.
-func (s *AuthService) UserCount() (int, error) {
+func (s *AuthService) UserCount(ctx context.Context) (int, error) {
 	var count int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count)
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count)
 	return count, err
 }
 
 // ListUsers returns a paginated list of users.
-func (s *AuthService) ListUsers(page, pageSize int64) ([]*model.User, int64, error) {
+func (s *AuthService) ListUsers(ctx context.Context, page, pageSize int64) ([]*model.User, int64, error) {
+	p := ParsePagination(int(page), int(pageSize))
+
 	var total int64
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&total); err != nil {
+	countSQL := PaginatedCountSQL("users", "")
+	if err := s.db.QueryRowContext(ctx, countSQL).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count users: %w", err)
 	}
 
-	offset := (page - 1) * pageSize
-	rows, err := s.db.Query(
-		`SELECT id, username, password_hash, role, created_at, updated_at FROM users ORDER BY id LIMIT ? OFFSET ?`,
-		pageSize, offset,
+	querySQL := PaginatedQuerySQL(
+		"SELECT id, username, password_hash, role, created_at, updated_at",
+		"users", "", "id", p,
 	)
+	queryArgs := AppendLimitArgs(nil, p)
+	rows, err := s.db.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query users: %w", err)
 	}
@@ -166,12 +171,15 @@ func (s *AuthService) ListUsers(page, pageSize int64) ([]*model.User, int64, err
 		}
 		users = append(users, u)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate users: %w", err)
+	}
 	return users, total, nil
 }
 
 // UpdateUserRole updates a user's role. Returns an error if the user does not exist.
-func (s *AuthService) UpdateUserRole(userID int64, role string) (*model.User, error) {
-	result, err := s.db.Exec(
+func (s *AuthService) UpdateUserRole(ctx context.Context, userID int64, role string) (*model.User, error) {
+	result, err := s.db.ExecContext(ctx,
 		`UPDATE users SET role = ?, updated_at = datetime('now') WHERE id = ?`,
 		role, userID,
 	)
@@ -182,12 +190,12 @@ func (s *AuthService) UpdateUserRole(userID int64, role string) (*model.User, er
 	if n == 0 {
 		return nil, ErrUserNotFound
 	}
-	return s.GetUserByID(userID)
+	return s.GetUserByID(ctx, userID)
 }
 
 // DeleteUser deletes a user by ID.
-func (s *AuthService) DeleteUser(userID int64) error {
-	result, err := s.db.Exec(`DELETE FROM users WHERE id = ?`, userID)
+func (s *AuthService) DeleteUser(ctx context.Context, userID int64) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, userID)
 	if err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
@@ -199,19 +207,19 @@ func (s *AuthService) DeleteUser(userID int64) error {
 }
 
 // AdminCount returns the number of admin users.
-func (s *AuthService) AdminCount() (int64, error) {
+func (s *AuthService) AdminCount(ctx context.Context) (int64, error) {
 	var count int64
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM users WHERE role = 'admin'`).Scan(&count)
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE role = 'admin'`).Scan(&count)
 	return count, err
 }
 
 // ResetPassword resets a user's password (admin operation, no old password check).
-func (s *AuthService) ResetPassword(userID int64, newPassword string) error {
+func (s *AuthService) ResetPassword(ctx context.Context, userID int64, newPassword string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
-	result, err := s.db.Exec(
+	result, err := s.db.ExecContext(ctx,
 		`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`,
 		string(hash), userID,
 	)

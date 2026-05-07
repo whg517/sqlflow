@@ -9,6 +9,15 @@ import (
 	"io"
 )
 
+// ValidateKey checks if the key length is valid for AES (16, 24, or 32 bytes).
+func ValidateKey(key string) error {
+	n := len(key)
+	if n != 16 && n != 24 && n != 32 {
+		return fmt.Errorf("AES key must be 16, 24, or 32 bytes, got %d", n)
+	}
+	return nil
+}
+
 // Encrypt encrypts plaintext using AES-GCM and returns a base64-encoded string.
 func Encrypt(plaintext, key string) (string, error) {
 	block, err := aes.NewCipher([]byte(key))

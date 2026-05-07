@@ -1,0 +1,43 @@
+# SQLFlow 配置示例
+# 复制为 config.yaml 并修改相应值
+# cp config/config.example.yaml config/config.yaml
+
+server:
+  port: 8080  # 服务监听端口
+
+jwt:
+  # JWT 签名密钥（必填，至少 16 字符）
+  # 生成方法: openssl rand -hex 32
+  secret: "your-32-char-secret-change-me-in-production"
+  expiry: "24h"  # Token 过期时间
+
+admin:
+  # 初始管理员账号（仅首次启动创建，至少 8 字符）
+  username: "admin"
+  # ⚠️ 必须修改默认密码，生产环境请使用强密码
+  # 生成方法: openssl rand -base64 16
+  password: "admin123"
+
+db:
+  # SQLite 数据库文件路径
+  path: "./data/sqlflow.db"
+
+ai:
+  provider: "openai"
+  model: "gpt-4"
+  api_key: ""  # AI API Key（可选，为空则 AI 评审不可用）
+  base_url: "https://api.openai.com/v1"
+  timeout: "10s"
+
+dingtalk:
+  webhook_url: ""  # 钉钉机器人 Webhook 地址（可选）
+  secret: ""       # 钉钉机器人签名密钥（可选）
+
+# AES 加密密钥（必填，用于加密数据源密码等敏感信息）
+# 必须为 16、24 或 32 字节（对应 AES-128/192/256）
+# 生成方法: openssl rand -hex 16   (16字节/AES-128)
+#           openssl rand -hex 24   (24字节/AES-192)
+#           openssl rand -hex 32   (32字节/AES-256)
+encryption_key: "0123456789abcdef0123456789abcdef"
+
+query_history_max: 200  # 每用户最大查询历史记录数

@@ -23,6 +23,8 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import MaskRulesTab from './MaskRulesTab'
+import AIConfigTab from './AIConfigTab'
 
 // --- Types ---
 
@@ -109,7 +111,7 @@ function DataSourceTab() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState({
     name: '', type: 'mysql', host: '', port: '3306',
-    username: '', password: '', max_open: '10',
+    username: '', password: '', database: '', max_open: '10',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -142,7 +144,7 @@ function DataSourceTab() {
     setEditingId(null)
     setForm({
       name: '', type: 'mysql', host: '', port: '3306',
-      username: '', password: '', max_open: '10',
+      username: '', password: '', database: '', max_open: '10',
     })
     setErrors({})
     setDialogOpen(true)
@@ -153,7 +155,7 @@ function DataSourceTab() {
     setForm({
       name: ds.name, type: ds.type, host: ds.host,
       port: String(ds.port), username: ds.username,
-      password: '', max_open: String(ds.max_open || 10),
+      password: '', database: ds.database || '', max_open: String(ds.max_open || 10),
     })
     setErrors({})
     setDialogOpen(true)
@@ -181,6 +183,7 @@ function DataSourceTab() {
       port: Number(form.port),
       username: form.username.trim(),
       ...(form.password ? { password: form.password } : {}),
+      database: form.database.trim(),
       max_open: Number(form.max_open) || 10,
     }
     try {
@@ -255,6 +258,7 @@ function DataSourceTab() {
               <TableHead className="text-[var(--text-secondary)]">名称</TableHead>
               <TableHead className="text-[var(--text-secondary)]">类型</TableHead>
               <TableHead className="text-[var(--text-secondary)]">地址</TableHead>
+              <TableHead className="text-[var(--text-secondary)]">数据库</TableHead>
               <TableHead className="text-[var(--text-secondary)]">状态</TableHead>
               <TableHead className="text-[var(--text-secondary)]">操作</TableHead>
             </TableRow>
@@ -262,13 +266,13 @@ function DataSourceTab() {
           <TableBody>
             {loading && !sources.length ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-[var(--text-muted)]">
+                <TableCell colSpan={6} className="h-24 text-center text-[var(--text-muted)]">
                   加载中...
                 </TableCell>
               </TableRow>
             ) : !sources.length ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-[var(--text-muted)]">
+                <TableCell colSpan={6} className="h-24 text-center text-[var(--text-muted)]">
                   暂无数据源，点击上方按钮添加
                 </TableCell>
               </TableRow>
@@ -286,6 +290,9 @@ function DataSourceTab() {
                     </TableCell>
                     <TableCell>
                       <span className="text-[var(--text-secondary)]">{ds.host}:{ds.port}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-[var(--text-secondary)]">{ds.database || '—'}</span>
                     </TableCell>
                     <TableCell>
                       <Badge className={sb.cls}>{sb.label}</Badge>
@@ -417,6 +424,15 @@ function DataSourceTab() {
               </div>
             </div>
             <div className="space-y-1.5">
+              <Label className="text-[var(--text-secondary)]">默认数据库</Label>
+              <Input
+                value={form.database}
+                onChange={(e) => setForm((f) => ({ ...f, database: e.target.value }))}
+                placeholder="数据库名（可选）"
+                className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
+              />
+            </div>
+            <div className="space-y-1.5">
               <Label className="text-[var(--text-secondary)]">最大连接数</Label>
               <Input
                 type="number"
@@ -473,16 +489,6 @@ function DataSourceTab() {
   )
 }
 
-// --- Placeholder Tab ---
-
-function PlaceholderTab({ title }: { title: string }) {
-  return (
-    <div className="flex h-64 items-center justify-center">
-      <p className="text-[var(--text-muted)]">{title}功能开发中...</p>
-    </div>
-  )
-}
-
 // --- Main Page ---
 
 export default function SettingsPage() {
@@ -515,8 +521,8 @@ export default function SettingsPage() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         {activeTab === 'datasource' && <DataSourceTab />}
-        {activeTab === 'mask-rules' && <PlaceholderTab title="脱敏规则" />}
-        {activeTab === 'ai-config' && <PlaceholderTab title="AI 配置" />}
+        {activeTab === 'mask-rules' && <MaskRulesTab />}
+        {activeTab === 'ai-config' && <AIConfigTab />}
       </div>
     </div>
   )

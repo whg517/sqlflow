@@ -15,6 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
 	"github.com/whg517/sqlflow/internal/pkg/mask"
@@ -69,28 +70,32 @@ type QueryService struct {
 	dsSvc         *DatasourceService
 	historySvc    *QueryHistoryService
 	permSvc       *PermissionService
+	auditSvc      *AuditService
 	encryptionKey string
+	connMgr       *connpool.Manager
 }
 
 // NewQueryService creates a new QueryService.
-func NewQueryService(db *sql.DB, dsSvc *DatasourceService, historySvc *QueryHistoryService, permSvc *PermissionService, encryptionKey string) *QueryService {
+func NewQueryService(db *sql.DB, dsSvc *DatasourceService, historySvc *QueryHistoryService, permSvc *PermissionService, auditSvc *AuditService, encryptionKey string, connMgr *connpool.Manager) *QueryService {
 	return &QueryService{
 		db:            db,
 		dsSvc:         dsSvc,
 		historySvc:    historySvc,
 		permSvc:       permSvc,
+		auditSvc:      auditSvc,
 		encryptionKey: encryptionKey,
+		connMgr:       connMgr,
 	}
 }
 
 // ExecuteQuery executes a SQL query on the specified datasource.
-func (s *QueryService) ExecuteQuery(userID int64, username, role string, datasourceID int64, database, sqlContent, dbType string) (*QueryResult, error) {
+func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username, role string, datasourceID int64, database, sqlContent, dbType string) (*QueryResult, error) {
 	if strings.TrimSpace(sqlContent) == "" {
 		return nil, ErrEmptySQL
 	}
 
 	// Get datasource
-	ds, err := s.dsSvc.GetDataSource(datasourceID)
+	ds, err := s.dsSvc.GetDataSource(ctx, datasourceID)
 	if err != nil {
 		return nil, fmt.Errorf("获取数据源失败: %w", err)
 	}
@@ -141,20 +146,28 @@ func (s *QueryService) ExecuteQuery(userID int64, username, role string, datasou
 		}
 	}
 
+	// Build pool config from datasource
+	poolCfg := connpool.MySQLPoolConfig{
+		MaxOpen:     ds.MaxOpen,
+		MaxIdle:     ds.MaxIdle,
+		MaxLifetime: ds.MaxLifetime,
+		MaxIdleTime: ds.MaxIdleTime,
+	}
+
 	// Execute based on db type
 	var result *QueryResult
 	switch dbType {
 	case "mysql":
-		result, err = s.executeMySQL(datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, defaultRowLimit)
+		result, err = s.executeMySQL(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, poolCfg, defaultRowLimit)
 	case "mongodb":
-		result, err = s.executeMongoDB(datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, defaultRowLimit)
+		result, err = s.executeMongoDB(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, defaultRowLimit)
 	default:
 		return nil, ErrDatasourceType
 	}
 
 	if err != nil {
 		// Write audit log for failed query
-		s.writeAuditLog(AuditRecord{
+		s.auditSvc.Write(ctx, AuditRecord{
 			UserID:          userID,
 			Action:          "query_failed",
 			DatasourceID:    datasourceID,
@@ -171,7 +184,7 @@ func (s *QueryService) ExecuteQuery(userID int64, username, role string, datasou
 	}
 
 	// Apply desensitization
-	desensitized, maskedFields := s.applyDesensitization(result, role, datasourceID, database, parseResult.Tables)
+	desensitized, maskedFields := s.applyDesensitization(ctx, result, role, datasourceID, database, parseResult.Tables)
 	result.Desensitized = desensitized
 	result.DesensitizedFields = maskedFields
 	result.Warnings = parseResult.Warnings
@@ -189,10 +202,10 @@ func (s *QueryService) ExecuteQuery(userID int64, username, role string, datasou
 		ResultRows:    result.Total,
 		AffectedRows:  result.AffectedRows,
 	}
-	_ = s.historySvc.CreateHistory(history)
+	_ = s.historySvc.CreateHistory(ctx, history)
 
 	// Write audit log for successful query
-	s.writeAuditLog(AuditRecord{
+	s.auditSvc.Write(ctx, AuditRecord{
 		UserID:             userID,
 		Action:             "query",
 		DatasourceID:       datasourceID,
@@ -208,22 +221,20 @@ func (s *QueryService) ExecuteQuery(userID int64, username, role string, datasou
 	return result, nil
 }
 
-func (s *QueryService) executeMySQL(datasourceID int64, database, sqlContent, host string, port int, user, password string, rowLimit int) (*QueryResult, error) {
+func (s *QueryService) executeMySQL(ctx context.Context, datasourceID int64, database, sqlContent, host string, port int, user, password string, poolCfg connpool.MySQLPoolConfig, rowLimit int) (*QueryResult, error) {
 	dbName := database
 	if dbName == "" {
 		dbName = "information_schema"
 	}
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=30s&parseTime=true", user, password, host, port, dbName)
 
 	start := time.Now()
 
-	targetDB, err := sql.Open("mysql", dsn)
+	targetDB, err := s.connMgr.GetMySQL(datasourceID, host, port, user, password, dbName, poolCfg)
 	if err != nil {
 		return nil, fmt.Errorf("连接数据库失败: %w", err)
 	}
-	defer targetDB.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 
 	rows, err := targetDB.QueryContext(ctx, sqlContent)
@@ -284,23 +295,18 @@ func (s *QueryService) executeMySQL(datasourceID int64, database, sqlContent, ho
 	}, nil
 }
 
-func (s *QueryService) executeMongoDB(datasourceID int64, database, body, host string, port int, user, password string, rowLimit int) (*QueryResult, error) {
+func (s *QueryService) executeMongoDB(ctx context.Context, datasourceID int64, database, body, host string, port int, user, password string, rowLimit int) (*QueryResult, error) {
 	uri := buildMongoURI(host, port, user, password)
-
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
-	defer cancel()
 
 	start := time.Now()
 
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	client, err := s.connMgr.GetMongoDB(ctx, datasourceID, uri)
 	if err != nil {
 		return nil, fmt.Errorf("连接MongoDB失败: %w", err)
 	}
-	defer client.Disconnect(ctx)
 
-	if err := client.Ping(ctx, nil); err != nil {
-		return nil, fmt.Errorf("连接MongoDB失败: %w", err)
-	}
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
 
 	// Parse the MongoDB command
 	mongoResult, err := sqlparser.ParseMongo(body)
@@ -402,7 +408,7 @@ func (s *QueryService) executeMongoDB(datasourceID int64, database, body, host s
 
 // applyDesensitization checks if the user has desensitize:bypass permission.
 // If not, applies masking rules to the result set.
-func (s *QueryService) applyDesensitization(result *QueryResult, role string, datasourceID int64, database string, tables []string) (bool, []string) {
+func (s *QueryService) applyDesensitization(ctx context.Context, result *QueryResult, role string, datasourceID int64, database string, tables []string) (bool, []string) {
 	// Check desensitize:bypass permission
 	for _, table := range tables {
 		if table == "" {
@@ -420,7 +426,7 @@ func (s *QueryService) applyDesensitization(result *QueryResult, role string, da
 	}
 
 	// Load mask rules for this datasource/database/tables
-	rules := s.loadMaskRules(datasourceID, database, tables)
+	rules := s.loadMaskRules(ctx, datasourceID, database, tables)
 	if len(rules) == 0 {
 		return false, nil
 	}
@@ -443,7 +449,7 @@ func (s *QueryService) applyDesensitization(result *QueryResult, role string, da
 }
 
 // loadMaskRules loads mask rules from the database for the given context.
-func (s *QueryService) loadMaskRules(datasourceID int64, database string, tables []string) []mask.Rule {
+func (s *QueryService) loadMaskRules(ctx context.Context, datasourceID int64, database string, tables []string) []mask.Rule {
 	query := `SELECT datasource_id, database, table_name, field, mask_type, custom_regex, custom_template
 			  FROM mask_rules WHERE datasource_id = ?`
 	args := []interface{}{datasourceID}
@@ -462,7 +468,7 @@ func (s *QueryService) loadMaskRules(datasourceID int64, database string, tables
 		query += fmt.Sprintf(` AND (table_name IN (%s) OR table_name = '*')`, strings.Join(placeholders, ","))
 	}
 
-	rows, err := s.db.Query(query, args...)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		log.Printf("load mask rules: %v", err)
 		return nil
@@ -486,23 +492,10 @@ func (s *QueryService) loadMaskRules(datasourceID int64, database string, tables
 		r.CustomTemplate = customTemplate
 		rules = append(rules, r)
 	}
+	if err := rows.Err(); err != nil {
+		log.Printf("iterate mask rules: %v", err)
+	}
 	return rules
-}
-
-// writeAuditLog writes an audit log entry (best-effort, non-blocking).
-func (s *QueryService) writeAuditLog(rec AuditRecord) {
-	go func() {
-		_, err := s.db.Exec(
-			`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, desensitized_fields, ip_address)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			rec.UserID, rec.Action, rec.DatasourceID, rec.Database,
-			rec.SQLContent, rec.SQLSummary, rec.ResultRows, rec.AffectedRows,
-			rec.ExecutionTimeMs, rec.ErrorMessage, rec.DesensitizedFields, rec.IPAddress,
-		)
-		if err != nil {
-			log.Printf("write audit log: %v", err)
-		}
-	}()
 }
 
 // parseMongoBody parses the MongoDB command body into a map.

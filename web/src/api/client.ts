@@ -36,6 +36,11 @@ async function request<T>(
     throw new Error('Unauthorized')
   }
 
+  if (res.status === 403) {
+    window.location.href = '/403'
+    throw new Error('Forbidden')
+  }
+
   if (res.status >= 500) {
     toast.error('服务器错误，请稍后重试')
     throw new Error(`Server error: ${res.status}`)

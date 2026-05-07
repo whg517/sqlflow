@@ -1,10 +1,12 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
 	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
 )
@@ -15,13 +17,13 @@ const exportRowLimit = 10000
 var ErrExportRowLimit = errors.New("导出数据超过10000行上限，请添加 LIMIT 条件缩小范围")
 
 // ExportQuery executes a query for data export with a higher row limit (10000).
-func (s *QueryService) ExportQuery(userID int64, username, role string, datasourceID int64, database, sqlContent, dbType string) (*QueryResult, error) {
+func (s *QueryService) ExportQuery(ctx context.Context, userID int64, username, role string, datasourceID int64, database, sqlContent, dbType string) (*QueryResult, error) {
 	if strings.TrimSpace(sqlContent) == "" {
 		return nil, ErrEmptySQL
 	}
 
 	// Get datasource
-	ds, err := s.dsSvc.GetDataSource(datasourceID)
+	ds, err := s.dsSvc.GetDataSource(ctx, datasourceID)
 	if err != nil {
 		return nil, fmt.Errorf("获取数据源失败: %w", err)
 	}
@@ -71,19 +73,27 @@ func (s *QueryService) ExportQuery(userID int64, username, role string, datasour
 		}
 	}
 
+	// Build pool config from datasource
+	poolCfg := connpool.MySQLPoolConfig{
+		MaxOpen:     ds.MaxOpen,
+		MaxIdle:     ds.MaxIdle,
+		MaxLifetime: ds.MaxLifetime,
+		MaxIdleTime: ds.MaxIdleTime,
+	}
+
 	// Execute with exportRowLimit+1 to detect overflow
 	var result *QueryResult
 	switch dbType {
 	case "mysql":
-		result, err = s.executeMySQL(datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, exportRowLimit+1)
+		result, err = s.executeMySQL(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, poolCfg, exportRowLimit+1)
 	case "mongodb":
-		result, err = s.executeMongoDB(datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, exportRowLimit+1)
+		result, err = s.executeMongoDB(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, exportRowLimit+1)
 	default:
 		return nil, ErrDatasourceType
 	}
 
 	if err != nil {
-		s.writeAuditLog(AuditRecord{
+		s.auditSvc.Write(ctx, AuditRecord{
 			UserID:          userID,
 			Action:          "export_failed",
 			DatasourceID:    datasourceID,
@@ -98,7 +108,7 @@ func (s *QueryService) ExportQuery(userID int64, username, role string, datasour
 
 	// Check row limit
 	if result.Total > int64(exportRowLimit) {
-		s.writeAuditLog(AuditRecord{
+		s.auditSvc.Write(ctx, AuditRecord{
 			UserID:       userID,
 			Action:       "export_failed",
 			DatasourceID: datasourceID,
@@ -111,13 +121,13 @@ func (s *QueryService) ExportQuery(userID int64, username, role string, datasour
 	}
 
 	// Apply desensitization
-	desensitized, maskedFields := s.applyDesensitization(result, role, datasourceID, database, parseResult.Tables)
+	desensitized, maskedFields := s.applyDesensitization(ctx, result, role, datasourceID, database, parseResult.Tables)
 	result.Desensitized = desensitized
 	result.DesensitizedFields = maskedFields
 
 	// Write audit log
 	summary := truncateSQL(sqlContent)
-	s.writeAuditLog(AuditRecord{
+	s.auditSvc.Write(ctx, AuditRecord{
 		UserID:             userID,
 		Action:             "export",
 		DatasourceID:       datasourceID,

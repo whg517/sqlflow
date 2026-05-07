@@ -1,0 +1,212 @@
+import { Download, Loader2, Play } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from '@/components/ui/alert-dialog'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { exportQuery } from '@/api/query'
+import type { QueryResult } from '@/api/query'
+
+interface StatusBarProps {
+  executing: boolean
+  error: string | null
+  result: QueryResult | null
+  datasourceId: number | null
+  database: string
+  sql: string
+  onExecute: () => void
+  isMongo?: boolean
+  mongoCollection?: string
+}
+
+export default function StatusBar({
+  executing,
+  error,
+  result,
+  datasourceId,
+  database,
+  sql,
+  onExecute,
+  isMongo,
+  mongoCollection,
+}: StatusBarProps) {
+  const hasResult = result !== null && result.rows.length > 0
+
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json' | null>(null)
+  const [confirmLargeExport, setConfirmLargeExport] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  const canExecute = isMongo
+    ? !executing && !!datasourceId && !!mongoCollection?.trim()
+    : !executing && !!sql.trim() && !!datasourceId
+
+  async function doExport(format: 'csv' | 'json') {
+    if (!datasourceId) {
+      toast.error('请先选择数据源')
+      return
+    }
+    if (!sql.trim()) {
+      toast.error(isMongo ? '请填写查询内容' : '请输入 SQL')
+      return
+    }
+    setExporting(true)
+    try {
+      await exportQuery({
+        datasource_id: datasourceId,
+        database,
+        sql: sql.trim(),
+        format,
+      })
+      toast.success('导出完成')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '导出失败')
+    } finally {
+      setExporting(false)
+      setConfirmLargeExport(false)
+      setExportFormat(null)
+    }
+  }
+
+  function handleExport(format: 'csv' | 'json') {
+    if (result && result.total > 10000) {
+      setExportFormat(format)
+      setConfirmLargeExport(true)
+      return
+    }
+    doExport(format)
+  }
+
+  return (
+    <div className="flex items-center justify-between border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5">
+      <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
+        {/* Execute button */}
+        <Button
+          size="sm"
+          disabled={!canExecute}
+          onClick={onExecute}
+          className="h-6 gap-1 bg-[var(--accent-primary)] px-3 text-xs text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
+        >
+          {executing ? (
+            <>
+              <Loader2 size={12} className="animate-spin" />
+              执行中
+            </>
+          ) : (
+            <>
+              <Play size={12} />
+              执行
+            </>
+          )}
+        </Button>
+
+        {/* Stats */}
+        {result && (
+          <>
+            <span>
+              {result.execution_time_ms >= 1000
+                ? `${(result.execution_time_ms / 1000).toFixed(2)}s`
+                : `${result.execution_time_ms}ms`}
+            </span>
+            <span>{result.total} 行</span>
+            {result.affected_rows > 0 && (
+              <span>影响 {result.affected_rows} 行</span>
+            )}
+            {result.desensitized && result.desensitized_fields.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="cursor-default text-[var(--warning)]">
+                    已脱敏 {result.desensitized_fields.length} 字段
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  脱敏字段: {result.desensitized_fields.join(', ')}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </>
+        )}
+
+        {/* Error */}
+        {error && (
+          <span className="text-[var(--danger)]">{error}</span>
+        )}
+
+        {/* Warnings */}
+        {result?.warnings && result.warnings.length > 0 && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="cursor-default text-[var(--warning)]">
+                {result.warnings.length} 条警告
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {result.warnings.map((w, i) => (
+                <div key={i}>{w}</div>
+              ))}
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        {!result && !error && !executing && (
+          <span className="text-[var(--text-muted)]">Ctrl+Enter 执行</span>
+        )}
+      </div>
+
+      {/* Export */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!hasResult || exporting}
+            className="h-6 gap-1 px-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-30"
+          >
+            {exporting ? (
+              <>
+                <Loader2 size={12} className="animate-spin" />
+                正在导出...
+              </>
+            ) : (
+              <>
+                <Download size={12} />
+                导出
+              </>
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => handleExport('csv')}>CSV</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleExport('json')}>JSON</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Large export confirmation */}
+      <AlertDialog open={confirmLargeExport} onOpenChange={setConfirmLargeExport}>
+        <AlertDialogContent className="border-[var(--border-default)] bg-[var(--bg-surface)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[var(--text-primary)]">确认导出</AlertDialogTitle>
+            <AlertDialogDescription className="text-[var(--text-secondary)]">
+              当前结果共 {result?.total ?? 0} 行，导出可能耗时较长，是否继续？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-[var(--border-default)]">取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => exportFormat && doExport(exportFormat)}
+              disabled={exporting}
+              className="bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)]"
+            >
+              {exporting ? '导出中...' : '确认导出'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}

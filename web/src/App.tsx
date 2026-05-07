@@ -3,15 +3,13 @@ import { Toaster } from 'sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Layout from './components/Layout'
 import AuthGuard from './components/AuthGuard'
+import ErrorPage from './components/ErrorPage'
 import QueryPage from './pages/Query'
 import TicketPage from './pages/Ticket'
 import TicketNewPage from './pages/TicketNew'
 import AuditPage from './pages/Audit'
 import PermissionsPage from './pages/Permissions'
 import SettingsPage from './pages/Settings'
-import DataSourcePage from './pages/settings/DataSource'
-import MaskRulesPage from './pages/settings/MaskRules'
-import AIConfigPage from './pages/settings/AIConfig'
 import LoginPage from './pages/Login'
 
 function App() {
@@ -27,9 +25,11 @@ function App() {
             <Route path="/permissions" element={<PermissionsPage />} />
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/settings/datasource" element={<DataSourcePage />} />
-            <Route path="/settings/mask-rules" element={<MaskRulesPage />} />
-            <Route path="/settings/ai-config" element={<AIConfigPage />} />
+            <Route path="/settings/datasource" element={<SettingsPage />} />
+            <Route path="/settings/mask-rules" element={<SettingsPage />} />
+            <Route path="/settings/ai-config" element={<SettingsPage />} />
+            <Route path="/403" element={<ErrorPage code={403} />} />
+            <Route path="/404" element={<ErrorPage code={404} />} />
             <Route path="*" element={<Navigate to="/query" replace />} />
           </Route>
         </Routes>

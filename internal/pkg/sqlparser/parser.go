@@ -1,6 +1,7 @@
 package sqlparser
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -120,15 +121,11 @@ func (r *SQLParseResult) applyMySQLRules(mr *MySQLParseResult) {
 		r.RiskLevel = RiskHigh
 		return
 	}
-	if mr.Operation == OpDDL && !mr.IsDropDatabase && !mr.IsDropTable {
-		// Check for TRUNCATE
-		if len(mr.Tables) > 0 && mr.Operation == OpDDL {
-			// TRUNCATE is already mapped to OpDDL
-			r.IsBlocked = true
-			r.BlockReason = "TRUNCATE is not allowed"
-			r.RiskLevel = RiskHigh
-			return
-		}
+	if mr.IsTruncate {
+		r.IsBlocked = true
+		r.BlockReason = "TRUNCATE is not allowed"
+		r.RiskLevel = RiskHigh
+		return
 	}
 
 	// Rule: DELETE/UPDATE without WHERE → high risk
@@ -195,7 +192,7 @@ func (r *SQLParseResult) applyMongoRules(mr *MongoParseResult) {
 
 // CheckSensitiveTables checks which of the given tables are marked as sensitive.
 // It queries the mask_rules table via the provided database connection.
-func CheckSensitiveTables(db *sql.DB, tables []string, datasourceID int) ([]string, error) {
+func CheckSensitiveTables(ctx context.Context, db *sql.DB, tables []string, datasourceID int) ([]string, error) {
 	if len(tables) == 0 || db == nil {
 		return nil, nil
 	}
@@ -214,7 +211,7 @@ func CheckSensitiveTables(db *sql.DB, tables []string, datasourceID int) ([]stri
 		strings.Join(placeholders, ","),
 	)
 
-	rows, err := db.Query(query, args...)
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query sensitive tables: %w", err)
 	}
@@ -274,13 +271,8 @@ func IsHighRisk(sqlContent string, op OperationType) bool {
 	if mysqlResult.IsDropDatabase || mysqlResult.IsDropTable {
 		return true
 	}
-	// TRUNCATE is always high risk (DDL operation)
-	if mysqlResult.Operation == OpDDL {
-		// Check if it's a TRUNCATE or other dangerous DDL
-		s := strings.ToUpper(strings.TrimSpace(sqlContent))
-		if strings.HasPrefix(s, "TRUNCATE") {
-			return true
-		}
+	if mysqlResult.IsTruncate {
+		return true
 	}
 	if (mysqlResult.Operation == OpUpdate || mysqlResult.Operation == OpDelete) && !mysqlResult.HasWhere {
 		return true

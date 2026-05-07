@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
@@ -121,7 +121,7 @@ func (h *DatasourceHandler) CreateDatasource(c echo.Context) error {
 		MaxIdleTime:       req.MaxIdleTime,
 	}
 
-	if err := h.dsSvc.CreateDataSource(ds); err != nil {
+	if err := h.dsSvc.CreateDataSource(c.Request().Context(), ds); err != nil {
 		return resp.InternalError(c, "创建数据源失败")
 	}
 
@@ -130,7 +130,7 @@ func (h *DatasourceHandler) CreateDatasource(c echo.Context) error {
 
 // ListDatasources handles GET /api/datasources (admin).
 func (h *DatasourceHandler) ListDatasources(c echo.Context) error {
-	list, err := h.dsSvc.ListDataSources()
+	list, err := h.dsSvc.ListDataSources(c.Request().Context())
 	if err != nil {
 		return resp.InternalError(c, "获取数据源列表失败")
 	}
@@ -150,7 +150,7 @@ func (h *DatasourceHandler) GetDatasource(c echo.Context) error {
 		return resp.BadRequest(c, "无效的数据源ID")
 	}
 
-	ds, err := h.dsSvc.GetDataSourceSafe(id)
+	ds, err := h.dsSvc.GetDataSourceSafe(c.Request().Context(), id)
 	if err != nil {
 		if err == service.ErrDatasourceNotFound {
 			return resp.NotFound(c, "数据源不存在")
@@ -191,14 +191,14 @@ func (h *DatasourceHandler) UpdateDatasource(c echo.Context) error {
 		MaxIdleTime:       req.MaxIdleTime,
 	}
 
-	if err := h.dsSvc.UpdateDataSource(id, ds); err != nil {
+	if err := h.dsSvc.UpdateDataSource(c.Request().Context(), id, ds); err != nil {
 		if err == service.ErrDatasourceNotFound {
 			return resp.NotFound(c, "数据源不存在")
 		}
 		return resp.InternalError(c, "更新数据源失败")
 	}
 
-	updated, err := h.dsSvc.GetDataSourceSafe(id)
+	updated, err := h.dsSvc.GetDataSourceSafe(c.Request().Context(), id)
 	if err != nil {
 		return resp.InternalError(c, "获取数据源失败")
 	}
@@ -213,7 +213,7 @@ func (h *DatasourceHandler) DisableDatasource(c echo.Context) error {
 		return resp.BadRequest(c, "无效的数据源ID")
 	}
 
-	if err := h.dsSvc.DisableDataSource(id); err != nil {
+	if err := h.dsSvc.DisableDataSource(c.Request().Context(), id); err != nil {
 		if err == service.ErrDatasourceNotFound {
 			return resp.NotFound(c, "数据源不存在")
 		}
@@ -230,7 +230,7 @@ func (h *DatasourceHandler) TestConnection(c echo.Context) error {
 		return resp.BadRequest(c, "无效的数据源ID")
 	}
 
-	ds, err := h.dsSvc.GetDataSource(id)
+	ds, err := h.dsSvc.GetDataSource(c.Request().Context(), id)
 	if err != nil {
 		if err == service.ErrDatasourceNotFound {
 			return resp.NotFound(c, "数据源不存在")
@@ -238,10 +238,11 @@ func (h *DatasourceHandler) TestConnection(c echo.Context) error {
 		return resp.InternalError(c, "获取数据源失败")
 	}
 
-	if err := h.dsSvc.TestConnection(ds); err != nil {
+	if err := h.dsSvc.TestConnection(c.Request().Context(), ds); err != nil {
+		log.Printf("TestConnection failed for datasource %d: %v", id, err)
 		return resp.OK(c, map[string]interface{}{
 			"success": false,
-			"message": fmt.Sprintf("连接失败: %v", err),
+			"message": "连接失败",
 		})
 	}
 
@@ -258,7 +259,7 @@ func (h *DatasourceHandler) GetTables(c echo.Context) error {
 		return resp.BadRequest(c, "无效的数据源ID")
 	}
 
-	tables, err := h.dsSvc.GetTables(id)
+	tables, err := h.dsSvc.GetTables(c.Request().Context(), id)
 	if err != nil {
 		if err == service.ErrDatasourceNotFound {
 			return resp.NotFound(c, "数据源不存在")
@@ -266,7 +267,8 @@ func (h *DatasourceHandler) GetTables(c echo.Context) error {
 		if err == service.ErrDatasourceDisabled {
 			return resp.BadRequest(c, "数据源已禁用")
 		}
-		return resp.InternalError(c, fmt.Sprintf("获取表列表失败: %v", err))
+		log.Printf("GetTables failed for datasource %d: %v", id, err)
+		return resp.InternalError(c, "获取表列表失败")
 	}
 
 	return resp.OK(c, tables)

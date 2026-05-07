@@ -16,6 +16,7 @@ type MySQLParseResult struct {
 	HasWhere      bool
 	IsDropDatabase bool
 	IsDropTable   bool
+	IsTruncate    bool
 	HasLimit      bool
 	LimitCount    int64 // 0 means no limit or unknown
 }
@@ -120,6 +121,7 @@ func (r *MySQLParseResult) extractFromNode(node ast.StmtNode) {
 		r.Tables = append(r.Tables, stmt.Name)
 	case *ast.TruncateTableStmt:
 		r.Operation = OpDDL
+		r.IsTruncate = true
 		if stmt.Table != nil {
 			r.Tables = append(r.Tables, stmt.Table.Name.String())
 		}
