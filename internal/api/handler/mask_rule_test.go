@@ -1136,6 +1136,90 @@ func TestMaskRuleHandler_DeleteSensitiveTable_InvalidID(t *testing.T) {
 	}
 }
 
+// ─── DeleteMaskRule Error Path ────────────────────────────────────────────────
+
+func TestMaskRuleHandler_DeleteMaskRule_DBError(t *testing.T) {
+	database, err := db.Open(t.TempDir() + "/test_del_rule_err.db")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := database.Migrate(); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	auditSvc := service.NewAuditService(database.DB, 10, 5*time.Second)
+	maskRuleSvc := service.NewMaskRuleService(database.DB, nil, auditSvc)
+	handler := NewMaskRuleHandler(maskRuleSvc)
+	e := echo.New()
+
+	// Close the database to force a non-ErrMaskRuleNotFound error
+	database.Close()
+	auditSvc.Close()
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/mask-rules/:id", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	setMaskRuleAuthContext(c, 1, "admin", "admin")
+
+	if err := handler.DeleteMaskRule(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+
+	result := decodeJSONResponse(t, rec)
+	msg, _ := result["message"].(string)
+	if msg != "删除脱敏规则失败" {
+		t.Errorf("message = %q, want %q", msg, "删除脱敏规则失败")
+	}
+}
+
+// ─── DeleteSensitiveTable Error Path ─────────────────────────────────────────
+
+func TestMaskRuleHandler_DeleteSensitiveTable_DBError(t *testing.T) {
+	database, err := db.Open(t.TempDir() + "/test_del_st_err.db")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := database.Migrate(); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	auditSvc := service.NewAuditService(database.DB, 10, 5*time.Second)
+	maskRuleSvc := service.NewMaskRuleService(database.DB, nil, auditSvc)
+	handler := NewMaskRuleHandler(maskRuleSvc)
+	e := echo.New()
+
+	// Close the database to force a non-ErrSensitiveTableNotFound error
+	database.Close()
+	auditSvc.Close()
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/sensitive-tables/:id", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	setMaskRuleAuthContext(c, 1, "admin", "admin")
+
+	if err := handler.DeleteSensitiveTable(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+
+	result := decodeJSONResponse(t, rec)
+	msg, _ := result["message"].(string)
+	if msg != "删除敏感表失败" {
+		t.Errorf("message = %q, want %q", msg, "删除敏感表失败")
+	}
+}
+
 // ─── Sensitivity Level Tests (all valid levels) ─────────────────────────────
 
 func TestMaskRuleHandler_CreateSensitiveTable_AllLevels(t *testing.T) {

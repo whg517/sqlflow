@@ -1064,6 +1064,95 @@ func TestWriteExportJSON(t *testing.T) {
 	}
 }
 
+// ─── ClearHistory Error Path ─────────────────────────────────────────────────
+
+func TestQueryHandler_ClearHistory_Error(t *testing.T) {
+	database, err := db.Open(t.TempDir() + "/test_clear_err.db")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := database.Migrate(); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	encKey := "0123456789abcdef0123456789abcdef"
+	connMgr := connpool.NewManager()
+	dsSvc := service.NewDatasourceService(database.DB, encKey, connMgr)
+	historySvc := service.NewQueryHistoryService(database.DB)
+	querySvc := service.NewQueryService(database.DB, dsSvc, historySvc, nil, nil, encKey, connMgr)
+	h := NewQueryHandler(querySvc, historySvc)
+	e := echo.New()
+
+	// Close the database to force ClearHistory to fail
+	database.Close()
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/query/history", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	setQueryAuthContext(c, 1, "testuser", "developer")
+
+	if err := h.ClearHistory(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+
+	result := decodeJSONResponse(t, rec)
+	msg, _ := result["message"].(string)
+	if msg != "清空查询历史失败" {
+		t.Errorf("message = %q, want %q", msg, "清空查询历史失败")
+	}
+}
+
+// ─── ExportQuery Error Branches ──────────────────────────────────────────────
+
+func TestQueryHandler_ExportQuery_BlockedSQL(t *testing.T) {
+	e, _, _, dsSvc, h, _ := setupQueryTest(t)
+
+	ds := seedTestDatasource(t, dsSvc, "export-blocked")
+
+	body := fmt.Sprintf(`{"datasource_id":%d,"sql":"DROP TABLE users","database":"testdb","format":"csv"}`, ds.ID)
+	req := httptest.NewRequest(http.MethodPost, "/api/query/export", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	setQueryAuthContext(c, 1, "testuser", "developer")
+
+	if err := h.ExportQuery(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	// Blocked SQL wraps error → falls to default handler → 500
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+}
+
+func TestQueryHandler_ExportQuery_HighRiskSQL(t *testing.T) {
+	e, _, _, dsSvc, h, _ := setupQueryTest(t)
+
+	ds := seedTestDatasource(t, dsSvc, "export-highrisk")
+
+	// UPDATE without WHERE is high-risk
+	body := fmt.Sprintf(`{"datasource_id":%d,"sql":"UPDATE users SET name = 'hacked'","database":"testdb","format":"csv"}`, ds.ID)
+	req := httptest.NewRequest(http.MethodPost, "/api/query/export", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	setQueryAuthContext(c, 1, "testuser", "developer")
+
+	if err := h.ExportQuery(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	// High-risk SQL should return 403 or fall to default 500 depending on error wrapping
+	if rec.Code != http.StatusInternalServerError && rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 or 500; body = %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestWriteExportJSON_EmptyResult(t *testing.T) {
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

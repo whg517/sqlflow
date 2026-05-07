@@ -1081,6 +1081,156 @@ func TestTicketHandler_ExecuteTicket_NotFound(t *testing.T) {
 	}
 }
 
+// ─── CreateTicket Service Error Branches ─────────────────────────────────────
+
+func TestTicketHandler_CreateTicket_NonExistentDatasource(t *testing.T) {
+	e, h, database := setupTicketHandlerTest(t)
+	userID := seedTicketTestUser(t, database, "dev1", "developer")
+
+	body := `{"datasource_id":99999,"database":"mydb","sql":"ALTER TABLE t ADD c INT","db_type":"mysql","change_reason":"test","risk_level":"low"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	setTicketAuthContext(c, userID, "dev1", "developer")
+
+	if err := h.CreateTicket(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	// Service accepts any datasource_id and creates the ticket
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	result := decodeJSONResponse(t, rec)
+	data, ok := result["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("data is not an object; body=%s", rec.Body.String())
+	}
+	if data["datasource_id"] != float64(99999) {
+		t.Errorf("datasource_id = %v, want 99999", data["datasource_id"])
+	}
+}
+
+// ─── RejectTicket Additional Tests ──────────────────────────────────────────
+
+func TestTicketHandler_RejectTicket_NotFound(t *testing.T) {
+	e, h, _ := setupTicketHandlerTest(t)
+
+	body := `{"reason":"bad ticket"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/:id/reject", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("99999")
+	setTicketAuthContext(c, 1, "dba1", "dba")
+
+	if err := h.RejectTicket(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+
+	result := decodeJSONResponse(t, rec)
+	msg, _ := result["message"].(string)
+	if msg != "工单不存在" {
+		t.Errorf("message = %q, want %q", msg, "工单不存在")
+	}
+}
+
+func TestTicketHandler_RejectTicket_InvalidStatus(t *testing.T) {
+	e, h, database := setupTicketHandlerTest(t)
+	devID := seedTicketTestUser(t, database, "dev1", "developer")
+	dbaID := seedTicketTestUser(t, database, "dba1", "dba")
+	dsID := seedTicketTestDatasource(t, database, "test-ds")
+
+	// Create ticket and set to DONE (terminal status)
+	ticketID := createTicketViaDB(t, database, devID, dsID, "DELETE FROM users")
+	setTicketStatusDB(t, database, ticketID, model.TicketStatusDone)
+
+	body := `{"reason":"too late"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/:id/reject", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(fmt.Sprintf("%d", ticketID))
+	setTicketAuthContext(c, dbaID, "dba1", "dba")
+
+	if err := h.RejectTicket(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+
+	result := decodeJSONResponse(t, rec)
+	msg, _ := result["message"].(string)
+	if msg != "无效的工单状态变更" {
+		t.Errorf("message = %q, want %q", msg, "无效的工单状态变更")
+	}
+}
+
+// ─── CancelTicket Additional Tests ──────────────────────────────────────────
+
+func TestTicketHandler_CancelTicket_NotFound(t *testing.T) {
+	e, h, _ := setupTicketHandlerTest(t)
+
+	body := `{"reason":"cancel it"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/:id/cancel", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("99999")
+	setTicketAuthContext(c, 1, "dev1", "developer")
+
+	if err := h.CancelTicket(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+
+	result := decodeJSONResponse(t, rec)
+	msg, _ := result["message"].(string)
+	if msg != "工单不存在" {
+		t.Errorf("message = %q, want %q", msg, "工单不存在")
+	}
+}
+
+func TestTicketHandler_CancelTicket_InvalidBody(t *testing.T) {
+	e, h, _ := setupTicketHandlerTest(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/:id/cancel", strings.NewReader(`{bad}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+	setTicketAuthContext(c, 1, "dev1", "developer")
+
+	if err := h.CancelTicket(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	result := decodeJSONResponse(t, rec)
+	msg, _ := result["message"].(string)
+	if msg != "请求格式错误" {
+		t.Errorf("message = %q, want %q", msg, "请求格式错误")
+	}
+}
+
 // ─── Full Workflow Handler Test ──────────────────────────────────────────────
 
 func TestTicketHandler_FullWorkflow(t *testing.T) {

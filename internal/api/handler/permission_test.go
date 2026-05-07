@@ -879,3 +879,50 @@ func TestPermissionHandler_CRUDLifecycle(t *testing.T) {
 	// Suppress unused warnings
 	_ = permSvc.LoadPolicy
 }
+
+// ─── SyncPolicies Error Path ────────────────────────────────────────────────
+
+func TestPermissionHandler_SyncPolicies_LoadPolicyError(t *testing.T) {
+	database, err := db.Open(t.TempDir() + "/test_sync_err.db")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := database.Migrate(); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	// Seed a policy so the service initializes correctly
+	_, _ = database.Exec(
+		`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES (?, ?, ?, ?, ?)`,
+		"p", "admin", "*", "*", "*",
+	)
+
+	permSvc, err := service.NewPermissionService(database.DB)
+	if err != nil {
+		t.Fatalf("create permission service: %v", err)
+	}
+
+	handler := NewPermissionHandler(permSvc)
+
+	// Close the database to force LoadPolicy to fail
+	database.Close()
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/api/policies/sync", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := handler.SyncPolicies(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+
+	result := decodePermResponse(t, rec)
+	msg, _ := result["message"].(string)
+	if msg != "同步策略失败" {
+		t.Errorf("message = %q, want %q", msg, "同步策略失败")
+	}
+}
