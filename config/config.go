@@ -3,6 +3,7 @@ package config
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"log"
 	"time"
 
 	"github.com/spf13/viper"
@@ -63,7 +64,10 @@ func Load(configPath string) (*Config, error) {
 		cfg.Server.Port = 8080
 	}
 	if cfg.JWT.Secret == "" {
-		cfg.JWT.Secret = "change-me"
+		log.Println("[WARNING] jwt.secret is not set; generating a random secret (tokens will invalidate on restart). Set jwt.secret in config.yaml for production.")
+		key := make([]byte, 32)
+		_, _ = rand.Read(key)
+		cfg.JWT.Secret = hex.EncodeToString(key)
 	}
 	if cfg.JWT.Expiry == 0 {
 		cfg.JWT.Expiry = 24 * time.Hour

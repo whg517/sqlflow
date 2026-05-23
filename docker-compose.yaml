@@ -6,8 +6,8 @@ services:
     volumes:
       - sqlflow-data:/app/data
     environment:
-      - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=admin123
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}  # REQUIRED: set via .env file or env var
     restart: unless-stopped
 
 volumes:

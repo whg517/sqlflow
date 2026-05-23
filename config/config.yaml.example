@@ -1,0 +1,23 @@
+# SQLFlow Configuration
+
+server:
+  port: 8080
+
+jwt:
+  # REQUIRED for production: generate with `openssl rand -hex 32`
+  secret: ""
+  expiry: 24h
+
+admin:
+  username: admin
+  # REQUIRED: change the default password before deploying
+  password: ""
+
+db:
+  path: "./data/sqlflow.db"
+
+query_history_max: 200
+
+# REQUIRED: generate with `openssl rand -hex 16`
+# Used for AES-GCM encryption of datasource passwords
+encryption_key: ""

@@ -1,5 +1,7 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
+
+RUN apk add --no-cache gcc musl-dev
 
 WORKDIR /app
 
@@ -18,7 +20,7 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 
 COPY --from=builder /sqlflow /app/sqlflow
-COPY config/config.yaml /app/config.yaml
+COPY config/config.yaml.example /app/config.yaml.example
 
 RUN mkdir -p /app/data
 

@@ -203,7 +203,7 @@ function DataSourceTab() {
   async function handleTest(id: number) {
     setTestingId(id)
     try {
-      const res = await api.post<TestConnectionResponse>(`/datasources/${id}/test`)
+      const res = await api.post<TestConnectionResponse>(`/datasources/${id}/test`, {})
       if (res.data.success) {
         toast.success(res.data.message || '连接测试成功')
       } else {
