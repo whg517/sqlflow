@@ -1,10 +1,18 @@
-import { useRef, useEffect, useCallback, useState } from 'react'
+import { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, placeholder as cmPlaceholder } from '@codemirror/view'
 import { json, jsonParseLinter } from '@codemirror/lang-json'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, indentOnInput } from '@codemirror/language'
 import { linter } from '@codemirror/lint'
+import {
+  autocompletion,
+  type CompletionContext,
+  type CompletionResult,
+  type Completion,
+  type CompletionSource,
+  completionKeymap,
+} from '@codemirror/autocomplete'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -25,7 +33,105 @@ interface MongoEditorProps {
   onFilterChange: (v: string) => void
   onOptionsChange: (v: string) => void
   onExecute: () => void
+  /** Collection names from schema for autocomplete */
+  collectionNames?: string[]
 }
+
+// --- MongoDB Operator Completions ---
+
+const MONGO_PIPELINE_OPERATORS: Completion[] = [
+  { label: '$match', type: 'keyword', detail: 'pipeline', boost: 5 },
+  { label: '$group', type: 'keyword', detail: 'pipeline', boost: 5 },
+  { label: '$project', type: 'keyword', detail: 'pipeline', boost: 5 },
+  { label: '$sort', type: 'keyword', detail: 'pipeline', boost: 5 },
+  { label: '$limit', type: 'keyword', detail: 'pipeline', boost: 5 },
+  { label: '$skip', type: 'keyword', detail: 'pipeline', boost: 5 },
+  { label: '$count', type: 'keyword', detail: 'pipeline', boost: 5 },
+  { label: '$unwind', type: 'keyword', detail: 'pipeline', boost: 5 },
+  { label: '$addFields', type: 'keyword', detail: 'pipeline', boost: 5 },
+  { label: '$set', type: 'keyword', detail: 'pipeline', boost: 5 },
+  { label: '$unset', type: 'keyword', detail: 'pipeline' },
+  { label: '$lookup', type: 'keyword', detail: 'pipeline' },
+  { label: '$facet', type: 'keyword', detail: 'pipeline' },
+  { label: '$bucket', type: 'keyword', detail: 'pipeline' },
+  { label: '$bucketAuto', type: 'keyword', detail: 'pipeline' },
+  { label: '$out', type: 'keyword', detail: 'pipeline' },
+  { label: '$merge', type: 'keyword', detail: 'pipeline' },
+  { label: '$replaceRoot', type: 'keyword', detail: 'pipeline' },
+  { label: '$sample', type: 'keyword', detail: 'pipeline' },
+  { label: '$redact', type: 'keyword', detail: 'pipeline' },
+  { label: '$sortByCount', type: 'keyword', detail: 'pipeline' },
+]
+
+const MONGO_QUERY_OPERATORS: Completion[] = [
+  { label: '$eq', type: 'keyword', detail: 'query', boost: 4 },
+  { label: '$ne', type: 'keyword', detail: 'query', boost: 4 },
+  { label: '$gt', type: 'keyword', detail: 'query', boost: 4 },
+  { label: '$gte', type: 'keyword', detail: 'query', boost: 4 },
+  { label: '$lt', type: 'keyword', detail: 'query', boost: 4 },
+  { label: '$lte', type: 'keyword', detail: 'query', boost: 4 },
+  { label: '$in', type: 'keyword', detail: 'query', boost: 4 },
+  { label: '$nin', type: 'keyword', detail: 'query', boost: 4 },
+  { label: '$and', type: 'keyword', detail: 'query', boost: 4 },
+  { label: '$or', type: 'keyword', detail: 'query', boost: 4 },
+  { label: '$not', type: 'keyword', detail: 'query', boost: 4 },
+  { label: '$nor', type: 'keyword', detail: 'query' },
+  { label: '$exists', type: 'keyword', detail: 'query' },
+  { label: '$type', type: 'keyword', detail: 'query' },
+  { label: '$regex', type: 'keyword', detail: 'query' },
+  { label: '$text', type: 'keyword', detail: 'query' },
+  { label: '$where', type: 'keyword', detail: 'query' },
+  { label: '$all', type: 'keyword', detail: 'query' },
+  { label: '$elemMatch', type: 'keyword', detail: 'query' },
+  { label: '$size', type: 'keyword', detail: 'query' },
+]
+
+const MONGO_UPDATE_OPERATORS: Completion[] = [
+  { label: '$set', type: 'keyword', detail: 'update', boost: 3 },
+  { label: '$unset', type: 'keyword', detail: 'update', boost: 3 },
+  { label: '$inc', type: 'keyword', detail: 'update', boost: 3 },
+  { label: '$push', type: 'keyword', detail: 'update', boost: 3 },
+  { label: '$pull', type: 'keyword', detail: 'update', boost: 3 },
+  { label: '$addToSet', type: 'keyword', detail: 'update', boost: 3 },
+  { label: '$pop', type: 'keyword', detail: 'update', boost: 3 },
+  { label: '$rename', type: 'keyword', detail: 'update' },
+  { label: '$mul', type: 'keyword', detail: 'update' },
+  { label: '$min', type: 'keyword', detail: 'update' },
+  { label: '$max', type: 'keyword', detail: 'update' },
+  { label: '$currentDate', type: 'keyword', detail: 'update' },
+]
+
+const MONGO_AGGREGATION_EXPRESSIONS: Completion[] = [
+  { label: '$sum', type: 'function', detail: 'accumulator', boost: 3 },
+  { label: '$avg', type: 'function', detail: 'accumulator', boost: 3 },
+  { label: '$min', type: 'function', detail: 'accumulator', boost: 3 },
+  { label: '$max', type: 'function', detail: 'accumulator', boost: 3 },
+  { label: '$first', type: 'function', detail: 'accumulator' },
+  { label: '$last', type: 'function', detail: 'accumulator' },
+  { label: '$push', type: 'function', detail: 'accumulator' },
+  { label: '$addToSet', type: 'function', detail: 'accumulator' },
+  { label: '$concatArrays', type: 'function', detail: 'expression' },
+  { label: '$filter', type: 'function', detail: 'expression' },
+  { label: '$map', type: 'function', detail: 'expression' },
+  { label: '$reduce', type: 'function', detail: 'expression' },
+  { label: '$cond', type: 'function', detail: 'expression' },
+  { label: '$ifNull', type: 'function', detail: 'expression' },
+  { label: '$switch', type: 'function', detail: 'expression' },
+  { label: '$toString', type: 'function', detail: 'expression' },
+  { label: '$toInt', type: 'function', detail: 'expression' },
+  { label: '$toDouble', type: 'function', detail: 'expression' },
+  { label: '$toDate', type: 'function', detail: 'expression' },
+  { label: '$toBool', type: 'function', detail: 'expression' },
+]
+
+const ALL_MONGO_COMPLETIONS: Completion[] = [
+  ...MONGO_PIPELINE_OPERATORS,
+  ...MONGO_QUERY_OPERATORS,
+  ...MONGO_UPDATE_OPERATORS,
+  ...MONGO_AGGREGATION_EXPRESSIONS,
+]
+
+// --- JSON Theme ---
 
 const jsonTheme = EditorView.theme({
   '&': {
@@ -76,6 +182,77 @@ const jsonTheme = EditorView.theme({
     cursor: 'pointer',
   },
 })
+
+// --- Custom completion icon styling ---
+
+const completionTheme = EditorView.baseTheme({
+  '.cm-tooltip.cm-tooltip-autocomplete': {
+    '& > ul > li[aria-selected]': {
+      backgroundColor: 'rgba(99, 102, 241, 0.15)',
+      color: 'var(--text-primary)',
+    },
+    '& > ul > li': {
+      padding: '2px 8px',
+    },
+    '& > ul > li .cm-completionLabel': {
+      fontFamily: 'var(--font-mono)',
+      fontSize: '12px',
+    },
+    '& > ul > li .cm-completionDetail': {
+      fontSize: '10px',
+      marginLeft: '8px',
+      fontStyle: 'normal',
+    },
+  },
+  '.cm-completionIcon': {
+    width: '16px',
+    height: '16px',
+    fontSize: '12px',
+    lineHeight: '16px',
+    textAlign: 'center',
+  },
+})
+
+// --- Completion icon renderer ---
+
+const completionIcons: Record<string, { icon: string; label: string }> = {
+  keyword: { icon: '💡', label: 'operator' },
+  function: { icon: '💡', label: 'expression' },
+}
+
+// --- MongoDB Completion Source ---
+
+function createMongoCompletionSource(): CompletionSource {
+  return function mongoCompletions(context: CompletionContext): CompletionResult | null {
+    // Match $ prefixed tokens (MongoDB operators)
+    const dollarWord = context.matchBefore(/\$\w*/)
+    if (dollarWord && dollarWord.from < dollarWord.to) {
+      const text = dollarWord.text.toLowerCase()
+      const filtered = ALL_MONGO_COMPLETIONS.filter((opt) =>
+        opt.label.toLowerCase().startsWith(text) || opt.label.toLowerCase().includes(text),
+      )
+      if (filtered.length > 0) {
+        return {
+          from: dollarWord.from,
+          options: filtered,
+          validFor: /^\$[\w]*$/,
+        }
+      }
+    }
+
+    // Also trigger explicitly with Ctrl+Space
+    if (context.explicit) {
+      const word = context.matchBefore(/\$?\w*/)
+      return {
+        from: word ? word.from : context.pos,
+        options: ALL_MONGO_COMPLETIONS,
+        validFor: /^\$?[\w]*$/,
+      }
+    }
+
+    return null
+  }
+}
 
 // --- Preset Templates ---
 
@@ -144,8 +321,10 @@ function JsonEditor({
   const onExecuteRef = useRef(onExecute)
   const isExternalUpdate = useRef(false)
 
-  onChangeRef.current = onChange
-  onExecuteRef.current = onExecute
+  useEffect(() => {
+    onChangeRef.current = onChange
+    onExecuteRef.current = onExecute
+  })
 
   const getExtensions = useCallback(() => [
     json(),
@@ -158,9 +337,32 @@ function JsonEditor({
     indentOnInput(),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     linter(jsonParseLinter()),
+    // MongoDB operator autocompletion
+    autocompletion({
+      override: [createMongoCompletionSource()],
+      activateOnTyping: true,
+      icons: false,
+      addToOptions: [
+        {
+          render: (completion: Completion) => {
+            const icon = document.createElement('span')
+            const typeInfo = completionIcons[completion.type ?? '']
+            if (typeInfo) {
+              icon.textContent = typeInfo.icon
+              icon.style.marginRight = '4px'
+              icon.style.fontSize = '11px'
+            }
+            return icon
+          },
+          position: 20,
+        },
+      ],
+    }),
+    completionTheme,
     keymap.of([
       ...defaultKeymap,
       ...historyKeymap,
+      ...completionKeymap,
       {
         key: 'Ctrl-Enter',
         run: () => { onExecuteRef.current(); return true },
@@ -224,11 +426,21 @@ export default function MongoEditor({
   onFilterChange,
   onOptionsChange,
   onExecute,
+  collectionNames = [],
 }: MongoEditorProps) {
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
+  const [collectionSuggestionsOpen, setCollectionSuggestionsOpen] = useState(false)
+  const [collectionInputFocus, setCollectionInputFocus] = useState(false)
 
   const filterLabel = operation === 'aggregate' ? 'Pipeline' : 'Filter'
+
+  // Filter collection suggestions based on input
+  const filteredCollections = useMemo(() => {
+    if (!collection.trim()) return collectionNames
+    const lower = collection.toLowerCase()
+    return collectionNames.filter((name) => name.toLowerCase().includes(lower))
+  }, [collection, collectionNames])
 
   function applyTemplate(tpl: PresetTemplate) {
     onOperationChange(tpl.operation)
@@ -237,18 +449,58 @@ export default function MongoEditor({
     setTemplateOpen(false)
   }
 
+  function handleCollectionSelect(name: string) {
+    onCollectionChange(name)
+    setCollectionSuggestionsOpen(false)
+  }
+
   return (
     <div className="flex h-full flex-col gap-0 overflow-hidden bg-[var(--bg-surface)]">
       {/* Controls bar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-default)] px-3 py-2">
-        {/* Collection */}
-        <input
-          type="text"
-          value={collection}
-          onChange={(e) => onCollectionChange(e.target.value)}
-          placeholder="集合名 (collection)"
-          className="h-7 w-48 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]"
-        />
+        {/* Collection input with autocomplete */}
+        <div className="relative">
+          <input
+            type="text"
+            value={collection}
+            onChange={(e) => {
+              onCollectionChange(e.target.value)
+              setCollectionSuggestionsOpen(true)
+            }}
+            onFocus={() => {
+              setCollectionInputFocus(true)
+              setCollectionSuggestionsOpen(true)
+            }}
+            onBlur={() => {
+              // Delay to allow click on suggestion
+              setTimeout(() => {
+                setCollectionInputFocus(false)
+                setCollectionSuggestionsOpen(false)
+              }, 200)
+            }}
+            placeholder="集合名 (collection)"
+            className="h-7 w-48 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]"
+          />
+          {/* Collection suggestions dropdown */}
+          {collectionInputFocus && collectionSuggestionsOpen && filteredCollections.length > 0 && (
+            <div className="absolute left-0 top-full z-50 mt-1 max-h-48 w-48 overflow-y-auto rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-lg">
+              {filteredCollections.map((name) => (
+                <button
+                  key={name}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-[var(--bg-elevated)]/50"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    handleCollectionSelect(name)
+                  }}
+                >
+                  <span className="text-[var(--text-primary)]">📋</span>
+                  <span className="text-xs">{name}</span>
+                  <span className="ml-auto text-[10px] text-[var(--text-muted)]">collection</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Operation type */}
         <Select value={operation} onValueChange={(v) => onOperationChange(v as MongoOperation)}>

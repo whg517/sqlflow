@@ -76,15 +76,15 @@
   --bg-base: #f8fafc;
   --bg-surface: #ffffff;
   --bg-elevated: #f1f5f9;
-  --bg-sidebar: #f1f5f9;
-  --border-default: #e2e8f0;
-  --border-subtle: #f1f5f9;
+  --bg-sidebar: #ffffff;
+  --border-default: #878f9c;
+  --border-subtle: #b0bac7;
   --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --text-tertiary: #94a3b8;
-  --text-muted: #cbd5e1;
-  --accent-primary: #e67a40;
-  --accent-hover: #FF8C55;
+  --text-secondary: #5b6b81;
+  --text-tertiary: #5b6b81;
+  --text-muted: #6b7789;
+  --accent-primary: #a84a1a;
+  --accent-hover: #b85320;
   --accent-secondary: #7c3aed;
 }
 
@@ -104,4 +104,21 @@ html, body, #root {
 
 body {
   margin: 0;
+}
+
+/* Audit log expand row animation */
+@keyframes audit-row-expand {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 800px;
+  }
+}
+
+.audit-expanded-row td > div {
+  animation: audit-row-expand 300ms ease-out forwards;
+  overflow: hidden;
 }

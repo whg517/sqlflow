@@ -1,0 +1,62 @@
+# docker-compose.e2e.yaml
+# Extends the main stack with a MySQL test database and an e2e-test runner.
+#
+# Usage:
+#   docker compose -f docker-compose.yaml -f docker-compose.e2e.yaml up --build
+#   # then run tests locally:
+#   cd web && npm run test:e2e-real
+#
+# Or run everything inside Docker:
+#   docker compose -f docker-compose.yaml -f docker-compose.e2e.yaml up --build e2e-test
+
+services:
+  # --- Real E2E test MySQL ---
+  mysql-test:
+    image: mysql:8.0
+    container_name: sqlflow-mysql-test
+    environment:
+      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_DATABASE: testdb
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-test-data:/var/lib/mysql
+      - ./tests/e2e-init.sql:/docker-entrypoint-initdb.d/e2e-init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123456"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # --- sqlflow backend (extended with mysql-test dependency) ---
+  sqlflow:
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+
+  # --- e2e-test runner (optional: run playwright inside Docker) ---
+  e2e-test:
+    image: node:24
+    container_name: sqlflow-e2e-test
+    working_dir: /app/web
+    depends_on:
+      sqlflow:
+        condition: service_healthy
+    environment:
+      E2E_BASE_URL: "http://sqlflow:8080"
+      E2E_USERNAME: "admin"
+      E2E_PASSWORD: "admin123"
+      CI: "true"
+    volumes:
+      - ./web:/app/web
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        npm ci
+        npx playwright install --with-deps chromium
+        npx playwright test --config=playwright.config.e2e.ts
+
+volumes:
+  mysql-test-data:

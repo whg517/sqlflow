@@ -72,7 +72,9 @@ function useDatasources() {
     }
   }, [])
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => { fetchDatasources() }, [fetchDatasources])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return { datasources, loading }
 }
@@ -82,7 +84,7 @@ function useDatasources() {
 function SensitiveTablesTab() {
   const { datasources } = useDatasources()
   const [tables, setTables] = useState<SensitiveTable[]>([])
-  const [_total, setTotal] = useState(0)
+  const [, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
   const [filterDs, setFilterDs] = useState('')
@@ -120,11 +122,13 @@ function SensitiveTablesTab() {
     }
   }, [filterDs])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchTables(1) }, [fetchTables])
 
   // Load tables for selected datasource in form
   useEffect(() => {
     if (!form.datasource_id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDsTables([])
       return
     }
@@ -419,7 +423,7 @@ function SensitiveTablesTab() {
 function FieldRulesTab() {
   const { datasources } = useDatasources()
   const [rules, setRules] = useState<MaskRule[]>([])
-  const [_total, setTotal] = useState(0)
+  const [, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
   const [filterDs, setFilterDs] = useState('')
@@ -461,11 +465,13 @@ function FieldRulesTab() {
     }
   }, [filterDs])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchRules(1) }, [fetchRules])
 
   // Load tables for selected datasource in form
   useEffect(() => {
     if (!form.datasource_id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDsTables([])
       return
     }

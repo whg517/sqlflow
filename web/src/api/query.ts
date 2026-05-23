@@ -228,6 +228,15 @@ export async function fetchHistory(page = 1, pageSize = 50): Promise<QueryHistor
   return api.get<QueryHistoryResponse>(`/query/history?page=${page}&page_size=${pageSize}`)
 }
 
+/** Search query history by keyword */
+export async function searchQueryHistory(keyword: string, page = 1, pageSize = 5): Promise<QueryHistoryResponse> {
+  const qs = new URLSearchParams()
+  qs.set('keyword', keyword)
+  qs.set('page', String(page))
+  qs.set('page_size', String(pageSize))
+  return api.get<QueryHistoryResponse>(`/query/history?${qs.toString()}`)
+}
+
 export async function deleteHistory(id: number): Promise<ApiResponse> {
   return api.del<ApiResponse>(`/query/history/${id}`)
 }

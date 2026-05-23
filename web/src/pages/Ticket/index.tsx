@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Search, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -56,6 +56,7 @@ interface CurrentUser {
 
 export default function TicketPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   // State
   const [tickets, setTickets] = useState<Ticket[]>([])
@@ -81,6 +82,20 @@ export default function TicketPage() {
   // Detail drawer
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null)
+
+  // Open detail drawer if `id` param present in URL (from global search)
+  useEffect(() => {
+    const idParam = searchParams.get('id')
+    if (idParam) {
+      const id = Number(idParam)
+      if (id > 0) {
+        queueMicrotask(() => {
+          setSelectedTicketId(id)
+          setDrawerOpen(true)
+        })
+      }
+    }
+  }, [searchParams])
 
   // Load user
   useEffect(() => {
@@ -119,7 +134,8 @@ export default function TicketPage() {
   }, [page, pageSize, activeTab, datasourceFilter, riskFilter, keyword, scopeFilter])
 
   useEffect(() => {
-    fetchTickets()
+    const id = requestAnimationFrame(() => { fetchTickets() })
+    return () => cancelAnimationFrame(id)
   }, [fetchTickets])
 
   // Tab change

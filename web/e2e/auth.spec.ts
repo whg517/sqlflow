@@ -60,6 +60,15 @@ test.describe('认证与登录流程', () => {
   })
 
   test('错误凭据显示服务端错误', async ({ page }) => {
+    // 覆盖 mock：让登录请求返回非 200 状态码，触发客户端 catch
+    await page.route('**/api/auth/login', async (route) => {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 1, message: '用户名或密码错误' }),
+      })
+    })
+
     await page.goto('/login')
 
     await page.getByPlaceholder('用户名').fill('wronguser')

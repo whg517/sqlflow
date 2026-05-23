@@ -40,11 +40,18 @@ func (s *QueryHistoryService) CreateHistory(ctx context.Context, h *model.QueryH
 }
 
 // ListHistory returns paginated query history for a user.
-func (s *QueryHistoryService) ListHistory(ctx context.Context, userID int64, page, pageSize int) ([]model.QueryHistory, int, error) {
+func (s *QueryHistoryService) ListHistory(ctx context.Context, userID int64, page, pageSize int, keyword string) ([]model.QueryHistory, int, error) {
 	p := ParsePagination(page, pageSize)
 
 	filters := []FilterClause{
 		{Condition: "user_id = ?", Args: []interface{}{userID}},
+	}
+	if keyword != "" {
+		keywordLike := "%" + escapeLike(keyword) + "%"
+		filters = append(filters, FilterClause{
+			Condition: "(sql_content LIKE ? ESCAPE '\\' OR sql_summary LIKE ? ESCAPE '\\')",
+			Args:      []interface{}{keywordLike, keywordLike},
+		})
 	}
 	whereClause, args := BuildWhereClause(filters)
 
@@ -114,3 +121,5 @@ func (s *QueryHistoryService) cleanupOldRecords(userID int64) {
 		userID, userID, maxHistoryPerUser,
 	)
 }
+
+

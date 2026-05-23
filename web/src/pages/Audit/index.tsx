@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Search, Download, ChevronRight, ChevronDown, Loader2, Copy, Check,
+  Search, Download, ChevronRight, ChevronDown, Loader2, Copy, Check, Link2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -20,12 +21,14 @@ import {
   actionOptions,
   type AuditLog,
 } from '@/api/audit'
+import { listTickets, getStatusLabel, getStatusColor, type Ticket } from '@/api/ticket'
 
 // --- Types ---
 
 interface DataSourceOption {
   id: number
   name: string
+  type: string
 }
 
 interface UserOption {
@@ -67,8 +70,42 @@ function exportToCsv(logs: AuditLog[]) {
 
 // --- Expandable Row ---
 
-function ExpandedRow({ log }: { log: AuditLog }) {
+function ExpandedRow({ log, datasourceName, datasourceType }: {
+  log: AuditLog
+  datasourceName: string
+  datasourceType: string
+}) {
   const [copied, setCopied] = useState(false)
+  const [linkedTicket, setLinkedTicket] = useState<Ticket | null>(null)
+  const [ticketLoading, setTicketLoading] = useState(false)
+  const navigate = useNavigate()
+
+  // Fetch linked ticket by matching datasource_id + sql_content
+  useEffect(() => {
+    let cancelled = false
+    async function searchTicket() {
+      if (!log.datasource_id || !log.sql_content?.trim()) return
+      setTicketLoading(true)
+      try {
+        const res = await listTickets({
+          datasource_id: String(log.datasource_id),
+          keyword: log.sql_content.trim().slice(0, 100),
+          page_size: 5,
+        })
+        if (cancelled) return
+        const matched = (res.data ?? []).find(
+          (t) => t.datasource_id === log.datasource_id && t.sql_content?.trim() === log.sql_content?.trim()
+        )
+        if (matched) setLinkedTicket(matched)
+      } catch {
+        // Silently ignore ticket lookup failures
+      } finally {
+        if (!cancelled) setTicketLoading(false)
+      }
+    }
+    searchTicket()
+    return () => { cancelled = true }
+  }, [log.datasource_id, log.sql_content])
 
   function handleCopy() {
     navigator.clipboard.writeText(log.sql_content)
@@ -77,9 +114,11 @@ function ExpandedRow({ log }: { log: AuditLog }) {
   }
 
   return (
-    <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]/30">
-      <td colSpan={6} className="p-4">
-        <div className="grid grid-cols-2 gap-x-8 gap-y-3 lg:grid-cols-4">
+    <tr className="audit-expanded-row border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]/30">
+      <td colSpan={6} className="p-0">
+        <div className="overflow-hidden">
+          <div className="p-4">
+            <div className="grid grid-cols-2 gap-x-8 gap-y-3 lg:grid-cols-4">
           {/* Full SQL */}
           <div className="col-span-full">
             <div className="mb-1 flex items-center justify-between">
@@ -100,24 +139,24 @@ function ExpandedRow({ log }: { log: AuditLog }) {
           {/* Execution time */}
           <div>
             <span className="text-xs text-[var(--text-muted)]">执行耗时</span>
-            <p className="mt-0.5 text-sm text-[var(--text-primary)]">
+            <p className="mt-0.5 text-sm font-medium text-[var(--text-primary)]">
               {log.execution_time_ms > 0 ? formatExecutionTime(log.execution_time_ms) : '—'}
-            </p>
-          </div>
-
-          {/* Result rows */}
-          <div>
-            <span className="text-xs text-[var(--text-muted)]">返回行数</span>
-            <p className="mt-0.5 text-sm text-[var(--text-primary)]">
-              {log.result_rows >= 0 ? log.result_rows.toLocaleString() : '—'}
             </p>
           </div>
 
           {/* Affected rows */}
           <div>
             <span className="text-xs text-[var(--text-muted)]">影响行数</span>
-            <p className="mt-0.5 text-sm text-[var(--text-primary)]">
+            <p className="mt-0.5 text-sm font-medium text-[var(--text-primary)]">
               {log.affected_rows >= 0 ? log.affected_rows.toLocaleString() : '—'}
+            </p>
+          </div>
+
+          {/* Result rows */}
+          <div>
+            <span className="text-xs text-[var(--text-muted)]">返回行数</span>
+            <p className="mt-0.5 text-sm font-medium text-[var(--text-primary)]">
+              {log.result_rows >= 0 ? log.result_rows.toLocaleString() : '—'}
             </p>
           </div>
 
@@ -127,6 +166,76 @@ function ExpandedRow({ log }: { log: AuditLog }) {
             <p className="mt-0.5 text-sm text-[var(--text-primary)]">
               {log.ip_address || '—'}
             </p>
+          </div>
+
+          {/* Database type */}
+          <div>
+            <span className="text-xs text-[var(--text-muted)]">数据库类型</span>
+            <p className="mt-0.5 text-sm text-[var(--text-primary)]">
+              {datasourceType ? (
+                <Badge className="border-0 bg-sky-500/15 text-[10px] text-sky-400">
+                  {datasourceType}
+                </Badge>
+              ) : '—'}
+            </p>
+          </div>
+
+          {/* Datasource name */}
+          <div>
+            <span className="text-xs text-[var(--text-muted)]">数据源名称</span>
+            <p className="mt-0.5 text-sm text-[var(--text-primary)]">
+              {datasourceName || `#${log.datasource_id}`}
+            </p>
+          </div>
+
+          {/* Operator */}
+          <div>
+            <span className="text-xs text-[var(--text-muted)]">操作人</span>
+            <p className="mt-0.5 text-sm text-[var(--text-primary)]">
+              {log.username || `#${log.user_id}`}
+            </p>
+          </div>
+
+          {/* Timestamp */}
+          <div>
+            <span className="text-xs text-[var(--text-muted)]">时间戳</span>
+            <p className="mt-0.5 text-sm text-[var(--text-primary)]">
+              {new Date(log.created_at).toLocaleString('zh-CN', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+              })}
+            </p>
+          </div>
+
+          {/* Linked ticket */}
+          <div className="col-span-full">
+            <span className="text-xs text-[var(--text-muted)]">关联工单</span>
+            <div className="mt-1">
+              {ticketLoading ? (
+                <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+                  <Loader2 size={12} className="animate-spin" />查找中…
+                </span>
+              ) : linkedTicket ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate(`/tickets?id=${linkedTicket.id}`)
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2.5 py-1 text-xs transition-colors hover:bg-[var(--bg-surface)]"
+                >
+                  <Link2 size={12} className="text-[var(--text-muted)]" />
+                  <span className="font-medium text-[var(--text-primary)]">
+                    #{linkedTicket.id}
+                  </span>
+                  <span className="text-[var(--text-secondary)]">{linkedTicket.sql_summary || linkedTicket.sql_content.slice(0, 40)}</span>
+                  <Badge className={`${getStatusColor(linkedTicket.status)} ml-1 border-0 text-[10px]`}>
+                    {getStatusLabel(linkedTicket.status)}
+                  </Badge>
+                </button>
+              ) : (
+                <span className="text-xs text-[var(--text-muted)]">无关联工单</span>
+              )}
+            </div>
           </div>
 
           {/* Desensitization info */}
@@ -150,6 +259,8 @@ function ExpandedRow({ log }: { log: AuditLog }) {
               <p className="mt-0.5 text-sm text-red-400">{log.error_message}</p>
             </div>
           )}
+            </div>
+          </div>
         </div>
       </td>
     </tr>
@@ -159,6 +270,8 @@ function ExpandedRow({ log }: { log: AuditLog }) {
 // --- Main Page ---
 
 export default function AuditPage() {
+  const [searchParams] = useSearchParams()
+
   // Data
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [total, setTotal] = useState(0)
@@ -173,8 +286,19 @@ export default function AuditPage() {
   const [datasourceFilter, setDatasourceFilter] = useState<string>('')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
-  const [keyword, setKeyword] = useState('')
-  const [searchInput, setSearchInput] = useState('')
+  const [keyword, setKeyword] = useState(() => searchParams.get('highlight') ?? '')
+  const [searchInput, setSearchInput] = useState(() => searchParams.get('highlight') ?? '')
+
+  // Sync keyword from URL `highlight` param when navigating from global search
+  useEffect(() => {
+    const hl = searchParams.get('highlight')
+    if (hl) {
+      queueMicrotask(() => {
+        setKeyword(hl)
+        setSearchInput(hl)
+      })
+    }
+  }, [searchParams])
 
   // Options
   const [datasources, setDatasources] = useState<DataSourceOption[]>([])
@@ -216,9 +340,11 @@ export default function AuditPage() {
     }
   }, [page, pageSize, userFilter, actionFilter, datasourceFilter, startDate, endDate, keyword])
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     fetchLogs()
   }, [fetchLogs])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Search handler
   function handleSearch() {
@@ -389,6 +515,7 @@ export default function AuditPage() {
             <TableBody>
               {logs.map((log) => {
                 const isExpanded = expandedIds.has(log.id)
+                const ds = datasources.find((d) => d.id === log.datasource_id)
                 return (
                   <>
                     <TableRow
@@ -398,9 +525,9 @@ export default function AuditPage() {
                     >
                       <TableCell className="w-8 px-2">
                         {isExpanded ? (
-                          <ChevronDown size={14} className="text-[var(--text-muted)]" />
+                          <ChevronDown size={14} className="text-[var(--text-muted)] transition-transform" />
                         ) : (
-                          <ChevronRight size={14} className="text-[var(--text-muted)]" />
+                          <ChevronRight size={14} className="text-[var(--text-muted)] transition-transform" />
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-[var(--text-muted)]">
@@ -436,7 +563,14 @@ export default function AuditPage() {
                         </Tooltip>
                       </TableCell>
                     </TableRow>
-                    {isExpanded && <ExpandedRow key={`expanded-${log.id}`} log={log} />}
+                    {isExpanded && (
+                      <ExpandedRow
+                        key={`expanded-${log.id}`}
+                        log={log}
+                        datasourceName={ds?.name ?? ''}
+                        datasourceType={ds?.type ?? ''}
+                      />
+                    )}
                   </>
                 )
               })}

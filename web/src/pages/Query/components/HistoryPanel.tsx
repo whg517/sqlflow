@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Clock, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -32,8 +32,16 @@ export default function HistoryPanel() {
     }
   }, [])
 
+  // Load data when panel opens — use ref to track previous open state
+  // and trigger fetch via microtask to avoid synchronous setState in effect
+  const prevOpenRef = useRef(false)
   useEffect(() => {
-    if (open) load()
+    if (open && !prevOpenRef.current) {
+      // Schedule fetch outside synchronous effect body
+      const id = requestAnimationFrame(() => { load() })
+      return () => cancelAnimationFrame(id)
+    }
+    prevOpenRef.current = open
   }, [open, load])
 
   // Close on click outside

@@ -21,17 +21,17 @@ server:
   #   http_port: 80         # HTTP 监听端口（重定向用），需与 port 不同
 
 jwt:
-  # JWT 签名密钥 — 推荐通过环境变量 SQLFLOW_JWT_SECRET 设置
+  # Required. Set via SQLFLOW_JWT_SECRET env var
   # 生成方法: openssl rand -hex 32
-  secret: ""
+  secret: "sqlflow-jwt-secret-dev-insecure"  # INSECURE DEV-ONLY — override with env var in production
   expiry: "24h"  # Token 过期时间
 
 admin:
   # 初始管理员账号（仅首次启动创建）
   username: "admin"
-  # ⚠️ 推荐通过环境变量 SQLFLOW_ADMIN_PASSWORD 设置
+  # Required. Set via SQLFLOW_ADMIN_PASSWORD env var
   # 至少 8 字符，必须包含字母和数字
-  password: ""
+  password: "admin123"  # INSECURE DEV-ONLY — override with env var in production
 
 db:
   # SQLite 数据库文件路径
@@ -66,9 +66,14 @@ backup:
   keep: 10               # 保留最近 N 个备份文件
   compress: true         # 是否压缩备份文件（gzip）
 
-# AES 加密密钥 — 推荐通过环境变量 SQLFLOW_ENCRYPTION_KEY 设置
+# Required. Set via SQLFLOW_ENCRYPTION_KEY env var
 # 必须为 16、24 或 32 字节（对应 AES-128/192/256）
 # 生成方法: openssl rand -hex 16
-encryption_key: ""
+encryption_key: "2f89e3851766a2840c3348dc6df23ab4"  # INSECURE DEV-ONLY — override with env var in production
+
+# Prometheus 监控指标
+metrics:
+  enabled: false           # 是否启用 /metrics 端点
+  port: 9090              # Metrics HTTP 端口（通过 docker-compose 暴露）
 
 query_history_max: 200

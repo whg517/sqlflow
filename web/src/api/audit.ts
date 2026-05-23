@@ -56,6 +56,18 @@ export async function listAuditLogs(params: AuditListParams = {}): Promise<Audit
   return api.get<AuditListResponse>(`/audit-logs${query ? `?${query}` : ''}`)
 }
 
+/**
+ * Full-text search on audit logs (FTS5).
+ * Falls back to listAuditLogs with keyword if the search endpoint is unavailable.
+ */
+export async function searchAuditLogs(keyword: string, pageSize = 5): Promise<AuditListResponse> {
+  const qs = new URLSearchParams()
+  qs.set('keyword', keyword)
+  qs.set('page', '1')
+  qs.set('page_size', String(pageSize))
+  return api.get<AuditListResponse>(`/audit-logs/search?${qs.toString()}`)
+}
+
 // --- Helpers ---
 
 const actionLabelMap: Record<string, string> = {

@@ -17,6 +17,8 @@ import {
   PanelLeft,
   Search,
   LayoutDashboard,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -31,6 +33,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog'
 import CommandPalette from '@/components/CommandPalette'
 import NetworkBanner from '@/components/NetworkBanner'
+import { useTheme } from '@/hooks/useTheme'
 import { api } from '@/api/client'
 
 const settingsSubItems = [
@@ -44,6 +47,36 @@ interface CurrentUser {
   role: string
 }
 
+// --- NavItem must be defined outside Layout to avoid react-hooks/static-components error ---
+
+interface NavItemProps {
+  to: string
+  icon: React.ElementType
+  label: string
+  collapsed: boolean
+  navLinkClass: (isActive: boolean) => string
+}
+
+function NavItem({ to, icon: Icon, label, collapsed, navLinkClass }: NavItemProps) {
+  return collapsed ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <NavLink to={to} className={({ isActive }) => navLinkClass(isActive)}>
+          <Icon size={18} />
+        </NavLink>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="text-xs">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  ) : (
+    <NavLink to={to} className={({ isActive }) => navLinkClass(isActive)}>
+      <Icon size={18} />
+      <span>{label}</span>
+    </NavLink>
+  )
+}
+
 export default function Layout() {
   const location = useLocation()
   const [settingsOpen, setSettingsOpen] = useState(
@@ -51,6 +84,7 @@ export default function Layout() {
   )
   const isSettingsActive = location.pathname.startsWith('/settings')
 
+  const { theme, toggle } = useTheme()
   const [user, setUser] = useState<CurrentUser | null>(null)
   const [pwdOpen, setPwdOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
@@ -95,25 +129,7 @@ export default function Layout() {
         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
     }`
 
-  const NavItem = ({ to, icon: Icon, label }: { to: string; icon: React.ElementType; label: string }) => (
-    collapsed ? (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <NavLink to={to} className={({ isActive }) => navLinkClass(isActive)}>
-            <Icon size={18} />
-          </NavLink>
-        </TooltipTrigger>
-        <TooltipContent side="right" className="text-xs">
-          {label}
-        </TooltipContent>
-      </Tooltip>
-    ) : (
-      <NavLink to={to} className={({ isActive }) => navLinkClass(isActive)}>
-        <Icon size={18} />
-        <span>{label}</span>
-      </NavLink>
-    )
-  )
+
 
   return (
     <div className="flex h-full">
@@ -132,13 +148,13 @@ export default function Layout() {
 
         {/* Navigation */}
         <nav className="flex flex-1 flex-col gap-0.5 p-2">
-          <NavItem to="/" icon={LayoutDashboard} label="概览" />
-          <NavItem to="/query" icon={Database} label="查询" />
-          <NavItem to="/tickets" icon={FileText} label="工单" />
-          <NavItem to="/permissions" icon={ShieldCheck} label="权限" />
-          <NavItem to="/audit" icon={ScrollText} label="审计" />
+          <NavItem to="/" icon={LayoutDashboard} label="概览" collapsed={collapsed} navLinkClass={navLinkClass} />
+          <NavItem to="/query" icon={Database} label="查询" collapsed={collapsed} navLinkClass={navLinkClass} />
+          <NavItem to="/tickets" icon={FileText} label="工单" collapsed={collapsed} navLinkClass={navLinkClass} />
+          <NavItem to="/permissions" icon={ShieldCheck} label="权限" collapsed={collapsed} navLinkClass={navLinkClass} />
+          <NavItem to="/audit" icon={ScrollText} label="审计" collapsed={collapsed} navLinkClass={navLinkClass} />
           {user?.role === 'admin' && (
-            <NavItem to="/users" icon={User} label="用户管理" />
+            <NavItem to="/users" icon={User} label="用户管理" collapsed={collapsed} navLinkClass={navLinkClass} />
           )}
 
           {/* Separator */}
@@ -234,6 +250,11 @@ export default function Layout() {
                 <KeyRound size={14} />
                 修改密码
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={toggle}>
+                {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                {theme === 'dark' ? '浅色模式' : '深色模式'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
                 onClick={() => {

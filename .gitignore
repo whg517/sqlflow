@@ -34,7 +34,18 @@ Thumbs.db
 # Environment
 .env
 .env.local
+.env.*.local
 config.yaml
+
+# Logs
+*.log
+logs/
+
+# Certificates
+certs/
+*.crt
+*.key
+*.pem
 
 # State (runtime only)
 state/

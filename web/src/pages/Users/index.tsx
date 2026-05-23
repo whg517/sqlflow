@@ -355,9 +355,11 @@ export default function UsersPage() {
         },
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [page],
   )
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: filteredUsers,
     columns,

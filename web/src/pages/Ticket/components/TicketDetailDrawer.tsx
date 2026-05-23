@@ -58,13 +58,17 @@ export default function TicketDetailDrawer({
 
   useEffect(() => {
     if (open && ticketId) {
-      setLoading(true)
-      getTicket(ticketId)
-        .then((res) => setTicket(res.data))
-        .catch((err) => toast.error(err instanceof Error ? err.message : '获取工单失败'))
-        .finally(() => setLoading(false))
+      const id = requestAnimationFrame(() => {
+        setLoading(true)
+        getTicket(ticketId)
+          .then((res) => setTicket(res.data))
+          .catch((err) => toast.error(err instanceof Error ? err.message : '获取工单失败'))
+          .finally(() => setLoading(false))
+      })
+      return () => cancelAnimationFrame(id)
     } else {
-      setTicket(null)
+      const id = requestAnimationFrame(() => { setTicket(null) })
+      return () => cancelAnimationFrame(id)
     }
   }, [open, ticketId])
 

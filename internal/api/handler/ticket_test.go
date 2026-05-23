@@ -1333,3 +1333,145 @@ func TestTicketHandler_RejectWorkflow(t *testing.T) {
 		t.Errorf("status = %v, want REJECTED", data["status"])
 	}
 }
+
+func TestTicketHandler_ScheduleTicket(t *testing.T) {
+	e, h, database := setupTicketHandlerTest(t)
+	devID := seedTicketTestUser(t, database, "dev1", "developer")
+	seedTicketTestDatasource(t, database, "test-ds")
+
+	ticketID := createTicketViaDB(t, database, devID, 1, "SELECT 1")
+	setTicketStatusDB(t, database, ticketID, model.TicketStatusApproved)
+
+	// Schedule for a future time
+	futureTime := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
+	body := `{"scheduled_at":"` + futureTime + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/:id/schedule", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(fmt.Sprintf("%d", ticketID))
+	setTicketAuthContext(c, devID, "dev1", "developer")
+
+	if err := h.ScheduleTicket(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+func TestTicketHandler_ScheduleTicket_InvalidID(t *testing.T) {
+	e, h, _, _ := setupTicketHandlerTest(t)
+
+	futureTime := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
+	body := `{"scheduled_at":"` + futureTime + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/abc/schedule", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("abc")
+	setTicketAuthContext(c, 1, "dev1", "developer")
+
+	if err := h.ScheduleTicket(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+func TestTicketHandler_ScheduleTicket_EmptyBody(t *testing.T) {
+	e, h, database := setupTicketHandlerTest(t)
+	devID := seedTicketTestUser(t, database, "dev1", "developer")
+	seedTicketTestDatasource(t, database, "test-ds")
+
+	ticketID := createTicketViaDB(t, database, devID, 1, "SELECT 1")
+	setTicketStatusDB(t, database, ticketID, model.TicketStatusApproved)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/:id/schedule", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(fmt.Sprintf("%d", ticketID))
+	setTicketAuthContext(c, devID, "dev1", "developer")
+
+	if err := h.ScheduleTicket(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+func TestTicketHandler_CancelSchedule(t *testing.T) {
+	e, h, database := setupTicketHandlerTest(t)
+	devID := seedTicketTestUser(t, database, "dev1", "developer")
+	seedTicketTestDatasource(t, database, "test-ds")
+
+	ticketID := createTicketViaDB(t, database, devID, 1, "SELECT 1")
+	setTicketStatusDB(t, database, ticketID, model.TicketStatusScheduled)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/:id/cancel-schedule", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(fmt.Sprintf("%d", ticketID))
+	setTicketAuthContext(c, devID, "dev1", "developer")
+
+	if err := h.CancelSchedule(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+func TestTicketHandler_CancelSchedule_InvalidID(t *testing.T) {
+	e, h, _, _ := setupTicketHandlerTest(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/abc/cancel-schedule", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("abc")
+	setTicketAuthContext(c, 1, "dev1", "developer")
+
+	if err := h.CancelSchedule(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+func TestTicketHandler_CancelSchedule_NotScheduled(t *testing.T) {
+	e, h, database := setupTicketHandlerTest(t)
+	devID := seedTicketTestUser(t, database, "dev1", "developer")
+	seedTicketTestDatasource(t, database, "test-ds")
+
+	ticketID := createTicketViaDB(t, database, devID, 1, "SELECT 1")
+	// Keep default SUBMITTED status, not SCHEDULED
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets/:id/cancel-schedule", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(fmt.Sprintf("%d", ticketID))
+	setTicketAuthContext(c, devID, "dev1", "developer")
+
+	if err := h.CancelSchedule(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}

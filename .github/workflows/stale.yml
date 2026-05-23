@@ -1,0 +1,47 @@
+# ============================================================
+# SQLFlow Stale PR & Issue 管理
+# 自动标记和关闭不活跃的 PR 和 Issue
+# ============================================================
+name: Stale
+
+on:
+  schedule:
+    - cron: "0 0 * * *"  # 每天 UTC 00:00（北京时间 08:00）
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    name: Mark Stale Issues & PRs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          # Issue 配置
+          stale-issue-message: >
+            👋 这个 Issue 已经 30 天没有活动了。
+            如果它仍然相关，请添加评论或更新状态。
+            如果不再需要，可以手动关闭它。
+            7 天后没有活动将自动关闭。
+          stale-issue-label: "stale"
+          close-issue-message: "由于 30 天没有活动，这个 Issue 已自动关闭。如果仍有需要，请重新打开。"
+          days-before-issue-stale: 30
+          days-before-issue-close: 7
+          # PR 配置
+          stale-pr-message: >
+            👋 这个 PR 已经 14 天没有活动了。
+            如果仍在开发中，请推送新的 commit 或添加评论。
+            7 天后没有活动将自动关闭。
+          stale-pr-label: "stale"
+          close-pr-message: "由于 14 天没有活动，这个 PR 已自动关闭。如果仍需要合并，请重新打开。"
+          days-before-pr-stale: 14
+          days-before-pr-close: 7
+          # 豁免规则
+          exempt-issue-labels: "pinned,security,enhancement"
+          exempt-pr-labels: "pinned,security,work-in-progress,wip"
+          # 操作
+          remove-stale-when-updated: true
+          delete-branch: false

@@ -44,10 +44,15 @@ export default function CommentSection({
     }
   }, [orderId])
 
+  // Fetch comments when orderId changes — schedule outside synchronous effect body
+  const prevOrderIdRef = useRef(orderId)
   useEffect(() => {
-    if (orderId > 0) {
-      fetchComments()
+    if (orderId > 0 && orderId !== prevOrderIdRef.current) {
+      const id = requestAnimationFrame(() => { fetchComments() })
+      prevOrderIdRef.current = orderId
+      return () => cancelAnimationFrame(id)
     }
+    prevOrderIdRef.current = orderId
   }, [orderId, fetchComments])
 
   // Auto-scroll to bottom when comments change

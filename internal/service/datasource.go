@@ -11,6 +11,7 @@ import (
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 var (
@@ -285,6 +286,137 @@ func (s *DatasourceService) GetTables(ctx context.Context, id int64) ([]string, 
 	default:
 		return nil, ErrInvalidDatasourceType
 	}
+}
+
+// ColumnInfo represents a table column's metadata.
+type ColumnInfo struct {
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	Comment string `json:"comment"`
+}
+
+// GetTableColumns returns column information for a specific table in a datasource.
+func (s *DatasourceService) GetTableColumns(ctx context.Context, id int64, tableName string) ([]ColumnInfo, error) {
+	ds, err := s.GetDataSource(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if ds.Status == "disabled" {
+		return nil, ErrDatasourceDisabled
+	}
+
+	password, err := crypto.Decrypt(ds.PasswordEncrypted, s.encryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt password: %w", err)
+	}
+
+	switch ds.Type {
+	case "mysql":
+		return s.getMySQLColumns(ctx, ds, password, tableName)
+	case "mongodb":
+		return s.getMongoColumns(ctx, ds, password, tableName)
+	default:
+		return nil, ErrInvalidDatasourceType
+	}
+}
+
+// getMySQLColumns queries INFORMATION_SCHEMA.COLUMNS for column metadata.
+func (s *DatasourceService) getMySQLColumns(ctx context.Context, ds *model.DataSource, password, tableName string) ([]ColumnInfo, error) {
+	dbName := ds.Database
+	if dbName == "" {
+		dbName = "information_schema"
+	}
+	poolCfg := connpool.MySQLPoolConfig{
+		MaxOpen:     ds.MaxOpen,
+		MaxIdle:     ds.MaxIdle,
+		MaxLifetime: ds.MaxLifetime,
+		MaxIdleTime: ds.MaxIdleTime,
+	}
+	targetDB, err := s.connMgr.GetMySQL(ds.ID, ds.Host, ds.Port, ds.Username, password, dbName, poolCfg)
+	if err != nil {
+		return nil, fmt.Errorf("connect mysql: %w", err)
+	}
+
+	query := `SELECT COLUMN_NAME, DATA_TYPE, COLUMN_COMMENT FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`
+	rows, err := targetDB.QueryContext(ctx, query, dbName, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("query columns: %w", err)
+	}
+	defer rows.Close()
+
+	var columns []ColumnInfo
+	for rows.Next() {
+		var c ColumnInfo
+		if err := rows.Scan(&c.Name, &c.Type, &c.Comment); err != nil {
+			return nil, fmt.Errorf("scan column: %w", err)
+		}
+		columns = append(columns, c)
+	}
+	return columns, rows.Err()
+}
+
+// getMongoColumns samples documents from a MongoDB collection to infer field types.
+func (s *DatasourceService) getMongoColumns(ctx context.Context, ds *model.DataSource, password, tableName string) ([]ColumnInfo, error) {
+	uri := buildMongoURI(ds.Host, ds.Port, ds.Username, password)
+	client, err := s.connMgr.GetMongoDB(ctx, ds.ID, uri)
+	if err != nil {
+		return nil, fmt.Errorf("connect mongodb: %w", err)
+	}
+
+	database := ds.Database
+	if database == "" {
+		database = tableName // If no database specified, tableName might be the DB name
+	}
+	collection := client.Database(database).Collection(tableName)
+
+	// Sample up to 100 documents to infer field names and types
+	pipeline := []bson.M{
+		{"$limit": int32(100)},
+		{"$project": bson.M{"_id": 0}},
+	}
+
+	cursor, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("aggregate mongo columns: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	seen := make(map[string]string) // name → type
+	for cursor.Next(ctx) {
+		var doc map[string]interface{}
+		if err := cursor.Decode(&doc); err != nil {
+			continue
+		}
+		for field, val := range doc {
+			t := "unknown"
+			if val != nil {
+				switch val.(type) {
+				case string:
+					t = "string"
+				case float64:
+					t = "number"
+				case bool:
+					t = "boolean"
+				case int, int32, int64:
+					t = "number"
+				case map[string]interface{}:
+					t = "object"
+				case []interface{}:
+					t = "array"
+				}
+			}
+			if _, exists := seen[field]; !exists {
+				seen[field] = t
+			}
+		}
+	}
+
+	columns := make([]ColumnInfo, 0, len(seen))
+	for name, typ := range seen {
+		columns = append(columns, ColumnInfo{Name: name, Type: typ, Comment: ""})
+	}
+	return columns, nil
 }
 
 // GetDataSourceSafe returns a datasource without the encrypted password for API responses.

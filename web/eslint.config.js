@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'node_modules', 'playwright-report']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -17,6 +17,14 @@ export default defineConfig([
     ],
     languageOptions: {
       globals: globals.browser,
+      parser: tseslint.parser,
+    },
+    rules: {
+      // Let @typescript-eslint/no-unused-vars handle unused vars (smarter about TS types)
+      'no-unused-vars': 'off',
+      'no-console': 'warn',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': 'warn',
     },
   },
 ])

@@ -1,16 +1,18 @@
 package api
 
 import (
-	"net/http"
+	"database/sql"
 
 	"github.com/labstack/echo/v4"
+	"github.com/whg517/sqlflow/config"
 	"github.com/whg517/sqlflow/internal/api/handler"
 	"github.com/whg517/sqlflow/internal/api/middleware"
+	"github.com/whg517/sqlflow/internal/pkg/metrics"
 	"github.com/whg517/sqlflow/internal/service"
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, db *sql.DB, cfg *config.Config) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -18,10 +20,20 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	e.Use(middleware.Logger())
 	e.Use(middleware.CORS())
 
-	// Health check (public)
-	e.GET("/api/health", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
-	})
+	// Prometheus metrics middleware
+	if cfg.Metrics.Enabled {
+		e.Use(metrics.Middleware())
+	}
+
+	// Health check (public, enhanced with DB check)
+	healthHandler := handler.NewHealthHandler(db)
+	e.GET("/health", healthHandler.Health)
+	e.GET("/api/health", healthHandler.Health)
+
+	// Prometheus metrics endpoint
+	if cfg.Metrics.Enabled {
+		e.GET("/metrics", healthHandler.Metrics)
+	}
 
 	// Auth handlers
 	userHandler := handler.NewUserHandler(authSvc)
@@ -53,6 +65,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 
 	// Tables endpoint: authenticated users can access
 	authGroup.GET("/api/datasources/:id/tables", dsHandler.GetTables)
+	authGroup.GET("/api/datasources/:id/tables/:name/columns", dsHandler.GetTableColumns)
 
 	// Query execution & history (authenticated users)
 	authGroup.POST("/api/query/execute", queryHandler.ExecuteQuery)

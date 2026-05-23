@@ -117,7 +117,7 @@ func main() {
 	defer backupSvc.Stop()
 
 	// Start server
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, database.DB, cfg)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server

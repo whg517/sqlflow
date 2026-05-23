@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { api } from '@/api/client'
 import { executeQuery, streamAIReview, buildMongoSql, type MongoQueryBody, type AIReviewResult } from '@/api/query'
 import { useQueryStore, type MongoOperation } from '@/store/queryStore'
+import { useSchemaCompletion, type SchemaData } from '@/hooks/useSchemaCompletion'
 import SqlEditor from './components/SqlEditor'
 import MongoEditor from './components/MongoEditor'
 import ResultTable from './components/ResultTable'
@@ -54,6 +55,10 @@ export default function QueryPage() {
 
   const [datasources, setDatasources] = useState<DataSourceOption[]>([])
   const [ticketSheetOpen, setTicketSheetOpen] = useState(false)
+  const [schemaData, setSchemaData] = useState<SchemaData | null>(null)
+
+  const { fetchTables, fetchColumns, clearDatasourceCache } = useSchemaCompletion()
+  void clearDatasourceCache
 
   const cancelReviewRef = useRef<(() => void) | null>(null)
 
@@ -84,6 +89,19 @@ export default function QueryPage() {
       cancelReviewRef.current?.()
     }
   }, [])
+
+  // Fetch schema data when active datasource changes
+  useEffect(() => {
+    if (!activeTab?.datasourceId) {
+      return
+    }
+    fetchTables(activeTab.datasourceId).then((data) => {
+      setSchemaData(data ?? null)
+    })
+  }, [activeTab?.datasourceId, fetchTables])
+
+  // Derive: when datasource is cleared, schema is implicitly null
+  const effectiveSchemaData = activeTab?.datasourceId ? schemaData : null
 
   const buildMongoQuerySql = useCallback((): string | null => {
     if (!activeTab) return null
@@ -335,6 +353,7 @@ export default function QueryPage() {
                 onFilterChange={(v) => updateMongoField(activeTab.id, { mongoFilter: v })}
                 onOptionsChange={(v) => updateMongoField(activeTab.id, { mongoOptions: v })}
                 onExecute={handleExecute}
+                collectionNames={isMongo && effectiveSchemaData ? effectiveSchemaData.tables : []}
               />
             ) : (
               <SqlEditor
@@ -342,6 +361,11 @@ export default function QueryPage() {
                 value={activeTab?.sql ?? ''}
                 onChange={(sql) => updateTabSql(activeTab.id, sql)}
                 onExecute={handleExecute}
+                schemaData={effectiveSchemaData}
+                onFetchColumns={async (tableName: string) => {
+                  if (!activeTab?.datasourceId) return []
+                  return fetchColumns(activeTab.datasourceId, tableName)
+                }}
               />
             )
           }

@@ -18,6 +18,7 @@ type Config struct {
 	AI              AIConfig       `mapstructure:"ai"`
 	DingTalk        DingTalkConfig `mapstructure:"dingtalk"`
 	Backup          BackupConfig   `mapstructure:"backup"`
+	Metrics         MetricsConfig  `mapstructure:"metrics"`
 	QueryHistoryMax int            `mapstructure:"query_history_max"`
 	EncryptionKey   string         `mapstructure:"encryption_key"`
 }
@@ -74,6 +75,12 @@ type DingTalkOAuthConfig struct {
 	AppSecret   string `mapstructure:"app_secret"`
 	RedirectURL string `mapstructure:"redirect_url"`
 	Enabled     bool   `mapstructure:"enabled"`
+}
+
+// MetricsConfig holds Prometheus metrics configuration.
+type MetricsConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+	Port    int  `mapstructure:"port"`
 }
 
 // BackupConfig holds database backup configuration.
@@ -216,6 +223,14 @@ func Load(configPath string) (*Config, error) {
 	}
 	if cfg.Backup.Keep == 0 {
 		cfg.Backup.Keep = 10
+	}
+
+	// Metrics defaults
+	if !cfg.Metrics.Enabled && os.Getenv("SQLFLOW_METRICS_ENABLED") == "true" {
+		cfg.Metrics.Enabled = true
+	}
+	if cfg.Metrics.Port == 0 {
+		cfg.Metrics.Port = 9090
 	}
 
 	return &cfg, nil

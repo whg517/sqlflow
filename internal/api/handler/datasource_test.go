@@ -841,6 +841,204 @@ func TestDatasourceHandler_GetTables(t *testing.T) {
 	})
 }
 
+// ─── GetTableColumns Tests ─────────────────────────────────────────────────
+
+func TestGetTableColumns(t *testing.T) {
+	e, dsSvc, h := setupDatasourceTest(t)
+	mysqlDS := createTestDatasource(t, dsSvc, "mysql-cols", "mysql", "10.0.0.1", 3306)
+	mongoDS := createTestDatasource(t, dsSvc, "mongo-cols", "mongodb", "10.0.0.2", 27017)
+
+	t.Run("mysql_connection_error", func(t *testing.T) {
+		// No real MySQL server, so this should fail with internal error (500)
+		req := httptest.NewRequest(http.MethodGet, "/api/datasources/:id/tables/:name/columns", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id", "name")
+		c.SetParamValues(fmt.Sprintf("%d", mysqlDS.ID), "users")
+
+		if err := h.GetTableColumns(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+
+		// Connection will fail (no real server), should return 500
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+		}
+
+		result := decodeDatasourceResponse(t, rec)
+		msg, _ := result["message"].(string)
+		if msg != "获取字段列表失败" {
+			t.Errorf("message = %q, want %q", msg, "获取字段列表失败")
+		}
+	})
+
+	t.Run("mongodb_connection_error", func(t *testing.T) {
+		// No real MongoDB server, should fail with internal error
+		req := httptest.NewRequest(http.MethodGet, "/api/datasources/:id/tables/:name/columns", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id", "name")
+		c.SetParamValues(fmt.Sprintf("%d", mongoDS.ID), "products")
+
+		if err := h.GetTableColumns(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+		}
+	})
+
+	t.Run("datasource_not_found", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/datasources/:id/tables/:name/columns", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id", "name")
+		c.SetParamValues("99999", "users")
+
+		if err := h.GetTableColumns(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusNotFound, rec.Body.String())
+		}
+
+		result := decodeDatasourceResponse(t, rec)
+		msg, _ := result["message"].(string)
+		if msg != "数据源不存在" {
+			t.Errorf("message = %q, want %q", msg, "数据源不存在")
+		}
+	})
+
+	t.Run("table_not_exists", func(t *testing.T) {
+		// The service will attempt to connect and query; since there's no real server
+		// it will return an internal error. In production, a non-existent table would
+		// return an empty array (the SQL query simply yields no rows).
+		// We verify the handler doesn't crash with a bad table name.
+		req := httptest.NewRequest(http.MethodGet, "/api/datasources/:id/tables/:name/columns", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id", "name")
+		c.SetParamValues(fmt.Sprintf("%d", mysqlDS.ID), "nonexistent_table_xyz")
+
+		if err := h.GetTableColumns(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+
+		// Connection fails (no real server), so we get 500
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+		}
+	})
+
+	t.Run("disabled_datasource", func(t *testing.T) {
+		// Disable the datasource
+		ctx := contextWithTimeout(t)
+		if err := dsSvc.DisableDataSource(ctx, mysqlDS.ID); err != nil {
+			t.Fatalf("disable datasource: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/datasources/:id/tables/:name/columns", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id", "name")
+		c.SetParamValues(fmt.Sprintf("%d", mysqlDS.ID), "users")
+
+		if err := h.GetTableColumns(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+		}
+
+		result := decodeDatasourceResponse(t, rec)
+		msg, _ := result["message"].(string)
+		if msg != "数据源已禁用" {
+			t.Errorf("message = %q, want %q", msg, "数据源已禁用")
+		}
+	})
+
+	t.Run("invalid_datasource_id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/datasources/:id/tables/:name/columns", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id", "name")
+		c.SetParamValues("notanumber", "users")
+
+		if err := h.GetTableColumns(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+		}
+
+		result := decodeDatasourceResponse(t, rec)
+		msg, _ := result["message"].(string)
+		if msg != "无效的数据源ID" {
+			t.Errorf("message = %q, want %q", msg, "无效的数据源ID")
+		}
+	})
+
+	t.Run("empty_table_name", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/datasources/:id/tables/:name/columns", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id", "name")
+		c.SetParamValues(fmt.Sprintf("%d", mysqlDS.ID), "")
+
+		if err := h.GetTableColumns(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+		}
+
+		result := decodeDatasourceResponse(t, rec)
+		msg, _ := result["message"].(string)
+		if msg != "表名不能为空" {
+			t.Errorf("message = %q, want %q", msg, "表名不能为空")
+		}
+	})
+
+	t.Run("negative_datasource_id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/datasources/:id/tables/:name/columns", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id", "name")
+		c.SetParamValues("-1", "users")
+
+		if err := h.GetTableColumns(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+
+		// Negative ID parses as valid int64 but datasource won't exist → 404
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusNotFound, rec.Body.String())
+		}
+	})
+
+	t.Run("zero_datasource_id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/datasources/:id/tables/:name/columns", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id", "name")
+		c.SetParamValues("0", "users")
+
+		if err := h.GetTableColumns(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+
+		// ID=0 parses fine but no such datasource → 404
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusNotFound, rec.Body.String())
+		}
+	})
+}
+
 // ─── parseDatasourceID Tests ────────────────────────────────────────────────
 
 func TestParseDatasourceID(t *testing.T) {

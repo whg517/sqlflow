@@ -1,12 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { listSensitiveTables, type SensitiveTable } from '@/api/maskRule'
+
+const EMPTY_MAP = new Map<string, SensitiveTable>()
 
 /**
  * Hook to fetch and cache sensitive tables by datasource id.
  * Returns a map: tableName -> SensitiveTable for quick lookup.
  */
 export function useSensitiveTables(datasourceId: number | null) {
-  const [sensitiveMap, setSensitiveMap] = useState<Map<string, SensitiveTable>>(new Map())
+  const [fetchedMap, setFetchedMap] = useState<Map<string, SensitiveTable>>(EMPTY_MAP)
   const [loading, setLoading] = useState(false)
   const cacheRef = useRef<Map<number, Map<string, SensitiveTable>>>(new Map())
 
@@ -14,7 +16,7 @@ export function useSensitiveTables(datasourceId: number | null) {
     // Check cache first
     const cached = cacheRef.current.get(dsId)
     if (cached) {
-      setSensitiveMap(cached)
+      setFetchedMap(cached)
       return
     }
 
@@ -29,7 +31,7 @@ export function useSensitiveTables(datasourceId: number | null) {
         tableMap.set(t.table_name.toLowerCase(), t)
       }
       cacheRef.current.set(dsId, tableMap)
-      setSensitiveMap(tableMap)
+      setFetchedMap(tableMap)
     } catch {
       // Silently fail — non-critical feature
     } finally {
@@ -40,10 +42,14 @@ export function useSensitiveTables(datasourceId: number | null) {
   useEffect(() => {
     if (datasourceId) {
       fetchSensitive(datasourceId)
-    } else {
-      setSensitiveMap(new Map())
     }
   }, [datasourceId, fetchSensitive])
+
+  // When datasourceId is null, expose an empty map without needing to reset state
+  const sensitiveMap = useMemo(
+    () => (datasourceId ? fetchedMap : EMPTY_MAP),
+    [datasourceId, fetchedMap],
+  )
 
   /**
    * Check if a table name is marked as sensitive for the current datasource.

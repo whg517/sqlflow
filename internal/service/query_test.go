@@ -960,7 +960,7 @@ func TestQueryHistory_CreateAndList(t *testing.T) {
 		t.Fatalf("CreateHistory() error: %v", err)
 	}
 
-	list, total, err := svc.ListHistory(ctx, 1, 1, 10)
+	list, total, err := svc.ListHistory(ctx, 1, 1, 10, "")
 	if err != nil {
 		t.Fatalf("ListHistory() error: %v", err)
 	}
@@ -993,7 +993,7 @@ func TestQueryHistory_Delete(t *testing.T) {
 	}
 
 	// Get the ID from the DB since CreateHistory doesn't return it
-	list, _, err := svc.ListHistory(ctx, 1, 1, 1)
+	list, _, err := svc.ListHistory(ctx, 1, 1, 1, "")
 	if err != nil || len(list) == 0 {
 		t.Fatalf("ListHistory() error: %v, len=%d", err, len(list))
 	}
@@ -1012,7 +1012,7 @@ func TestQueryHistory_Delete(t *testing.T) {
 			SQLContent: "SELECT 2", SQLSummary: "SELECT 2", DBType: "mysql",
 		}
 		svc.CreateHistory(ctx, history2)
-		list2, _, _ := svc.ListHistory(ctx, 1, 1, 1)
+		list2, _, _ := svc.ListHistory(ctx, 1, 1, 1, "")
 		if len(list2) == 0 {
 			t.Fatal("expected at least one history record")
 		}
@@ -1043,7 +1043,7 @@ func TestQueryHistory_Clear(t *testing.T) {
 		t.Fatalf("ClearHistory() error: %v", err)
 	}
 
-	_, total, err := svc.ListHistory(ctx, 1, 1, 10)
+	_, total, err := svc.ListHistory(ctx, 1, 1, 10, "")
 	if err != nil {
 		t.Fatalf("ListHistory() error: %v", err)
 	}
@@ -1069,7 +1069,7 @@ func TestQueryHistory_Pagination(t *testing.T) {
 	}
 
 	t.Run("page1", func(t *testing.T) {
-		list, total, err := svc.ListHistory(ctx, 1, 1, 5)
+		list, total, err := svc.ListHistory(ctx, 1, 1, 5, "")
 		if err != nil {
 			t.Fatalf("ListHistory() error: %v", err)
 		}
@@ -1082,7 +1082,7 @@ func TestQueryHistory_Pagination(t *testing.T) {
 	})
 
 	t.Run("page4_empty", func(t *testing.T) {
-		list, _, err := svc.ListHistory(ctx, 1, 4, 5)
+		list, _, err := svc.ListHistory(ctx, 1, 4, 5, "")
 		if err != nil {
 			t.Fatalf("ListHistory() error: %v", err)
 		}

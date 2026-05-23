@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
 )
 
 // RequestSpec defines a single HTTP request for benchmarking.
@@ -180,12 +181,12 @@ func executeRequest(client *http.Client, spec RequestSpec) LatencyRecord {
 	var dnsDur, tcpDur, tlsDur, firstByteDur time.Duration
 
 	trace := &httptrace.ClientTrace{
-		DNSStart: func(_ httptrace.DNSStartInfo) { dnsStart = time.Now() },
-		DNSDone:  func(_ httptrace.DNSDoneInfo) { dnsDur = time.Since(dnsStart) },
-		TLSHandshakeStart: func() { tlsStart = time.Now() },
-		TLSHandshakeDone:  func(_ httptrace.TLSHandshakeDoneInfo) { tlsDur = time.Since(tlsStart) },
-		ConnectStart: func(_, _ string) { tcpStart = time.Now() },
-		ConnectDone: func(_, _ string, err error) { tcpDur = time.Since(tcpStart) },
+		DNSStart:             func(_ httptrace.DNSStartInfo) { dnsStart = time.Now() },
+		DNSDone:              func(_ httptrace.DNSDoneInfo) { dnsDur = time.Since(dnsStart) },
+		TLSHandshakeStart:   func() { tlsStart = time.Now() },
+		TLSHandshakeDone:    func(tls.ConnectionState, error) { tlsDur = time.Since(tlsStart) },
+		ConnectStart:        func(_, _ string) { tcpStart = time.Now() },
+		ConnectDone:         func(_, _ string, err error) { tcpDur = time.Since(tcpStart) },
 		GotFirstResponseByte: func() { firstByteDur = time.Since(firstByteStart) },
 	}
 

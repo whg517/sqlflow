@@ -44,7 +44,7 @@ func (s *AuditService) Write(ctx context.Context, rec AuditRecord) {
 func (s *AuditService) Close() {}
 
 // List retrieves a paginated list of audit logs with filtering.
-// Supported filters: userID, action, datasourceID, start/end (time), keyword (searches sql_content).
+// Supported filters: userID, action, datasourceID, start/end (time), keyword (searches sql_content, username, action).
 func (s *AuditService) List(ctx context.Context, page, pageSize int, userID, action, datasourceID, start, end, keyword string) ([]model.AuditLog, int64, error) {
 	p := ParsePagination(page, pageSize)
 
@@ -65,14 +65,22 @@ func (s *AuditService) List(ctx context.Context, page, pageSize int, userID, act
 		filters = append(filters, FilterClause{Condition: "a.created_at <= ?", Args: []interface{}{end}})
 	}
 	if keyword != "" {
-		filters = append(filters, FilterClause{Condition: "a.sql_content LIKE ? ESCAPE '\\'", Args: []interface{}{"%" + escapeLike(keyword) + "%"}})
+		keywordLike := "%" + escapeLike(keyword) + "%"
+		filters = append(filters, FilterClause{
+			Condition: "(a.sql_content LIKE ? ESCAPE '\\' OR u.username LIKE ? ESCAPE '\\' OR a.action LIKE ? ESCAPE '\\')",
+			Args:      []interface{}{keywordLike, keywordLike, keywordLike},
+		})
 	}
 
 	whereClause, args := BuildWhereClause(filters)
 
-	// Count total.
+	// Count total. When keyword filter references u.username, we need the JOIN.
 	var total int64
-	countSQL := PaginatedCountSQL("audit_logs a", whereClause)
+	countTable := "audit_logs a"
+	if keyword != "" {
+		countTable = "audit_logs a LEFT JOIN users u ON a.user_id = u.id"
+	}
+	countSQL := PaginatedCountSQL(countTable, whereClause)
 	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("统计审计日志失败: %w", err)
 	}

@@ -252,6 +252,33 @@ func (h *DatasourceHandler) TestConnection(c echo.Context) error {
 	})
 }
 
+// GetTableColumns handles GET /api/datasources/:id/tables/:name/columns (authenticated).
+func (h *DatasourceHandler) GetTableColumns(c echo.Context) error {
+	id, err := parseDatasourceID(c)
+	if err != nil {
+		return resp.BadRequest(c, "无效的数据源ID")
+	}
+
+	tableName := c.Param("name")
+	if tableName == "" {
+		return resp.BadRequest(c, "表名不能为空")
+	}
+
+	columns, err := h.dsSvc.GetTableColumns(c.Request().Context(), id, tableName)
+	if err != nil {
+		if err == service.ErrDatasourceNotFound {
+			return resp.NotFound(c, "数据源不存在")
+		}
+		if err == service.ErrDatasourceDisabled {
+			return resp.BadRequest(c, "数据源已禁用")
+		}
+		log.Printf("GetTableColumns failed for datasource %d table %s: %v", id, tableName, err)
+		return resp.InternalError(c, "获取字段列表失败")
+	}
+
+	return resp.OK(c, columns)
+}
+
 // GetTables handles GET /api/datasources/:id/tables (authenticated).
 func (h *DatasourceHandler) GetTables(c echo.Context) error {
 	id, err := parseDatasourceID(c)

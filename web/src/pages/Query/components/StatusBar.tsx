@@ -1,5 +1,5 @@
 import { Download, Loader2, Play, ShieldAlert } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -45,24 +45,20 @@ export default function StatusBar({
 
   // Sensitive table detection
   const [sensitiveTables, setSensitiveTables] = useState<SensitiveTable[]>([])
-  const [detectedSensitive, setDetectedSensitive] = useState<string[]>([])
 
   useEffect(() => {
     if (!datasourceId) {
-      setSensitiveTables([])
-      setDetectedSensitive([])
-      return
+      const id = requestAnimationFrame(() => { setSensitiveTables([]) })
+      return () => cancelAnimationFrame(id)
     }
     listSensitiveTables({ datasource_id: String(datasourceId), page_size: 500 })
       .then((res) => setSensitiveTables(res.data ?? []))
       .catch(() => setSensitiveTables([]))
   }, [datasourceId])
 
-  useEffect(() => {
-    if (!sql.trim() || sensitiveTables.length === 0) {
-      setDetectedSensitive([])
-      return
-    }
+  // Derive detected sensitive tables from SQL and sensitive tables list
+  const detectedSensitive = useMemo(() => {
+    if (!sql.trim() || sensitiveTables.length === 0) return []
     // Extract table names from SQL (simple FROM/JOIN parsing)
     const sqlLower = sql.toLowerCase()
     const found = new Set<string>()
@@ -74,7 +70,7 @@ export default function StatusBar({
         found.add(tableName)
       }
     }
-    setDetectedSensitive(Array.from(found))
+    return Array.from(found)
   }, [sql, sensitiveTables])
 
   const canExecute = isMongo

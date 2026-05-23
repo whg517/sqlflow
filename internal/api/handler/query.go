@@ -88,7 +88,9 @@ func (h *QueryHandler) ListHistory(c echo.Context) error {
 		pageSize = 50
 	}
 
-	list, total, err := h.historySvc.ListHistory(c.Request().Context(), userID, page, pageSize)
+	keyword := c.QueryParam("keyword")
+
+	list, total, err := h.historySvc.ListHistory(c.Request().Context(), userID, page, pageSize, keyword)
 	if err != nil {
 		return resp.InternalError(c, "获取查询历史失败")
 	}

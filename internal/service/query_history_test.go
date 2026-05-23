@@ -30,7 +30,7 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 			t.Fatalf("CreateHistory: %v", err)
 		}
 
-		list, total, err := svc.ListHistory(context.Background(), userID, 1, 10)
+		list, total, err := svc.ListHistory(context.Background(), userID, 1, 10, "")
 		if err != nil {
 			t.Fatalf("ListHistory: %v", err)
 		}
@@ -71,7 +71,7 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 		}
 
 		// Total should be 6 (1 from previous + 5 new)
-		_, total, err := svc.ListHistory(context.Background(), userID, 1, 10)
+		_, total, err := svc.ListHistory(context.Background(), userID, 1, 10, "")
 		if err != nil {
 			t.Fatalf("ListHistory total: %v", err)
 		}
@@ -80,7 +80,7 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 		}
 
 		// Page 1 with size 3 => 3 items
-		page1, total, err := svc.ListHistory(context.Background(), userID, 1, 3)
+		page1, total, err := svc.ListHistory(context.Background(), userID, 1, 3, "")
 		if err != nil {
 			t.Fatalf("ListHistory page1: %v", err)
 		}
@@ -92,7 +92,7 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 		}
 
 		// Page 2 with size 3 => 3 items
-		page2, _, err := svc.ListHistory(context.Background(), userID, 2, 3)
+		page2, _, err := svc.ListHistory(context.Background(), userID, 2, 3, "")
 		if err != nil {
 			t.Fatalf("ListHistory page2: %v", err)
 		}
@@ -101,7 +101,7 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 		}
 
 		// Page 3 with size 3 => 0 items (6 records, page3 starts at offset 6)
-		page3, _, err := svc.ListHistory(context.Background(), userID, 3, 3)
+		page3, _, err := svc.ListHistory(context.Background(), userID, 3, 3, "")
 		if err != nil {
 			t.Fatalf("ListHistory page3: %v", err)
 		}
@@ -111,7 +111,7 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 	})
 
 	t.Run("list_orders_by_id_desc", func(t *testing.T) {
-		list, _, err := svc.ListHistory(context.Background(), userID, 1, 2)
+		list, _, err := svc.ListHistory(context.Background(), userID, 1, 2, "")
 		if err != nil {
 			t.Fatalf("ListHistory: %v", err)
 		}
@@ -125,7 +125,7 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 
 	t.Run("list_empty_for_other_user", func(t *testing.T) {
 		otherID := seedIntegrationUser(t, testDB, "qh_other", "developer")
-		list, total, err := svc.ListHistory(context.Background(), otherID, 1, 10)
+		list, total, err := svc.ListHistory(context.Background(), otherID, 1, 10, "")
 		if err != nil {
 			t.Fatalf("ListHistory other: %v", err)
 		}
@@ -154,20 +154,20 @@ func TestQueryHistoryService_DeleteHistory(t *testing.T) {
 			t.Fatalf("CreateHistory: %v", err)
 		}
 
-		_, total, _ := svc.ListHistory(context.Background(), userID, 1, 10)
+		_, total, _ := svc.ListHistory(context.Background(), userID, 1, 10, "")
 		if total != 1 {
 			t.Fatalf("total before delete = %d, want 1", total)
 		}
 
 		// Get the ID
-		list, _, _ := svc.ListHistory(context.Background(), userID, 1, 10)
+		list, _, _ := svc.ListHistory(context.Background(), userID, 1, 10, "")
 		recordID := list[0].ID
 
 		if err := svc.DeleteHistory(context.Background(), recordID, userID); err != nil {
 			t.Fatalf("DeleteHistory: %v", err)
 		}
 
-		_, total, _ = svc.ListHistory(context.Background(), userID, 1, 10)
+		_, total, _ = svc.ListHistory(context.Background(), userID, 1, 10, "")
 		if total != 0 {
 			t.Errorf("total after delete = %d, want 0", total)
 		}
@@ -182,7 +182,7 @@ func TestQueryHistoryService_DeleteHistory(t *testing.T) {
 		}
 		svc.CreateHistory(context.Background(), h)
 
-		list, _, _ := svc.ListHistory(context.Background(), userID, 1, 10)
+		list, _, _ := svc.ListHistory(context.Background(), userID, 1, 10, "")
 		recordID := list[0].ID
 
 		err := svc.DeleteHistory(context.Background(), recordID, otherID)
@@ -217,7 +217,7 @@ func TestQueryHistoryService_ClearHistory(t *testing.T) {
 		}
 	}
 
-	_, total, _ := svc.ListHistory(context.Background(), userID, 1, 10)
+	_, total, _ := svc.ListHistory(context.Background(), userID, 1, 10, "")
 	if total != 3 {
 		t.Fatalf("total before clear = %d, want 3", total)
 	}
@@ -227,7 +227,7 @@ func TestQueryHistoryService_ClearHistory(t *testing.T) {
 			t.Fatalf("ClearHistory: %v", err)
 		}
 
-		_, total, err := svc.ListHistory(context.Background(), userID, 1, 10)
+		_, total, err := svc.ListHistory(context.Background(), userID, 1, 10, "")
 		if err != nil {
 			t.Fatalf("ListHistory after clear: %v", err)
 		}
@@ -249,7 +249,7 @@ func TestQueryHistoryService_ClearHistory(t *testing.T) {
 		// Clear first user (already cleared, but idempotent)
 		svc.ClearHistory(context.Background(), userID)
 
-		_, total, _ := svc.ListHistory(context.Background(), otherID, 1, 10)
+		_, total, _ := svc.ListHistory(context.Background(), otherID, 1, 10, "")
 		if total != 2 {
 			t.Errorf("other user total = %d, want 2 (should not be affected)", total)
 		}
@@ -279,7 +279,7 @@ func TestQueryHistoryService_CreateHistoryWithZeroValues(t *testing.T) {
 			t.Fatalf("CreateHistory: %v", err)
 		}
 
-		list, total, err := svc.ListHistory(context.Background(), userID, 1, 10)
+		list, total, err := svc.ListHistory(context.Background(), userID, 1, 10, "")
 		if err != nil {
 			t.Fatalf("ListHistory: %v", err)
 		}

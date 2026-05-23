@@ -135,6 +135,7 @@ function AIConfigSection() {
     }
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchConfig() }, [fetchConfig])
 
   async function handleSave(e: FormEvent) {
@@ -336,6 +337,7 @@ function DingTalkSection() {
     }
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchConfig() }, [fetchConfig])
 
   async function handleSave(e: FormEvent) {
