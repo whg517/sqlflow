@@ -18,6 +18,7 @@ import {
   getStatusLabel, getStatusColor, getRiskLabel, getRiskColor, getRiskDot, formatTime,
   type Ticket, type TicketStatus,
 } from '@/api/ticket'
+import CommentSection from './CommentSection'
 
 interface TicketDetailDrawerProps {
   open: boolean
@@ -282,6 +283,14 @@ export default function TicketDetailDrawer({
                     执行时间: {formatTime(ticket.executed_at)}
                   </div>
                 )}
+
+                {/* Comments Section */}
+                <Separator className="bg-[var(--border-default)]" />
+                <CommentSection
+                  orderId={ticket.id}
+                  currentUserId={userId}
+                  currentUserRole={userRole}
+                />
               </div>
             </ScrollArea>
           )}

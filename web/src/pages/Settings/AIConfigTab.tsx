@@ -43,18 +43,44 @@ interface ApiResponse {
 
 const PROVIDER_OPTIONS = [
   { value: 'openai', label: 'OpenAI' },
+  { value: 'zhipu', label: '智谱 GLM' },
   { value: 'azure', label: 'Azure OpenAI' },
   { value: 'custom', label: '自定义 (OpenAI 兼容)' },
 ]
 
-const MODEL_OPTIONS = [
-  { value: 'gpt-4', label: 'GPT-4' },
-  { value: 'gpt-4o', label: 'GPT-4o' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-  { value: 'claude-3-5-sonnet', label: 'Claude 3.5 Sonnet' },
-  { value: 'custom', label: '自定义模型' },
-]
+const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  openai: [
+    { value: 'gpt-4', label: 'GPT-4' },
+    { value: 'gpt-4o', label: 'GPT-4o' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+    { value: 'custom', label: '自定义模型' },
+  ],
+  zhipu: [
+    { value: 'glm-4', label: 'GLM-4' },
+    { value: 'glm-4-flash', label: 'GLM-4 Flash' },
+    { value: 'glm-4-plus', label: 'GLM-4 Plus' },
+    { value: 'glm-4-air', label: 'GLM-4 Air' },
+    { value: 'glm-4-long', label: 'GLM-4 Long' },
+    { value: 'custom', label: '自定义模型' },
+  ],
+  azure: [
+    { value: 'gpt-4', label: 'GPT-4' },
+    { value: 'gpt-4o', label: 'GPT-4o' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+    { value: 'custom', label: '自定义模型' },
+  ],
+  custom: [
+    { value: 'custom', label: '输入模型名称' },
+  ],
+}
+
+const DEFAULT_BASE_URLS: Record<string, string> = {
+  openai: 'https://api.openai.com/v1',
+  zhipu: 'https://open.bigmodel.cn/api/paas/v4',
+  azure: '',
+  custom: '',
+}
 
 const TIMEOUT_OPTIONS = [
   { value: '5s', label: '5 秒' },
@@ -79,6 +105,9 @@ function AIConfigSection() {
   const [baseUrl, setBaseUrl] = useState('https://api.openai.com/v1')
   const [timeout, setTimeout_] = useState('10s')
 
+  // Current provider's model options
+  const currentModelOptions = MODEL_OPTIONS[provider] || MODEL_OPTIONS.custom
+
   const fetchConfig = useCallback(async () => {
     try {
       const res = await api.get<SettingsResponse>('/settings')
@@ -86,8 +115,8 @@ function AIConfigSection() {
       if (ai) {
         setConfig(ai)
         setProvider(ai.provider || 'openai')
-        // Check if current model is in the preset list
-        const isPreset = MODEL_OPTIONS.some((o) => o.value === ai.model)
+        const opts = MODEL_OPTIONS[ai.provider || 'openai'] || MODEL_OPTIONS.custom
+        const isPreset = opts.some((o) => o.value === ai.model)
         if (isPreset) {
           setModel(ai.model)
           setCustomModel('')
@@ -96,7 +125,7 @@ function AIConfigSection() {
           setCustomModel(ai.model)
         }
         setApiKey('')
-        setBaseUrl(ai.base_url || 'https://api.openai.com/v1')
+        setBaseUrl(ai.base_url || DEFAULT_BASE_URLS[ai.provider || 'openai'] || 'https://api.openai.com/v1')
         setTimeout_(ai.timeout || '10s')
       }
     } catch {
@@ -187,7 +216,7 @@ function AIConfigSection() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {MODEL_OPTIONS.map((o) => (
+                {currentModelOptions.map((o) => (
                   <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                 ))}
               </SelectContent>

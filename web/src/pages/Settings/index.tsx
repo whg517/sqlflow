@@ -2,7 +2,7 @@ import { useState, useCallback, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import {
   Plus, Pencil, Trash2, Database, ShieldCheck, Brain,
-  Plug, Loader2,
+  Plug, Loader2, ShieldAlert,
 } from 'lucide-react'
 import { api } from '@/api/client'
 import { cn } from '@/lib/utils'
@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select'
 import MaskRulesTab from './MaskRulesTab'
 import AIConfigTab from './AIConfigTab'
+import { listSensitiveTables } from '@/api/maskRule'
 
 // --- Types ---
 
@@ -106,6 +107,8 @@ function DataSourceTab() {
   const [loading, setLoading] = useState(false)
   const [inited, setInited] = useState(false)
 
+  const [sensitiveCounts, setSensitiveCounts] = useState<Map<number, number>>(new Map())
+
   // Dialog
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -123,18 +126,35 @@ function DataSourceTab() {
   const [deleteTarget, setDeleteTarget] = useState<DataSourceItem | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  const fetchSensitiveCounts = useCallback(async (dsList: DataSourceItem[]) => {
+    const counts = new Map<number, number>()
+    await Promise.allSettled(
+      dsList.map(async (ds) => {
+        try {
+          const res = await listSensitiveTables({ datasource_id: String(ds.id), page_size: 1 })
+          counts.set(ds.id, res.total ?? 0)
+        } catch {
+          counts.set(ds.id, 0)
+        }
+      }),
+    )
+    setSensitiveCounts(counts)
+  }, [])
+
   const fetchSources = useCallback(async () => {
     setLoading(true)
     try {
       const res = await api.get<DataSourceListResponse>('/datasources')
-      setSources(res.data ?? [])
+      const list = res.data ?? []
+      setSources(list)
       setInited(true)
+      fetchSensitiveCounts(list)
     } catch {
       toast.error('获取数据源列表失败')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [fetchSensitiveCounts])
 
   if (!inited && !loading) fetchSources()
 
@@ -259,6 +279,7 @@ function DataSourceTab() {
               <TableHead className="text-[var(--text-secondary)]">类型</TableHead>
               <TableHead className="text-[var(--text-secondary)]">地址</TableHead>
               <TableHead className="text-[var(--text-secondary)]">数据库</TableHead>
+              <TableHead className="text-[var(--text-secondary)]">敏感表</TableHead>
               <TableHead className="text-[var(--text-secondary)]">状态</TableHead>
               <TableHead className="text-[var(--text-secondary)]">操作</TableHead>
             </TableRow>
@@ -266,13 +287,13 @@ function DataSourceTab() {
           <TableBody>
             {loading && !sources.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-[var(--text-muted)]">
+                <TableCell colSpan={7} className="h-24 text-center text-[var(--text-muted)]">
                   加载中...
                 </TableCell>
               </TableRow>
             ) : !sources.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-[var(--text-muted)]">
+                <TableCell colSpan={7} className="h-24 text-center text-[var(--text-muted)]">
                   暂无数据源，点击上方按钮添加
                 </TableCell>
               </TableRow>
@@ -280,6 +301,7 @@ function DataSourceTab() {
               sources.map((ds) => {
                 const tb = TYPE_BADGE[ds.type] ?? { label: ds.type, cls: DEFAULT_BADGE.cls }
                 const sb = STATUS_BADGE[ds.status] ?? DEFAULT_BADGE
+                const sCount = sensitiveCounts.get(ds.id) ?? 0
                 return (
                   <TableRow key={ds.id} className="border-[var(--border-default)]">
                     <TableCell>
@@ -293,6 +315,16 @@ function DataSourceTab() {
                     </TableCell>
                     <TableCell>
                       <span className="text-[var(--text-secondary)]">{ds.database || '—'}</span>
+                    </TableCell>
+                    <TableCell>
+                      {sCount > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-red-500/15 px-1.5 py-0.5 text-xs font-medium text-red-400">
+                          <ShieldAlert size={12} />
+                          {sCount}
+                        </span>
+                      ) : (
+                        <span className="text-[var(--text-muted)]">0</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge className={sb.cls}>{sb.label}</Badge>

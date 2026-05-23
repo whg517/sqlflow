@@ -6,22 +6,35 @@ services:
     image: sqlflow:latest
     container_name: sqlflow
     ports:
-      - "${SERVER_PORT:-8080}:8080"
+      - "${SQLFLOW_SERVER_PORT:-8080}:8080"
+      # Uncomment below to expose HTTP redirect port when TLS is enabled
+      # - "${SQLFLOW_TLS_HTTP_PORT:-80}:80"
     volumes:
       - sqlflow-data:/app/data
+      # Uncomment below to mount TLS certificates when TLS is enabled
+      # - ./certs/sqlflow.crt:/etc/ssl/certs/sqlflow.crt:ro
+      # - ./certs/sqlflow.key:/etc/ssl/private/sqlflow.key:ro
     environment:
-      - SERVER_PORT=8080
-      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
-      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
-      - DB_PATH=/app/data/sqlflow.db
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
-      - AI_PROVIDER=${AI_PROVIDER:-openai}
-      - AI_MODEL=${AI_MODEL:-gpt-4}
-      - AI_API_KEY=${AI_API_KEY:-}
-      - AI_BASE_URL=${AI_BASE_URL:-https://api.openai.com/v1}
-      - DINGTALK_WEBHOOK_URL=${DINGTALK_WEBHOOK_URL:-}
-      - DINGTALK_SECRET=${DINGTALK_SECRET:-}
+      # Viper env prefix is SQLFLOW_, keys use _ as nested separator
+      - SQLFLOW_SERVER_PORT=8080
+      - SQLFLOW_JWT_SECRET=${SQLFLOW_JWT_SECRET:-sqlflow-jwt-secret-key-2026-dev-only}
+      - SQLFLOW_JWT_EXPIRY=24h
+      - SQLFLOW_ADMIN_USERNAME=${SQLFLOW_ADMIN_USERNAME:-admin}
+      - SQLFLOW_ADMIN_PASSWORD=${SQLFLOW_ADMIN_PASSWORD:-admin123}
+      - SQLFLOW_DB_PATH=/app/data/sqlflow.db
+      - SQLFLOW_ENCRYPTION_KEY=${SQLFLOW_ENCRYPTION_KEY:-2f89e3851766a2840c3348dc6df23ab4}
+      - SQLFLOW_AI_PROVIDER=${SQLFLOW_AI_PROVIDER:-openai}
+      - SQLFLOW_AI_MODEL=${SQLFLOW_AI_MODEL:-gpt-4}
+      - SQLFLOW_AI_API_KEY=${SQLFLOW_AI_API_KEY:-}
+      - SQLFLOW_AI_BASE_URL=${SQLFLOW_AI_BASE_URL:-https://api.openai.com/v1}
+      - SQLFLOW_DINGTALK_WEBHOOK_URL=${SQLFLOW_DINGTALK_WEBHOOK_URL:-}
+      - SQLFLOW_DINGTALK_SECRET=${SQLFLOW_DINGTALK_SECRET:-}
+      # TLS configuration (set SQLFLOW_SERVER_TLS_ENABLE=true to enable)
+      - SQLFLOW_SERVER_TLS_ENABLE=${SQLFLOW_SERVER_TLS_ENABLE:-false}
+      - SQLFLOW_SERVER_TLS_CERT_FILE=${SQLFLOW_SERVER_TLS_CERT_FILE:-}
+      - SQLFLOW_SERVER_TLS_KEY_FILE=${SQLFLOW_SERVER_TLS_KEY_FILE:-}
+      - SQLFLOW_SERVER_TLS_REDIRECT_HTTP=${SQLFLOW_SERVER_TLS_REDIRECT_HTTP:-false}
+      - SQLFLOW_SERVER_TLS_HTTP_PORT=${SQLFLOW_SERVER_TLS_HTTP_PORT:-80}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 15s

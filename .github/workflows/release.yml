@@ -1,0 +1,181 @@
+# ============================================================
+# SQLFlow Release — 创建 v* tag 时自动发布 GitHub Release
+# 生成 Changelog 并附带编译产物
+# ============================================================
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: "1.25"
+
+jobs:
+  # ────────────────────────────────────────────────
+  # 编译多平台二进制
+  # ────────────────────────────────────────────────
+  build-binaries:
+    name: Build Binaries (${{ matrix.os }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            artifact: sqlflow-linux-amd64
+          - goos: linux
+            goarch: arm64
+            artifact: sqlflow-linux-arm64
+          - goos: darwin
+            goarch: amd64
+            artifact: sqlflow-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            artifact: sqlflow-darwin-arm64
+          - goos: windows
+            goarch: amd64
+            artifact: sqlflow-windows-amd64.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      # 构建前端（嵌入到 Go 二进制中）
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build frontend
+        run: |
+          cd web && npm ci && npm run build
+
+      # 编译 Go 二进制（CGO_ENABLED=0 保证纯静态）
+      - name: Build Go binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          BUILD_TIME="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          BINARY="sqlflow"
+          [ "${{ matrix.goos }}" = "windows" ] && BINARY="sqlflow.exe"
+
+          go build \
+            -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" \
+            -o "${{ matrix.artifact }}" \
+            ./cmd/server/
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          retention-days: 90
+
+  # ────────────────────────────────────────────────
+  # 创建 GitHub Release
+  # ────────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-binaries
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 下载所有编译产物
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          merge-multiple: true
+
+      # 从 CHANGELOG.md 提取当前版本内容（如果没有则生成简单的）
+      - name: Generate release notes
+        id: notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${TAG}$" | head -1 || echo "")
+
+          echo "## What's Changed" > release_notes.md
+          echo "" >> release_notes.md
+
+          if [ -n "$PREV_TAG" ]; then
+            # 自动生成 commit 变更列表
+            echo "### Commits since \`${PREV_TAG}\`" >> release_notes.md
+            echo "" >> release_notes.md
+            git log "${PREV_TAG}..${TAG}" --pretty=format:"- %s (%h)" --no-merges >> release_notes.md
+          else
+            echo "### First release" >> release_notes.md
+            echo "Initial release of SQLFlow." >> release_notes.md
+          fi
+
+          echo "" >> release_notes.md
+
+          # 如果 CHANGELOG.md 中有对应版本的内容，追加
+          if [ -f CHANGELOG.md ]; then
+            # 尝试提取当前版本的内容块
+            sed -n "/^## \[${TAG#v}\]/,/^## \[/p" CHANGELOG.md | head -n -1 >> release_notes.md 2>/dev/null || true
+          fi
+
+          echo "" >> release_notes.md
+          echo "---" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG}" >> release_notes.md
+
+      # 打包所有产物为 tar.gz / zip
+      - name: Package artifacts
+        run: |
+          cd ./artifacts
+          for f in sqlflow-linux-*; do
+            [ -f "$f" ] && tar -czf "${f}.tar.gz" "$f"
+          done
+          for f in sqlflow-darwin-*; do
+            [ -f "$f" ] && tar -czf "${f}.tar.gz" "$f"
+          done
+          for f in sqlflow-windows-*; do
+            [ -f "$f" ] && zip "${f%.exe}.zip" "$f"
+          done
+          ls -la
+
+      # 创建 Release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          files: |
+            ./artifacts/*.tar.gz
+            ./artifacts/*.zip
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 生成发布摘要 ──
+      - name: Release Summary
+        if: success()
+        run: |
+          echo "## Release Created :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Pre-release:** ${{ contains(github.ref_name, '-') }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          ls -lh ./artifacts/*.tar.gz ./artifacts/*.zip 2>/dev/null | awk '{print "- \`" $NF "\` (" $5 ")"}' >> $GITHUB_STEP_SUMMARY

@@ -141,6 +141,34 @@ func (s *NotifyService) NotifyTicketRejected(t *model.Ticket) {
 	go s.sendMarkdown(title, text)
 }
 
+// NotifyTicketScheduled sends a notification when a ticket is scheduled for execution.
+func (s *NotifyService) NotifyTicketScheduled(t *model.Ticket) {
+	if !s.isEnabled() {
+		return
+	}
+
+	var scheduledTime string
+	if t.ScheduledAt != nil {
+		scheduledTime = t.ScheduledAt.Format("2006-01-02 15:04:05")
+	} else {
+		scheduledTime = "未指定"
+	}
+
+	title := "⏰ 工单定时执行通知"
+	text := fmt.Sprintf(
+		"**工单 #%d 已设置定时执行**\n\n"+
+			"- **提交人**: %s\n"+
+			"- **SQL摘要**: %s\n"+
+			"- **风险等级**: %s\n"+
+			"- **计划执行时间**: %s",
+		t.ID, t.SubmitterName,
+		t.SQLSummary, riskLabel(t.RiskLevel),
+		scheduledTime,
+	)
+
+	go s.sendMarkdown(title, text)
+}
+
 // NotifyTicketExecuted sends a notification when a ticket SQL is executed.
 func (s *NotifyService) NotifyTicketExecuted(t *model.Ticket) {
 	if !s.isEnabled() {

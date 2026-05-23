@@ -99,10 +99,10 @@ func NewAIReviewService(db *sql.DB, provider, model, apiKey, baseURL string, tim
 		provider = "openai"
 	}
 	if model == "" {
-		model = "gpt-4"
+		model = defaultModelForProvider(provider)
 	}
 	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
+		baseURL = defaultBaseURLForProvider(provider)
 	}
 	enabled := apiKey != ""
 
@@ -806,3 +806,27 @@ const (
 	AIRiskMedium = "medium"
 	AIRiskHigh   = "high"
 )
+
+// defaultModelForProvider returns the default model for a given provider.
+func defaultModelForProvider(provider string) string {
+	switch provider {
+	case "zhipu":
+		return "glm-4"
+	case "azure":
+		return "gpt-4"
+	default:
+		return "gpt-4"
+	}
+}
+
+// defaultBaseURLForProvider returns the default API base URL for a given provider.
+func defaultBaseURLForProvider(provider string) string {
+	switch provider {
+	case "zhipu":
+		return "https://open.bigmodel.cn/api/paas/v4"
+	case "azure":
+		return ""
+	default:
+		return "https://api.openai.com/v1"
+	}
+}

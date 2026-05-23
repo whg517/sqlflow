@@ -16,6 +16,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   Search,
+  LayoutDashboard,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -131,10 +132,14 @@ export default function Layout() {
 
         {/* Navigation */}
         <nav className="flex flex-1 flex-col gap-0.5 p-2">
+          <NavItem to="/" icon={LayoutDashboard} label="概览" />
           <NavItem to="/query" icon={Database} label="查询" />
           <NavItem to="/tickets" icon={FileText} label="工单" />
           <NavItem to="/permissions" icon={ShieldCheck} label="权限" />
           <NavItem to="/audit" icon={ScrollText} label="审计" />
+          {user?.role === 'admin' && (
+            <NavItem to="/users" icon={User} label="用户管理" />
+          )}
 
           {/* Separator */}
           <div className="my-1 border-t border-[var(--border-subtle)]" />

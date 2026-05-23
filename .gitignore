@@ -7,6 +7,8 @@
 *.test
 *.out
 vendor/
+/server
+coverage.out
 
 # SQLite
 *.db
@@ -36,6 +38,7 @@ config.yaml
 
 # State (runtime only)
 state/
+.claude/
 
 # Backups
 *.bak

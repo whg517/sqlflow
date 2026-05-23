@@ -107,7 +107,7 @@ func TestAuthenticate(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		token, user, err := svc.Authenticate(ctx, "testuser", "mypassword")
+		token, _, user, err := svc.Authenticate(ctx, "testuser", "mypassword")
 		if err != nil {
 			t.Fatalf("Authenticate() error: %v", err)
 		}
@@ -138,28 +138,28 @@ func TestAuthenticate(t *testing.T) {
 	})
 
 	t.Run("wrong password", func(t *testing.T) {
-		_, _, err := svc.Authenticate(ctx, "testuser", "wrongpassword")
+		_, _, _, err := svc.Authenticate(ctx, "testuser", "wrongpassword")
 		if err != ErrInvalidCredentials {
 			t.Errorf("Authenticate() error = %v, want ErrInvalidCredentials", err)
 		}
 	})
 
 	t.Run("nonexistent user", func(t *testing.T) {
-		_, _, err := svc.Authenticate(ctx, "ghost", "whatever")
+		_, _, _, err := svc.Authenticate(ctx, "ghost", "whatever")
 		if err != ErrInvalidCredentials {
 			t.Errorf("Authenticate() error = %v, want ErrInvalidCredentials", err)
 		}
 	})
 
 	t.Run("empty username", func(t *testing.T) {
-		_, _, err := svc.Authenticate(ctx, "", "pass")
+		_, _, _, err := svc.Authenticate(ctx, "", "pass")
 		if err != ErrInvalidCredentials {
 			t.Errorf("Authenticate() error = %v, want ErrInvalidCredentials", err)
 		}
 	})
 
 	t.Run("empty password", func(t *testing.T) {
-		_, _, err := svc.Authenticate(ctx, "testuser", "")
+		_, _, _, err := svc.Authenticate(ctx, "testuser", "")
 		if err != ErrInvalidCredentials {
 			t.Errorf("Authenticate() error = %v, want ErrInvalidCredentials", err)
 		}
@@ -307,13 +307,13 @@ func TestChangePassword(t *testing.T) {
 		}
 
 		// Verify new password works for authentication
-		_, _, err = svc.Authenticate(ctx, "pwuser", "newpassword")
+		_, _, _, err = svc.Authenticate(ctx, "pwuser", "newpassword")
 		if err != nil {
 			t.Fatalf("Authenticate() with new password error: %v", err)
 		}
 
 		// Verify old password no longer works
-		_, _, err = svc.Authenticate(ctx, "pwuser", "oldpassword")
+		_, _, _, err = svc.Authenticate(ctx, "pwuser", "oldpassword")
 		if err != ErrInvalidCredentials {
 			t.Errorf("Authenticate() with old password error = %v, want ErrInvalidCredentials", err)
 		}
@@ -555,13 +555,13 @@ func TestResetPassword(t *testing.T) {
 		}
 
 		// Verify new password works
-		_, _, err = svc.Authenticate(ctx, "resetuser", "newpass12")
+		_, _, _, err = svc.Authenticate(ctx, "resetuser", "newpass12")
 		if err != nil {
 			t.Fatalf("Authenticate() with new password error: %v", err)
 		}
 
 		// Verify old password no longer works
-		_, _, err = svc.Authenticate(ctx, "resetuser", "oldpass12")
+		_, _, _, err = svc.Authenticate(ctx, "resetuser", "oldpass12")
 		if err != ErrInvalidCredentials {
 			t.Errorf("Authenticate() with old password error = %v, want ErrInvalidCredentials", err)
 		}
@@ -584,7 +584,7 @@ func TestResetPassword(t *testing.T) {
 			t.Fatalf("ResetPassword() with empty password error: %v", err)
 		}
 		// Should authenticate with empty password
-		_, _, err = svc.Authenticate(ctx, "emptyPwUser", "")
+		_, _, _, err = svc.Authenticate(ctx, "emptyPwUser", "")
 		if err != nil {
 			t.Fatalf("Authenticate() with empty password error: %v", err)
 		}
@@ -600,10 +600,10 @@ func TestParseToken(t *testing.T) {
 	ctx := context.Background()
 
 	user, _ := svc.CreateUser(ctx, "tokenuser", "pass", "admin")
-	token, _, _ := svc.Authenticate(ctx, "tokenuser", "pass")
+	accessToken, _, _, _ := svc.Authenticate(ctx, "tokenuser", "pass")
 
 	t.Run("valid token", func(t *testing.T) {
-		claims, err := svc.ParseToken(token)
+		claims, err := svc.ParseToken(accessToken)
 		if err != nil {
 			t.Fatalf("ParseToken() error: %v", err)
 		}
@@ -631,7 +631,7 @@ func TestParseToken(t *testing.T) {
 		testDB := setupAuthTestDB(t)
 		otherSvc := NewAuthService(testDB, "different-secret", 1*time.Hour)
 		_, _ = otherSvc.CreateUser(ctx, "otheruser", "pass", "developer")
-		otherToken, _, _ := otherSvc.Authenticate(ctx, "otheruser", "pass")
+		otherToken, _, _, _ := otherSvc.Authenticate(ctx, "otheruser", "pass")
 
 		_, err := svc.ParseToken(otherToken)
 		if err == nil {

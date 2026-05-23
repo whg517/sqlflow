@@ -53,7 +53,7 @@ func createTestUser(t *testing.T, authSvc *service.AuthService, username, passwo
 	if err != nil {
 		t.Fatalf("create test user %q: %v", username, err)
 	}
-	token, _, err := authSvc.Authenticate(ctx, username, password)
+	token, _, _, err := authSvc.Authenticate(ctx, username, password)
 	if err != nil {
 		t.Fatalf("authenticate test user %q: %v", username, err)
 	}
@@ -143,8 +143,8 @@ func TestUserHandler_Login(t *testing.T) {
 				if !ok {
 					t.Fatal("response data is not an object")
 				}
-				if _, hasToken := data["token"]; !hasToken {
-					t.Error("response data missing token")
+				if _, hasToken := data["access_token"]; !hasToken {
+					t.Error("response data missing access_token")
 				}
 				userObj, _ := data["user"].(map[string]interface{})
 				if userObj["username"] != "testuser" {
@@ -251,7 +251,7 @@ func TestUserHandler_ChangePassword(t *testing.T) {
 	// Verify password actually changed — login with new password should work
 	t.Run("login_with_new_password", func(t *testing.T) {
 		ctx := contextWithTimeout(t)
-		_, _, err := authSvc.Authenticate(ctx, "changepw", "NewPassword1")
+		_, _, _, err := authSvc.Authenticate(ctx, "changepw", "NewPassword1")
 		if err != nil {
 			t.Errorf("authenticate with new password: %v", err)
 		}
@@ -260,7 +260,7 @@ func TestUserHandler_ChangePassword(t *testing.T) {
 	// Verify old password no longer works
 	t.Run("login_with_old_password_fails", func(t *testing.T) {
 		ctx := contextWithTimeout(t)
-		_, _, err := authSvc.Authenticate(ctx, "changepw", "OldPassword1")
+		_, _, _, err := authSvc.Authenticate(ctx, "changepw", "OldPassword1")
 		if err == nil {
 			t.Error("expected error authenticating with old password")
 		}
@@ -757,7 +757,7 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create third admin: %v", err)
 		}
-		thirdClaims, _, err := authSvc.Authenticate(ctx, "third_admin", "Password123")
+		thirdClaims, _, _, err := authSvc.Authenticate(ctx, "third_admin", "Password123")
 		if err != nil {
 			t.Fatalf("authenticate third admin: %v", err)
 		}
@@ -784,7 +784,7 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create dev user: %v", err)
 		}
-		devToken, _, err := authSvc.Authenticate(ctx, "dev_for_test", "Password123")
+		devToken, _, _, err := authSvc.Authenticate(ctx, "dev_for_test", "Password123")
 		if err != nil {
 			t.Fatalf("authenticate dev: %v", err)
 		}
@@ -801,7 +801,7 @@ func TestUserHandler_DeleteUser(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create fourth admin: %v", err)
 		}
-		fourthToken, _, err := authSvc.Authenticate(ctx, "fourth_admin", "Password123")
+		fourthToken, _, _, err := authSvc.Authenticate(ctx, "fourth_admin", "Password123")
 		if err != nil {
 			t.Fatalf("authenticate fourth: %v", err)
 		}
@@ -906,7 +906,7 @@ func TestUserHandler_ResetPassword(t *testing.T) {
 		}
 
 		// Verify new password works
-		_, _, err := authSvc.Authenticate(ctx, "resetuser", "NewPassword1")
+		_, _, _, err := authSvc.Authenticate(ctx, "resetuser", "NewPassword1")
 		if err != nil {
 			t.Errorf("authenticate with new password: %v", err)
 		}

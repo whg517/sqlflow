@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/spf13/viper"
@@ -16,17 +17,30 @@ type Config struct {
 	DB              DBConfig       `mapstructure:"db"`
 	AI              AIConfig       `mapstructure:"ai"`
 	DingTalk        DingTalkConfig `mapstructure:"dingtalk"`
+	Backup          BackupConfig   `mapstructure:"backup"`
 	QueryHistoryMax int            `mapstructure:"query_history_max"`
 	EncryptionKey   string         `mapstructure:"encryption_key"`
 }
 
 type ServerConfig struct {
-	Port int `mapstructure:"port"`
+	Port int       `mapstructure:"port"`
+	TLS  TLSConfig `mapstructure:"tls"`
+}
+
+// TLSConfig holds HTTPS/TLS configuration.
+// When Enable is true, the server listens with TLS and optionally redirects HTTP traffic.
+type TLSConfig struct {
+	Enable       bool   `mapstructure:"enable"`
+	CertFile     string `mapstructure:"cert_file"`
+	KeyFile      string `mapstructure:"key_file"`
+	RedirectHTTP bool   `mapstructure:"redirect_http"`
+	HTTPPort     int    `mapstructure:"http_port"` // port for HTTP→HTTPS redirect listener
 }
 
 type JWTConfig struct {
-	Secret string        `mapstructure:"secret"`
-	Expiry time.Duration `mapstructure:"expiry"`
+	Secret        string        `mapstructure:"secret"`
+	Expiry        time.Duration `mapstructure:"expiry"`
+	RefreshExpiry time.Duration `mapstructure:"refresh_expiry"`
 }
 
 type AdminConfig struct {
@@ -49,8 +63,26 @@ type AIConfig struct {
 
 // DingTalkConfig holds DingTalk notification configuration.
 type DingTalkConfig struct {
-	WebhookURL string `mapstructure:"webhook_url"`
-	Secret     string `mapstructure:"secret"`
+	WebhookURL string              `mapstructure:"webhook_url"`
+	Secret     string              `mapstructure:"secret"`
+	OAuth      DingTalkOAuthConfig `mapstructure:"oauth"`
+}
+
+// DingTalkOAuthConfig holds DingTalk OAuth2 configuration for login.
+type DingTalkOAuthConfig struct {
+	AppKey      string `mapstructure:"app_key"`
+	AppSecret   string `mapstructure:"app_secret"`
+	RedirectURL string `mapstructure:"redirect_url"`
+	Enabled     bool   `mapstructure:"enabled"`
+}
+
+// BackupConfig holds database backup configuration.
+type BackupConfig struct {
+	Enabled  bool          `mapstructure:"enabled"`
+	Dir      string        `mapstructure:"dir"`
+	Interval time.Duration `mapstructure:"interval"`
+	Keep     int           `mapstructure:"keep"`
+	Compress bool          `mapstructure:"compress"`
 }
 
 func Load(configPath string) (*Config, error) {
@@ -66,6 +98,7 @@ func Load(configPath string) (*Config, error) {
 
 	// Environment variable overrides
 	viper.AutomaticEnv()
+	viper.SetEnvPrefix("SQLFLOW")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w (hint: copy config/config.example.yaml to config/config.yaml and fill in values)", err)
@@ -75,6 +108,24 @@ func Load(configPath string) (*Config, error) {
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, err
+	}
+
+	// --- Env var overrides for secrets (highest priority) ---
+	// These environment variables take precedence over config.yaml values.
+	if v := os.Getenv("SQLFLOW_JWT_SECRET"); v != "" {
+		cfg.JWT.Secret = v
+	}
+	if v := os.Getenv("SQLFLOW_ENCRYPTION_KEY"); v != "" {
+		cfg.EncryptionKey = v
+	}
+	if v := os.Getenv("SQLFLOW_AI_API_KEY"); v != "" {
+		cfg.AI.APIKey = v
+	}
+	if v := os.Getenv("SQLFLOW_ADMIN_PASSWORD"); v != "" {
+		cfg.Admin.Password = v
+	}
+	if v := os.Getenv("SQLFLOW_DINGTALK_SECRET"); v != "" {
+		cfg.DingTalk.Secret = v
 	}
 
 	// Set defaults
@@ -88,7 +139,11 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("jwt.secret is too short (%d bytes), must be at least 16 bytes for security", len(cfg.JWT.Secret))
 	}
 	if cfg.JWT.Expiry == 0 {
-		cfg.JWT.Expiry = 24 * time.Hour
+		cfg.JWT.Expiry = 15 * time.Minute
+	}
+	// Refresh token expiry defaults to 7 days
+	if cfg.JWT.RefreshExpiry == 0 {
+		cfg.JWT.RefreshExpiry = 7 * 24 * time.Hour
 	}
 	if cfg.DB.Path == "" {
 		cfg.DB.Path = "./data/sqlflow.db"
@@ -106,10 +161,10 @@ func Load(configPath string) (*Config, error) {
 		cfg.AI.Provider = "openai"
 	}
 	if cfg.AI.Model == "" {
-		cfg.AI.Model = "gpt-4"
+		cfg.AI.Model = defaultModelForProvider(cfg.AI.Provider)
 	}
 	if cfg.AI.BaseURL == "" {
-		cfg.AI.BaseURL = "https://api.openai.com/v1"
+		cfg.AI.BaseURL = defaultBaseURLForProvider(cfg.AI.Provider)
 	}
 	if cfg.AI.Timeout == 0 {
 		cfg.AI.Timeout = 10 * time.Second
@@ -132,5 +187,60 @@ func Load(configPath string) (*Config, error) {
 		log.Printf("[WARN] ai.api_key is empty, AI review will be unavailable")
 	}
 
+	// TLS validation
+	if cfg.Server.TLS.Enable {
+		if cfg.Server.TLS.CertFile == "" {
+			return nil, fmt.Errorf("server.tls.cert_file is required when TLS is enabled")
+		}
+		if cfg.Server.TLS.KeyFile == "" {
+			return nil, fmt.Errorf("server.tls.key_file is required when TLS is enabled")
+		}
+		if cfg.Server.TLS.RedirectHTTP && cfg.Server.TLS.HTTPPort == 0 {
+			cfg.Server.TLS.HTTPPort = 80 // default HTTP redirect port
+		}
+		if cfg.Server.TLS.HTTPPort == cfg.Server.Port {
+			return nil, fmt.Errorf("server.tls.http_port (%d) must differ from server.port (%d)", cfg.Server.TLS.HTTPPort, cfg.Server.Port)
+		}
+		log.Printf("[INFO] TLS enabled, cert=%s, key=%s", cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile)
+		if cfg.Server.TLS.RedirectHTTP {
+			log.Printf("[INFO] HTTP→HTTPS redirect enabled on port %d", cfg.Server.TLS.HTTPPort)
+		}
+	}
+
+	// Backup defaults
+	if cfg.Backup.Interval == 0 {
+		cfg.Backup.Interval = 6 * time.Hour
+	}
+	if cfg.Backup.Dir == "" {
+		cfg.Backup.Dir = "./data/backups"
+	}
+	if cfg.Backup.Keep == 0 {
+		cfg.Backup.Keep = 10
+	}
+
 	return &cfg, nil
+}
+
+// defaultModelForProvider returns the default model for a given provider.
+func defaultModelForProvider(provider string) string {
+	switch provider {
+	case "zhipu":
+		return "glm-4"
+	case "azure":
+		return "gpt-4"
+	default:
+		return "gpt-4"
+	}
+}
+
+// defaultBaseURLForProvider returns the default API base URL for a given provider.
+func defaultBaseURLForProvider(provider string) string {
+	switch provider {
+	case "zhipu":
+		return "https://open.bigmodel.cn/paas/v4"
+	case "azure":
+		return ""
+	default:
+		return "https://api.openai.com/v1"
+	}
 }

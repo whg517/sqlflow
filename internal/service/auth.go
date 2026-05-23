@@ -28,18 +28,30 @@ var ValidRoles = map[string]bool{"admin": true, "dba": true, "developer": true}
 
 // AuthService handles authentication logic.
 type AuthService struct {
-	db        *sql.DB
-	jwtSecret []byte
-	jwtExpiry time.Duration
+	db              *sql.DB
+	jwtSecret       []byte
+	jwtExpiry       time.Duration
+	refreshTokenSvc *RefreshTokenService
 }
 
 // NewAuthService creates a new AuthService.
 func NewAuthService(db *sql.DB, jwtSecret string, jwtExpiry time.Duration) *AuthService {
 	return &AuthService{
-		db:        db,
-		jwtSecret: []byte(jwtSecret),
-		jwtExpiry: jwtExpiry,
+		db:              db,
+		jwtSecret:       []byte(jwtSecret),
+		jwtExpiry:       jwtExpiry,
+		refreshTokenSvc: NewRefreshTokenService(db),
 	}
+}
+
+// RefreshTokenService returns the embedded refresh token service.
+func (s *AuthService) RefreshTokenService() *RefreshTokenService {
+	return s.refreshTokenSvc
+}
+
+// JWTExpiry returns the configured access token expiry duration.
+func (s *AuthService) JWTExpiry() time.Duration {
+	return s.jwtExpiry
 }
 
 // CreateUser inserts a new user with a bcrypt-hashed password.
@@ -93,26 +105,32 @@ func (s *AuthService) GetUserByID(ctx context.Context, id int64) (*model.User, e
 	return u, nil
 }
 
-// Authenticate validates credentials and returns a signed JWT token.
-func (s *AuthService) Authenticate(ctx context.Context, username, password string) (string, *model.User, error) {
+// Authenticate validates credentials and returns a signed JWT access token and a refresh token.
+func (s *AuthService) Authenticate(ctx context.Context, username, password string) (accessToken, refreshToken string, user *model.User, err error) {
 	u, err := s.GetUserByUsername(ctx, username)
 	if err != nil {
-		return "", nil, ErrInvalidCredentials
+		return "", "", nil, ErrInvalidCredentials
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
-		return "", nil, ErrInvalidCredentials
+		return "", "", nil, ErrInvalidCredentials
 	}
 
-	token, err := s.generateToken(u)
+	accessToken, err = s.generateToken(u)
 	if err != nil {
-		return "", nil, fmt.Errorf("generate token: %w", err)
+		return "", "", nil, fmt.Errorf("generate token: %w", err)
 	}
 
-	return token, u, nil
+	refreshToken, err = s.refreshTokenSvc.GenerateToken(ctx, u.ID)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("generate refresh token: %w", err)
+	}
+
+	return accessToken, refreshToken, u, nil
 }
 
 // ChangePassword changes a user's password after verifying the old one.
+// It also revokes all existing refresh tokens for the user.
 func (s *AuthService) ChangePassword(ctx context.Context, userID int64, oldPassword, newPassword string) error {
 	u, err := s.GetUserByID(ctx, userID)
 	if err != nil {
@@ -132,6 +150,16 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, oldPassw
 		`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`,
 		string(hash), userID,
 	)
+	if err != nil {
+		return err
+	}
+
+	// Revoke all refresh tokens for security
+	if err := s.refreshTokenSvc.RevokeAllTokens(ctx, userID); err != nil {
+		// Log but don't fail the password change
+		err = fmt.Errorf("password changed but failed to revoke refresh tokens: %w", err)
+	}
+
 	return err
 }
 
@@ -214,6 +242,7 @@ func (s *AuthService) AdminCount(ctx context.Context) (int64, error) {
 }
 
 // ResetPassword resets a user's password (admin operation, no old password check).
+// It also revokes all existing refresh tokens for the user.
 func (s *AuthService) ResetPassword(ctx context.Context, userID int64, newPassword string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -230,7 +259,14 @@ func (s *AuthService) ResetPassword(ctx context.Context, userID int64, newPasswo
 	if n == 0 {
 		return ErrUserNotFound
 	}
-	return nil
+
+	// Revoke all refresh tokens for security
+	if err := s.refreshTokenSvc.RevokeAllTokens(ctx, userID); err != nil {
+		// Log but don't fail the password reset
+		err = fmt.Errorf("password reset but failed to revoke refresh tokens: %w", err)
+	}
+
+	return err
 }
 
 // Claims represents JWT claims.
@@ -254,6 +290,11 @@ func (s *AuthService) generateToken(u *model.User) (string, error) {
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(s.jwtSecret)
+}
+
+// GenerateAccessToken creates a signed JWT access token for the given user.
+func (s *AuthService) GenerateAccessToken(u *model.User) (string, error) {
+	return s.generateToken(u)
 }
 
 // ParseToken validates a JWT token and returns the claims.

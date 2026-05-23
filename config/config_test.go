@@ -151,8 +151,8 @@ encryption_key: "0123456789abcdef0123456789abcdef"
 		}
 	})
 	t.Run("default_jwt_expiry", func(t *testing.T) {
-		if cfg.JWT.Expiry.String() != "24h0m0s" {
-			t.Errorf("JWT.Expiry = %v, want default 24h", cfg.JWT.Expiry)
+		if cfg.JWT.Expiry.String() != "15m0s" {
+			t.Errorf("JWT.Expiry = %v, want default 15m", cfg.JWT.Expiry)
 		}
 	})
 	t.Run("default_query_history_max", func(t *testing.T) {

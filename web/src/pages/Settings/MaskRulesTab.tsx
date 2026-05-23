@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, type FormEvent } from 'react'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, ShieldCheck } from 'lucide-react'
+import { Plus, Pencil, Trash2, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { api } from '@/api/client'
 import {
   listMaskRules,
@@ -227,6 +227,7 @@ function SensitiveTablesTab() {
             <TableRow className="border-[var(--border-default)] hover:bg-transparent">
               <TableHead className="text-[var(--text-secondary)]">数据源</TableHead>
               <TableHead className="text-[var(--text-secondary)]">表名</TableHead>
+              <TableHead className="text-[var(--text-secondary)]">敏感</TableHead>
               <TableHead className="text-[var(--text-secondary)]">敏感等级</TableHead>
               <TableHead className="text-[var(--text-secondary)]">标记时间</TableHead>
               <TableHead className="text-[var(--text-secondary)]">操作</TableHead>
@@ -235,13 +236,13 @@ function SensitiveTablesTab() {
           <TableBody>
             {loading && !tables.length ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-[var(--text-muted)]">
+                <TableCell colSpan={6} className="h-24 text-center text-[var(--text-muted)]">
                   加载中...
                 </TableCell>
               </TableRow>
             ) : !tables.length ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-[var(--text-muted)]">
+                <TableCell colSpan={6} className="h-24 text-center text-[var(--text-muted)]">
                   暂无敏感表标记，点击上方按钮添加
                 </TableCell>
               </TableRow>
@@ -254,7 +255,16 @@ function SensitiveTablesTab() {
                       <span className="text-[var(--text-secondary)]">{getDatasourceName(t.datasource_id)}</span>
                     </TableCell>
                     <TableCell>
-                      <span className="font-medium text-[var(--text-primary)]">{t.table_name}</span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <ShieldAlert size={13} className="shrink-0 text-red-400" />
+                        <span className="rounded bg-red-500/15 px-1.5 py-0.5 font-medium text-[var(--text-primary)]">{t.table_name}</span>
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center gap-1">
+                        <ShieldAlert size={12} className="text-red-400" />
+                        <span className="text-xs font-medium text-red-400">是</span>
+                      </span>
                     </TableCell>
                     <TableCell>
                       <Badge className={badge.cls}>{badge.label}</Badge>

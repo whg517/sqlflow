@@ -1,9 +1,20 @@
-# SQL 审批管理平台 - PRD
+# SQLFlow - 产品需求文档（PRD）
 
-> 项目代号：SQLFlow
+> 项目代号 SQLFlow，代码仓库 `sql-platform`
 > 创建日期：2026-04-21
-> 最后更新：2026-05-02（评审修订 v4）
-> 状态：需求确认中
+> 最后更新：2026-05-23（v1.0 正式版：AI Provider 多接入、去 MVP 限制、完整版需求）
+> 状态：已确认
+> 技术架构见 [ARCHITECTURE.md](./ARCHITECTURE.md)
+
+## 变更记录
+
+| 版本 | 日期 | 变更内容 |
+|------|------|----------|
+| v1.0 | 2026-05-23 | 正式版：AI Provider 多接入（OpenAI/智谱/自定义）、去 MVP 限制、完整版需求定义 |
+| v0.2 | 2026-05-17 | 评审反馈修复：精简 PRD 聚焦业务，技术实现移至 ARCHITECTURE；补充执行权限、策略变更审计、非功能需求 |
+| v0.1 | 2026-05-08 | 004-frontend-completion 合并 |
+
+---
 
 ## 背景
 
@@ -58,7 +69,9 @@
 
 ### 3. AI 前置评审
 
-用户提交 SQL 后，AI 自动评审：
+用户提交 SQL 后，系统自动进行评审（AI + 静态规则）。
+
+> 技术实现细节（流式返回、超时策略、降级逻辑等）见 [ARCHITECTURE.md §4 AI 评审流程](./ARCHITECTURE.md#4-ai-评审流程)。
 
 **按操作类型分流评审逻辑：**
 
@@ -77,7 +90,7 @@
 - 预估影响范围（行数、是否全表扫描）
 - 是否有 WHERE 条件（无 WHERE 的 UPDATE/DELETE 直接判定高风险）
 - 查询复杂度（JOIN 数量、子查询嵌套深度）
-- 用户脱敏权限：拥有 \`desensitize:bypass\` 的用户查敏感表视为高风险（可能查看原始数据），无 bypass 权限的用户查敏感表降级为中风险（结果已脱敏）
+- 用户脱敏权限：拥有 `desensitize:bypass` 的用户查敏感表视为高风险（可能查看原始数据），无 bypass 权限的用户查敏感表降级为中风险（结果已脱敏）
 
 > **SELECT 风险判定补充说明：** 敏感表 + 无脱敏豁免 = 中风险（已脱敏，数据安全）；敏感表 + 有脱敏豁免 = 高风险（查看原始数据，需走工单或记录告警）。
 
@@ -91,8 +104,6 @@
 - DDL：预估影响范围
 - DML：预估影响行数、是否锁表
 - 自动生成回滚语句
-
-**评审模型：** 外部 LLM API（具体待定）
 
 ### 4. 数据脱敏
 
@@ -113,10 +124,13 @@
 | 自定义正则 | 用户配置正则 + 替换模板 | 灵活配置 |
 
 - 查询结果**默认脱敏生效**
-- **脱敏行为由权限控制**：通过 Casbin RBAC 策略，拥有 `desensitize:bypass` 权限的用户可查看原始数据
+- **脱敏行为由权限控制**：拥有 `desensitize:bypass` 权限的用户可查看原始数据
 - 没有 bypass 权限的用户，查询和导出均自动脱敏
 - 拥有 bypass 权限的用户导出时，可选择是否包含脱敏数据（默认包含，需主动勾选"导出原始数据"）
 - 所有 bypass 操作均记录审计日志
+
+> 权限控制实现（Casbin RBAC）见 [ARCHITECTURE.md §2.2 权限 — Casbin RBAC](./ARCHITECTURE.md#22-权限--casbin-rbac)。
+
 ### 5. 变更工单
 
 - DDL（建表、改表）和 DML（UPDATE/DELETE）必须提交工单
@@ -125,8 +139,14 @@
 - AI 评审结果决定走**简化工单**还是**标准工单**
 - **支持取消**：提交人或 DBA 可在审批前取消工单
 - **审批通过后需手动执行**：DBA 审批通过后，工单进入 APPROVED 状态，需提交人或 DBA 手动点击「执行」按钮才真正执行 SQL。这样 DBA 可以在审批通过后选择合适的执行时机
-- **执行权限**：仅工单提交人或 dba/admin 角色可执行工单 SQL
+- **执行权限**：
+  - 仅工单提交人或 dba/admin 角色可触发执行
+  - 执行前系统校验：工单状态必须为 APPROVED
+  - 当前用户必须有目标数据源/表的执行权限（如用户角色非 dba/admin）
+  - 权限校验失败则拒绝执行并提示原因
 - 工单状态透明可追踪，所有状态变更记录时间戳和操作人
+
+> 工单执行权限校验技术实现见 [ARCHITECTURE.md API 概览 - 工单](./ARCHITECTURE.md#api-概览)。
 
 **工单状态机：**
 ```
@@ -152,7 +172,7 @@ SUBMITTED → AI_REVIEWED → PENDING_APPROVAL → APPROVED → EXECUTING → DO
 
 ### 6. 用户管理（MVP）
 
-> MVP 采用**用户名 + 密码 + JWT**方案。
+> MVP 采用**用户名 + 密码**认证方案。
 > 首次启动时通过命令行参数或环境变量配置初始管理员账号和密码。
 
 - 初始管理员通过启动参数配置（`--admin-username`、`--admin-password` 或环境变量 `ADMIN_USERNAME`、`ADMIN_PASSWORD`）
@@ -160,41 +180,24 @@ SUBMITTED → AI_REVIEWED → PENDING_APPROVAL → APPROVED → EXECUTING → DO
 - 管理员登录后可添加其他用户（设置用户名、密码、角色）
 - 角色分为：**admin**（系统管理）、**dba**（审批 + 配置）、**developer**（查询 + 提交工单）
 - 所有用户通过用户名 + 密码登录
-- 密码使用 bcrypt 哈希存储
 - 密码策略：长度 8-128 字符，至少包含字母和数字
-- 登录成功后签发 JWT（Access Token），前端存储在 localStorage，每次请求通过 `Authorization: Bearer <token>` 携带
-- JWT 有效期默认 24 小时，支持配置
+- Admin 可在 Web UI 管理用户（创建、编辑、禁用、重置密码），无需命令行操作
 - 后续版本接入钉钉 OAuth 正式认证
 
-### 7. 权限管理（Casbin RBAC）
+> 认证技术实现（JWT、bcrypt 等）见 [ARCHITECTURE.md §2.1 认证 — JWT](./ARCHITECTURE.md#21-认证--jwt)。
 
-> MVP 使用 [Casbin](https://casbin.org/) 实现基于角色的访问控制（RBAC）。
+### 7. 权限管理
 
-**Casbin 模型设计（RBAC with domains）：**
+> MVP 使用基于角色的访问控制（RBAC），支持多数据源隔离。
+> 技术实现（Casbin model.conf 配置、Adapter 选型、策略存储等）见 [ARCHITECTURE.md §2.2 权限 — Casbin RBAC](./ARCHITECTURE.md#22-权限--casbin-rbac)。
 
-```ini
-[request_definition]
-r = sub, dom, obj, act
+**权限模型（RBAC with domains）：**
 
-[policy_definition]
-p = sub, dom, obj, act
-
-[role_definition]
-g = _, _, _
-
-[policy_effect]
-e = some(where (p.eft == allow))
-
-[matchers]
-m = g(r.sub, p.sub, r.dom) && r.dom == p.dom && (r.obj == p.obj || p.obj == "*") && (r.act == p.act || p.act == "*")
-```
-
-**模型说明：**
 - `sub`：用户或角色
 - `dom`：数据源/库名（domain，多数据源隔离）
 - `obj`：资源对象（表名，`*` 代表全部）
 - `act`：操作类型（`select`、`update`、`delete`、`ddl`、`export`、`desensitize:bypass`）
-  > 注：MVP 阶段不支持 INSERT 直连执行，INSERT 需通过工单流程，因此不纳入 Casbin 权限控制
+  > 注：MVP 阶段不支持 INSERT 直连执行，INSERT 需通过工单流程，因此不纳入权限控制
 
 **内置角色：**
 
@@ -207,16 +210,19 @@ m = g(r.sub, p.sub, r.dom) && r.dom == p.dom && (r.obj == p.obj || p.obj == "*")
 **关键设计：**
 - 敏感表默认拒绝所有角色访问，需管理员显式授权
 - `desensitize:bypass` 权限控制脱敏豁免，与角色解耦——任何拥有该权限的用户都可查看原始数据
-- 权限粒度：数据源（domain）→ 表（obj）→ 操作（act），支持 `\*` 通配
-- 权限变更由 admin 或 dba 操作，变更记录写入审计日志
-- Casbin 策略存储在 SQLite，使用 Ent ORM Adapter
+- 权限粒度：数据源（domain）→ 表（obj）→ 操作（act），支持 `*` 通配
+- 权限变更由 admin 或 dba 操作，**变更记录写入审计日志**（见 §8）
+- 角色与用户多对多绑定，一个用户在不同数据源可拥有不同角色
 
 ### 8. 操作审计
 
 - 全量记录：谁、什么时间、什么 SQL、影响行数、执行耗时、评审结果
 - 数据导出记录：谁导出了什么、多少条
+- **权限策略变更审计**：admin/dba 修改权限策略时，变更内容（操作人、时间、策略内容）记录到审计日志
 - 审计日志应用层面不支持删除（通过 API 限制）
 - 支持按用户/时间/数据源/操作类型筛选查询
+
+> 审计日志存储实现及搜索能力规划见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
 
 ### 9. 通知集成（钉钉）
 
@@ -226,20 +232,58 @@ m = g(r.sub, p.sub, r.dom) && r.dom == p.dom && (r.obj == p.obj || p.obj == "*")
 
 ---
 
-## MVP 不做的事
+## 不做的事（v1.0 明确排除）
 
-- ❌ 测试环境管控
-- ❌ Elasticsearch 操作
-- ❌ 自然语言转 SQL
-- ❌ 多级审批流
-- ❌ SQL 智能推荐
-- ❌ 数据库性能监控
-- ❌ 钉钉 OAuth（MVP 仅用户名+密码+JWT）
-- ❌ 审计日志防篡改（仅应用层限制）
-- ❌ 正式部署方案（MVP 仅 Docker 内网运行）
+以下功能明确不在 v1.0 范围内，不做、不规划、不预留接口：
+
+- ❌ **Elasticsearch 操作** — 目标数据库仅 MySQL + MongoDB
+- ❌ **自然语言转 SQL** — 用户需自己写 SQL
+- ❌ **SQL 智能推荐** — 不做自动补全之外的智能提示
+- ❌ **数据库性能监控** — 不做慢查询分析、性能仪表盘
+- ❌ **多级审批流** — v1.0 只有单级 DBA 审批
+- ❌ **数据库自动发现** — 数据源需手动注册
+- ❌ **草稿工单** — 提交即进入审批流程
+- ❌ **跨数据源 JOIN** — 单次查询只连一个数据源
+- ❌ **数据比对/同步** — 不做跨库数据对比或同步功能
 
 ---
 
 ## 非功能性需求
 
-> 技术架构和非功能性需求见 [ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+### 性能
+
+- SQL 查询执行：平台层面不额外增加明显延迟
+- 前端首屏加载：< 2 秒
+- 并发查询：支持多用户同时查询，不阻塞
+
+### 安全
+
+- 用户认证：用户名 + 密码（bcrypt 加密存储），后续支持钉钉 OAuth
+- 权限控制：RBAC 多数据源隔离，敏感表显式授权
+- 数据库连接密码 AES-256 加密存储，密钥通过环境变量注入
+- 审计日志不可删除（API 层限制）
+- JWT Token 有效期可配置，支持密钥轮换
+- AI Provider API Key 不落盘（环境变量注入）
+- 传输加密：生产环境必须 HTTPS
+
+### 可用性
+
+- 单实例部署，Docker 内网运行
+- 数据定期备份（SQLite 文件备份）
+- 不可用时回退原有口头沟通流程
+
+> 技术实现细节见 [ARCHITECTURE.md 非功能性需求](./ARCHITECTURE.md#非功能性需求)。
+
+---
+
+## 前端页面
+
+### Dashboard 概览页
+- 登录后默认进入 Dashboard，展示全局统计
+- 4 个统计卡片：待审批工单数、近 7 天查询次数、活跃数据源数、系统用户数
+- 后端聚合接口：`GET /api/dashboard/stats`
+
+### 查询→工单联动
+- AI 评审判定高风险（decision=ticket）时，查询页内联展示 TicketSubmitSheet
+- 自动预填充 SQL、数据源、数据库、AI 评审结果
+- 用户填写变更原因后直接提交工单

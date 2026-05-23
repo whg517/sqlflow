@@ -1,5 +1,5 @@
-import { Download, Loader2, Play } from 'lucide-react'
-import { useState } from 'react'
+import { Download, Loader2, Play, ShieldAlert } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,6 +12,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { exportQuery } from '@/api/query'
 import type { QueryResult } from '@/api/query'
+import { listSensitiveTables, type SensitiveTable } from '@/api/maskRule'
 
 interface StatusBarProps {
   executing: boolean
@@ -41,6 +42,40 @@ export default function StatusBar({
   const [exportFormat, setExportFormat] = useState<'csv' | 'json' | null>(null)
   const [confirmLargeExport, setConfirmLargeExport] = useState(false)
   const [exporting, setExporting] = useState(false)
+
+  // Sensitive table detection
+  const [sensitiveTables, setSensitiveTables] = useState<SensitiveTable[]>([])
+  const [detectedSensitive, setDetectedSensitive] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!datasourceId) {
+      setSensitiveTables([])
+      setDetectedSensitive([])
+      return
+    }
+    listSensitiveTables({ datasource_id: String(datasourceId), page_size: 500 })
+      .then((res) => setSensitiveTables(res.data ?? []))
+      .catch(() => setSensitiveTables([]))
+  }, [datasourceId])
+
+  useEffect(() => {
+    if (!sql.trim() || sensitiveTables.length === 0) {
+      setDetectedSensitive([])
+      return
+    }
+    // Extract table names from SQL (simple FROM/JOIN parsing)
+    const sqlLower = sql.toLowerCase()
+    const found = new Set<string>()
+    const tableRegex = /(?:from|join)\s+`?([\w]+)`?/gi
+    let match
+    while ((match = tableRegex.exec(sqlLower)) !== null) {
+      const tableName = match[1]
+      if (sensitiveTables.some((t) => t.table_name.toLowerCase() === tableName)) {
+        found.add(tableName)
+      }
+    }
+    setDetectedSensitive(Array.from(found))
+  }, [sql, sensitiveTables])
 
   const canExecute = isMongo
     ? !executing && !!datasourceId && !!mongoCollection?.trim()
@@ -153,7 +188,25 @@ export default function StatusBar({
           </Tooltip>
         )}
 
-        {!result && !error && !executing && (
+        {/* Sensitive table warning */}
+        {detectedSensitive.length > 0 && !executing && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex cursor-default items-center gap-1 rounded bg-red-500/15 px-1.5 py-0.5 text-[11px] font-medium text-red-400">
+                <ShieldAlert size={12} />
+                敏感表: {detectedSensitive.join(', ')}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className="text-xs">
+                <p className="mb-1 font-medium text-red-400">⚠ 检测到敏感表</p>
+                <p>查询涉及 {detectedSensitive.length} 个敏感表，查询结果将自动脱敏处理。</p>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        {!result && !error && !executing && detectedSensitive.length === 0 && (
           <span className="text-[var(--text-muted)]">Ctrl+Enter 执行</span>
         )}
       </div>

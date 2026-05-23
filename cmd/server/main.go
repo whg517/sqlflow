@@ -4,6 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/whg517/sqlflow/config"
 	"github.com/whg517/sqlflow/internal/api"
@@ -56,6 +61,12 @@ func main() {
 	ticketSvc := service.NewTicketService(database.DB, auditSvc, nil)
 	log.Println("ticket service initialized")
 
+	// Initialize and start the ticket scheduler
+	scheduler := service.NewScheduler(ticketSvc, 1*time.Minute)
+	scheduler.Start()
+	defer scheduler.Stop()
+	log.Println("ticket scheduler started")
+
 	notifySvc := service.NewNotifyService(cfg.DingTalk.WebhookURL, cfg.DingTalk.Secret)
 	log.Println("notify service initialized")
 	ticketSvc.SetNotifyService(notifySvc)
@@ -65,6 +76,26 @@ func main() {
 
 	aiReviewSvc := service.NewAIReviewService(database.DB, cfg.AI.Provider, cfg.AI.Model, cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Timeout)
 	log.Println("AI review service initialized")
+
+	dashboardSvc := service.NewDashboardService(database.DB)
+	log.Println("dashboard service initialized")
+
+	// Initialize backup service
+	backupSvc := service.NewBackupService(database.DB, cfg.DB.Path, cfg.Backup)
+	log.Println("backup service initialized")
+
+	commentSvc := service.NewCommentService(database.DB)
+	log.Println("comment service initialized")
+
+	// Initialize DingTalk OAuth service
+	dingOAuthSvc := service.NewDingTalkOAuthService(
+		database.DB, authSvc,
+		cfg.DingTalk.OAuth.AppKey,
+		cfg.DingTalk.OAuth.AppSecret,
+		cfg.DingTalk.OAuth.RedirectURL,
+		cfg.DingTalk.OAuth.Enabled,
+	)
+	log.Println("dingtalk oauth service initialized")
 
 	// Seed initial admin if users table is empty
 	count, err := authSvc.UserCount(context.Background())
@@ -81,11 +112,67 @@ func main() {
 		log.Println("admin user already exists, skipping seed")
 	}
 
+	// Start backup scheduler
+	backupSvc.Start()
+	defer backupSvc.Stop()
+
 	// Start server
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, notifySvc)
-	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	log.Printf("starting server on %s", addr)
-	if err := e.Start(addr); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc)
+
+	if cfg.Server.TLS.Enable {
+		// TLS mode: start HTTPS server
+		addr := fmt.Sprintf(":%d", cfg.Server.Port)
+		log.Printf("starting HTTPS server on %s", addr)
+
+		// Optionally start HTTP→HTTPS redirect listener
+		if cfg.Server.TLS.RedirectHTTP {
+			go startHTTPRedirect(cfg.Server.TLS.HTTPPort, cfg.Server.Port)
+		}
+
+		// Graceful shutdown
+		go func() {
+			quit := make(chan os.Signal, 1)
+			signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+			<-quit
+			log.Println("shutting down server...")
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := e.Shutdown(ctx); err != nil {
+				log.Printf("server shutdown error: %v", err)
+			}
+		}()
+
+		if err := e.StartTLS(addr, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile); err != nil {
+			log.Fatalf("failed to start TLS server: %v", err)
+		}
+	} else {
+		// Plain HTTP mode (backward compatible)
+		addr := fmt.Sprintf(":%d", cfg.Server.Port)
+		log.Printf("starting HTTP server on %s", addr)
+		if err := e.Start(addr); err != nil {
+			log.Fatalf("failed to start server: %v", err)
+		}
+	}
+}
+
+// startHTTPRedirect starts a lightweight HTTP server that redirects all traffic to HTTPS.
+func startHTTPRedirect(httpPort, httpsPort int) {
+	redirectAddr := fmt.Sprintf(":%d", httpPort)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		target := fmt.Sprintf("https://%s%s", r.Host, r.URL.RequestURI())
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+	})
+
+	srv := &http.Server{
+		Addr:         redirectAddr,
+		Handler:      handler,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+		IdleTimeout:  10 * time.Second,
+	}
+
+	log.Printf("starting HTTP→HTTPS redirect server on %s (→ :%d)", redirectAddr, httpsPort)
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Printf("HTTP redirect server error: %v", err)
 	}
 }

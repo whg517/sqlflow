@@ -10,7 +10,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, notifySvc *service.NotifyService) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -32,12 +32,22 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	maskRuleHandler := handler.NewMaskRuleHandler(maskRuleSvc)
 	aiReviewHandler := handler.NewAIReviewHandler(aiReviewSvc, dsSvc)
 	auditHandler := handler.NewAuditHandler(auditSvc)
+	dashboardHandler := handler.NewDashboardHandler(dashboardSvc)
+	backupHandler := handler.NewBackupHandler(backupSvc)
 
 	// Public routes
 	e.POST("/api/auth/login", userHandler.Login)
+	e.POST("/api/auth/refresh", userHandler.Refresh)
+
+	// DingTalk OAuth (public)
+	dingTalkHandler := handler.NewDingTalkHandler(dingOAuthSvc)
+	e.GET("/api/v1/auth/dingtalk/login", dingTalkHandler.Login)
+	e.GET("/api/v1/auth/dingtalk/callback", dingTalkHandler.Callback)
+	e.GET("/api/v1/auth/dingtalk/enabled", dingTalkHandler.Enabled)
 
 	// Authenticated routes
 	authGroup := e.Group("", middleware.JWT(authSvc))
+	authGroup.GET("/api/dashboard/stats", dashboardHandler.GetStats)
 	authGroup.GET("/api/auth/me", userHandler.Me)
 	authGroup.PUT("/api/auth/password", userHandler.ChangePassword)
 
@@ -59,7 +69,15 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.POST("/api/tickets/:id/approve", ticketHandler.ApproveTicket)
 	authGroup.POST("/api/tickets/:id/reject", ticketHandler.RejectTicket)
 	authGroup.POST("/api/tickets/:id/cancel", ticketHandler.CancelTicket)
+	authGroup.POST("/api/tickets/:id/schedule", ticketHandler.ScheduleTicket)
+	authGroup.POST("/api/tickets/:id/cancel-schedule", ticketHandler.CancelSchedule)
 	authGroup.POST("/api/tickets/:id/execute", ticketHandler.ExecuteTicket)
+
+	// Comment routes (authenticated users)
+	commentHandler := handler.NewCommentHandler(commentSvc)
+	authGroup.GET("/api/tickets/:id/comments", commentHandler.ListComments)
+	authGroup.POST("/api/tickets/:id/comments", commentHandler.CreateComment)
+	authGroup.DELETE("/api/comments/:id", commentHandler.DeleteComment)
 
 	// Admin-only routes
 	adminGroup := e.Group("", middleware.JWT(authSvc), middleware.Admin())
@@ -100,6 +118,13 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 
 	// Audit logs (admin/dba can view)
 	adminGroup.GET("/api/audit-logs", auditHandler.ListAuditLogs)
+	adminGroup.GET("/api/audit-logs/search", auditHandler.SearchAuditLogs)
+
+	// Database backup management (admin)
+	adminGroup.POST("/api/backups", backupHandler.TriggerBackup)
+	adminGroup.GET("/api/backups", backupHandler.ListBackups)
+	adminGroup.GET("/api/backups/:filename/download", backupHandler.DownloadBackup)
+	adminGroup.DELETE("/api/backups/:filename", backupHandler.DeleteBackup)
 
 	// Notification & Settings (admin)
 	notifyHandler := handler.NewNotifyHandler(notifySvc, aiReviewSvc)
@@ -107,6 +132,9 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.PUT("/api/settings/dingtalk", notifyHandler.UpdateNotifyConfig)
 	adminGroup.POST("/api/settings/dingtalk/test", notifyHandler.TestNotify)
 	adminGroup.PUT("/api/settings/ai", notifyHandler.UpdateAIConfig)
+
+	// Frontend SPA (must be after API routes)
+	serveFrontend(e)
 
 	return e
 }

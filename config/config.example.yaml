@@ -1,43 +1,74 @@
 # SQLFlow 配置示例
 # 复制为 config.yaml 并修改相应值
 # cp config/config.example.yaml config/config.yaml
+#
+# ⚠️ 敏感配置项（密钥、密码等）不要写在此文件中，请使用环境变量：
+#   SQLFLOW_JWT_SECRET       - JWT 签名密钥（必填，≥16字符）
+#   SQLFLOW_ENCRYPTION_KEY   - AES 加密密钥（必填，16/24/32字节）
+#   SQLFLOW_ADMIN_PASSWORD   - 初始管理员密码（必填，≥8字符，含字母+数字）
+#   SQLFLOW_AI_API_KEY       - AI 评审 API Key（可选）
+#   SQLFLOW_DINGTALK_SECRET  - 钉钉机器人签名密钥（可选）
 
 server:
   port: 8080  # 服务监听端口
+  # TLS / HTTPS 配置（可选，默认关闭）
+  # 启用后服务器将使用 HTTPS，并可选地将 HTTP 流量自动重定向
+  # tls:
+  #   enable: true
+  #   cert_file: "/etc/ssl/certs/sqlflow.crt"
+  #   key_file: "/etc/ssl/private/sqlflow.key"
+  #   redirect_http: true   # 是否自动将 HTTP 流量重定向到 HTTPS
+  #   http_port: 80         # HTTP 监听端口（重定向用），需与 port 不同
 
 jwt:
-  # JWT 签名密钥（必填，至少 16 字符）
+  # JWT 签名密钥 — 推荐通过环境变量 SQLFLOW_JWT_SECRET 设置
   # 生成方法: openssl rand -hex 32
-  secret: "your-32-char-secret-change-me-in-production"
+  secret: ""
   expiry: "24h"  # Token 过期时间
 
 admin:
-  # 初始管理员账号（仅首次启动创建，至少 8 字符）
+  # 初始管理员账号（仅首次启动创建）
   username: "admin"
-  # ⚠️ 必须修改默认密码，生产环境请使用强密码
-  # 生成方法: openssl rand -base64 16
-  password: "admin123"
+  # ⚠️ 推荐通过环境变量 SQLFLOW_ADMIN_PASSWORD 设置
+  # 至少 8 字符，必须包含字母和数字
+  password: ""
 
 db:
   # SQLite 数据库文件路径
   path: "./data/sqlflow.db"
 
 ai:
+  # AI 评审服务商: openai | zhipu | azure | custom
   provider: "openai"
   model: "gpt-4"
-  api_key: ""  # AI API Key（可选，为空则 AI 评审不可用）
-  base_url: "https://api.openai.com/v1"
+  # ⚠️ 推荐通过环境变量 SQLFLOW_AI_API_KEY 设置
+  api_key: ""
+  base_url: ""
   timeout: "10s"
 
 dingtalk:
-  webhook_url: ""  # 钉钉机器人 Webhook 地址（可选）
-  secret: ""       # 钉钉机器人签名密钥（可选）
+  webhook_url: ""
+  # ⚠️ 推荐通过环境变量 SQLFLOW_DINGTALK_SECRET 设置
+  secret: ""
+  # DingTalk OAuth2 登录（可选）
+  oauth:
+    enabled: false
+    app_key: ""
+    app_secret: ""
+    # 回调地址必须与钉钉开放平台应用配置一致
+    redirect_url: "http://localhost:8080/api/v1/auth/dingtalk/callback"
 
-# AES 加密密钥（必填，用于加密数据源密码等敏感信息）
+# 数据库自动备份
+backup:
+  enabled: true           # 是否启用定时备份
+  dir: "./data/backups" # 备份文件存储目录
+  interval: "6h"        # 自动备份间隔
+  keep: 10               # 保留最近 N 个备份文件
+  compress: true         # 是否压缩备份文件（gzip）
+
+# AES 加密密钥 — 推荐通过环境变量 SQLFLOW_ENCRYPTION_KEY 设置
 # 必须为 16、24 或 32 字节（对应 AES-128/192/256）
-# 生成方法: openssl rand -hex 16   (16字节/AES-128)
-#           openssl rand -hex 24   (24字节/AES-192)
-#           openssl rand -hex 32   (32字节/AES-256)
-encryption_key: "0123456789abcdef0123456789abcdef"
+# 生成方法: openssl rand -hex 16
+encryption_key: ""
 
-query_history_max: 200  # 每用户最大查询历史记录数
+query_history_max: 200

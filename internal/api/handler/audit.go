@@ -20,6 +20,44 @@ func NewAuditHandler(auditSvc *service.AuditService) *AuditHandler {
 }
 
 // ListAuditLogs handles GET /api/audit-logs.
+// SearchAuditLogs handles GET /api/audit-logs/search.
+// Uses FTS5 for full-text search with keyword, action, time range, and user_id filters.
+func (h *AuditHandler) SearchAuditLogs(c echo.Context) error {
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+
+	keyword := c.QueryParam("keyword")
+	if keyword == "" {
+		return resp.BadRequest(c, "keyword parameter is required")
+	}
+
+	result, err := h.auditSvc.Search(
+		c.Request().Context(),
+		service.SearchParams{
+			Keyword:  keyword,
+			Page:     page,
+			PageSize: pageSize,
+			UserID:   c.QueryParam("user_id"),
+			Action:   c.QueryParam("action"),
+			Start:    c.QueryParam("start"),
+			End:      c.QueryParam("end"),
+		},
+	)
+	if err != nil {
+		log.Printf("SearchAuditLogs failed: %v", err)
+		return resp.InternalError(c, "全文搜索审计日志失败")
+	}
+
+	return resp.OKPage(c, result.Logs, int64(page), int64(pageSize), result.Total)
+}
+
+// ListAuditLogs handles GET /api/audit-logs.
 func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))

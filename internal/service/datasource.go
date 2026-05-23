@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 
 	"github.com/whg517/sqlflow/internal/connpool"
@@ -298,7 +299,8 @@ func (s *DatasourceService) GetDataSourceSafe(ctx context.Context, id int64) (*m
 
 func buildMongoURI(host string, port int, user, password string) string {
 	if user != "" && password != "" {
-		return "mongodb://" + user + ":" + password + "@" + host + ":" + strconv.Itoa(port)
+		// URL-encode credentials to prevent injection via special characters
+		return "mongodb://" + url.QueryEscape(user) + ":" + url.QueryEscape(password) + "@" + host + ":" + strconv.Itoa(port)
 	}
 	return "mongodb://" + host + ":" + strconv.Itoa(port)
 }

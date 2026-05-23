@@ -4,12 +4,14 @@ import "time"
 
 // User represents a user in the system.
 type User struct {
-	ID           int64     `json:"id"`
-	Username     string    `json:"username"`
-	PasswordHash string    `json:"-"`
-	Role         string    `json:"role"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID              int64     `json:"id"`
+	Username        string    `json:"username"`
+	PasswordHash    string    `json:"-"`
+	Role            string    `json:"role"`
+	DingTalkUserID  string    `json:"dingtalk_user_id,omitempty"`
+	DingTalkUnionID string    `json:"dingtalk_union_id,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // QueryHistory represents a user's query execution history record.
@@ -35,9 +37,10 @@ const (
 	TicketStatusAIReviewed      TicketStatus = "AI_REVIEWED"
 	TicketStatusPendingApproval TicketStatus = "PENDING_APPROVAL"
 	TicketStatusApproved        TicketStatus = "APPROVED"
-	TicketStatusRejected        TicketStatus = "REJECTED"
+	TicketStatusScheduled       TicketStatus = "SCHEDULED"
 	TicketStatusExecuting       TicketStatus = "EXECUTING"
 	TicketStatusDone            TicketStatus = "DONE"
+	TicketStatusRejected        TicketStatus = "REJECTED"
 	TicketStatusCancelled       TicketStatus = "CANCELLED"
 )
 
@@ -58,6 +61,7 @@ type Ticket struct {
 	ReviewerID     int64        `json:"reviewer_id"`
 	ReviewerName   string       `json:"reviewer_name,omitempty"`
 	ReviewComment  string       `json:"review_comment,omitempty"`
+	ScheduledAt    *time.Time   `json:"scheduled_at,omitempty"`
 	ExecutedAt     *time.Time   `json:"executed_at,omitempty"`
 	CreatedAt      time.Time    `json:"created_at"`
 	UpdatedAt      time.Time    `json:"updated_at"`
@@ -88,6 +92,16 @@ type SensitiveTable struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+// RefreshToken represents a stored refresh token for token rotation.
+type RefreshToken struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	Token     string    `json:"-"`          // hashed token, never exposed
+	ExpiresAt time.Time `json:"expires_at"`
+	Revoked   bool      `json:"revoked"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // AuditLog represents an audit log entry.
 type AuditLog struct {
 	ID                 int64     `json:"id"`
@@ -105,6 +119,25 @@ type AuditLog struct {
 	DesensitizedFields string    `json:"desensitized_fields,omitempty"`
 	IPAddress          string    `json:"ip_address,omitempty"`
 	CreatedAt          time.Time `json:"created_at"`
+}
+
+// Comment represents a discussion comment on a ticket.
+type Comment struct {
+	ID        int64     `json:"id"`
+	OrderID   int64     `json:"order_id"`
+	UserID    int64     `json:"user_id"`
+	Username  string    `json:"username,omitempty"`
+	Content   string    `json:"content"`
+	ParentID  int64     `json:"parent_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// AuditLogSearch represents an audit log entry returned by FTS5 full-text search.
+type AuditLogSearch struct {
+	AuditLog
+	HighlightSQLContent string `json:"highlight_sql_content,omitempty"`
+	HighlightSQLSummary string `json:"highlight_sql_summary,omitempty"`
+	Rank               float64 `json:"rank,omitempty"`
 }
 
 // DataSource represents a registered database instance.

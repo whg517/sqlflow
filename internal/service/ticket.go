@@ -32,6 +32,14 @@ var (
 	ErrTicketSQLRequired = errors.New("SQL内容不能为空")
 	// ErrTicketDatasourceRequired indicates the datasource is required.
 	ErrTicketDatasourceRequired = errors.New("数据源不能为空")
+	// ErrScheduleTimeRequired indicates a schedule time is required.
+	ErrScheduleTimeRequired = errors.New("定时执行时间不能为空")
+	// ErrScheduleTimeInPast indicates the schedule time must be in the future.
+	ErrScheduleTimeInPast = errors.New("定时执行时间必须晚于当前时间")
+	// ErrTicketNotSchedulable indicates the ticket is not in a state that allows scheduling.
+	ErrTicketNotSchedulable = errors.New("当前状态不可设置定时执行")
+	// ErrTicketNotScheduled indicates the ticket is not scheduled.
+	ErrTicketNotScheduled = errors.New("工单未设置定时执行")
 )
 
 // validTransitions defines the allowed state transitions for the ticket state machine.
@@ -39,7 +47,8 @@ var validTransitions = map[model.TicketStatus][]model.TicketStatus{
 	model.TicketStatusSubmitted:       {model.TicketStatusAIReviewed, model.TicketStatusCancelled},
 	model.TicketStatusAIReviewed:      {model.TicketStatusPendingApproval, model.TicketStatusCancelled},
 	model.TicketStatusPendingApproval: {model.TicketStatusApproved, model.TicketStatusRejected, model.TicketStatusCancelled},
-	model.TicketStatusApproved:        {model.TicketStatusExecuting, model.TicketStatusCancelled},
+	model.TicketStatusApproved:        {model.TicketStatusExecuting, model.TicketStatusScheduled, model.TicketStatusCancelled},
+	model.TicketStatusScheduled:       {model.TicketStatusExecuting, model.TicketStatusCancelled},
 	model.TicketStatusExecuting:       {model.TicketStatusDone},
 	model.TicketStatusRejected:        {},
 	model.TicketStatusDone:            {},
@@ -68,19 +77,22 @@ func scanTicket(scanner interface {
 	Scan(dest ...interface{}) error
 }) (*model.Ticket, error) {
 	t := &model.Ticket{}
-	var executedAt sql.NullTime
+	var scheduledAt, executedAt sql.NullTime
 
 	err := scanner.Scan(
 		&t.ID, &t.SubmitterID, &t.DatasourceID, &t.Database,
 		&t.SQLContent, &t.SQLSummary, &t.DBType, &t.ChangeReason,
 		&t.Status, &t.RiskLevel, &t.AIReviewResult,
-		&t.ReviewerID, &t.ReviewComment, &executedAt,
+		&t.ReviewerID, &t.ReviewComment, &scheduledAt, &executedAt,
 		&t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	if scheduledAt.Valid {
+		t.ScheduledAt = &scheduledAt.Time
+	}
 	if executedAt.Valid {
 		t.ExecutedAt = &executedAt.Time
 	}
@@ -168,7 +180,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, dat
 // GetTicket retrieves a ticket by ID with populated user names.
 func (s *TicketService) GetTicket(ctx context.Context, id int64) (*model.Ticket, error) {
 	t, err := scanTicket(s.db.QueryRowContext(ctx,
-		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, reviewer_id, review_comment, executed_at, created_at, updated_at
+		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, reviewer_id, review_comment, scheduled_at, executed_at, created_at, updated_at
 		 FROM tickets WHERE id = ?`, id,
 	))
 	if err != nil {
@@ -221,7 +233,7 @@ func (s *TicketService) ListTickets(ctx context.Context, page, pageSize int, sta
 
 	// Query page
 	querySQL := fmt.Sprintf(
-		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, reviewer_id, review_comment, executed_at, created_at, updated_at
+		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, reviewer_id, review_comment, scheduled_at, executed_at, created_at, updated_at
 		 FROM tickets %s ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		whereClause,
 	)
@@ -373,6 +385,7 @@ func (s *TicketService) CancelTicket(ctx context.Context, ticketID, operatorID i
 		model.TicketStatusAIReviewed:      true,
 		model.TicketStatusPendingApproval: true,
 		model.TicketStatusApproved:        true,
+		model.TicketStatusScheduled:       true,
 	}
 	if !cancellable[t.Status] {
 		return nil, ErrTicketNotCancellable
@@ -380,7 +393,7 @@ func (s *TicketService) CancelTicket(ctx context.Context, ticketID, operatorID i
 
 	now := time.Now()
 	_, err = s.db.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, review_comment = ?, updated_at = ? WHERE id = ?`,
+		`UPDATE tickets SET status = ?, review_comment = ?, scheduled_at = NULL, updated_at = ? WHERE id = ?`,
 		model.TicketStatusCancelled, reason, now, ticketID,
 	)
 	if err != nil {
@@ -402,14 +415,14 @@ func (s *TicketService) CancelTicket(ctx context.Context, ticketID, operatorID i
 }
 
 // ExecuteTicket executes a ticket's SQL. Only the submitter or dba/admin can execute,
-// and only when the ticket is in APPROVED status.
+// and only when the ticket is in APPROVED or SCHEDULED status.
 func (s *TicketService) ExecuteTicket(ctx context.Context, ticketID, operatorID int64, operatorRole, operatorName string) (*model.Ticket, error) {
 	t, err := s.GetTicket(ctx, ticketID)
 	if err != nil {
 		return nil, err
 	}
 
-	if t.Status != model.TicketStatusApproved {
+	if t.Status != model.TicketStatusApproved && t.Status != model.TicketStatusScheduled {
 		return nil, ErrTicketNotExecutable
 	}
 
@@ -445,6 +458,100 @@ func (s *TicketService) ExecuteTicket(ctx context.Context, ticketID, operatorID 
 	if s.notifySvc != nil {
 		s.notifySvc.NotifyTicketExecuted(t)
 	}
+
+	return t, nil
+}
+
+// ScheduleTicket sets a ticket to be executed at the specified time.
+// Only the submitter or dba/admin can schedule, and only when the ticket is APPROVED.
+func (s *TicketService) ScheduleTicket(ctx context.Context, ticketID, operatorID int64, operatorRole string, scheduledAt time.Time) (*model.Ticket, error) {
+	t, err := s.GetTicket(ctx, ticketID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only the submitter or dba/admin can schedule
+	if t.SubmitterID != operatorID && operatorRole != "admin" && operatorRole != "dba" {
+		return nil, ErrNoPermission
+	}
+
+	if t.Status != model.TicketStatusApproved {
+		return nil, ErrTicketNotSchedulable
+	}
+
+	if scheduledAt.IsZero() {
+		return nil, ErrScheduleTimeRequired
+	}
+
+	// Allow scheduling at the same minute or 1 minute in the future
+	if !scheduledAt.IsZero() && scheduledAt.Before(time.Now()) {
+		return nil, ErrScheduleTimeInPast
+	}
+
+	now := time.Now()
+	_, err = s.db.ExecContext(ctx,
+		`UPDATE tickets SET status = ?, scheduled_at = ?, updated_at = ? WHERE id = ?`,
+		model.TicketStatusScheduled, scheduledAt, now, ticketID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("设置定时执行失败: %w", err)
+	}
+
+	s.auditSvc.Write(ctx, AuditRecord{
+		UserID:     operatorID,
+		Action:     "ticket_schedule",
+		SQLContent: t.SQLContent,
+		SQLSummary: t.SQLSummary,
+	})
+
+	t.Status = model.TicketStatusScheduled
+	t.ScheduledAt = &scheduledAt
+	t.UpdatedAt = now
+	s.populateTicketNames(ctx, t)
+
+	if s.notifySvc != nil {
+		s.notifySvc.NotifyTicketScheduled(t)
+	}
+
+	return t, nil
+}
+
+// CancelSchedule cancels a scheduled ticket execution, returning it to APPROVED status.
+func (s *TicketService) CancelSchedule(ctx context.Context, ticketID, operatorID int64, operatorRole string) (*model.Ticket, error) {
+	t, err := s.GetTicket(ctx, ticketID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only the submitter or dba/admin can cancel schedule
+	if t.SubmitterID != operatorID && operatorRole != "admin" && operatorRole != "dba" {
+		return nil, ErrNoPermission
+	}
+
+	if t.Status != model.TicketStatusScheduled {
+		return nil, ErrTicketNotScheduled
+	}
+
+	now := time.Now()
+	_, err = s.db.ExecContext(ctx,
+		`UPDATE tickets SET status = ?, scheduled_at = NULL, updated_at = ? WHERE id = ?`,
+		model.TicketStatusApproved, now, ticketID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("取消定时执行失败: %w", err)
+	}
+
+	s.auditSvc.Write(ctx, AuditRecord{
+		UserID:     operatorID,
+		Action:     "ticket_cancel_schedule",
+		SQLContent: t.SQLContent,
+		SQLSummary: t.SQLSummary,
+	})
+
+	t.Status = model.TicketStatusApproved
+	t.ScheduledAt = nil
+	t.UpdatedAt = now
+	s.populateTicketNames(ctx, t)
 
 	return t, nil
 }

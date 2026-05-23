@@ -1,0 +1,319 @@
+# ============================================================
+# SQLFlow CI — 每次推送 / PR 自动触发
+# 触发条件：push 到 main/develop，或 PR 到 main
+# 流水线：Lint → Test → Build → E2E → Security Scan
+# ============================================================
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+# 防止同一分支多次并发跑 CI（后来的覆盖前面的）
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.25"
+  NODE_VERSION: "24"
+
+jobs:
+  # ────────────────────────────────────────────────
+  # Job 1: 后端 Lint + Vet（并行）
+  # ────────────────────────────────────────────────
+  backend-lint:
+    name: Backend Lint & Vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Go fmt check
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Go files not formatted: $unformatted"
+            echo "$unformatted" | xargs -I{} diff -u <(cat {}) <(gofmt -d {})
+            exit 1
+          fi
+
+      - name: Go Vet
+        run: go vet ./...
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v1.64
+          args: --timeout=5m
+
+      - name: Verify dependencies
+        run: |
+          go mod verify
+          go mod tidy -diff
+
+  # ────────────────────────────────────────────────
+  # Job 2: 后端单元测试 + 覆盖率
+  # ────────────────────────────────────────────────
+  backend-test:
+    name: Backend Test
+    runs-on: ubuntu-latest
+    needs: backend-lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Run tests with coverage
+        run: |
+          go test ./... -v -race -count=1 \
+            -coverprofile=coverage.out -covermode=atomic
+
+      - name: Enforce minimum coverage (60%)
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $NF}' | tr -d '%')
+          echo "Total coverage: ${COVERAGE}%"
+          if (( $(echo "$COVERAGE < 60" | bc -l) )); then
+            echo "::warning::Coverage ${COVERAGE}% is below 60% threshold"
+          fi
+
+      - name: Print coverage summary
+        run: |
+          echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          go tool cover -func=coverage.out >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total:** $(go tool cover -func=coverage.out | tail -1)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
+          retention-days: 14
+
+  # ────────────────────────────────────────────────
+  # Job 3: 前端 Lint（并行）
+  # ────────────────────────────────────────────────
+  frontend-lint:
+    name: Frontend Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Check for uncommitted lockfile changes
+        run: |
+          if ! git diff --exit-code package-lock.json; then
+            echo "::error::package-lock.json is out of sync. Run 'npm install' and commit changes."
+            exit 1
+          fi
+
+  # ────────────────────────────────────────────────
+  # Job 4: 前端类型检查 + 构建
+  # ────────────────────────────────────────────────
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    needs: frontend-lint
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc -b --noEmit
+
+      - name: Production build
+        run: npm run build
+
+      - name: Check bundle size
+        run: |
+          echo "## Frontend Bundle Size" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          du -sh dist/ >> $GITHUB_STEP_SUMMARY
+          ls -lh dist/assets/ 2>/dev/null >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          # Warn if bundle exceeds 2MB
+          BUNDLE_SIZE=$(du -sb dist/ | awk '{print $1}')
+          MAX_SIZE=2097152  # 2MB
+          if [ "$BUNDLE_SIZE" -gt "$MAX_SIZE" ]; then
+            echo "::warning::Frontend bundle size exceeds 2MB ($(( BUNDLE_SIZE / 1024 ))KB)"
+          fi
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: web/dist/
+          retention-days: 7
+
+  # ────────────────────────────────────────────────
+  # Job 5: 前端 E2E 测试
+  # ────────────────────────────────────────────────
+  frontend-e2e:
+    name: Frontend E2E Test
+    runs-on: ubuntu-latest
+    needs: frontend-build
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: npx playwright test
+        env:
+          CI: true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report/
+            web/test-results/
+          retention-days: 14
+
+  # ────────────────────────────────────────────────
+  # Job 6: Docker 构建验证（smoke test，不推送）
+  # ────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build Verify
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: sqlflow:ci-${{ github.sha }}
+          build-args: |
+            VERSION=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+
+      - name: Smoke test — verify binary exists in image
+        run: |
+          docker run --rm --entrypoint /bin/sh sqlflow:ci-${{ github.sha }} \
+            -c "test -f /app/sqlflow && echo 'Binary OK' || (echo 'Binary MISSING' && exit 1)"
+          docker run --rm --entrypoint /bin/sh sqlflow:ci-${{ github.sha }} \
+            -c "test -f /app/entrypoint.sh && echo 'Entrypoint OK' || (echo 'Entrypoint MISSING' && exit 1)"
+          docker run --rm --entrypoint /bin/sh sqlflow:ci-${{ github.sha }} \
+            -c "test -d /app/web/dist && echo 'Frontend OK' || (echo 'Frontend MISSING' && exit 1)"
+
+  # ────────────────────────────────────────────────
+  # Job 7: 安全扫描（并行）
+  # ────────────────────────────────────────────────
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          format: table
+
+  # ────────────────────────────────────────────────
+  # Job 8: CI 总结
+  # ────────────────────────────────────────────────
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [backend-lint, backend-test, frontend-lint, frontend-build, frontend-e2e, docker-build, security-scan]
+    steps:
+      - name: Check all jobs passed
+        run: |
+          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend Lint | ${{ needs.backend-lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend Test | ${{ needs.backend-test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Lint | ${{ needs.frontend-lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Build | ${{ needs.frontend-build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend E2E | ${{ needs.frontend-e2e.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build | ${{ needs.docker-build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+
+          # Fail if any required job failed
+          if [ "${{ needs.backend-lint.result }}" == "failure" ] || \
+             [ "${{ needs.backend-test.result }}" == "failure" ] || \
+             [ "${{ needs.frontend-lint.result }}" == "failure" ] || \
+             [ "${{ needs.frontend-build.result }}" == "failure" ] || \
+             [ "${{ needs.docker-build.result }}" == "failure" ]; then
+            echo "::error::CI pipeline failed"
+            exit 1
+          fi

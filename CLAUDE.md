@@ -7,9 +7,10 @@
 - **项目名**: SQLFlow — SQL 审批管理平台
 - **模块路径**: `github.com/whg517/sqlflow`
 - **Go 版本**: 1.25（需要 `/usr/local/go/bin` 在 PATH 中）
-- **技术栈**: Go (Echo) + Ent ORM + SQLite WAL | React 19 + Vite + TypeScript + TailwindCSS + Shadcn/ui
-- **Spec 文档**: `docs/spec/PRD.md`、`docs/spec/ARCHITECTURE.md`、`docs/spec/UI-DESIGN.md`
-- **开发计划**: `docs/proposals/002-code-review/plan.md`（当前进行中）
+- **技术栈**: Go (Echo) + SQLite WAL（手写 model + db.go） | React 19 + Vite + TypeScript + TailwindCSS + Shadcn/ui
+- **规格管理**: OpenSpec（`openspec/specs/` 为真相来源）
+- **设计文档**: `docs/spec/PRD.md`、`docs/spec/ARCHITECTURE.md`、`docs/spec/UI-DESIGN.md`
+- **AI Provider**: 支持 OpenAI / 智谱 GLM / 自定义 OpenAI 兼容 API（配置 `config.yaml` 的 `ai` 段）
 
 ## 🔴 强制规则（最高优先级）
 
@@ -33,19 +34,11 @@ cd web && npm run build && cd ..
 
 **只有以上命令全部成功退出（exit code 0）后，才能声称任务完成。**
 
-如果编译或测试失败：
-1. 分析错误原因
-2. 修复代码
-3. 重新运行验证
-4. 重复直到全部通过
-
-**不要在编译/测试未通过的情况下报告完成。**
-
 ### 2. 不要破坏现有代码
 
 - 修改函数签名前，先搜索所有调用点（`grep -rn`）确保兼容
 - 不要删除被其他文件 import 的函数/类型，除非确认无调用
-- 不要修改 `internal/ent/schema/*.go` 中的现有字段（除非任务明确要求）
+- 不要修改 `internal/model/*.go` 中的现有字段（除非任务明确要求）
 - 不要修改 `internal/api/router.go` 的路由结构，除非任务明确要求
 
 ### 3. Go 代码规范
@@ -62,7 +55,6 @@ cd web && npm run build && cd ..
 - 使用 `t.Run()` 组织子测试
 - 边界情况必须覆盖：空输入、nil、非法参数
 - 使用表驱动测试（table-driven tests）
-- 不要用 `t.Skip()` 除非确实无法实现（需注释说明原因）
 
 ### 5. 前端规范
 
@@ -76,11 +68,12 @@ cd web && npm run build && cd ..
 
 收到任务后，按以下顺序执行：
 
-1. **读 Spec** — 先读相关 spec 文档理解需求上下文
-2. **读现有代码** — 理解现有实现，避免重复或冲突
-3. **编写代码** — 按任务要求实现
-4. **自验证** — `go build ./...` + `go test ./...`（强制）
-5. **报告完成** — 简述做了什么、改了哪些文件、验证结果
+1. **读 Spec** — 先读 `openspec/specs/` 中相关的规格文档理解需求
+2. **读设计文档** — 再读 `docs/spec/ARCHITECTURE.md` 和 `docs/spec/UI-DESIGN.md` 了解架构和 UI 设计
+3. **读现有代码** — 理解现有实现，避免重复或冲突
+4. **编写代码** — 按任务要求实现
+5. **自验证** — `go build ./...` + `go test ./...`（强制）
+6. **报告完成** — 简述做了什么、改了哪些文件、验证结果
 
 ## 🔍 常见错误预防
 
@@ -96,30 +89,33 @@ cd web && npm run build && cd ..
 
 ```
 sql-platform/
-├── cmd/server/main.go          # 启动入口
-├── config/config.go            # 配置管理
+├── openspec/                    # OpenSpec 规格管理
+│   ├── config.yaml              # OpenSpec 配置
+│   ├── specs/                   # 当前生效的规格（真相来源）
+│   │   ├── datasource-management/
+│   │   ├── online-query/
+│   │   ├── ai-review/
+│   │   ├── data-masking/
+│   │   ├── ticket-workflow/
+│   │   ├── user-auth/
+│   │   ├── rbac-permissions/
+│   │   ├── audit-logging/
+│   │   └── dingtalk-notification/
+│   └── changes/                 # 活跃的变更提案
+├── cmd/server/main.go
+├── config/config.go
 ├── internal/
-│   ├── api/
-│   │   ├── handler/            # HTTP handlers
-│   │   ├── middleware/         # 中间件 (auth, cors, logger, recovery)
-│   │   └── router.go           # 路由注册
-│   ├── connpool/               # 数据库连接池 (MySQL + MongoDB)
-│   ├── db/db.go                # Ent 客户端初始化
-│   ├── ent/schema/             # Ent 数据模型定义
-│   ├── model/model.go          # 请求/响应模型
-│   ├── pkg/
-│   │   ├── sqlparser/          # SQL 解析器
-│   │   ├── casbin/             # Casbin 权限
-│   │   ├── crypto/             # 加密工具
-│   │   └── mask/               # 数据脱敏
-│   ├── service/                # 业务逻辑层
-│   └── resp/response.go        # 统一响应格式
+│   ├── api/{handler,middleware,router}.go
+│   ├── connpool/                # MySQL + MongoDB 连接池
+│   ├── db/db.go                 # Ent 客户端
+│   ├── ent/schema/              # 数据模型
+│   ├── model/model.go
+│   ├── pkg/{sqlparser,casbin,crypto,mask}/
+│   ├── service/                 # 业务逻辑
+│   └── resp/response.go
 ├── web/src/
-│   ├── api/client.ts           # API 请求层
-│   ├── components/             # 通用组件
-│   ├── components/ui/          # Shadcn/ui 组件
-│   ├── pages/                  # 页面组件
-│   └── lib/utils.ts            # 工具函数
-├── docs/spec/                  # 需求规格文档
-└── docs/proposals/             # 开发提案
+│   ├── api/client.ts
+│   ├── components/{ui,Layout}/
+│   └── pages/
+└── docs/spec/                   # 设计参考文档（PRD、架构、UI）
 ```

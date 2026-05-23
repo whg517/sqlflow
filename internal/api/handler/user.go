@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -28,8 +29,11 @@ type loginRequest struct {
 }
 
 type loginResponse struct {
-	Token string       `json:"token"`
-	User  userResponse `json:"user"`
+	AccessToken  string       `json:"access_token"`
+	RefreshToken string       `json:"refresh_token"`
+	TokenType    string       `json:"token_type"`
+	ExpiresIn    int64        `json:"expires_in"`
+	User         userResponse `json:"user"`
 }
 
 type userResponse struct {
@@ -50,6 +54,10 @@ type changePasswordRequest struct {
 	NewPassword string `json:"new_password"`
 }
 
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 // Login handles POST /api/auth/login.
 func (h *UserHandler) Login(c echo.Context) error {
 	var req loginRequest
@@ -65,13 +73,61 @@ func (h *UserHandler) Login(c echo.Context) error {
 		return resp.BadRequest(c, err.Error())
 	}
 
-	token, user, err := h.authSvc.Authenticate(c.Request().Context(), req.Username, req.Password)
+	token, refreshToken, user, err := h.authSvc.Authenticate(c.Request().Context(), req.Username, req.Password)
 	if err != nil {
 		return resp.Unauthorized(c, "用户名或密码错误")
 	}
 
 	return resp.OK(c, loginResponse{
-		Token: token,
+		AccessToken:  token,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(h.authSvc.JWTExpiry().Seconds()),
+		User: userResponse{
+			ID:       user.ID,
+			Username: user.Username,
+			Role:     user.Role,
+		},
+	})
+}
+
+// Refresh handles POST /api/auth/refresh.
+// It accepts a refresh_token and returns a new access_token + rotated refresh_token.
+func (h *UserHandler) Refresh(c echo.Context) error {
+	var req refreshRequest
+	if err := c.Bind(&req); err != nil {
+		return resp.BadRequest(c, "请求格式错误")
+	}
+	if req.RefreshToken == "" {
+		return resp.BadRequest(c, "refresh_token 不能为空")
+	}
+
+	// Rotate the refresh token (old one is revoked, new one issued)
+	newRefreshToken, userID, err := h.authSvc.RefreshTokenService().RotateToken(c.Request().Context(), req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, service.ErrRefreshTokenInvalid) || errors.Is(err, service.ErrRefreshTokenRevoked) {
+			return resp.Unauthorized(c, "refresh_token 无效或已过期，请重新登录")
+		}
+		return resp.InternalError(c, "刷新 token 失败")
+	}
+
+	// Look up the user to generate a new access token
+	user, err := h.authSvc.GetUserByID(c.Request().Context(), userID)
+	if err != nil {
+		return resp.Unauthorized(c, "用户不存在")
+	}
+
+	// Generate a new access token
+	accessToken, err := h.authSvc.GenerateAccessToken(user)
+	if err != nil {
+		return resp.InternalError(c, "生成 token 失败")
+	}
+
+	return resp.OK(c, loginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(h.authSvc.JWTExpiry().Seconds()),
 		User: userResponse{
 			ID:       user.ID,
 			Username: user.Username,

@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -160,6 +161,60 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 		return fmt.Errorf("migrate audit_logs created_at index: %w", err)
 	}
 
+	// FTS5 virtual table for full-text search on audit logs.
+	// Uses unicode61 tokenizer which handles CJK characters reasonably well.
+	// Standalone FTS5 table (no content=) — data synced via triggers.
+	_, err = db.Exec(`
+CREATE VIRTUAL TABLE IF NOT EXISTS audit_logs_fts USING fts5(
+    audit_id,
+    sql_content,
+    sql_summary,
+    action,
+    error_message,
+    database,
+    tokenize='unicode61'
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate audit_logs_fts: %w", err)
+	}
+
+	// Triggers to keep FTS5 index in sync with audit_logs.
+	// Insert trigger.
+	_, err = db.Exec(`
+CREATE TRIGGER IF NOT EXISTS audit_logs_fts_insert AFTER INSERT ON audit_logs BEGIN
+    INSERT INTO audit_logs_fts(rowid, audit_id, sql_content, sql_summary, action, error_message, database)
+    VALUES (new.id, new.id, new.sql_content, new.sql_summary, new.action, new.error_message, new.database);
+END;
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate audit_logs_fts_insert trigger: %w", err)
+	}
+
+	// Delete trigger.
+	_, err = db.Exec(`
+CREATE TRIGGER IF NOT EXISTS audit_logs_fts_delete AFTER DELETE ON audit_logs BEGIN
+    INSERT INTO audit_logs_fts(audit_logs_fts, rowid, audit_id, sql_content, sql_summary, action, error_message, database)
+    VALUES ('delete', old.id, old.id, old.sql_content, old.sql_summary, old.action, old.error_message, old.database);
+END;
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate audit_logs_fts_delete trigger: %w", err)
+	}
+
+	// Update trigger.
+	_, err = db.Exec(`
+CREATE TRIGGER IF NOT EXISTS audit_logs_fts_update AFTER UPDATE ON audit_logs BEGIN
+    INSERT INTO audit_logs_fts(audit_logs_fts, rowid, audit_id, sql_content, sql_summary, action, error_message, database)
+    VALUES ('delete', old.id, old.id, old.sql_content, old.sql_summary, old.action, old.error_message, old.database);
+    INSERT INTO audit_logs_fts(rowid, audit_id, sql_content, sql_summary, action, error_message, database)
+    VALUES (new.id, new.id, new.sql_content, new.sql_summary, new.action, new.error_message, new.database);
+END;
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate audit_logs_fts_update trigger: %w", err)
+	}
+
 	_, err = db.Exec(`
 CREATE TABLE IF NOT EXISTS mask_rules (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -213,6 +268,7 @@ CREATE TABLE IF NOT EXISTS tickets (
     ai_review_result TEXT    NOT NULL DEFAULT '',
     reviewer_id      INTEGER NOT NULL DEFAULT 0,
     review_comment   TEXT    NOT NULL DEFAULT '',
+    scheduled_at     DATETIME,
     executed_at      DATETIME,
     created_at       DATETIME NOT NULL DEFAULT (datetime('now')),
     updated_at       DATETIME NOT NULL DEFAULT (datetime('now'))
@@ -236,6 +292,74 @@ CREATE TABLE IF NOT EXISTS tickets (
 	if err != nil {
 		return fmt.Errorf("migrate tickets index datasource_id: %w", err)
 	}
+
+	// Refresh tokens table
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL,
+    token      TEXT    NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    revoked    INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate refresh_tokens: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate refresh_tokens index user_id: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token)`)
+	if err != nil {
+		return fmt.Errorf("migrate refresh_tokens index token: %w", err)
+	}
+
+	// Comments table for ticket discussions
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS comments (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id    INTEGER NOT NULL,
+    user_id     INTEGER NOT NULL,
+    content     TEXT    NOT NULL,
+    parent_id   INTEGER NOT NULL DEFAULT 0,
+    created_at  DATETIME NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (order_id) REFERENCES tickets(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate comments: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_comments_order_id ON comments(order_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate comments index order_id: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_comments_parent_id ON comments(parent_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate comments index parent_id: %w", err)
+	}
+
+	// Add scheduled_at column if it doesn't exist (migration for existing DBs)
+	_, err = db.Exec(`ALTER TABLE tickets ADD COLUMN scheduled_at DATETIME`)
+	if err != nil {
+		// Column may already exist, ignore the error
+		log.Printf("add scheduled_at column: %v", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tickets_scheduled_at ON tickets(scheduled_at)`)
+	if err != nil {
+		return fmt.Errorf("migrate tickets index scheduled_at: %w", err)
+	}
+
+	// DingTalk OAuth columns for users table (idempotent ALTER TABLE).
+	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN dingtalk_user_id TEXT DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN dingtalk_union_id TEXT DEFAULT ''`)
 
 	return nil
 }

@@ -16,7 +16,7 @@ import (
 	"github.com/casbin/casbin/v2/persist"
 )
 
-//go:embed casbin_model.conf
+//go:embed casbin_model.conf policy_seed.csv
 var casbinModelFS embed.FS
 
 // CasbinRule represents a row in the casbin_rule table.
@@ -214,11 +214,11 @@ func (s *PermissionService) seedIfEmpty(ctx context.Context) error {
 		return nil
 	}
 
-	// Read seed policies from file and insert directly
-	seedPath := filepath.Join("internal", "pkg", "casbin", "policy.csv")
-	data, err := fs.ReadFile(casbinModelFS, "../pkg/casbin/policy.csv")
+	// Read seed policies from embedded file
+	data, err := fs.ReadFile(casbinModelFS, "policy_seed.csv")
 	if err != nil {
-		// Try direct file read as fallback
+		// Try direct file read as fallback (for development)
+		seedPath := filepath.Join("internal", "pkg", "casbin", "policy.csv")
 		data, err = osReadFile(seedPath)
 		if err != nil {
 			return fmt.Errorf("read seed policy: %w", err)

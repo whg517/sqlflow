@@ -3,6 +3,7 @@ package handler
 import (
 	"log"
 	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/api/middleware"
@@ -264,6 +265,84 @@ func (h *TicketHandler) ExecuteTicket(c echo.Context) error {
 		default:
 			log.Printf("ExecuteTicket failed: %v", err)
 			return resp.InternalError(c, "执行工单失败")
+		}
+	}
+
+	return resp.OK(c, ticket)
+}
+
+type scheduleTicketRequest struct {
+	ScheduledAt string `json:"scheduled_at"` // RFC3339 format
+}
+
+// ScheduleTicket handles POST /api/tickets/:id/schedule.
+func (h *TicketHandler) ScheduleTicket(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return resp.BadRequest(c, "无效的工单ID")
+	}
+
+	var req scheduleTicketRequest
+	if err := c.Bind(&req); err != nil {
+		return resp.BadRequest(c, "请求格式错误")
+	}
+
+	if req.ScheduledAt == "" {
+		return resp.BadRequest(c, "定时执行时间不能为空")
+	}
+
+	scheduledAt, err := time.Parse(time.RFC3339, req.ScheduledAt)
+	if err != nil {
+		return resp.BadRequest(c, "定时执行时间格式错误，请使用 RFC3339 格式 (如: 2026-05-23T10:00:00+08:00)")
+	}
+
+	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	role := c.Get(middleware.ContextKeyRole).(string)
+
+	ticket, err := h.ticketSvc.ScheduleTicket(c.Request().Context(), id, userID, role, scheduledAt)
+	if err != nil {
+		switch err {
+		case service.ErrNoPermission:
+			return resp.Forbidden(c, err.Error())
+		case service.ErrTicketNotFound:
+			return resp.NotFound(c, err.Error())
+		case service.ErrTicketNotSchedulable:
+			return resp.BadRequest(c, err.Error())
+		case service.ErrScheduleTimeRequired:
+			return resp.BadRequest(c, err.Error())
+		case service.ErrScheduleTimeInPast:
+			return resp.BadRequest(c, err.Error())
+		default:
+			log.Printf("ScheduleTicket failed: %v", err)
+			return resp.InternalError(c, "设置定时执行失败")
+		}
+	}
+
+	return resp.OK(c, ticket)
+}
+
+// CancelSchedule handles POST /api/tickets/:id/cancel-schedule.
+func (h *TicketHandler) CancelSchedule(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return resp.BadRequest(c, "无效的工单ID")
+	}
+
+	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	role := c.Get(middleware.ContextKeyRole).(string)
+
+	ticket, err := h.ticketSvc.CancelSchedule(c.Request().Context(), id, userID, role)
+	if err != nil {
+		switch err {
+		case service.ErrNoPermission:
+			return resp.Forbidden(c, err.Error())
+		case service.ErrTicketNotFound:
+			return resp.NotFound(c, err.Error())
+		case service.ErrTicketNotScheduled:
+			return resp.BadRequest(c, err.Error())
+		default:
+			log.Printf("CancelSchedule failed: %v", err)
+			return resp.InternalError(c, "取消定时执行失败")
 		}
 	}
 
