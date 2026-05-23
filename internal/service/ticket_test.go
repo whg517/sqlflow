@@ -781,3 +781,142 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	os.Exit(code)
 }
+
+func TestScheduleTicket(t *testing.T) {
+	testDB := setupTicketTestDB(t)
+	svc := NewTicketService(testDB, nil, nil)
+	userID := seedTestUser(t, testDB, "dev1", "developer")
+	dsID := seedTestDatasource(t, testDB, "test-mysql")
+
+	// Create a ticket
+	ticket := createTicketAtStatus(t, testDB, svc, userID, dsID, model.TicketStatusApproved)
+
+	// Schedule it
+	scheduledAt := time.Now().Add(24 * time.Hour)
+	result, err := svc.ScheduleTicket(context.Background(), ticket.ID, userID, "developer", scheduledAt)
+	if err != nil {
+		t.Fatalf("ScheduleTicket: %v", err)
+	}
+	if result.Status != model.TicketStatusScheduled {
+		t.Errorf("status = %v, want %v", result.Status, model.TicketStatusScheduled)
+	}
+	if result.ScheduledAt == nil {
+		t.Error("ScheduledAt should not be nil")
+	}
+}
+
+func TestScheduleTicket_NotApproved(t *testing.T) {
+	testDB := setupTicketTestDB(t)
+	svc := NewTicketService(testDB, nil, nil)
+	userID := seedTestUser(t, testDB, "dev1", "developer")
+	dsID := seedTestDatasource(t, testDB, "test-mysql")
+
+	ticket := createTicketAtStatus(t, testDB, svc, userID, dsID, model.TicketStatusSubmitted)
+	// Keep as SUBMITTED, not APPROVED
+
+	_, err := svc.ScheduleTicket(context.Background(), ticket.ID, userID, "developer", time.Now().Add(24*time.Hour))
+	if err != ErrTicketNotSchedulable {
+		t.Errorf("err = %v, want ErrTicketNotSchedulable", err)
+	}
+}
+
+func TestScheduleTicket_NoPermission(t *testing.T) {
+	testDB := setupTicketTestDB(t)
+	svc := NewTicketService(testDB, nil, nil)
+	userID := seedTestUser(t, testDB, "dev1", "developer")
+	userID2 := seedTestUser(t, testDB, "dev2", "developer")
+	dsID := seedTestDatasource(t, testDB, "test-mysql")
+
+	ticket := createTicketAtStatus(t, testDB, svc, userID, dsID, model.TicketStatusApproved)
+
+	// Different user tries to schedule
+	_, err := svc.ScheduleTicket(context.Background(), ticket.ID, userID2, "developer", time.Now().Add(24*time.Hour))
+	if err != ErrNoPermission {
+		t.Errorf("err = %v, want ErrNoPermission", err)
+	}
+}
+
+func TestScheduleTicket_DBACanSchedule(t *testing.T) {
+	testDB := setupTicketTestDB(t)
+	svc := NewTicketService(testDB, nil, nil)
+	userID := seedTestUser(t, testDB, "dev1", "developer")
+	dbaID := seedTestUser(t, testDB, "dba1", "dba")
+	dsID := seedTestDatasource(t, testDB, "test-mysql")
+
+	ticket := createTicketAtStatus(t, testDB, svc, userID, dsID, model.TicketStatusApproved)
+
+	// DBA can schedule anyone's ticket
+	result, err := svc.ScheduleTicket(context.Background(), ticket.ID, dbaID, "dba", time.Now().Add(24*time.Hour))
+	if err != nil {
+		t.Fatalf("ScheduleTicket: %v", err)
+	}
+	if result.Status != model.TicketStatusScheduled {
+		t.Errorf("status = %v, want %v", result.Status, model.TicketStatusScheduled)
+	}
+}
+
+func TestCancelSchedule(t *testing.T) {
+	testDB := setupTicketTestDB(t)
+	svc := NewTicketService(testDB, nil, nil)
+	userID := seedTestUser(t, testDB, "dev1", "developer")
+	dsID := seedTestDatasource(t, testDB, "test-mysql")
+
+	ticket := createTicketAtStatus(t, testDB, svc, userID, dsID, model.TicketStatusApproved)
+
+	// Schedule first
+	scheduledAt := time.Now().Add(24 * time.Hour)
+	svc.ScheduleTicket(context.Background(), ticket.ID, userID, "developer", scheduledAt)
+
+	// Cancel the schedule
+	result, err := svc.CancelSchedule(context.Background(), ticket.ID, userID, "developer")
+	if err != nil {
+		t.Fatalf("CancelSchedule: %v", err)
+	}
+	if result.Status != model.TicketStatusApproved {
+		t.Errorf("status = %v, want %v", result.Status, model.TicketStatusApproved)
+	}
+	if result.ScheduledAt != nil {
+		t.Error("ScheduledAt should be nil after cancel")
+	}
+}
+
+func TestCancelSchedule_NotScheduled(t *testing.T) {
+	testDB := setupTicketTestDB(t)
+	svc := NewTicketService(testDB, nil, nil)
+	userID := seedTestUser(t, testDB, "dev1", "developer")
+	dsID := seedTestDatasource(t, testDB, "test-mysql")
+
+	ticket := createTicketAtStatus(t, testDB, svc, userID, dsID, model.TicketStatusSubmitted)
+	// Keep as APPROVED, not SCHEDULED
+
+	_, err := svc.CancelSchedule(context.Background(), ticket.ID, userID, "developer")
+	if err != ErrTicketNotScheduled {
+		t.Errorf("err = %v, want ErrTicketNotScheduled", err)
+	}
+}
+
+func TestCancelSchedule_NoPermission(t *testing.T) {
+	testDB := setupTicketTestDB(t)
+	svc := NewTicketService(testDB, nil, nil)
+	userID := seedTestUser(t, testDB, "dev1", "developer")
+	userID2 := seedTestUser(t, testDB, "dev2", "developer")
+	dsID := seedTestDatasource(t, testDB, "test-mysql")
+
+	ticket := createTicketAtStatus(t, testDB, svc, userID, dsID, model.TicketStatusApproved)
+	svc.ScheduleTicket(context.Background(), ticket.ID, userID, "developer", time.Now().Add(24*time.Hour))
+
+	// Different user tries to cancel
+	_, err := svc.CancelSchedule(context.Background(), ticket.ID, userID2, "developer")
+	if err != ErrNoPermission {
+		t.Errorf("err = %v, want ErrNoPermission", err)
+	}
+}
+
+func TestSetNotifyService(t *testing.T) {
+	testDB := setupTicketTestDB(t)
+	svc := NewTicketService(testDB, nil, nil)
+
+	// Initially nil
+	svc.SetNotifyService(nil)
+	// Should not panic
+}

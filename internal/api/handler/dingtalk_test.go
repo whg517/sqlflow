@@ -61,8 +61,8 @@ func TestDingTalkHandler_Callback_Disabled(t *testing.T) {
 		t.Fatalf("handler error: %v", err)
 	}
 
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 }
 

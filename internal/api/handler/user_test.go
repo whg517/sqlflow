@@ -1089,7 +1089,8 @@ func TestParsePagination(t *testing.T) {
 // ─── parseUserID Tests ───────────────────────────────────────────────────────
 
 func TestUserHandler_Refresh_EmptyToken(t *testing.T) {
-	e, _, handler := setupUserTest(t)
+	e, _, _h := setupUserTest(t)
+	handler := _h
 
 	body := `{"refresh_token":""}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(body))
@@ -1097,7 +1098,7 @@ func TestUserHandler_Refresh_EmptyToken(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	if err := h.Refresh(c); err != nil {
+	if err := handler.Refresh(c); err != nil {
 		t.Fatalf("handler error: %v", err)
 	}
 
@@ -1107,7 +1108,8 @@ func TestUserHandler_Refresh_EmptyToken(t *testing.T) {
 }
 
 func TestUserHandler_Refresh_InvalidToken(t *testing.T) {
-	e, _, handler := setupUserTest(t)
+	e, _, _h := setupUserTest(t)
+	handler := _h
 
 	body := `{"refresh_token":"invalid-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(body))
@@ -1115,7 +1117,7 @@ func TestUserHandler_Refresh_InvalidToken(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	if err := h.Refresh(c); err != nil {
+	if err := handler.Refresh(c); err != nil {
 		t.Fatalf("handler error: %v", err)
 	}
 
@@ -1132,7 +1134,7 @@ func TestUserHandler_Refresh_InvalidJSON(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	if err := h.Refresh(c); err != nil {
+	if err := handler.Refresh(c); err != nil {
 		t.Fatalf("handler error: %v", err)
 	}
 
@@ -1143,7 +1145,6 @@ func TestUserHandler_Refresh_InvalidJSON(t *testing.T) {
 
 func TestUserHandler_Refresh_Success(t *testing.T) {
 	e, authSvc, handler := setupUserTest(t)
-	ctx := context.Background()
 
 	// Register a user first
 	createTestUser(t, authSvc, "refreshtest", "password123", "developer")
@@ -1160,7 +1161,7 @@ func TestUserHandler_Refresh_Success(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	if err := h.Refresh(c); err != nil {
+	if err := handler.Refresh(c); err != nil {
 		t.Fatalf("handler error: %v", err)
 	}
 
