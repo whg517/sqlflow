@@ -10,6 +10,24 @@
 | 小梦旋 | PM 助理：拆任务、派发、review、汇报 | OpenClaw |
 | Claude Code | 开发执行：编码、测试、提交 | `claude -p` |
 
+## Git Worktree 开发流程（强制）
+
+**所有开发必须在 worktree 中进行，禁止直接修改 main 分支。**
+
+### 规则
+
+- **Worktree 目录**：项目根目录下 `.worktree/<branch-name>/`
+- **分支命名**：`feat/<需求ID>-<描述>` / `fix/<需求ID>-<描述>`
+- **子代理开发**：Marcus 在主仓库创建 worktree → 派发任务指定 worktree 路径 → 子代理在 worktree 中开发 → commit + push → Marcus review → 合并到 main → 清理 worktree
+
+### 禁止行为
+- ❌ 直接在主仓库（`/home/kevin/.openclaw/workspace/projects/sql-platform/`）修改代码
+- ❌ 子代理 push 到 main 分支
+- ❌ 未创建 worktree 就开始开发
+
+### 参考文档
+- 详细规范：`~/.openclaw/workspace-prism/docs/standards-03-branch-review.md`
+
 ## 规格管理（OpenSpec）
 
 本项目使用 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 进行规格驱动开发（SDD）。
