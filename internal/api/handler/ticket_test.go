@@ -1363,7 +1363,7 @@ func TestTicketHandler_ScheduleTicket(t *testing.T) {
 }
 
 func TestTicketHandler_ScheduleTicket_InvalidID(t *testing.T) {
-	e, h, _, _ := setupTicketHandlerTest(t)
+	e, h, _ := setupTicketHandlerTest(t)
 
 	futureTime := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
 	body := `{"scheduled_at":"` + futureTime + `"}`
@@ -1434,7 +1434,7 @@ func TestTicketHandler_CancelSchedule(t *testing.T) {
 }
 
 func TestTicketHandler_CancelSchedule_InvalidID(t *testing.T) {
-	e, h, _, _ := setupTicketHandlerTest(t)
+	e, h, _ := setupTicketHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/tickets/abc/cancel-schedule", nil)
 	rec := httptest.NewRecorder()

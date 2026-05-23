@@ -14,7 +14,6 @@ import (
 	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/service"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // contextWithTimeout returns a context with a 5-second timeout for tests.
@@ -1090,7 +1089,7 @@ func TestParsePagination(t *testing.T) {
 // ─── parseUserID Tests ───────────────────────────────────────────────────────
 
 func TestUserHandler_Refresh_EmptyToken(t *testing.T) {
-	e, _, _ := setupUserTest(t)
+	e, _, handler := setupUserTest(t)
 
 	body := `{"refresh_token":""}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(body))
@@ -1108,7 +1107,7 @@ func TestUserHandler_Refresh_EmptyToken(t *testing.T) {
 }
 
 func TestUserHandler_Refresh_InvalidToken(t *testing.T) {
-	e, _, _ := setupUserTest(t)
+	e, _, handler := setupUserTest(t)
 
 	body := `{"refresh_token":"invalid-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(body))
@@ -1126,7 +1125,7 @@ func TestUserHandler_Refresh_InvalidToken(t *testing.T) {
 }
 
 func TestUserHandler_Refresh_InvalidJSON(t *testing.T) {
-	e, _, _ := setupUserTest(t)
+	e, _, handler := setupUserTest(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(`{bad json}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -1143,16 +1142,14 @@ func TestUserHandler_Refresh_InvalidJSON(t *testing.T) {
 }
 
 func TestUserHandler_Refresh_Success(t *testing.T) {
-	e, authSvc, _ := setupUserTest(t)
+	e, authSvc, handler := setupUserTest(t)
 	ctx := context.Background()
 
 	// Register a user first
-	pwHash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
-	authSvc.db.Exec("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-		"refreshtest", string(pwHash), "developer")
+	createTestUser(t, authSvc, "refreshtest", "password123", "developer")
 
 	// Authenticate to get tokens
-	_, rawRefreshToken, _, err := authSvc.Authenticate(ctx, "refreshtest", "password123")
+	_, rawRefreshToken, _, err := authSvc.Authenticate(context.Background(), "refreshtest", "password123")
 	if err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
