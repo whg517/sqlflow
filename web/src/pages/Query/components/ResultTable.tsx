@@ -135,13 +135,13 @@ function ColumnFilterPopover({
         <div className="flex items-center justify-end gap-1.5 pt-0.5">
           <Button
             variant="ghost"
-            size="xs"
+            size="sm"
             onClick={onReset}
             className="text-[var(--text-muted)]"
           >
             重置
           </Button>
-          <Button size="xs" onClick={handleApply}>
+          <Button size="sm" onClick={handleApply}>
             确认
           </Button>
         </div>

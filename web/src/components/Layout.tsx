@@ -87,10 +87,24 @@ export default function Layout() {
   const { theme, toggle } = useTheme()
   const [user, setUser] = useState<CurrentUser | null>(null)
   const [pwdOpen, setPwdOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(() => {
+  const [manuallyCollapsed, setManuallyCollapsed] = useState(() => {
     return localStorage.getItem('sidebar-collapsed') === 'true'
   })
+  const [autoCollapsed, setAutoCollapsed] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
+
+  // Auto-collapse at 1024-1279px per §6.2 responsive strategy
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 1024px) and (max-width: 1279px)')
+    const handler = (e: MediaQueryListEvent | MediaQueryList) => {
+      setAutoCollapsed(e.matches)
+    }
+    handler(mql)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
+
+  const collapsed = autoCollapsed || manuallyCollapsed
 
   useEffect(() => {
     api
@@ -102,14 +116,14 @@ export default function Layout() {
   }, [])
 
   useEffect(() => {
-    localStorage.setItem('sidebar-collapsed', String(collapsed))
-  }, [collapsed])
+    localStorage.setItem('sidebar-collapsed', String(manuallyCollapsed))
+  }, [manuallyCollapsed])
 
   const initial = user?.username ? user.username[0].toUpperCase() : 'U'
 
-  const toggleCollapse = useCallback(() => setCollapsed((c) => !c), [])
+  const toggleCollapse = useCallback(() => setManuallyCollapsed((c) => !c), [])
 
-  const sidebarWidth = collapsed ? 'w-[56px] min-w-[56px]' : 'w-[200px] min-w-[200px]'
+  const sidebarWidth = collapsed ? 'w-[56px] min-w-[56px]' : 'w-[220px] min-w-[220px]'
 
   const navLinkClass = (isActive: boolean) =>
     `flex items-center rounded-md no-underline transition-colors ${

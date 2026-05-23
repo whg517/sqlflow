@@ -2,6 +2,9 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Google Fonts: Inter + JetBrains Mono */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @theme inline {
   --color-background: var(--bg-surface);
   --color-foreground: var(--text-primary);
@@ -10,7 +13,7 @@
   --color-popover: var(--bg-surface);
   --color-popover-foreground: var(--text-primary);
   --color-primary: var(--accent-primary);
-  --color-primary-foreground: #f1f5f9;
+  --color-primary-foreground: #ffffff;
   --color-secondary: var(--bg-elevated);
   --color-secondary-foreground: var(--text-primary);
   --color-muted: var(--bg-elevated);
@@ -18,7 +21,7 @@
   --color-accent: var(--bg-elevated);
   --color-accent-foreground: var(--text-primary);
   --color-destructive: #ef4444;
-  --color-destructive-foreground: #f1f5f9;
+  --color-destructive-foreground: #ffffff;
   --color-border: var(--border-default);
   --color-input: var(--border-default);
   --color-ring: var(--accent-primary);
@@ -30,7 +33,7 @@
   --color-sidebar-background: var(--bg-sidebar);
   --color-sidebar-foreground: var(--text-secondary);
   --color-sidebar-primary: var(--accent-primary);
-  --color-sidebar-primary-foreground: #f1f5f9;
+  --color-sidebar-primary-foreground: #ffffff;
   --color-sidebar-accent: var(--bg-elevated);
   --color-sidebar-accent-foreground: var(--text-primary);
   --color-sidebar-border: var(--border-subtle);
@@ -40,52 +43,101 @@
   --radius-lg: 8px;
   --radius-xl: 12px;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 }
 
 :root {
-  /* Dark theme (default) — Design Tokens per spec/UI-DESIGN.md §10 */
-  --bg-base: #0f172a;
-  --bg-surface: #1e293b;
-  --bg-elevated: #334155;
-  --bg-sidebar: #0d0d14;
-  --border-default: #334155;
-  --border-subtle: #1e293b;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
-  --text-muted: #475569;
-  --accent-primary: #FF8C55;
-  --accent-hover: #ff9f70;
+  /* ===== Dark theme (default) — UI-DESIGN-SPEC.md §1.2 ===== */
+
+  /* Background tokens */
+  --bg-base: #0a0a0f;
+  --bg-surface: #111118;
+  --bg-elevated: #1a1a24;
+  --bg-hover: #22222e;
+  --bg-sidebar: #08080d;
+
+  /* Border tokens */
+  --border-default: #27272f;
+  --border-subtle: #1e1e28;
+  --border-hover: #3a3a4a;
+
+  /* Text tokens */
+  --text-primary: #ededf0;
+  --text-secondary: #9b9ba8;
+  --text-tertiary: #6e6e80;
+  --text-muted: #4e4e60;
+
+  /* Accent tokens */
+  --accent-primary: #f97316;
+  --accent-hover: #fb923c;
+  --accent-muted: rgba(249, 115, 22, 0.12);
   --accent-secondary: #8b5cf6;
+
+  /* Functional colors */
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #3b82f6;
+
+  /* Risk level colors */
   --risk-low: #10b981;
   --risk-medium: #f59e0b;
   --risk-high: #ef4444;
   --risk-review: #8b5cf6;
   --risk-exec: #3b82f6;
+
+  /* Shadows (dark mode: higher opacity) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.7);
+}
+
+[data-theme='light'] {
+  /* ===== Light theme — UI-DESIGN-SPEC.md §1.2 ===== */
+
+  /* Background tokens */
+  --bg-base: #fafafa;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f4f4f5;
+  --bg-hover: #e4e4e7;
+  --bg-sidebar: #ffffff;
+
+  /* Border tokens */
+  --border-default: #e4e4e7;
+  --border-subtle: #f4f4f5;
+  --border-hover: #d4d4d8;
+
+  /* Text tokens */
+  --text-primary: #09090b;
+  --text-secondary: #52525b;
+  --text-tertiary: #71717a;
+  --text-muted: #a1a1aa;
+
+  /* Accent tokens */
+  --accent-primary: #ea580c;
+  --accent-hover: #c2410c;
+  --accent-muted: rgba(234, 88, 12, 0.10);
+  --accent-secondary: #7c3aed;
+
+  /* Functional colors */
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
   --info: #3b82f6;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 6px rgba(0,0,0,0.4);
-  --shadow-lg: 0 10px 15px rgba(0,0,0,0.5);
-}
 
-[data-theme='light'] {
-  --bg-base: #f8fafc;
-  --bg-surface: #ffffff;
-  --bg-elevated: #f1f5f9;
-  --bg-sidebar: #ffffff;
-  --border-default: #878f9c;
-  --border-subtle: #b0bac7;
-  --text-primary: #0f172a;
-  --text-secondary: #5b6b81;
-  --text-tertiary: #5b6b81;
-  --text-muted: #6b7789;
-  --accent-primary: #a84a1a;
-  --accent-hover: #b85320;
-  --accent-secondary: #7c3aed;
+  /* Risk level colors */
+  --risk-low: #10b981;
+  --risk-medium: #f59e0b;
+  --risk-high: #ef4444;
+  --risk-review: #8b5cf6;
+  --risk-exec: #3b82f6;
+
+  /* Shadows (light mode: lower opacity) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.15);
 }
 
 * {
@@ -106,7 +158,21 @@ body {
   margin: 0;
 }
 
-/* Audit log expand row animation */
+/* ===== Responsive: auto-collapse sidebar at 1024-1279px ===== */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .sidebar-auto-collapse {
+    width: 56px !important;
+    min-width: 56px !important;
+  }
+  .sidebar-auto-collapse .sidebar-label {
+    display: none;
+  }
+  .sidebar-auto-collapse .sidebar-chevron {
+    display: none;
+  }
+}
+
+/* ===== Animation: Audit log expand row ===== */
 @keyframes audit-row-expand {
   from {
     opacity: 0;
@@ -121,4 +187,16 @@ body {
 .audit-expanded-row td > div {
   animation: audit-row-expand 300ms ease-out forwards;
   overflow: hidden;
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
 }
