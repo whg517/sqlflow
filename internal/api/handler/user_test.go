@@ -1088,6 +1088,104 @@ func TestParsePagination(t *testing.T) {
 
 // ─── parseUserID Tests ───────────────────────────────────────────────────────
 
+func TestUserHandler_Refresh_EmptyToken(t *testing.T) {
+	e, _, _ := setupUserTest(t)
+
+	body := `{"refresh_token":""}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.Refresh(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+func TestUserHandler_Refresh_InvalidToken(t *testing.T) {
+	e, _, _ := setupUserTest(t)
+
+	body := `{"refresh_token":"invalid-token"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.Refresh(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+}
+
+func TestUserHandler_Refresh_InvalidJSON(t *testing.T) {
+	e, _, _ := setupUserTest(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(`{bad json}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.Refresh(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+func TestUserHandler_Refresh_Success(t *testing.T) {
+	e, authSvc, _ := setupUserTest(t)
+	ctx := context.Background()
+
+	// Register a user first
+	pwHash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+	authSvc.db.Exec("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+		"refreshtest", string(pwHash), "developer")
+
+	// Authenticate to get tokens
+	_, rawRefreshToken, _, err := authSvc.Authenticate(ctx, "refreshtest", "password123")
+	if err != nil {
+		t.Fatalf("Authenticate: %v", err)
+	}
+
+	body := `{"refresh_token":"` + rawRefreshToken + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.Refresh(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	result := decodeUserJSONResponse(t, rec)
+	data, ok := result["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("data is not an object; body=%s", rec.Body.String())
+	}
+	if data["access_token"] == nil {
+		t.Error("expected access_token in response")
+	}
+	if data["refresh_token"] == nil {
+		t.Error("expected refresh_token in response")
+	}
+	if data["token_type"] != "Bearer" {
+		t.Errorf("token_type = %v, want Bearer", data["token_type"])
+	}
+}
+
 func TestParseUserID(t *testing.T) {
 	e := echo.New()
 
