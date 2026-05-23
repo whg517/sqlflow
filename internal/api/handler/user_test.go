@@ -14,6 +14,7 @@ import (
 	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/service"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // contextWithTimeout returns a context with a 5-second timeout for tests.
@@ -1170,7 +1171,7 @@ func TestUserHandler_Refresh_Success(t *testing.T) {
 		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 
-	result := decodeUserJSONResponse(t, rec)
+	result := decodeResponse(t, rec)
 	data, ok := result["data"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("data is not an object; body=%s", rec.Body.String())
