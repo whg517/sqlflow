@@ -977,3 +977,95 @@ v2.0 **不做响应式变更**，保持 v1.0 的桌面端策略：
 1. ⚠️ 补充浅色主题 `--shadow-sm/md/lg` token：`0 1px 2px rgba(0,0,0,0.05)` / `0 4px 6px rgba(0,0,0,0.07)` / `0 10px 15px rgba(0,0,0,0.1)`
 2. ⚠️ 文档中 CSS token 示例值（indigo 色系）与实际代码（橙色系）不一致，不影响功能但需注意以实际代码为准
 3. ⚠️ 浅色主题侧边栏颜色 `#f1f5f9` vs v1.0 UI-DESIGN 定义的 `#f1f5f9` 与实际代码 `#ffffff` 不一致，需在视觉测试时确认最终值
+
+---
+
+## §8 间距系统修正（2026-05-24）
+
+> 基于 UI 视觉审查发现的间距层级问题，明确修正方案。
+
+### 8.1 问题概述
+
+当前实现存在以下间距问题：
+
+1. **Card 内部 padding 偏小**：筛选栏 `py-2.5`（10px）、Tab 栏 `pt-3`（12px）太紧
+2. **页面标题到内容区间距不足**：大量使用 `mb-4`（16px），应至少 `mb-5`（20px）
+3. **组件层级间距无递进**：筛选栏到表格只有 `border-b` 分隔，没有额外间距
+4. **双栏布局间距不足**：Settings 两栏之间 `ml-4`（16px）太紧
+5. **`h-[calc(100%-48px)]` hack**：硬编码高度扣减导致内容被压缩
+
+### 8.2 修正方案
+
+#### 8.2.1 Layout 全局
+
+| 元素 | 当前 | 修正为 | 说明 |
+|------|------|--------|------|
+| Layout main | `p-6` | `p-6`（保持） | 24px，L0 层级，合理 |
+| 页面标题 | 各页面自定义 | 统一 `text-xl font-semibold mb-5` | L0→L1 间距 20px |
+
+#### 8.2.2 Ticket（工单页）
+
+| 元素 | 当前 | 修正为 |
+|------|------|--------|
+| 外层容器 | `h-[calc(100%-48px)]` | `h-full` |
+| 标题区 | `mb-4` | `mb-5` |
+| Card 容器 | `rounded-lg border bg-surface flex flex-col` | 保持，但内部间距调整 |
+| Tab 栏 | `px-4 pt-3` | `px-5 pt-4` |
+| 筛选栏 | `px-4 py-2.5` | `px-5 py-3` |
+| 分页栏 | `px-6 py-2` | `px-5 py-3` |
+
+#### 8.2.3 Audit（审计日志页）
+
+| 元素 | 当前 | 修正为 |
+|------|------|--------|
+| 外层容器 | `h-full` | `h-full`（保持） |
+| 标题区 | `px-6 py-3`（无单独标题 mb） | 分离标题，`mb-5` |
+| 筛选栏 | `px-6 py-2.5` | `px-5 py-3` |
+| 表格行 | `px-6 py-3` | `px-5 py-3.5` |
+| 展开行 | `p-4` | `p-5` |
+
+#### 8.2.4 Users（用户管理页）
+
+| 元素 | 当前 | 修正为 |
+|------|------|--------|
+| 外层容器 | `h-[calc(100%-48px)]` | `h-full` |
+| 标题区 | `mb-4` | `mb-5` |
+| Card 内容 | `p-4 space-y-4` | `p-5 space-y-5` |
+
+#### 8.2.5 Settings（设置页）
+
+| 元素 | 当前 | 修正为 |
+|------|------|--------|
+| 外层容器 | `h-[calc(100%-48px)]` | `h-full` |
+| 左侧 nav | `p-3` | `p-4` |
+| nav 标题 | `mb-4` | `mb-5` |
+| 两栏间距 | `ml-4` | `ml-5` |
+| 内容区 | `p-6` | `p-5` |
+| 内容区间块 | `space-y-4` | `space-y-5` |
+
+#### 8.2.6 Permissions（权限管理页）
+
+| 元素 | 当前 | 修正为 |
+|------|------|--------|
+| 外层容器 | `h-[calc(100%-48px)]` | `h-full` |
+| 标题区 | `mb-4` | `mb-5` |
+| Tab 内容 | `p-4` | `p-5` |
+
+#### 8.2.7 Dashboard（概览页）
+
+| 元素 | 当前 | 修正为 |
+|------|------|--------|
+| 卡片网格 | `gap-6` | `gap-5`（空间感已够，微调一致性） |
+| 卡片内容 | `py-4 px-6`（CardContent） | `py-5 px-5` |
+
+### 8.3 实施计划
+
+分 4 个并行分支开发：
+
+| 分支 | 范围 | 涉及文件 |
+|------|------|---------|
+| `fix/fix-spacing-global` | 文档更新 + Card 组件 + Layout 微调 | `docs/spec/DESIGN-TOKENS.md`, `docs/spec/UI-DESIGN-v2.md`, `components/ui/card.tsx` |
+| `fix/fix-spacing-dashboard` | Dashboard 概览页 | `pages/Dashboard/index.tsx` |
+| `fix/fix-spacing-ticket-audit` | Ticket + Audit 页面 | `pages/Ticket/index.tsx`, `pages/Audit/index.tsx` |
+| `fix/fix-spacing-users-settings` | Users + Settings + Permissions | `pages/Users/index.tsx`, `pages/Settings/index.tsx`, `pages/Permissions/index.tsx` |
+
