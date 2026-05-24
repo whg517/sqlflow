@@ -25,3 +25,18 @@ global.IntersectionObserver = class IntersectionObserver {
 
 // cmdk calls scrollIntoView in jsdom which doesn't implement it
 Element.prototype.scrollIntoView = function () {}
+
+// matchMedia polyfill for jsdom
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }),
+})

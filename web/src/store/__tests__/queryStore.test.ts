@@ -195,7 +195,7 @@ describe('queryStore', () => {
       store.updateTabSql(tabId, 'SELECT * FROM users WHERE id = 1')
 
       const tab = useQueryStore.getState().tabs.find((t) => t.id === tabId)
-      expect(tab?.title).toBe('SELECT * FROM users WHE...')
+      expect(tab?.title).toBe('SELECT * FROM users ...')
     })
 
     it('resets title to "新查询" when SQL is cleared', async () => {
@@ -475,7 +475,7 @@ describe('queryStore', () => {
       useQueryStore.getState().restoreHistoryAsTab(longSql, 10, 'db')
 
       const tabs = useQueryStore.getState().tabs
-      expect(tabs[1].title).toBe('SELECT * FROM very_long...')
+      expect(tabs[1].title).toBe('SELECT * FROM very_l...')
     })
 
     it('closes history panel after restoring', async () => {

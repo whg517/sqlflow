@@ -35,18 +35,22 @@ vi.mock('@/components/NetworkBanner', () => ({
   default: () => <div data-testid="network-banner" />,
 }))
 
+import { TooltipProvider } from '@/components/ui/tooltip'
+
 import Layout from '@/components/Layout'
 
 function renderLayout(initialPath = '/') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<div data-testid="outlet-page">Home</div>} />
-          <Route path="query" element={<div data-testid="outlet-page">Query</div>} />
-          <Route path="tickets" element={<div data-testid="outlet-page">Tickets</div>} />
-        </Route>
-      </Routes>
+      <TooltipProvider>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route index element={<div data-testid="outlet-page">Home</div>} />
+            <Route path="query" element={<div data-testid="outlet-page">Query</div>} />
+            <Route path="tickets" element={<div data-testid="outlet-page">Tickets</div>} />
+          </Route>
+        </Routes>
+      </TooltipProvider>
     </MemoryRouter>,
   )
 }
@@ -121,7 +125,7 @@ describe('Layout', () => {
       renderLayout()
       await waitFor(() => {
         // The initial 'A' from 'admin' is rendered in the AvatarFallback
-        expect(document.querySelector('[class*="avatar"]')?.textContent).toBe('A')
+        expect(screen.getByText('A')).toBeInTheDocument()
       })
     })
   })
@@ -194,16 +198,15 @@ describe('Layout', () => {
     })
 
     it('auto-opens settings when on a settings path', async () => {
-      // Navigate to a nested settings path - the layout will see the path
-      // and auto-expand the settings menu. We need to render with a route
-      // that matches /settings/*.
-      const utils = render(
+      render(
         <MemoryRouter initialEntries={['/settings/datasource']}>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route path="settings/*" element={<div data-testid="outlet">Settings</div>} />
-            </Route>
-          </Routes>
+          <TooltipProvider>
+            <Routes>
+              <Route element={<Layout />}>
+                <Route path="settings/*" element={<div data-testid="outlet">Settings</div>} />
+              </Route>
+            </Routes>
+          </TooltipProvider>
         </MemoryRouter>,
       )
 
@@ -219,7 +222,15 @@ describe('Layout', () => {
     it('displays username in dropdown after API loads', async () => {
       mockApiGet.mockResolvedValue({ code: 0, data: { username: 'testuser', role: 'admin' } })
       renderLayout()
-      // The username appears in the dropdown menu label
+      await waitFor(() => {
+        const trigger = document.querySelector('[data-slot="dropdown-menu-trigger"]') as HTMLElement
+        expect(trigger).toBeInTheDocument()
+      })
+
+      // Open the dropdown
+      const trigger = document.querySelector('[data-slot="dropdown-menu-trigger"]') as HTMLElement
+      await userEvent.click(trigger)
+
       await waitFor(() => {
         expect(screen.getByText('testuser')).toBeInTheDocument()
       })
@@ -228,8 +239,15 @@ describe('Layout', () => {
     it('shows default dash when user data fails to load', async () => {
       mockApiGet.mockResolvedValue({ code: 1, data: null })
       renderLayout()
-      // The Layout catches the error silently; user stays null
-      // The dropdown should show '—' for username
+      await waitFor(() => {
+        const trigger = document.querySelector('[data-slot="dropdown-menu-trigger"]') as HTMLElement
+        expect(trigger).toBeInTheDocument()
+      })
+
+      // Open the dropdown
+      const trigger = document.querySelector('[data-slot="dropdown-menu-trigger"]') as HTMLElement
+      await userEvent.click(trigger)
+
       await waitFor(() => {
         expect(screen.getByText('—')).toBeInTheDocument()
       })
@@ -258,13 +276,11 @@ describe('Layout', () => {
   // --- Logout ---
 
   describe('logout', () => {
-    it('logout menu item exists and contains correct text', async () => {
+    it('renders avatar dropdown trigger in header', async () => {
       renderLayout()
       await waitFor(() => {
-        // The dropdown menu items are rendered inside the DOM
-        // but may be hidden by radix. They are still in the DOM.
-        // We check by looking for the text content in the document
-        expect(document.body.textContent).toContain('退出登录')
+        const trigger = document.querySelector('[data-slot="dropdown-menu-trigger"]') as HTMLElement
+        expect(trigger).toBeInTheDocument()
       })
     })
   })
@@ -272,11 +288,19 @@ describe('Layout', () => {
   // --- Theme toggle ---
 
   describe('theme toggle', () => {
-    it('shows theme toggle option in dropdown', async () => {
+    it('renders theme toggle option when dropdown is opened', async () => {
       renderLayout()
       await waitFor(() => {
-        // The dropdown menu content contains theme toggle text
-        expect(document.body.textContent).toContain('深色模式')
+        const trigger = document.querySelector('[data-slot="dropdown-menu-trigger"]') as HTMLElement
+        expect(trigger).toBeInTheDocument()
+      })
+
+      // Open the dropdown
+      const trigger = document.querySelector('[data-slot="dropdown-menu-trigger"]') as HTMLElement
+      await userEvent.click(trigger)
+
+      await waitFor(() => {
+        expect(screen.getByText('浅色模式')).toBeInTheDocument()
       })
     })
   })

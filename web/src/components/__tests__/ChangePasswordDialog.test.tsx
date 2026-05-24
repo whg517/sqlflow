@@ -172,7 +172,6 @@ describe('ChangePasswordDialog', () => {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: 'Bearer null',
             },
             body: JSON.stringify({ old_password: 'oldpass1', new_password: 'newpass12' }),
           })

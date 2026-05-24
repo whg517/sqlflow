@@ -114,7 +114,11 @@ describe('Ticket API Helpers', () => {
 
     it('formats date with single-digit month/day with leading zeros', () => {
       const result = formatTime('2026-01-05T08:05:00Z')
-      expect(result).toMatch(/^01-05 0[89]:05$/) // UTC+8 = 16:05
+      // formatTime uses local timezone (getMonth/getDate/getHours/getMinutes)
+      const d = new Date('2026-01-05T08:05:00Z')
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      expect(result).toMatch(new RegExp(`^${month}-${day} \\d{2}:05$`))
     })
 
     it('formats midnight correctly', () => {

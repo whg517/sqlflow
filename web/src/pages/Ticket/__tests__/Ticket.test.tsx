@@ -54,7 +54,7 @@ vi.mock('@/api/ticket', () => ({
 }))
 
 // Mock TicketDetailDrawer
-vi.mock('./components/TicketDetailDrawer', () => ({
+vi.mock('@/pages/Ticket/components/TicketDetailDrawer', () => ({
   default: ({
     open,
     ticketId,
@@ -68,6 +68,8 @@ vi.mock('./components/TicketDetailDrawer', () => ({
   }) =>
     open ? <div data-testid="ticket-detail-drawer">Ticket #{ticketId}</div> : null,
 }))
+
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 import TicketPage from '@/pages/Ticket'
 
@@ -166,9 +168,11 @@ function setupDefaultMocks(tickets = mockTickets, total = tickets.length) {
 function renderTicketPage() {
   return render(
     <MemoryRouter initialEntries={['/tickets']}>
-      <Routes>
-        <Route path="/tickets" element={<TicketPage />} />
-      </Routes>
+      <TooltipProvider>
+        <Routes>
+          <Route path="/tickets" element={<TicketPage />} />
+        </Routes>
+      </TooltipProvider>
     </MemoryRouter>,
   )
 }
@@ -246,8 +250,8 @@ describe('TicketPage', () => {
       renderTicketPage()
 
       await waitFor(() => {
-        expect(screen.getByText('testdb')).toBeInTheDocument()
-        expect(screen.getByText('production')).toBeInTheDocument()
+        expect(screen.getAllByText('testdb').length).toBeGreaterThan(0)
+        expect(screen.getAllByText('production').length).toBeGreaterThan(0)
       })
     })
 
@@ -365,9 +369,9 @@ describe('TicketPage', () => {
   // --- Navigate to new ticket ---
 
   describe('create ticket', () => {
-    it('navigates to /tickets/new when clicking create button', () => {
+    it('navigates to /tickets/new when clicking create button', async () => {
       renderTicketPage()
-      userEvent.click(screen.getByText('提交新工单'))
+      await userEvent.click(screen.getByText('提交新工单'))
       expect(mockNavigate).toHaveBeenCalledWith('/tickets/new')
     })
   })

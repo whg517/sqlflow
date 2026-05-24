@@ -38,7 +38,7 @@ function mockLoginSuccess(token = 'jwt-token-123') {
 function mockLoginFailure(message = '用户名或密码错误') {
   mockFetch.mockResolvedValueOnce({
     ok: false,
-    status: 401,
+    status: 400,
     json: async () => ({ message }),
   })
 }

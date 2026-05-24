@@ -198,7 +198,13 @@ function ResultTableInner({
     if (!result?.columns) return []
     return result.columns.map((col) => ({
       accessorKey: col,
-      filterFn: 'textFilter',
+      filterFn: ((row: any, _id: string, value: any) => {
+        const colVal = String(row.getValue(col) ?? '').toLowerCase()
+        const sv = String(value?.value ?? '').toLowerCase()
+        if (value?.operator === 'contains') return colVal.includes(sv)
+        if (value?.operator === 'not_contains') return !colVal.includes(sv)
+        return colVal.includes(sv)
+      }) as any,
       header: () => {
         const isDesensitized = result.desensitized_fields?.includes(col)
         return (
