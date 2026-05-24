@@ -1,16 +1,19 @@
 # SQLFlow Makefile
 #
 # Usage:
-#   make help            Show all available targets
-#   make dev             Start frontend dev server
-#   make test-e2e        Run mock E2E tests
+#   make                Show all available targets
+#   make dev            Start frontend dev server
+#   make go-build       Compile Go backend
 #
 # Note: GNU Make does not support colons in target names.
 # Targets like test:e2e are invoked as make test-e2e.
 
 .DEFAULT_GOAL := help
 
-.PHONY: help dev build lint test clean merge-cleanup docker-up docker-down docker-build test-e2e test-e2e-real
+.PHONY: help dev build lint test clean merge-cleanup \
+        go-build go-test go-fmt \
+        docker-up docker-down docker-build \
+        test-e2e test-e2e-real
 
 # ----------------------------------------------------------
 # Development
@@ -19,6 +22,18 @@
 ## dev              Start frontend dev server (Vite on port 5173)
 dev:
 	cd web && npm run dev
+
+## go-build         Compile Go backend
+go-build:
+	go build ./...
+
+## go-test          Run Go tests
+go-test:
+	go test ./...
+
+## go-fmt           Format Go code
+go-fmt:
+	go fmt ./...
 
 ## build            Build frontend for production (tsc + vite build)
 build:
@@ -32,7 +47,7 @@ lint:
 # Testing
 # ----------------------------------------------------------
 
-## test             Run unit tests (Vitest)
+## test             Run unit tests (Vitest, 508 tests)
 test:
 	cd web && npm run test
 
@@ -40,7 +55,7 @@ test:
 test-e2e:
 	cd e2e && npm run test:mock
 
-## test-e2e-real    Run real E2E tests against backend (requires docker-compose)
+## test-e2e-real    Run real E2E tests (requires e2e docker-compose)
 test-e2e-real:
 	cd e2e && npm run test:real
 
@@ -52,7 +67,7 @@ test-e2e-real:
 docker-up:
 	docker compose up -d
 
-## docker-down      Stop Docker Compose services and remove volumes
+## docker-down      Stop Docker Compose services
 docker-down:
 	docker compose down
 
@@ -64,9 +79,9 @@ docker-build:
 # Maintenance
 # ----------------------------------------------------------
 
-## clean            Remove build artifacts and caches
+## clean            Remove build artifacts, caches, and test results
 clean:
-	rm -rf web/dist web/node_modules/.vite
+	rm -rf web/dist web/node_modules/.vite e2e/test-results
 
 ## merge-cleanup    Clean up merged branch (usage: make merge-cleanup BRANCH=feat/xxx)
 merge-cleanup:
@@ -77,10 +92,10 @@ merge-cleanup:
 	./scripts/merge-cleanup.sh "$(BRANCH)"
 
 # ----------------------------------------------------------
-# Help (must be last so ## comments above define all targets)
+# Help (auto-generated from ## comments above)
 # ----------------------------------------------------------
 
-## help             Show this help message (auto-generated)
+## help             Show this help message
 help:
 	@echo ""
 	@echo "SQLFlow — Available Targets"
