@@ -1,0 +1,23 @@
+{
+  "name": "sqlflow-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:mock": "npx playwright test --project=mock",
+    "test:real": "npx playwright test --project=real",
+    "test:smoke": "npx playwright test --project=real tests/real/smoke.spec.ts",
+    "test:ci": "npx playwright test --project=real",
+    "test:ci:mock": "npx playwright test --project=mock",
+    "setup": "docker compose up -d --build --wait",
+    "teardown": "docker compose down -v",
+    "teardown:reset-db": "docker compose restart mysql-test",
+    "report": "npx playwright show-report test-results/playwright-report",
+    "lint": "npx tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "typescript": "~5.7.0"
+  }
+}
