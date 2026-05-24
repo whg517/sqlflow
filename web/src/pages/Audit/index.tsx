@@ -169,7 +169,7 @@ function ExpandedRow({
     <tr className="audit-expanded-row border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]/30">
       <td colSpan={6} className="p-0">
         <div className="overflow-hidden">
-          <div className="p-4">
+          <div className="p-5">
             <div className="grid grid-cols-4 gap-3">
               {/* Full SQL */}
               <div className="col-span-full">
@@ -541,7 +541,7 @@ export default function AuditPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3">
+      <div className="flex items-center justify-between mb-5 px-5 py-3">
         <div className="flex items-center gap-2.5">
           <FileText size={18} className="text-[var(--accent-primary)]" />
           <h1 className="text-base font-semibold text-[var(--text-primary)]">
@@ -583,7 +583,7 @@ export default function AuditPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-2.5">
+      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-5 py-3">
         {/* User filter */}
         <Select
           value={userFilter}
@@ -794,7 +794,7 @@ export default function AuditPage() {
                   <>
                     <TableRow
                       key={log.id}
-                      className="cursor-pointer border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)]"
+                      className="cursor-pointer border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)] [&>td]:py-3.5"
                       onClick={() => toggleExpand(log.id)}
                     >
                       <TableCell className="w-8 px-2">
@@ -863,7 +863,7 @@ export default function AuditPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-2">
+        <div className="flex items-center justify-between border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-5 py-3">
           <span className="text-xs text-[var(--text-muted)]">
             共 {total} 条，第 {page}/{totalPages} 页
           </span>

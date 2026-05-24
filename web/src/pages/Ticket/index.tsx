@@ -213,9 +213,9 @@ export default function TicketPage() {
   const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="flex h-[calc(100%-48px)] flex-col">
+    <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">
           变更工单
         </h1>
@@ -232,7 +232,7 @@ export default function TicketPage() {
       {/* Tabs + Filters + Table — all inside a card */}
       <div className="flex-1 overflow-hidden rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] flex flex-col">
       {/* Tabs */}
-      <div className="border-b border-[var(--border-default)] px-4 pt-3">
+      <div className="border-b border-[var(--border-default)] px-5 pt-4">
         <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList variant="line" className="h-9">
             {statusTabs.map((tab) => (
@@ -249,7 +249,7 @@ export default function TicketPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-default)] px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-default)] px-5 py-3">
         {/* Quick scope */}
         <Button
           variant="ghost"
@@ -461,7 +461,7 @@ export default function TicketPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-2">
+        <div className="flex items-center justify-between border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-5 py-3">
           <span className="text-xs text-[var(--text-muted)]">
             共 {total} 条，第 {page}/{totalPages} 页
           </span>
