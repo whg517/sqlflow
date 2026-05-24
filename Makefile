@@ -2,137 +2,87 @@
 # SQLFlow Makefile
 # ==============================================================================
 
-SHELL := /bin/bash
-.DEFAULT_GOAL := help
-
-COL := 17
-
-.PHONY: help \
-        dev dev-api dev-web \
-        build build-all \
-        test test-all test-e2e test-e2e-real \
-        lint lint-all fmt verify \
+.PHONY: help build dev test lint fmt clean verify \
         docker-up docker-down docker-build \
-        clean merge-cleanup \
-        _go-build _go-test _go-vet
+        merge-cleanup
 
-# ── DEVELOPMENT ──────────────────────────────────────────────────────────────
+# ── Build ───────────────────────────────────────────────────────────────────
 
-## dev            Start full dev environment (backend + frontend)
-dev: dev-api dev-web
+build: ## Build all (Go backend + frontend)
+build: go-build web-build
 
-## dev-api        Start Go backend server (port 8080)
-dev-api:
-	go run ./cmd/... serve
+go-build: ## Build Go backend binary
+	go build ./...
 
-## dev-web        Start frontend dev server (Vite :5173)
-dev-web:
-	cd web && npm run dev
-
-# ── BUILD ───────────────────────────────────────────────────────────────────
-
-## build          Build frontend (tsc + vite)
-build:
+web-build: ## Build frontend (tsc + vite)
 	cd web && npm run build
 
-## build-all      Build everything (Go + frontend)
-build-all: _go-build build
+# ── Development ─────────────────────────────────────────────────────────────
 
-# ── TEST ────────────────────────────────────────────────────────────────────
+dev: ## Start full dev environment (Go backend + Vite)
+dev: dev-backend dev-frontend
 
-## test           Run frontend unit tests (Vitest)
-test:
+dev-backend: ## Start Go backend server (port 8080)
+	go run ./cmd/... serve
+
+dev-frontend: ## Start frontend dev server (Vite :5173)
+	cd web && npm run dev
+
+# ── Test ────────────────────────────────────────────────────────────────────
+
+test: ## Run all tests (Go + frontend unit)
+test: go-test web-test
+
+go-test: ## Run Go tests
+	go test ./...
+
+web-test: ## Run frontend unit tests (Vitest)
 	cd web && npm run test
 
-## test-all       Run all tests (Go + frontend)
-test-all: _go-test test
+# ── Quality ──────────────────────────────────────────────────────────────────
 
-## test-e2e       Run mock E2E (Playwright, no backend needed)
-test-e2e:
-	cd e2e && npm run test:mock
+lint: ## Lint all (Go vet + ESLint)
+lint: go-vet web-lint
 
-## test-e2e-real  Run real E2E (requires e2e docker-compose)
-test-e2e-real:
-	cd e2e && npm run test:real
+go-vet: ## Run Go vet
+	go vet ./...
 
-# ── QUALITY ──────────────────────────────────────────────────────────────────
-
-## lint           Lint frontend (ESLint)
-lint:
+web-lint: ## Run ESLint
 	cd web && npm run lint
 
-## lint-all       Lint all (Go vet + ESLint)
-lint-all: _go-vet lint
-
-## fmt            Format all code (go fmt + prettier)
-fmt:
+fmt: ## Format all code (go fmt + prettier)
 	go fmt ./...
 	cd web && npx prettier --write "src/**/*.{ts,tsx}"
 
-## verify         Full CI check: lint + typecheck + build + test
-verify: lint-all
-	cd web && npx tsc --noEmit && npm run build && npm run test
-	go vet ./...
-	go test ./...
+verify: ## Full CI check (lint + build + test)
+verify: lint build test
 
-# ── DOCKER ──────────────────────────────────────────────────────────────────
+# ── Docker ──────────────────────────────────────────────────────────────────
 
-## docker-up      Start application stack
-docker-up:
+docker-up: ## Start application stack
 	docker compose up -d
 
-## docker-down    Stop application stack
-docker-down:
+docker-down: ## Stop application stack
 	docker compose down
 
-## docker-build   Build application images
-docker-build:
+docker-build: ## Build application images
 	docker compose build
 
-# ── MAINTENANCE ─────────────────────────────────────────────────────────────
+# ── Maintenance ─────────────────────────────────────────────────────────────
 
-## clean          Remove build artifacts and caches
-clean:
+clean: ## Remove build artifacts and caches
 	rm -rf web/dist web/node_modules/.vite e2e/test-results
 	go clean -cache
 
-## merge-cleanup  Remove worktree and branch after merge (BRANCH=feat/xxx)
-merge-cleanup:
+merge-cleanup: ## Remove worktree and branch (BRANCH=feat/xxx)
 	@if [ -z "$(BRANCH)" ]; then \
 		echo "Usage: make merge-cleanup BRANCH=feat/xxx"; exit 1; \
 	fi
 	./scripts/merge-cleanup.sh "$(BRANCH)"
 
-# ── INTERNAL ─────────────────────────────────────────────────────────────────
+# ── Help ────────────────────────────────────────────────────────────────────
 
-_go-build:
-	@go build ./...
-
-_go-test:
-	@go test ./...
-
-_go-vet:
-	@go vet ./...
-
-# ── HELP ────────────────────────────────────────────────────────────────────
-
-## help           Show available targets
-help:
-	@echo ""
-	@awk 'BEGIN { COL = ENVIRON["COL"] } \
-		/^## [a-z]/ && !/^## help/ { \
-			sub(/^## /, ""); \
-			t = $$1; sub(/^[^ ]+[ \t]+/, ""); d = $$0; \
-			g = 0; \
-			if (t ~ /^dev/) g = 1; \
-			else if (t ~ /^build/) g = 2; \
-			else if (t ~ /^test/) g = 3; \
-			else if (t ~ /^(lint|fmt|verify)/) g = 4; \
-			else if (t ~ /^docker-/) g = 5; \
-			else g = 6; \
-			G[1] = "DEVELOPMENT"; G[2] = "BUILD"; G[3] = "TEST"; \
-			G[4] = "QUALITY"; G[5] = "DOCKER"; G[6] = "MAINTENANCE"; \
-			if (g != pg) { printf "\n  \033[1m%s\033[0m\n", G[g]; pg = g } \
-			printf "    \033[36m%-" COL "s\033[0m %s\n", t, d \
-		}' COL=$(COL) $(MAKEFILE_LIST)
-	@echo ""
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		sort -k1,1 | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m%s\n", $$1, $$2}'
