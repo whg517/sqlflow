@@ -19,8 +19,14 @@ web-build: ## Build frontend (tsc + vite)
 
 ##@ Development
 
+PIDFILE := /tmp/sqlflow-dev.pid
+
 dev: ## Start full dev environment (Go backend + Vite)
-dev: dev-backend dev-frontend
+	@echo "Starting backend and frontend..."
+	@$(MAKE) dev-backend & PID=$$!; echo $$PID > $(PIDFILE).back; \
+		$(MAKE) dev-frontend & PID=$$!; echo $$PID > $(PIDFILE).front; \
+		trap 'kill $$(cat $(PIDFILE).back) $$(cat $(PIDFILE).front) 2>/dev/null; rm -f $(PIDFILE).*' EXIT; \
+		wait
 
 dev-backend: ## Start Go backend server (port 8080)
 	go run ./cmd/... serve
