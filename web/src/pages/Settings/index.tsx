@@ -271,7 +271,7 @@ function DataSourceTab() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)]">
+      <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] table-responsive">
         <Table>
           <TableHeader>
             <TableRow className="border-[var(--border-default)] hover:bg-transparent">
@@ -537,7 +537,7 @@ export default function SettingsPage() {
   return (
     <div className="flex h-full">
       {/* Left sidebar */}
-      <nav className="w-48 shrink-0 border-r border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
+      <nav className="settings-sidebar w-48 shrink-0 border-r border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
         <h1 className="mb-4 px-3 text-xl font-semibold text-[var(--text-primary)]">设置</h1>
         <div className="space-y-0.5">
           {NAV_ITEMS.map(({ key, label, icon: Icon }) => (

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Database, Server, Users, ShieldAlert, Loader2 } from 'lucide-react'
+import { FileText, Database, Server, Users, ShieldAlert, AlertCircle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { getDashboardStats, type DashboardStats } from '@/api/dashboard'
 import { listSensitiveTables } from '@/api/maskRule'
@@ -51,13 +51,16 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [sensitiveCount, setSensitiveCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     getDashboardStats()
       .then((res) => {
         if (res.code === 0) setStats(res.data)
       })
-      .catch(() => {})
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : '获取概览数据失败')
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -67,21 +70,51 @@ export default function DashboardPage() {
       .catch(() => {})
   }, [])
 
+  if (error) {
+    return (
+      <div className="mx-auto max-w-[960px] p-6 page-transition">
+        <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-6">概览</h1>
+        <div className="flex h-48 flex-col items-center justify-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
+            <AlertCircle size={24} className="text-red-400" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-medium text-[var(--text-secondary)]">加载失败</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{error}</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-[var(--text-muted)]" />
+      <div className="mx-auto max-w-[960px] p-6">
+        <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-6">概览</h1>
+        <div className="grid grid-cols-2 gap-4 skeleton-fade" data-loaded="false">
+          {statCards.map((card) => (
+            <Card key={card.key}>
+              <CardContent className="flex items-center gap-4 py-4">
+                <div className="h-10 w-10 rounded-lg bg-[var(--bg-elevated)] animate-pulse" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-6 w-16 rounded bg-[var(--bg-elevated)] animate-pulse" />
+                  <div className="h-4 w-24 rounded bg-[var(--bg-elevated)] animate-pulse" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     )
   }
 
   return (
     /* §3.2: centered content max-width 960px */
-    <div className="mx-auto max-w-[960px] space-y-6 p-6">
+    <div className="mx-auto max-w-[960px] space-y-6 p-6 page-transition dashboard-grid">
       <h1 className="text-xl font-semibold text-[var(--text-primary)]">概览</h1>
 
       {/* §3.2: grid grid-cols-2 gap-4 */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 skeleton-fade" data-loaded="true">
         {statCards.map((card) => {
           const value = card.key === 'sensitive_tables'
             ? sensitiveCount

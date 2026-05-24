@@ -253,7 +253,7 @@ export default function UsersPage() {
         accessorKey: 'username',
         header: '用户名',
         cell: ({ getValue }) => (
-          <span className="font-medium text-[var(--text-primary)]">{getValue() as string}</span>
+          <span className="block max-w-[120px] truncate font-medium text-[var(--text-primary)]">{getValue() as string}</span>
         ),
       },
       {
@@ -429,15 +429,26 @@ export default function UsersPage() {
               <TableBody>
                 {loading && !users.length ? (
                   <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center text-[var(--text-muted)]">
-                      加载中...
+                    <TableCell colSpan={columns.length} className="h-24">
+                      <div className="space-y-3 px-4">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="flex items-center gap-4">
+                            <div className="h-3 w-20 rounded bg-[var(--bg-elevated)] animate-pulse" />
+                            <div className="h-5 w-14 rounded-full bg-[var(--bg-elevated)] animate-pulse" />
+                            <div className="h-3 w-24 rounded bg-[var(--bg-elevated)] animate-pulse" />
+                            <div className="ml-auto h-3 w-16 rounded bg-[var(--bg-elevated)] animate-pulse" />
+                          </div>
+                        ))}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : !filteredUsers.length ? (
                   <TableRow>
                     <TableCell colSpan={columns.length} className="h-32">
-                      <div className="flex flex-col items-center gap-2">
-                        <UsersIcon size={20} className="text-[var(--text-muted)]" />
+                      <div className="flex flex-col items-center gap-2 page-transition">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--bg-elevated)] empty-state-icon">
+                          <UsersIcon size={20} className="text-[var(--text-muted)]" />
+                        </div>
                         <span className="text-sm text-[var(--text-muted)]">
                           {keyword ? '没有匹配的用户' : '暂无用户数据'}
                         </span>

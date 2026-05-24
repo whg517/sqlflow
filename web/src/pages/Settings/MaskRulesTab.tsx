@@ -225,7 +225,7 @@ function SensitiveTablesTab() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)]">
+      <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] table-responsive">
         <Table>
           <TableHeader>
             <TableRow className="border-[var(--border-default)] hover:bg-transparent">
@@ -614,7 +614,7 @@ function FieldRulesTab() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)]">
+      <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] table-responsive">
         <Table>
           <TableHeader>
             <TableRow className="border-[var(--border-default)] hover:bg-transparent">

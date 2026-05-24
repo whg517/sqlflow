@@ -172,6 +172,27 @@ body {
   }
 }
 
+/* ===== Responsive: 1280px breakpoint adjustments ===== */
+@media (max-width: 1280px) {
+  .settings-sidebar {
+    width: 160px !important;
+    min-width: 160px !important;
+  }
+}
+
+@media (min-width: 1440px) {
+  .settings-sidebar {
+    width: 200px !important;
+    min-width: 200px !important;
+  }
+}
+
+@media (min-width: 1920px) {
+  .dashboard-grid {
+    max-width: 1200px;
+  }
+}
+
 /* ===== Animation: Audit log expand row ===== */
 @keyframes audit-row-expand {
   from {
@@ -185,8 +206,93 @@ body {
 }
 
 .audit-expanded-row td > div {
-  animation: audit-row-expand 300ms ease-out forwards;
+  animation: audit-row-expand 250ms ease-out forwards;
   overflow: hidden;
+}
+
+/* ===== A1: Page transition — fade-in 250ms ease-out ===== */
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-transition {
+  animation: page-fade-in 250ms ease-out;
+}
+
+/* ===== A2: Skeleton → content smooth transition ===== */
+.skeleton-fade {
+  transition: opacity 200ms ease-out;
+}
+
+.skeleton-fade[data-loaded="true"] {
+  opacity: 1;
+}
+
+.skeleton-fade[data-loaded="false"] {
+  opacity: 0.6;
+}
+
+/* ===== A3: Sidebar collapse — 300ms ease-in-out ===== */
+/* Applied via Layout.tsx inline transition-[width] duration-300 ease-in-out */
+
+/* ===== A4: Modal/Drawer combined animation ===== */
+/* Enhanced overlay: fade + slight blur */
+@keyframes overlay-fade-in {
+  from { opacity: 0; backdrop-filter: blur(0px); }
+  to { opacity: 1; backdrop-filter: blur(2px); }
+}
+
+@keyframes overlay-fade-out {
+  from { opacity: 1; backdrop-filter: blur(2px); }
+  to { opacity: 0; backdrop-filter: blur(0px); }
+}
+
+/* ===== A5: Tab switch — smooth underline transition ===== */
+.tab-indicator {
+  transition: left 200ms ease-out, width 200ms ease-out;
+}
+
+/* ===== B: Enhanced empty state ===== */
+@keyframes empty-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.empty-state-icon {
+  animation: empty-float 3s ease-in-out infinite;
+}
+
+/* ===== C: Responsive table — horizontal scroll with sticky first column ===== */
+@media (max-width: 1280px) {
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-responsive table {
+    min-width: 800px;
+  }
+  .table-responsive th:first-child,
+  .table-responsive td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: inherit;
+  }
+}
+
+/* ===== Modal responsive: max-height + scroll on small screens ===== */
+@media (max-width: 1280px) {
+  [data-slot="dialog-content"] {
+    max-height: 85vh;
+    overflow-y: auto;
+  }
 }
 
 /* ===== Reduced motion ===== */

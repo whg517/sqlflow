@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Search, Loader2 } from 'lucide-react'
+import { Plus, Search, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -265,14 +265,35 @@ export default function TicketPage() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto bg-[var(--bg-base)]">
-        {loading ? (
+      <div className="flex-1 overflow-auto bg-[var(--bg-base)] table-responsive">
+        {loading && !tickets.length ? (
           <div className="flex h-32 items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin text-[var(--text-muted)]" />
+            <div className="flex flex-col items-center gap-3">
+              <div className="grid grid-cols-4 gap-3 w-full max-w-[800px] px-6">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="space-y-2">
+                    <div className="h-3 w-12 rounded bg-[var(--bg-elevated)] animate-pulse" />
+                    <div className="h-4 w-full rounded bg-[var(--bg-elevated)] animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         ) : tickets.length === 0 ? (
-          <div className="flex h-32 flex-col items-center justify-center gap-2">
-            <p className="text-sm text-[var(--text-muted)]">暂无工单</p>
+          <div className="flex h-48 flex-col items-center justify-center gap-3 py-12 page-transition">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bg-elevated)] empty-state-icon">
+              <FileText size={24} className="text-[var(--text-muted)]" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-[var(--text-secondary)]">
+                {activeTab !== 'all' || scopeFilter || datasourceFilter || keyword ? '没有匹配的工单' : '暂无变更工单'}
+              </p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                {activeTab !== 'all' || scopeFilter || datasourceFilter || keyword
+                  ? '尝试切换 Tab 或清空筛选条件'
+                  : '提交 SQL 变更申请后，工单将在此展示'}
+              </p>
+            </div>
           </div>
         ) : (
           <Table>

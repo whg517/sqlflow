@@ -151,7 +151,7 @@ export default function Layout() {
 
       {/* Sidebar — §2.1/2.2 */}
       <aside
-        className={`flex ${sidebarWidth} flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-sidebar)] transition-[width] duration-200 ease-out`}
+        className={`flex ${sidebarWidth} flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-sidebar)] transition-[width,min-width] duration-300 ease-in-out`}
       >
         {/* Brand — §2.2: height 56px, bottom 1px border-subtle */}
         <div className="flex h-[56px] min-h-[56px] items-center gap-2.5 border-b border-[var(--border-subtle)] px-4 text-lg font-bold text-[var(--accent-primary)]">
@@ -284,7 +284,7 @@ export default function Layout() {
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
-        <main className="flex-1 overflow-auto bg-[var(--bg-base)]">
+        <main className="flex-1 overflow-auto bg-[var(--bg-base)] page-transition">
           <Outlet />
         </main>
       </div>

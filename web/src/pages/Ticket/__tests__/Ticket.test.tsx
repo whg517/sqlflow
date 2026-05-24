@@ -279,12 +279,12 @@ describe('TicketPage', () => {
   // --- Empty state ---
 
   describe('empty state', () => {
-    it('shows "暂无工单" when no tickets', async () => {
+    it('shows empty state when no tickets', async () => {
       setupDefaultMocks([], 0)
       renderTicketPage()
 
       await waitFor(() => {
-        expect(screen.getByText('暂无工单')).toBeInTheDocument()
+        expect(screen.getByText('暂无变更工单')).toBeInTheDocument()
       })
     })
   })
@@ -292,12 +292,12 @@ describe('TicketPage', () => {
   // --- Loading state ---
 
   describe('loading state', () => {
-    it('shows loading indicator while fetching', async () => {
+    it('shows loading skeleton while fetching', async () => {
       mockListTickets.mockReturnValue(new Promise(() => {}))
       renderTicketPage()
 
       await waitFor(() => {
-        expect(document.querySelector('.animate-spin')).toBeInTheDocument()
+        expect(document.querySelector('.animate-pulse')).toBeInTheDocument()
       })
     })
   })

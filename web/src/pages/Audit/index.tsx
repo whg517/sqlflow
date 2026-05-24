@@ -279,6 +279,7 @@ export default function AuditPage() {
   const [page, setPage] = useState(1)
   const [pageSize] = useState(50)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
 
   // Filters
@@ -321,6 +322,7 @@ export default function AuditPage() {
   // Fetch audit logs
   const fetchLogs = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const res = await listAuditLogs({
         page,
@@ -335,7 +337,9 @@ export default function AuditPage() {
       setLogs(res.data ?? [])
       setTotal(res.total)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '获取审计日志失败')
+      const msg = err instanceof Error ? err.message : '获取审计日志失败'
+      setError(msg)
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
@@ -538,14 +542,41 @@ export default function AuditPage() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto bg-[var(--bg-base)]">
-        {loading ? (
-          <div className="flex h-32 items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin text-[var(--text-muted)]" />
+      <div className="flex-1 overflow-auto bg-[var(--bg-base)] table-responsive">
+        {error && !logs.length ? (
+          <div className="flex h-48 flex-col items-center justify-center gap-3 py-12 page-transition">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
+              <FileText size={24} className="text-red-400" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-[var(--text-secondary)]">加载失败</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{error}</p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 border-[var(--border-default)] text-xs"
+              onClick={() => fetchLogs()}
+            >
+              重试
+            </Button>
+          </div>
+        ) : loading && !logs.length ? (
+          <div className="space-y-0 p-0">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex items-center gap-4 border-b border-[var(--border-subtle)] px-6 py-3">
+                <div className="h-3 w-3 rounded bg-[var(--bg-elevated)] animate-pulse" />
+                <div className="h-3 w-20 rounded bg-[var(--bg-elevated)] animate-pulse" />
+                <div className="h-3 w-16 rounded bg-[var(--bg-elevated)] animate-pulse" />
+                <div className="h-5 w-14 rounded-full bg-[var(--bg-elevated)] animate-pulse" />
+                <div className="h-3 w-24 rounded bg-[var(--bg-elevated)] animate-pulse" />
+                <div className="h-3 flex-1 rounded bg-[var(--bg-elevated)] animate-pulse" />
+              </div>
+            ))}
           </div>
         ) : logs.length === 0 ? (
-          <div className="flex h-48 flex-col items-center justify-center gap-3 py-12">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bg-elevated)]">
+          <div className="flex h-48 flex-col items-center justify-center gap-3 py-12 page-transition">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bg-elevated)] empty-state-icon">
               <FileText size={24} className="text-[var(--text-muted)]" />
             </div>
             <div className="text-center">

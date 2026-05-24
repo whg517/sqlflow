@@ -253,7 +253,7 @@ function UserManagementTab() {
       accessorKey: 'username',
       header: '用户名',
       cell: ({ getValue }) => (
-        <span className="font-medium text-[var(--text-primary)]">{getValue() as string}</span>
+        <span className="block max-w-[120px] truncate font-medium text-[var(--text-primary)]">{getValue() as string}</span>
       ),
     },
     {
