@@ -213,10 +213,10 @@ export default function TicketPage() {
   const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-[calc(100%-48px)] flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3">
-        <h1 className="text-base font-semibold text-[var(--text-primary)]">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold text-[var(--text-primary)]">
           变更工单
         </h1>
         <Button
@@ -229,8 +229,10 @@ export default function TicketPage() {
         </Button>
       </div>
 
+      {/* Tabs + Filters + Table — all inside a card */}
+      <div className="flex-1 overflow-hidden rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] flex flex-col">
       {/* Tabs */}
-      <div className="border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6">
+      <div className="border-b border-[var(--border-default)] px-4 pt-3">
         <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList variant="line" className="h-9">
             {statusTabs.map((tab) => (
@@ -247,7 +249,7 @@ export default function TicketPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-2.5">
+      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-default)] px-4 py-2.5">
         {/* Quick scope */}
         <Button
           variant="ghost"
@@ -333,7 +335,7 @@ export default function TicketPage() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto bg-[var(--bg-base)] table-responsive">
+      <div className="flex-1 overflow-auto table-responsive">
         {loading && !tickets.length ? (
           <div className="flex h-32 items-center justify-center">
             <div className="flex flex-col items-center gap-3">
@@ -488,6 +490,7 @@ export default function TicketPage() {
           </div>
         </div>
       )}
+      </div>{/* end card container */}
 
       {/* Detail Drawer */}
       <TicketDetailDrawer

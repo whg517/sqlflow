@@ -663,9 +663,9 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("datasource");
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-[calc(100%-48px)]">
       {/* Left sidebar */}
-      <nav className="settings-sidebar w-44 shrink-0 border-r border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
+      <nav className="settings-sidebar w-44 shrink-0 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
         <h1 className="mb-4 px-3 text-xl font-semibold text-[var(--text-primary)]">
           设置
         </h1>
@@ -692,7 +692,7 @@ export default function SettingsPage() {
       </nav>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-6 bg-[var(--bg-base)]">
+      <div className="flex-1 overflow-auto rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] ml-4 p-6">
         {activeTab === "datasource" && <DataSourceTab />}
         {activeTab === "mask-rules" && <MaskRulesTab />}
         {activeTab === "ai-config" && <AIConfigTab />}

@@ -79,7 +79,7 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-[960px] p-6 page-transition">
+      <div className="mx-auto max-w-[960px] page-transition">
         <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-6">
           概览
         </h1>
@@ -100,7 +100,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-[960px] p-6">
+      <div className="mx-auto max-w-[960px]">
         <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-6">
           概览
         </h1>
@@ -126,7 +126,7 @@ export default function DashboardPage() {
 
   return (
     /* §3.2: centered content max-width 960px */
-    <div className="mx-auto max-w-[960px] space-y-8 p-6 page-transition dashboard-grid">
+    <div className="mx-auto max-w-[960px] space-y-8 page-transition dashboard-grid">
       <h1 className="text-xl font-semibold text-[var(--text-primary)]">概览</h1>
 
       {/* §3.2: grid grid-cols-2 gap-6 */}

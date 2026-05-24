@@ -346,7 +346,7 @@ export default function Layout() {
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
-        <main className="flex-1 overflow-auto bg-[var(--bg-base)] page-transition">
+        <main className="flex-1 overflow-auto bg-[var(--bg-base)] p-6 page-transition">
           <Outlet />
         </main>
       </div>

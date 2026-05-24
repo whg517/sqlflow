@@ -403,9 +403,9 @@ export default function UsersPage() {
   });
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-[calc(100%-48px)] flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-4">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
           <UsersIcon size={18} className="text-[var(--accent-primary)]" />
           <h1 className="text-xl font-semibold text-[var(--text-primary)]">
@@ -427,9 +427,9 @@ export default function UsersPage() {
         </Button>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto p-6 bg-[var(--bg-base)]">
-        <div className="space-y-4">
+      {/* Content — card wrapper */}
+      <div className="flex-1 overflow-auto rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)]">
+        <div className="p-4 space-y-4">
           {/* Search + Count */}
           <div className="flex items-center justify-between">
             <div className="relative w-64">
@@ -450,7 +450,7 @@ export default function UsersPage() {
           </div>
 
           {/* Table */}
-          <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)]">
+          <div className="overflow-hidden">
             <Table>
               <TableHeader>
                 {table.getHeaderGroups().map((hg) => (
