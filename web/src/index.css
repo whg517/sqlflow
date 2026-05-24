@@ -58,9 +58,9 @@
   --bg-sidebar: #09090b;       /* same as base, separated by border only */
 
   /* Border tokens — white opacity system (Vercel-style) */
-  --border-default: rgba(255, 255, 255, 0.08);
-  --border-subtle: rgba(255, 255, 255, 0.05);
-  --border-hover: rgba(255, 255, 255, 0.15);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.20);
 
   /* Text tokens — pure neutral gray */
   --text-primary: #fafafa;     /* zinc-50 */
@@ -87,11 +87,15 @@
   --risk-review: #8b5cf6;
   --risk-exec: #3b82f6;
 
-  /* Shadows — removed for dark theme, use border/bg hierarchy instead */
-  --shadow-sm: 0 0 0 0 transparent;
-  --shadow-md: 0 0 0 0 transparent;
-  --shadow-lg: 0 0 0 0 transparent;
-  --shadow-xl: 0 0 0 0 transparent;
+  /* Table zebra stripe */
+  --table-row-alt: rgba(255, 255, 255, 0.03);
+  --table-row-hover: rgba(255, 255, 255, 0.06);
+
+  /* Shadows — subtle elevation for dark theme */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.6);
 
   /* ===== Spacing tokens — UI-DESIGN-SPEC.md §1.4 ===== */
   --space-0-5: 2px;   /* gap-0.5  icon-text gap */
@@ -166,6 +170,10 @@
   --risk-high: #ef4444;
   --risk-review: #8b5cf6;
   --risk-exec: #3b82f6;
+
+  /* Table zebra stripe */
+  --table-row-alt: rgba(0, 0, 0, 0.03);
+  --table-row-hover: rgba(0, 0, 0, 0.06);
 
   /* Shadows — minimal for light theme */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);

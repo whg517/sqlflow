@@ -76,7 +76,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Username — §3.1: h-10 bg-elevated border-default */}
           <div>
             <Input

@@ -91,7 +91,7 @@ export default function DashboardPage() {
     return (
       <div className="mx-auto max-w-[960px] p-6">
         <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-6">概览</h1>
-        <div className="grid grid-cols-2 gap-4 skeleton-fade" data-loaded="false">
+        <div className="grid grid-cols-2 gap-6 skeleton-fade" data-loaded="false">
           {statCards.map((card) => (
             <Card key={card.key}>
               <CardContent className="flex items-center gap-4 py-4">
@@ -110,11 +110,11 @@ export default function DashboardPage() {
 
   return (
     /* §3.2: centered content max-width 960px */
-    <div className="mx-auto max-w-[960px] space-y-6 p-6 page-transition dashboard-grid">
+    <div className="mx-auto max-w-[960px] space-y-8 p-6 page-transition dashboard-grid">
       <h1 className="text-xl font-semibold text-[var(--text-primary)]">概览</h1>
 
-      {/* §3.2: grid grid-cols-2 gap-4 */}
-      <div className="grid grid-cols-2 gap-4 skeleton-fade" data-loaded="true">
+      {/* §3.2: grid grid-cols-2 gap-6 */}
+      <div className="grid grid-cols-2 gap-6 skeleton-fade" data-loaded="true">
         {statCards.map((card) => {
           const value = card.key === 'sensitive_tables'
             ? sensitiveCount

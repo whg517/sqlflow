@@ -385,7 +385,7 @@ function DataSourceTab() {
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-6">
               <div className="space-y-1.5">
                 <Label className="text-[var(--text-secondary)]">名称</Label>
                 <Input
@@ -412,7 +412,7 @@ function DataSourceTab() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-6">
               <div className="space-y-1.5">
                 <Label className="text-[var(--text-secondary)]">主机</Label>
                 <Input
@@ -435,7 +435,7 @@ function DataSourceTab() {
                 {errors.port && <p className="text-xs text-red-400">{errors.port}</p>}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-6">
               <div className="space-y-1.5">
                 <Label className="text-[var(--text-secondary)]">用户名</Label>
                 <Input
