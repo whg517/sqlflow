@@ -47,7 +47,7 @@ interface CurrentUser {
   role: string
 }
 
-// --- NavItem must be defined outside Layout to avoid react-hooks/static-components error ---
+// --- NavItem defined outside Layout to avoid react-hooks/static-components error ---
 
 interface NavItemProps {
   to: string
@@ -125,12 +125,13 @@ export default function Layout() {
 
   const sidebarWidth = collapsed ? 'w-[56px] min-w-[56px]' : 'w-[220px] min-w-[220px]'
 
+  // §2.2 Navigation item interaction
   const navLinkClass = (isActive: boolean) =>
     `flex items-center rounded-md no-underline transition-colors ${
       collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3.5 py-2.5 text-sm'
     } ${
       isActive
-        ? 'bg-[var(--accent-primary)]/10 font-medium text-[var(--accent-primary)]'
+        ? 'font-medium text-[var(--accent-primary)] bg-[var(--accent-muted)]'
         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
     }`
 
@@ -139,29 +140,27 @@ export default function Layout() {
       collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3.5 py-2.5 text-sm'
     } ${
       isSettingsActive
-        ? 'bg-[var(--accent-primary)]/10 font-medium text-[var(--accent-primary)]'
+        ? 'font-medium text-[var(--accent-primary)] bg-[var(--accent-muted)]'
         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
     }`
-
-
 
   return (
     <div className="flex h-full">
       {/* Network banner */}
       <NetworkBanner />
 
-      {/* Sidebar */}
+      {/* Sidebar — §2.1/2.2 */}
       <aside
-        className={`flex ${sidebarWidth} flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-sidebar)] transition-all duration-200`}
+        className={`flex ${sidebarWidth} flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-sidebar)] transition-[width] duration-200 ease-out`}
       >
-        {/* Brand */}
-        <div className="flex items-center gap-2.5 border-b border-[var(--border-subtle)] px-4 py-4 text-lg font-bold text-[var(--accent-primary)]">
+        {/* Brand — §2.2: height 56px, bottom 1px border-subtle */}
+        <div className="flex h-[56px] min-h-[56px] items-center gap-2.5 border-b border-[var(--border-subtle)] px-4 text-lg font-bold text-[var(--accent-primary)]">
           <Database size={24} className="shrink-0" />
           {!collapsed && <span>SQLFlow</span>}
         </div>
 
         {/* Navigation */}
-        <nav className="flex flex-1 flex-col gap-0.5 p-2">
+        <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-0.5 p-2">
           <NavItem to="/" icon={LayoutDashboard} label="概览" collapsed={collapsed} navLinkClass={navLinkClass} />
           <NavItem to="/query" icon={Database} label="查询" collapsed={collapsed} navLinkClass={navLinkClass} />
           <NavItem to="/tickets" icon={FileText} label="工单" collapsed={collapsed} navLinkClass={navLinkClass} />
@@ -174,7 +173,7 @@ export default function Layout() {
           {/* Separator */}
           <div className="my-1 border-t border-[var(--border-subtle)]" />
 
-          {/* Settings with submenu */}
+          {/* Settings with submenu — §2.2 */}
           {collapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -192,11 +191,12 @@ export default function Layout() {
               <span className="flex-1">设置</span>
               <ChevronDown
                 size={14}
-                className={`transition-transform ${settingsOpen ? 'rotate-180' : ''}`}
+                className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''}`}
               />
             </button>
           )}
 
+          {/* Settings submenu — §2.2: ml-4, border-l border-subtle */}
           {settingsOpen && !collapsed && (
             <div className="ml-4 flex flex-col gap-0.5 border-l border-[var(--border-subtle)] pl-2">
               {settingsSubItems.map((item) => (
@@ -219,7 +219,7 @@ export default function Layout() {
           )}
         </nav>
 
-        {/* Collapse toggle */}
+        {/* Collapse toggle — §2.2: border-t, icon swap */}
         <div className="border-t border-[var(--border-subtle)] p-2">
           <button
             onClick={toggleCollapse}
@@ -230,12 +230,14 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* Main area */}
+      {/* Main area — §2.3 */}
       <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Top bar — §2.3: h-52px, border-b border-default, bg-surface */}
         <header className="flex h-[52px] min-h-[52px] items-center justify-between border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6">
+          {/* Command palette trigger — §2.3 */}
           <button
             onClick={() => setCmdOpen(true)}
-            className="flex items-center gap-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-1.5 text-xs text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--text-secondary)]"
+            className="flex h-8 items-center gap-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-1.5 text-xs text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--text-secondary)]"
           >
             <Search size={14} />
             <span>搜索...</span>
@@ -244,7 +246,7 @@ export default function Layout() {
             </kbd>
           </button>
 
-          {/* Avatar dropdown */}
+          {/* Avatar dropdown — §2.3 */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-[var(--bg-elevated)]">

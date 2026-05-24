@@ -62,7 +62,7 @@ export default function ResizableSplit({
         {top}
       </div>
       <div
-        className={`relative z-10 h-[5px] shrink-0 cursor-row-resize border-y border-[var(--border-default)] bg-[var(--bg-elevated)] transition-colors hover:bg-[var(--accent-primary)]/30 ${
+        className={`relative z-10 h-[4px] shrink-0 cursor-row-resize border-y border-[var(--border-default)] bg-[var(--bg-elevated)] transition-colors hover:bg-[var(--accent-primary)]/30 ${
           dragging ? 'bg-[var(--accent-primary)]/30' : ''
         }`}
         onMouseDown={handleMouseDown}

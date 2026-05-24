@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { getDashboardStats, type DashboardStats } from '@/api/dashboard'
 import { listSensitiveTables } from '@/api/maskRule'
 
+/* §3.2: stat card config — icon color + bg matching spec */
 const statCards = [
   {
     key: 'pending_tickets' as const,
@@ -60,7 +61,6 @@ export default function DashboardPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // Fetch sensitive table count (independent of backend field)
   useEffect(() => {
     listSensitiveTables({ page_size: 1 })
       .then((res) => setSensitiveCount(res.total ?? 0))
@@ -70,29 +70,35 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
+        <Loader2 className="h-6 w-6 animate-spin text-[var(--text-muted)]" />
       </div>
     )
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
+    /* §3.2: centered content max-width 960px */
+    <div className="mx-auto max-w-[960px] space-y-6 p-6">
       <h1 className="text-xl font-semibold text-[var(--text-primary)]">概览</h1>
 
+      {/* §3.2: grid grid-cols-2 gap-4 */}
       <div className="grid grid-cols-2 gap-4">
         {statCards.map((card) => {
           const value = card.key === 'sensitive_tables'
-          ? sensitiveCount
-          : (stats?.[card.key] ?? 0)
+            ? sensitiveCount
+            : (stats?.[card.key] ?? 0)
           const Icon = card.icon
           const content = (
-            <Card className="cursor-pointer transition-shadow hover:shadow-md">
+            /* §3.2: Card rounded-lg hover:shadow-md transition-shadow cursor-pointer */
+            <Card className="cursor-pointer transition-shadow duration-150 hover:shadow-[var(--shadow-md)]">
               <CardContent className="flex items-center gap-4 py-4">
+                {/* §3.2: 40x40 rounded-lg icon with bg */}
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${card.bg}`}>
                   <Icon size={20} className={card.color} />
                 </div>
                 <div>
+                  {/* §3.2: text-2xl font-bold text-primary */}
                   <div className="text-2xl font-bold text-[var(--text-primary)]">{value}</div>
+                  {/* §3.2: text-sm text-secondary */}
                   <div className="text-sm text-[var(--text-secondary)]">{card.label}</div>
                 </div>
               </CardContent>

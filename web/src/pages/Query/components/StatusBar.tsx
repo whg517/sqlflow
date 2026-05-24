@@ -114,7 +114,8 @@ export default function StatusBar({
   }
 
   return (
-    <div className="flex items-center justify-between border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-1.5">
+    /* §3.4: h-7 border-t border-default bg-surface px-3 */
+    <div className="flex h-7 items-center justify-between border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-3">
       <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
         {/* Execute button */}
         <Button

@@ -6,7 +6,7 @@ import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { AIReviewResult, ReviewDecision } from '@/api/query'
 
-// --- Risk config ---
+// --- Risk config — §3.4 risk-level colors ---
 
 const riskConfig: Record<string, {
   label: string
@@ -18,24 +18,24 @@ const riskConfig: Record<string, {
 }> = {
   low: {
     label: '低风险',
-    color: 'text-green-400',
-    bgColor: 'bg-green-500/10',
-    borderColor: 'border-green-500/30',
+    color: 'text-emerald-400',
+    bgColor: 'bg-emerald-500/5',
+    borderColor: 'border-emerald-500/30',
     icon: ShieldCheck,
-    badgeClass: 'bg-green-500/20 text-green-400 border-green-500/30',
+    badgeClass: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
   },
   medium: {
     label: '中风险',
-    color: 'text-yellow-400',
-    bgColor: 'bg-yellow-500/10',
-    borderColor: 'border-yellow-500/30',
+    color: 'text-amber-400',
+    bgColor: 'bg-amber-500/5',
+    borderColor: 'border-amber-500/30',
     icon: Shield,
-    badgeClass: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+    badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
   },
   high: {
     label: '高风险',
     color: 'text-red-400',
-    bgColor: 'bg-red-500/10',
+    bgColor: 'bg-red-500/5',
     borderColor: 'border-red-500/30',
     icon: ShieldAlert,
     badgeClass: 'bg-red-500/20 text-red-400 border-red-500/30',
@@ -71,15 +71,15 @@ export default function AIReviewCard({
 
   if (status === 'idle') return null
 
-  // Reviewing state — pulsing animation with streaming content
+  // §3.4: Reviewing state — border-violet-500/30 bg-violet-500/5, streaming text
   if (status === 'reviewing') {
     return (
-      <div className="border-b border-[var(--border-default)] bg-[var(--bg-surface)]">
+      <div className="border-b border-violet-500/30 bg-violet-500/5">
         <div className="flex items-center gap-2 px-4 py-2.5">
           <div className="relative">
-            <Sparkles size={16} className="animate-pulse text-[var(--accent-primary)]" />
+            <Sparkles size={16} className="animate-pulse text-violet-400" />
           </div>
-          <span className="text-xs font-medium text-[var(--text-primary)]">AI 评审中...</span>
+          <span className="text-xs font-medium text-violet-400">AI 评审中...</span>
           <Loader2 size={12} className="animate-spin text-[var(--text-muted)]" />
           <div className="flex-1" />
           <Button
@@ -92,9 +92,9 @@ export default function AIReviewCard({
           </Button>
         </div>
         {streamingContent && (
-          <div className="border-t border-[var(--border-default)] px-4 py-2">
+          <div className="border-t border-violet-500/20 px-4 py-2">
             <ScrollArea className="max-h-24">
-              <pre className="whitespace-pre-wrap text-xs text-[var(--text-muted)] font-mono">
+              <pre className="whitespace-pre-wrap font-mono text-xs text-[var(--text-muted)]">
                 {streamingContent}
               </pre>
             </ScrollArea>
@@ -104,10 +104,10 @@ export default function AIReviewCard({
     )
   }
 
-  // Error state
+  // §3.4: Error state — border-red-500/30 bg-red-500/5
   if (status === 'error') {
     return (
-      <div className="border-b border-[var(--border-default)] bg-red-500/5">
+      <div className="border-b border-red-500/30 bg-red-500/5">
         <div className="flex items-center gap-2 px-4 py-2.5">
           <ShieldAlert size={16} className="text-red-400" />
           <span className="text-xs text-red-400">
@@ -127,7 +127,7 @@ export default function AIReviewCard({
     )
   }
 
-  // Done state — show result card
+  // Done state — show result card per risk level colors
   if (!result) return null
 
   const risk = riskConfig[result.risk_level] || riskConfig.medium
@@ -145,7 +145,7 @@ export default function AIReviewCard({
           {risk.label} ({result.risk_score})
         </Badge>
         {result.review_source !== 'ai' && (
-          <Badge variant="outline" className="text-[10px] bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]">
+          <Badge variant="outline" className="border-[var(--border-default)] bg-[var(--bg-elevated)] text-[10px] text-[var(--text-muted)]">
             {result.review_source === 'static' ? '静态规则' : '降级模式'}
           </Badge>
         )}
@@ -178,7 +178,7 @@ export default function AIReviewCard({
           {suggestionsOpen && (
             <ul className="mt-1.5 space-y-1 pl-4">
               {result.suggestions.map((s, i) => (
-                <li key={i} className="text-xs text-[var(--text-secondary)] list-disc">
+                <li key={i} className="list-disc text-xs text-[var(--text-secondary)]">
                   {s}
                 </li>
               ))}
@@ -199,7 +199,7 @@ export default function AIReviewCard({
       {result.warnings && result.warnings.length > 0 && (
         <div className="px-4 pb-2">
           {result.warnings.map((w, i) => (
-            <div key={i} className="text-xs text-yellow-400">
+            <div key={i} className="text-xs text-amber-400">
               ⚠ {w}
             </div>
           ))}
@@ -208,7 +208,7 @@ export default function AIReviewCard({
 
       <Separator className="bg-[var(--border-default)]" />
 
-      {/* Action buttons based on decision */}
+      {/* Action buttons per §3.4 decision flow */}
       <div className="flex items-center gap-2 px-4 py-2">
         <ActionButtons
           decision={result.decision}
@@ -223,7 +223,7 @@ export default function AIReviewCard({
   )
 }
 
-// --- Action Buttons Sub-component ---
+// --- Action Buttons — §3.4 decision flow ---
 
 function ActionButtons({
   decision,
@@ -242,15 +242,16 @@ function ActionButtons({
 }) {
   switch (decision) {
     case 'execute':
+      /* §3.4: low risk — ✓ 安全 — 自动执行中..., green */
       return (
         <>
-          <span className="text-xs text-green-400">
-            低风险查询，即将自动执行...
+          <span className="text-xs text-emerald-400">
+            ✓ 安全 — 自动执行中...
           </span>
           <div className="flex-1" />
           <Button
             size="sm"
-            className="h-6 gap-1 bg-green-600 px-3 text-xs text-white hover:bg-green-700"
+            className="h-7 gap-1 bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700"
             onClick={onAutoExecute}
           >
             立即执行
@@ -258,9 +259,10 @@ function ActionButtons({
         </>
       )
     case 'confirm':
+      /* §3.4: medium risk — confirm + submit ticket buttons */
       return (
         <>
-          <span className="text-xs text-yellow-400">
+          <span className="text-xs text-amber-400">
             {riskLevel === 'high'
               ? '高风险查询，请确认后执行'
               : '需要确认后执行'}
@@ -269,21 +271,30 @@ function ActionButtons({
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-xs text-[var(--text-muted)]"
+            className="h-7 px-2 text-xs text-[var(--text-muted)]"
             onClick={onDismiss}
           >
             取消
           </Button>
           <Button
             size="sm"
-            className="h-6 gap-1 bg-[var(--accent-primary)] px-3 text-xs text-white hover:bg-[var(--accent-hover)]"
+            className="h-7 gap-1 bg-[var(--accent-primary)] px-3 text-xs text-white hover:bg-[var(--accent-hover)]"
             onClick={onConfirm}
           >
             确认执行
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 border-amber-500/50 px-3 text-xs text-amber-400 hover:bg-amber-500/10"
+            onClick={onSubmitTicket}
+          >
+            提交工单
+          </Button>
         </>
       )
     case 'ticket':
+      /* §3.4: high risk — submit ticket button */
       return (
         <>
           <span className="text-xs text-red-400">
@@ -293,14 +304,14 @@ function ActionButtons({
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-xs text-[var(--text-muted)]"
+            className="h-7 px-2 text-xs text-[var(--text-muted)]"
             onClick={onDismiss}
           >
             取消
           </Button>
           <Button
             size="sm"
-            className="h-6 gap-1 bg-red-600 px-3 text-xs text-white hover:bg-red-700"
+            className="h-7 gap-1 bg-red-600 px-3 text-xs text-white hover:bg-red-700"
             onClick={onSubmitTicket}
           >
             提交工单
@@ -317,7 +328,7 @@ function ActionButtons({
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-xs text-[var(--text-muted)]"
+            className="h-7 px-2 text-xs text-[var(--text-muted)]"
             onClick={onDismiss}
           >
             关闭
@@ -331,7 +342,7 @@ function ActionButtons({
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-xs text-[var(--text-muted)]"
+            className="h-7 px-2 text-xs text-[var(--text-muted)]"
             onClick={onDismiss}
           >
             关闭

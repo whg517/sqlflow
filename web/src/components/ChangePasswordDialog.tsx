@@ -101,13 +101,18 @@ export default function ChangePasswordDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* §4.4/4.9: max-w-md */}
       <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          {/* §4.9: text-lg font-semibold */}
+          <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
             <KeyRound size={18} />
             修改密码
           </DialogTitle>
-          <DialogDescription>请输入当前密码并设置新密码</DialogDescription>
+          {/* §4.9: text-sm text-secondary */}
+          <DialogDescription className="text-sm text-[var(--text-secondary)]">
+            请输入当前密码并设置新密码
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="grid gap-4">
@@ -122,7 +127,7 @@ export default function ChangePasswordDialog({ open, onOpenChange }: Props) {
               placeholder="请输入当前密码"
             />
             {errors.oldPassword && (
-              <p className="text-xs text-red-500">{errors.oldPassword}</p>
+              <p className="text-xs text-[var(--danger)]">{errors.oldPassword}</p>
             )}
           </div>
 
@@ -138,7 +143,7 @@ export default function ChangePasswordDialog({ open, onOpenChange }: Props) {
               placeholder="8-128 字符，需包含字母和数字"
             />
             {errors.newPassword && (
-              <p className="text-xs text-red-500">{errors.newPassword}</p>
+              <p className="text-xs text-[var(--danger)]">{errors.newPassword}</p>
             )}
           </div>
 
@@ -154,10 +159,11 @@ export default function ChangePasswordDialog({ open, onOpenChange }: Props) {
               placeholder="再次输入新密码"
             />
             {errors.confirmPassword && (
-              <p className="text-xs text-red-500">{errors.confirmPassword}</p>
+              <p className="text-xs text-[var(--danger)]">{errors.confirmPassword}</p>
             )}
           </div>
 
+          {/* §4.9: footer right-aligned, gap-2, cancel (outline) + confirm (accent-primary) */}
           <DialogFooter>
             <Button
               type="button"
@@ -167,7 +173,10 @@ export default function ChangePasswordDialog({ open, onOpenChange }: Props) {
             >
               取消
             </Button>
-            <Button type="submit" disabled={submitting}>
+            <Button
+              type="submit"
+              loading={submitting}
+            >
               {submitting ? '保存中...' : '保存修改'}
             </Button>
           </DialogFooter>
