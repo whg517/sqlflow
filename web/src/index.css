@@ -181,12 +181,7 @@
   --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
   --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.10);
 }
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
+/* Reset handled by Tailwind v4 preflight — removed manual * { margin: 0; padding: 0 } */
 html, body, #root {
   height: 100%;
   font-family: var(--font-sans);
