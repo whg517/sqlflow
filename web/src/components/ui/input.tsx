@@ -32,7 +32,7 @@ function Input({
         data-slot="input"
         data-size={inputSize}
         className={cn(
-          "w-full min-w-0 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-1 text-sm text-[var(--text-primary)] shadow-xs transition-[color,box-shadow] outline-none placeholder:text-[var(--text-muted)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+          "w-full min-w-0 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text-primary)] shadow-xs transition-[color,box-shadow] outline-none placeholder:text-[var(--text-muted)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
           "focus-visible:border-[var(--accent-primary)] focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)]",
           "aria-invalid:border-[var(--danger)]",
           inputSize === "compact" ? "h-7 text-xs" : "h-9",

@@ -196,12 +196,12 @@ export default function TicketPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-2">
+      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-2.5">
         {/* Quick scope */}
         <Button
           variant="ghost"
           size="sm"
-          className={`h-7 px-2 text-xs ${scopeFilter === 'mine' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}
+          className={`h-8 px-3 text-sm ${scopeFilter === 'mine' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}
           onClick={() => {
             setScopeFilter(scopeFilter === 'mine' ? '' : 'mine')
             setPage(1)
@@ -213,7 +213,7 @@ export default function TicketPage() {
           <Button
             variant="ghost"
             size="sm"
-            className={`h-7 px-2 text-xs ${scopeFilter === 'pending' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}
+            className={`h-8 px-3 text-sm ${scopeFilter === 'pending' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}
             onClick={() => {
               setScopeFilter(scopeFilter === 'pending' ? '' : 'pending')
               setPage(1)
@@ -227,7 +227,7 @@ export default function TicketPage() {
 
         {/* Datasource filter */}
         <Select value={datasourceFilter} onValueChange={(v) => { setDatasourceFilter(v === '__all__' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-7 w-32 border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
+          <SelectTrigger className="h-8 w-36 border-[var(--border-default)] bg-[var(--bg-elevated)] text-sm">
             <SelectValue placeholder="数据源" />
           </SelectTrigger>
           <SelectContent>
@@ -240,7 +240,7 @@ export default function TicketPage() {
 
         {/* Risk filter */}
         <Select value={riskFilter} onValueChange={(v) => { setRiskFilter(v === '__all__' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-7 w-28 border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
+          <SelectTrigger className="h-8 w-32 border-[var(--border-default)] bg-[var(--bg-elevated)] text-sm">
             <SelectValue placeholder="AI 风险" />
           </SelectTrigger>
           <SelectContent>
@@ -253,13 +253,13 @@ export default function TicketPage() {
 
         {/* Search */}
         <div className="relative ml-auto">
-          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder="搜索 SQL 内容..."
-            className="h-7 w-48 rounded-md border-[var(--border-default)] bg-[var(--bg-elevated)] pl-7 pr-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+            className="h-8 w-52 rounded-md border-[var(--border-default)] bg-[var(--bg-elevated)] pl-8 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
           />
         </div>
       </div>

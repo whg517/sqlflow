@@ -91,10 +91,10 @@ export default function DashboardPage() {
     return (
       <div className="mx-auto max-w-[960px] p-6">
         <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-6">概览</h1>
-        <div className="grid grid-cols-2 gap-4 skeleton-fade" data-loaded="false">
+        <div className="grid grid-cols-2 gap-5 skeleton-fade" data-loaded="false">
           {statCards.map((card) => (
             <Card key={card.key}>
-              <CardContent className="flex items-center gap-4 py-4">
+              <CardContent className="flex items-center gap-5 py-5">
                 <div className="h-10 w-10 rounded-lg bg-[var(--bg-elevated)] animate-pulse" />
                 <div className="flex-1 space-y-2">
                   <div className="h-6 w-16 rounded bg-[var(--bg-elevated)] animate-pulse" />
@@ -114,7 +114,7 @@ export default function DashboardPage() {
       <h1 className="text-xl font-semibold text-[var(--text-primary)]">概览</h1>
 
       {/* §3.2: grid grid-cols-2 gap-4 */}
-      <div className="grid grid-cols-2 gap-4 skeleton-fade" data-loaded="true">
+      <div className="grid grid-cols-2 gap-5 skeleton-fade" data-loaded="true">
         {statCards.map((card) => {
           const value = card.key === 'sensitive_tables'
             ? sensitiveCount
@@ -123,7 +123,7 @@ export default function DashboardPage() {
           const content = (
             /* §3.2: Card rounded-lg hover:shadow-md transition-shadow cursor-pointer */
             <Card className="cursor-pointer transition-shadow duration-150 hover:shadow-[var(--shadow-md)]">
-              <CardContent className="flex items-center gap-4 py-4">
+              <CardContent className="flex items-center gap-5 py-5">
                 {/* §3.2: 40x40 rounded-lg icon with bg */}
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${card.bg}`}>
                   <Icon size={20} className={card.color} />

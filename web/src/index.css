@@ -91,6 +91,39 @@
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.6);
   --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.7);
+
+  /* ===== Spacing tokens — UI-DESIGN-SPEC.md §1.4 ===== */
+  --space-0-5: 2px;   /* gap-0.5  icon-text gap */
+  --space-1: 4px;     /* gap-1    compact element gap */
+  --space-1-5: 6px;   /* gap-1.5  form item inner */
+  --space-2: 8px;     /* gap-2    general element gap */
+  --space-3: 12px;    /* gap-3    form group gap */
+  --space-4: 16px;    /* gap-4    card inner padding */
+  --space-5: 20px;    /* gap-5    section gap */
+  --space-6: 24px;    /* gap-6    page section gap */
+  --space-8: 32px;    /* gap-8    page large whitespace */
+
+  /* ===== Typography tokens — UI-DESIGN-SPEC.md §1.3 ===== */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
+
+  /* ===== Layout constants — UI-DESIGN-SPEC.md §1.4 ===== */
+  --sidebar-expanded: 220px;
+  --sidebar-collapsed: 56px;
+  --topbar-height: 52px;
+  --page-padding: 24px;
+  --card-padding: 20px;
+  --table-row-height: 40px;
+  --table-header-height: 36px;
 }
 
 [data-theme='light'] {
@@ -139,7 +172,6 @@
   --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
   --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.15);
 }
-
 * {
   margin: 0;
   padding: 0;
@@ -150,6 +182,7 @@ html, body, #root {
   height: 100%;
   font-family: var(--font-sans);
   font-size: 14px;
+  line-height: 1.5;
   background: var(--bg-base);
   color: var(--text-primary);
 }

@@ -457,7 +457,7 @@ export default function MongoEditor({
   return (
     <div className="flex h-full flex-col gap-0 overflow-hidden bg-[var(--bg-surface)]">
       {/* Controls bar */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-default)] px-3 py-2">
+      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-default)] px-4 py-2.5">
         {/* Collection input with autocomplete */}
         <div className="relative">
           <input
@@ -479,7 +479,7 @@ export default function MongoEditor({
               }, 200)
             }}
             placeholder="集合名 (collection)"
-            className="h-7 w-48 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]"
+            className="h-8 w-52 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]"
           />
           {/* Collection suggestions dropdown */}
           {collectionInputFocus && collectionSuggestionsOpen && filteredCollections.length > 0 && (
@@ -504,7 +504,7 @@ export default function MongoEditor({
 
         {/* Operation type */}
         <Select value={operation} onValueChange={(v) => onOperationChange(v as MongoOperation)}>
-          <SelectTrigger className="h-7 w-32 border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
+          <SelectTrigger className="h-8 w-36 border-[var(--border-default)] bg-[var(--bg-elevated)] text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

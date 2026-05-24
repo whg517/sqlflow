@@ -274,7 +274,7 @@ function UserManagementTab() {
               }}
               disabled={editLoading}
             >
-              <SelectTrigger className="h-7 w-28 text-xs">
+              <SelectTrigger className="h-8 w-32 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

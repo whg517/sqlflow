@@ -264,7 +264,7 @@ export default function QueryPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar: datasource selectors + history button */}
-      <div className="flex items-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2">
+      <div className="flex items-center gap-3 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2.5">
         <Select
           value={activeTab?.datasourceId ? String(activeTab.datasourceId) : ''}
           onValueChange={(v) => {
@@ -272,7 +272,7 @@ export default function QueryPage() {
             updateTabDatasource(activeTab.id, Number(v), ds?.type === 'mysql' ? activeTab.database : activeTab.database, ds?.type ?? '')
           }}
         >
-          <SelectTrigger className="h-7 w-48 border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
+          <SelectTrigger className="h-8 w-48 border-[var(--border-default)] bg-[var(--bg-elevated)] text-sm">
             <SelectValue placeholder="选择数据源" />
           </SelectTrigger>
           <SelectContent>
@@ -293,7 +293,7 @@ export default function QueryPage() {
           value={activeTab?.database ?? ''}
           onChange={(e) => updateTabDatasource(activeTab.id, activeTab.datasourceId, e.target.value, activeTab.datasourceType)}
           placeholder={isMongo ? 'Database' : '数据库名'}
-          className="h-7 w-36 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]"
+          className="h-8 w-36 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]"
         />
 
         {/* DB type indicator */}
@@ -310,7 +310,7 @@ export default function QueryPage() {
           <Button
             variant="ghost"
             size="sm"
-            className={`h-7 gap-1 px-2 text-xs ${historyOpen ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}
+            className={`h-8 gap-1 px-2.5 text-sm ${historyOpen ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}
             onClick={() => setHistoryOpen(!historyOpen)}
           >
             <Clock size={14} />

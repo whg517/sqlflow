@@ -460,7 +460,7 @@ export default function AuditPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-2.5">
+      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-2.5">
         {/* User filter */}
         <Select value={userFilter} onValueChange={(v) => { setUserFilter(v === '__all__' ? '' : v); setPage(1) }}>
           <SelectTrigger className="h-8 w-[120px] border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">

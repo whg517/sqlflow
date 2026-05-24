@@ -115,14 +115,14 @@ export default function StatusBar({
 
   return (
     /* §3.4: h-7 border-t border-default bg-surface px-3 */
-    <div className="flex h-7 items-center justify-between border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-3">
+    <div className="flex h-8 items-center justify-between border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-3">
       <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
         {/* Execute button */}
         <Button
           size="sm"
           disabled={!canExecute}
           onClick={onExecute}
-          className="h-6 gap-1 bg-[var(--accent-primary)] px-3 text-xs text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
+          className="h-7 gap-1 bg-[var(--accent-primary)] px-3 text-xs text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
         >
           {executing ? (
             <>
@@ -215,7 +215,7 @@ export default function StatusBar({
             variant="ghost"
             size="sm"
             disabled={!hasResult || exporting}
-            className="h-6 gap-1 px-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-30"
+            className="h-7 gap-1 px-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-30"
           >
             {exporting ? (
               <>
