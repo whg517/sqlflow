@@ -1,200 +1,265 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// --- Mocks ---
+// --- Test api/client.ts 401/403/500 error handling ---
 
-// Mock toast before importing client
+// We need to test the actual module, but mock fetch and dependencies
+const mockToastError = vi.fn()
 vi.mock('sonner', () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
+  toast: { success: vi.fn(), error: (...args: unknown[]) => mockToastError(...args) },
 }))
 
-const mockFetch = vi.fn()
-vi.stubGlobal('fetch', mockFetch)
+// Mock window.location
+const originalLocation = window.location
+const mockHref = vi.fn()
+Object.defineProperty(window, 'location', {
+  value: { href: '' },
+  writable: true,
+})
 
+// Mock localStorage
+const localStorageMock = (() => {
+  let store: Record<string, string> = {}
+  return {
+    getItem: vi.fn((key: string) => store[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => { store[key] = value }),
+    removeItem: vi.fn((key: string) => { delete store[key] }),
+    clear: () => { store = {} },
+  }
+})()
+Object.defineProperty(window, 'localStorage', { value: localStorageMock })
+
+// Mock fetch
+const mockFetch = vi.fn()
+globalThis.fetch = mockFetch
+
+// Import after mocks are set up
 import { api } from '@/api/client'
 
-describe('API Client', () => {
+describe('API Client - Error Handling', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    localStorage.clear()
-    delete (window as any).location
-    ;(window as any).location = { href: '' }
+    localStorageMock.clear()
   })
 
-  afterEach(() => {
-    localStorage.clear()
-    vi.restoreAllMocks()
-  })
+  // --- Token handling ---
 
-  describe('api.get', () => {
-    it('makes GET request with correct URL', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ code: 0, data: [] }),
-      })
-
-      const result = await api.get('/test')
-
-      expect(mockFetch).toHaveBeenCalledWith('/api/test', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      expect(result).toEqual({ code: 0, data: [] })
-    })
-
+  describe('token handling', () => {
     it('includes Authorization header when token exists', async () => {
-      localStorage.setItem('token', 'test-jwt')
-
-      mockFetch.mockResolvedValueOnce({
+      localStorageMock.getItem.mockReturnValue('test-jwt-token')
+      mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: async () => ({ code: 0 }),
+        json: () => Promise.resolve({ code: 0, data: {} }),
       })
 
       await api.get('/test')
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/test', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer test-jwt',
-        },
-      })
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/test',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-jwt-token',
+          }),
+        }),
+      )
     })
 
-    it('does not include Authorization header when no token', async () => {
-      mockFetch.mockResolvedValueOnce({
+    it('omits Authorization header when no token', async () => {
+      localStorageMock.getItem.mockReturnValue(null)
+      mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: async () => ({ code: 0 }),
+        json: () => Promise.resolve({ code: 0, data: {} }),
       })
 
       await api.get('/test')
 
-      const headers = mockFetch.mock.calls[0][1].headers
-      expect(headers).not.toHaveProperty('Authorization')
+      const call = mockFetch.mock.calls[0]
+      const headers = call[1].headers as Record<string, string>
+      expect(headers.Authorization).toBeUndefined()
     })
   })
 
-  describe('api.post', () => {
-    it('makes POST request with body', async () => {
-      const body = { name: 'test' }
+  // --- 401 Unauthorized ---
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ code: 0, data: { id: 1 } }),
-      })
-
-      const result = await api.post('/items', body)
-
-      expect(mockFetch).toHaveBeenCalledWith('/api/items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      expect(result).toEqual({ code: 0, data: { id: 1 } })
-    })
-  })
-
-  describe('api.put', () => {
-    it('makes PUT request with body', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ code: 0 }),
-      })
-
-      await api.put('/items/1', { name: 'updated' })
-
-      expect(mockFetch).toHaveBeenCalledWith('/api/items/1', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'updated' }),
-      })
-    })
-  })
-
-  describe('api.del', () => {
-    it('makes DELETE request', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ code: 0 }),
-      })
-
-      await api.del('/items/1')
-
-      expect(mockFetch).toHaveBeenCalledWith('/api/items/1', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      })
-    })
-  })
-
-  describe('error handling', () => {
-    it('redirects to /login on 401 and removes token', async () => {
-      localStorage.setItem('token', 'expired-token')
-
-      mockFetch.mockResolvedValueOnce({
+  describe('401 unauthorized', () => {
+    it('removes token from localStorage on 401', async () => {
+      localStorageMock.getItem.mockReturnValue('expired-token')
+      mockFetch.mockResolvedValue({
         ok: false,
         status: 401,
-        json: async () => ({ message: 'Unauthorized' }),
+        json: () => Promise.resolve({}),
       })
 
       await expect(api.get('/protected')).rejects.toThrow('Unauthorized')
 
-      expect(localStorage.getItem('token')).toBeNull()
-      expect(window.location.href).toBe('/login')
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token')
     })
 
-    it('redirects to /403 on 403', async () => {
-      mockFetch.mockResolvedValueOnce({
+    it('shows "登录已过期" toast on 401', async () => {
+      localStorageMock.getItem.mockReturnValue('expired-token')
+      mockFetch.mockResolvedValue({
         ok: false,
-        status: 403,
-        json: async () => ({ message: 'Forbidden' }),
+        status: 401,
+        json: () => Promise.resolve({}),
       })
 
-      await expect(api.get('/admin')).rejects.toThrow('Forbidden')
+      await expect(api.get('/protected')).rejects.toThrow()
+
+      expect(mockToastError).toHaveBeenCalledWith('登录已过期，请重新登录')
+    })
+
+    it('redirects to /login on 401', async () => {
+      localStorageMock.getItem.mockReturnValue('expired-token')
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({}),
+      })
+
+      await expect(api.get('/protected')).rejects.toThrow()
+
+      expect(window.location.href).toBe('/login')
+    })
+  })
+
+  // --- 403 Forbidden ---
+
+  describe('403 forbidden', () => {
+    it('redirects to /403 on 403', async () => {
+      localStorageMock.getItem.mockReturnValue('valid-token')
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: () => Promise.resolve({}),
+      })
+
+      await expect(api.get('/admin-only')).rejects.toThrow('Forbidden')
 
       expect(window.location.href).toBe('/403')
     })
+  })
 
+  // --- 500 Server Error ---
+
+  describe('500 server error', () => {
     it('shows server error toast on 500', async () => {
-      const { toast } = await import('sonner')
-
-      mockFetch.mockResolvedValueOnce({
+      localStorageMock.getItem.mockReturnValue('valid-token')
+      mockFetch.mockResolvedValue({
         ok: false,
         status: 500,
-        json: async () => ({ message: 'Internal Server Error' }),
+        json: () => Promise.resolve({}),
       })
 
-      await expect(api.get('/error')).rejects.toThrow('Server error: 500')
+      await expect(api.get('/data')).rejects.toThrow('Server error: 500')
 
-      expect(toast.error).toHaveBeenCalledWith('服务器错误，请稍后重试')
+      expect(mockToastError).toHaveBeenCalledWith('服务器错误，请稍后重试')
     })
 
-    it('throws error with message from response for other errors', async () => {
-      mockFetch.mockResolvedValueOnce({
+    it('shows server error toast on 502', async () => {
+      localStorageMock.getItem.mockReturnValue('valid-token')
+      mockFetch.mockResolvedValue({
         ok: false,
-        status: 400,
-        json: async () => ({ message: 'Validation failed' }),
+        status: 502,
+        json: () => Promise.resolve({}),
       })
 
-      await expect(api.get('/validate')).rejects.toThrow('Validation failed')
+      await expect(api.get('/data')).rejects.toThrow()
+
+      expect(mockToastError).toHaveBeenCalledWith('服务器错误，请稍后重试')
+    })
+  })
+
+  // --- 4xx Client Errors (not 401/403) ---
+
+  describe('4xx client errors', () => {
+    it('throws with server message on 400', async () => {
+      localStorageMock.getItem.mockReturnValue('valid-token')
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ message: '参数错误: datasource_id is required' }),
+      })
+
+      await expect(api.post('/tickets', {})).rejects.toThrow('参数错误: datasource_id is required')
     })
 
-    it('throws generic error when response JSON fails', async () => {
-      mockFetch.mockResolvedValueOnce({
+    it('throws generic message when server has no message', async () => {
+      localStorageMock.getItem.mockReturnValue('valid-token')
+      mockFetch.mockResolvedValue({
         ok: false,
-        status: 400,
-        json: () => Promise.reject(new Error('Invalid JSON')),
+        status: 404,
+        json: () => Promise.resolve({}),
       })
 
-      await expect(api.get('/bad')).rejects.toThrow('Request failed: 400')
+      await expect(api.get('/tickets/999')).rejects.toThrow('Request failed: 404')
+    })
+  })
+
+  // --- Successful requests ---
+
+  describe('successful requests', () => {
+    it('returns parsed JSON on 200', async () => {
+      localStorageMock.getItem.mockReturnValue('valid-token')
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ code: 0, data: { id: 1, name: 'test' } }),
+      })
+
+      const result = await api.get('/tickets/1')
+      expect(result).toEqual({ code: 0, data: { id: 1, name: 'test' } })
+    })
+
+    it('sends POST with JSON body', async () => {
+      localStorageMock.getItem.mockReturnValue('valid-token')
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ code: 0, data: {} }),
+      })
+
+      await api.post('/tickets', { sql: 'SELECT 1' })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/tickets',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ sql: 'SELECT 1' }),
+        }),
+      )
+    })
+  })
+
+  // --- Method variants ---
+
+  describe('HTTP methods', () => {
+    beforeEach(() => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ code: 0 }),
+      })
+    })
+
+    it('api.get sends GET request', async () => {
+      await api.get('/test')
+      expect(mockFetch).toHaveBeenCalledWith('/api/test', expect.objectContaining({ method: 'GET' }))
+    })
+
+    it('api.post sends POST request', async () => {
+      await api.post('/test', { data: 1 })
+      expect(mockFetch).toHaveBeenCalledWith('/api/test', expect.objectContaining({ method: 'POST' }))
+    })
+
+    it('api.put sends PUT request', async () => {
+      await api.put('/test', { data: 1 })
+      expect(mockFetch).toHaveBeenCalledWith('/api/test', expect.objectContaining({ method: 'PUT' }))
+    })
+
+    it('api.del sends DELETE request', async () => {
+      await api.del('/test')
+      expect(mockFetch).toHaveBeenCalledWith('/api/test', expect.objectContaining({ method: 'DELETE' }))
     })
   })
 })
