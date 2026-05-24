@@ -40,57 +40,58 @@
   --color-sidebar-ring: var(--accent-primary);
   --radius-sm: 4px;
   --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 }
 
 :root {
-  /* ===== Dark theme (default) — UI-DESIGN-SPEC.md §1.2 ===== */
+  /* ===== Dark theme (default) — Visual Refresh 2026-05-24 ===== */
+  /* Pure neutral zinc palette — zero blue/purple shift */
 
-  /* Background tokens */
-  --bg-base: #0a0a0f;
-  --bg-surface: #111118;
-  --bg-elevated: #1a1a24;
-  --bg-hover: #22222e;
-  --bg-sidebar: #08080d;
+  /* Background tokens — zinc scale, clear hierarchy */
+  --bg-base: #09090b;          /* zinc-950 */
+  --bg-surface: #18181b;       /* zinc-900 — panels, cards, header */
+  --bg-elevated: #27272a;      /* zinc-800 — inputs, popovers */
+  --bg-hover: #3f3f46;         /* zinc-700 — hover states */
+  --bg-sidebar: #09090b;       /* same as base, separated by border only */
 
-  /* Border tokens */
-  --border-default: #27272f;
-  --border-subtle: #1e1e28;
-  --border-hover: #3a3a4a;
+  /* Border tokens — white opacity system (Vercel-style) */
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-hover: rgba(255, 255, 255, 0.15);
 
-  /* Text tokens */
-  --text-primary: #ededf0;
-  --text-secondary: #9b9ba8;
-  --text-tertiary: #6e6e80;
-  --text-muted: #4e4e60;
+  /* Text tokens — pure neutral gray */
+  --text-primary: #fafafa;     /* zinc-50 */
+  --text-secondary: #a1a1aa;   /* zinc-400 */
+  --text-tertiary: #71717a;    /* zinc-500 */
+  --text-muted: #52525b;       /* zinc-600 */
 
-  /* Accent tokens */
-  --accent-primary: #f97316;
-  --accent-hover: #fb923c;
-  --accent-muted: rgba(249, 115, 22, 0.12);
+  /* Accent tokens — orange, more restrained */
+  --accent-primary: #ea580c;   /* orange-600 — deeper, less garish */
+  --accent-hover: #c2410c;     /* orange-700 */
+  --accent-muted: rgba(234, 88, 12, 0.10);  /* 10% instead of 12% */
   --accent-secondary: #8b5cf6;
 
-  /* Functional colors */
+  /* Functional colors — unchanged */
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
   --info: #3b82f6;
 
-  /* Risk level colors */
+  /* Risk level colors — unchanged */
   --risk-low: #10b981;
   --risk-medium: #f59e0b;
   --risk-high: #ef4444;
   --risk-review: #8b5cf6;
   --risk-exec: #3b82f6;
 
-  /* Shadows (dark mode: higher opacity) */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.6);
-  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.7);
+  /* Shadows — removed for dark theme, use border/bg hierarchy instead */
+  --shadow-sm: 0 0 0 0 transparent;
+  --shadow-md: 0 0 0 0 transparent;
+  --shadow-lg: 0 0 0 0 transparent;
+  --shadow-xl: 0 0 0 0 transparent;
 
   /* ===== Spacing tokens — UI-DESIGN-SPEC.md §1.4 ===== */
   --space-0-5: 2px;   /* gap-0.5  icon-text gap */
@@ -166,11 +167,11 @@
   --risk-review: #8b5cf6;
   --risk-exec: #3b82f6;
 
-  /* Shadows (light mode: lower opacity) */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
-  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.15);
+  /* Shadows — minimal for light theme */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.10);
 }
 * {
   margin: 0;

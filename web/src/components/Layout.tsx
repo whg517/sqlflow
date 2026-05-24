@@ -125,14 +125,14 @@ export default function Layout() {
 
   const sidebarWidth = collapsed ? 'w-[56px] min-w-[56px]' : 'w-[220px] min-w-[220px]'
 
-  // §2.2 Navigation item interaction
+  // §2.2 Navigation item interaction — clean indicator style
   const navLinkClass = (isActive: boolean) =>
     `flex items-center rounded-md no-underline transition-colors ${
       collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3.5 py-2.5 text-sm'
     } ${
       isActive
-        ? 'font-medium text-[var(--accent-primary)] bg-[var(--accent-muted)]'
-        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
+        ? 'font-medium text-[var(--accent-primary)] bg-[var(--accent-muted)] border-l-2 border-[var(--accent-primary)]'
+        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] border-l-2 border-transparent'
     }`
 
   const settingsButtonClass = () =>
@@ -140,8 +140,8 @@ export default function Layout() {
       collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3.5 py-2.5 text-sm'
     } ${
       isSettingsActive
-        ? 'font-medium text-[var(--accent-primary)] bg-[var(--accent-muted)]'
-        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]'
+        ? 'font-medium text-[var(--accent-primary)] bg-[var(--accent-muted)] border-l-2 border-[var(--accent-primary)]'
+        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] border-l-2 border-transparent'
     }`
 
   return (
@@ -160,7 +160,7 @@ export default function Layout() {
         </div>
 
         {/* Navigation */}
-        <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-0.5 p-2">
+        <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-0.5 p-2 pl-0">
           <NavItem to="/" icon={LayoutDashboard} label="概览" collapsed={collapsed} navLinkClass={navLinkClass} />
           <NavItem to="/query" icon={Database} label="查询" collapsed={collapsed} navLinkClass={navLinkClass} />
           <NavItem to="/tickets" icon={FileText} label="工单" collapsed={collapsed} navLinkClass={navLinkClass} />
