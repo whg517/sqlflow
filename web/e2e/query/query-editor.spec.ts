@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { mockApiRoutes, loginViaUI, MOCK_QUERY_RESULT, MOCK_DATASOURCES } from '../../e2e/helpers'
+import { mockApiRoutes, loginViaUI, MOCK_QUERY_RESULT, MOCK_DATASOURCES } from '../helpers'
 
 test.describe('查询编辑器', () => {
   test.beforeEach(async ({ page }) => {
