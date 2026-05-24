@@ -11,14 +11,14 @@ import (
 type MaskType string
 
 const (
-	MaskPhone     MaskType = "phone"
-	MaskIDCard    MaskType = "id_card"
-	MaskName      MaskType = "name"
-	MaskEmail     MaskType = "email"
-	MaskBankCard  MaskType = "bank_card"
-	MaskAddress   MaskType = "address"
-	MaskFull      MaskType = "full"
-	MaskCustom    MaskType = "custom"
+	MaskPhone    MaskType = "phone"
+	MaskIDCard   MaskType = "id_card"
+	MaskName     MaskType = "name"
+	MaskEmail    MaskType = "email"
+	MaskBankCard MaskType = "bank_card"
+	MaskAddress  MaskType = "address"
+	MaskFull     MaskType = "full"
+	MaskCustom   MaskType = "custom"
 )
 
 // Rule defines a masking rule for a specific field.

@@ -11,11 +11,11 @@ import (
 type OperationType string
 
 const (
-	OpSelect  OperationType = "select"
-	OpDDL     OperationType = "ddl"
-	OpDML     OperationType = "dml"
-	OpUpdate  OperationType = "update"
-	OpDelete  OperationType = "delete"
+	OpSelect OperationType = "select"
+	OpDDL    OperationType = "ddl"
+	OpDML    OperationType = "dml"
+	OpUpdate OperationType = "update"
+	OpDelete OperationType = "delete"
 )
 
 // RiskLevel represents the risk level of a SQL operation.

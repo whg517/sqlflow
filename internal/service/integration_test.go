@@ -111,7 +111,7 @@ func TestIntegration_TicketLifecycleWithAudit(t *testing.T) {
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 
 		// Step 3: DBA approves
-		ticket, err = ticketSvc.ApproveTicket(context.Background(),ticket.ID, dbaID, "dba", "LGTM")
+		ticket, err = ticketSvc.ApproveTicket(context.Background(), ticket.ID, dbaID, "dba", "LGTM")
 		if err != nil {
 			t.Fatalf("ApproveTicket: %v", err)
 		}
@@ -123,7 +123,7 @@ func TestIntegration_TicketLifecycleWithAudit(t *testing.T) {
 		}
 
 		// Step 4: Developer executes
-		ticket, err = ticketSvc.ExecuteTicket(context.Background(),ticket.ID, devID, "developer", "developer1")
+		ticket, err = ticketSvc.ExecuteTicket(context.Background(), ticket.ID, devID, "developer", "developer1")
 		if err != nil {
 			t.Fatalf("ExecuteTicket: %v", err)
 		}
@@ -184,7 +184,7 @@ func TestIntegration_TicketLifecycleWithAudit(t *testing.T) {
 
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 
-		ticket, err = ticketSvc.RejectTicket(context.Background(),ticket.ID, dbaID, "dba", "too risky without limit")
+		ticket, err = ticketSvc.RejectTicket(context.Background(), ticket.ID, dbaID, "dba", "too risky without limit")
 		if err != nil {
 			t.Fatalf("RejectTicket: %v", err)
 		}
@@ -193,7 +193,7 @@ func TestIntegration_TicketLifecycleWithAudit(t *testing.T) {
 		}
 
 		// Rejected ticket cannot be executed
-		_, err = ticketSvc.ExecuteTicket(context.Background(),ticket.ID, devID, "developer", "developer1")
+		_, err = ticketSvc.ExecuteTicket(context.Background(), ticket.ID, devID, "developer", "developer1")
 		if err != ErrTicketNotExecutable {
 			t.Errorf("ExecuteTicket on rejected ticket: error = %v, want ErrTicketNotExecutable", err)
 		}
@@ -210,7 +210,7 @@ func TestIntegration_TicketLifecycleWithAudit(t *testing.T) {
 		}
 
 		// Developer cancels own ticket
-		ticket, err = ticketSvc.CancelTicket(context.Background(),ticket.ID, devID, "developer", "changed my mind")
+		ticket, err = ticketSvc.CancelTicket(context.Background(), ticket.ID, devID, "developer", "changed my mind")
 		if err != nil {
 			t.Fatalf("CancelTicket: %v", err)
 		}
@@ -236,49 +236,49 @@ func TestIntegration_PermissionChecks(t *testing.T) {
 	dsID := seedIntegrationDatasource(t, testDB, "perm-db")
 
 	t.Run("developer_cannot_approve", func(t *testing.T) {
-		ticket, _ := ticketSvc.CreateTicket(context.Background(),devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
+		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 
-		_, err := ticketSvc.ApproveTicket(context.Background(),ticket.ID, devID, "developer", "ok")
+		_, err := ticketSvc.ApproveTicket(context.Background(), ticket.ID, devID, "developer", "ok")
 		if err != ErrNoPermission {
 			t.Errorf("developer approve: error = %v, want ErrNoPermission", err)
 		}
 	})
 
 	t.Run("developer_cannot_reject", func(t *testing.T) {
-		ticket, _ := ticketSvc.CreateTicket(context.Background(),devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
+		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 
-		_, err := ticketSvc.RejectTicket(context.Background(),ticket.ID, devID, "developer", "bad")
+		_, err := ticketSvc.RejectTicket(context.Background(), ticket.ID, devID, "developer", "bad")
 		if err != ErrNoPermission {
 			t.Errorf("developer reject: error = %v, want ErrNoPermission", err)
 		}
 	})
 
 	t.Run("other_developer_cannot_execute", func(t *testing.T) {
-		ticket, _ := ticketSvc.CreateTicket(context.Background(),devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
+		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusApproved)
 
-		_, err := ticketSvc.ExecuteTicket(context.Background(),ticket.ID, dev2ID, "developer", "dev2_perm")
+		_, err := ticketSvc.ExecuteTicket(context.Background(), ticket.ID, dev2ID, "developer", "dev2_perm")
 		if err != ErrNoPermission {
 			t.Errorf("other dev execute: error = %v, want ErrNoPermission", err)
 		}
 	})
 
 	t.Run("other_developer_cannot_cancel", func(t *testing.T) {
-		ticket, _ := ticketSvc.CreateTicket(context.Background(),devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
+		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
 
-		_, err := ticketSvc.CancelTicket(context.Background(),ticket.ID, dev2ID, "developer", "cancel")
+		_, err := ticketSvc.CancelTicket(context.Background(), ticket.ID, dev2ID, "developer", "cancel")
 		if err != ErrNoPermission {
 			t.Errorf("other dev cancel: error = %v, want ErrNoPermission", err)
 		}
 	})
 
 	t.Run("dba_can_approve_and_execute", func(t *testing.T) {
-		ticket, _ := ticketSvc.CreateTicket(context.Background(),devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
+		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 
-		result, err := ticketSvc.ApproveTicket(context.Background(),ticket.ID, dbaID, "dba", "ok")
+		result, err := ticketSvc.ApproveTicket(context.Background(), ticket.ID, dbaID, "dba", "ok")
 		if err != nil {
 			t.Fatalf("dba approve: %v", err)
 		}
@@ -286,7 +286,7 @@ func TestIntegration_PermissionChecks(t *testing.T) {
 			t.Errorf("status = %s, want APPROVED", result.Status)
 		}
 
-		result, err = ticketSvc.ExecuteTicket(context.Background(),ticket.ID, dbaID, "dba", "dba_perm")
+		result, err = ticketSvc.ExecuteTicket(context.Background(), ticket.ID, dbaID, "dba", "dba_perm")
 		if err != nil {
 			t.Fatalf("dba execute: %v", err)
 		}
@@ -296,10 +296,10 @@ func TestIntegration_PermissionChecks(t *testing.T) {
 	})
 
 	t.Run("admin_can_approve_and_execute", func(t *testing.T) {
-		ticket, _ := ticketSvc.CreateTicket(context.Background(),devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
+		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 
-		result, err := ticketSvc.ApproveTicket(context.Background(),ticket.ID, adminID, "admin", "ok")
+		result, err := ticketSvc.ApproveTicket(context.Background(), ticket.ID, adminID, "admin", "ok")
 		if err != nil {
 			t.Fatalf("admin approve: %v", err)
 		}
@@ -307,7 +307,7 @@ func TestIntegration_PermissionChecks(t *testing.T) {
 			t.Errorf("status = %s, want APPROVED", result.Status)
 		}
 
-		result, err = ticketSvc.ExecuteTicket(context.Background(),ticket.ID, adminID, "admin", "admin_perm")
+		result, err = ticketSvc.ExecuteTicket(context.Background(), ticket.ID, adminID, "admin", "admin_perm")
 		if err != nil {
 			t.Fatalf("admin execute: %v", err)
 		}
@@ -317,10 +317,10 @@ func TestIntegration_PermissionChecks(t *testing.T) {
 	})
 
 	t.Run("dba_can_cancel_any_ticket", func(t *testing.T) {
-		ticket, _ := ticketSvc.CreateTicket(context.Background(),devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
+		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "medium", "")
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 
-		result, err := ticketSvc.CancelTicket(context.Background(),ticket.ID, dbaID, "dba", "not needed anymore")
+		result, err := ticketSvc.CancelTicket(context.Background(), ticket.ID, dbaID, "dba", "not needed anymore")
 		if err != nil {
 			t.Fatalf("dba cancel: %v", err)
 		}
@@ -401,14 +401,14 @@ func TestIntegration_SQLParsingToTicketCreation(t *testing.T) {
 
 			// Step 2: AI Review (static only since no API key)
 			aiReq := &AIReviewRequest{
-				SQL:         tt.sql,
-				DBType:      tt.dbType,
+				SQL:          tt.sql,
+				DBType:       tt.dbType,
 				DatasourceID: dsID,
-				Database:    "testdb",
-				UserID:      devID,
-				Operation:   parseResult.Operation,
-				Tables:      parseResult.Tables,
-				ParseResult: parseResult,
+				Database:     "testdb",
+				UserID:       devID,
+				Operation:    parseResult.Operation,
+				Tables:       parseResult.Tables,
+				ParseResult:  parseResult,
 			}
 			aiResult, err := aiSvc.Review(context.Background(), aiReq)
 			if err != nil {
@@ -440,7 +440,7 @@ func TestIntegration_SQLParsingToTicketCreation(t *testing.T) {
 			}
 
 			// Step 4: Verify ticket can be retrieved
-			got, err := ticketSvc.GetTicket(context.Background(),ticket.ID)
+			got, err := ticketSvc.GetTicket(context.Background(), ticket.ID)
 			if err != nil {
 				t.Fatalf("GetTicket: %v", err)
 			}
@@ -465,11 +465,11 @@ func TestIntegration_MaskRulesWithDataMasking(t *testing.T) {
 	t.Run("create_rules_and_apply_masking", func(t *testing.T) {
 		// Create mask rules for different field types
 		rules := []struct {
-			table  string
-			field  string
-			mtype  string
-			regex  string
-			tmpl   string
+			table string
+			field string
+			mtype string
+			regex string
+			tmpl  string
 		}{
 			{"users", "phone", "phone", "", ""},
 			{"users", "email", "email", "", ""},
@@ -479,14 +479,14 @@ func TestIntegration_MaskRulesWithDataMasking(t *testing.T) {
 		}
 
 		for _, r := range rules {
-			_, err := maskRuleSvc.CreateMaskRule(context.Background(),0, dsID, "appdb", r.table, r.field, r.mtype, r.regex, r.tmpl)
+			_, err := maskRuleSvc.CreateMaskRule(context.Background(), 0, dsID, "appdb", r.table, r.field, r.mtype, r.regex, r.tmpl)
 			if err != nil {
 				t.Fatalf("CreateMaskRule(%s.%s): %v", r.table, r.field, err)
 			}
 		}
 
 		// List all rules
-		allRules, total, err := maskRuleSvc.ListMaskRules(context.Background(),1, 10, "", "", "")
+		allRules, total, err := maskRuleSvc.ListMaskRules(context.Background(), 1, 10, "", "", "")
 		if err != nil {
 			t.Fatalf("ListMaskRules: %v", err)
 		}
@@ -502,9 +502,9 @@ func TestIntegration_MaskRulesWithDataMasking(t *testing.T) {
 		for _, r := range allRules {
 			if r.TableName == "users" || r.TableName == "*" {
 				matchedRules = append(matchedRules, mask.Rule{
-					Field:      r.Field,
-					MaskType:   mask.MaskType(r.MaskType),
-					TableName:  r.TableName,
+					Field:     r.Field,
+					MaskType:  mask.MaskType(r.MaskType),
+					TableName: r.TableName,
 				})
 			}
 		}
@@ -546,7 +546,7 @@ func TestIntegration_MaskRulesWithDataMasking(t *testing.T) {
 	})
 
 	t.Run("custom_regex_mask_rule", func(t *testing.T) {
-		_, err := maskRuleSvc.CreateMaskRule(context.Background(),0, dsID, "appdb", "products", "serial_no", "custom", `(\w{3})\w+(\w{3})`, "$1***$2")
+		_, err := maskRuleSvc.CreateMaskRule(context.Background(), 0, dsID, "appdb", "products", "serial_no", "custom", `(\w{3})\w+(\w{3})`, "$1***$2")
 		if err != nil {
 			t.Fatalf("CreateMaskRule custom: %v", err)
 		}
@@ -563,13 +563,13 @@ func TestIntegration_MaskRulesWithDataMasking(t *testing.T) {
 	})
 
 	t.Run("update_and_delete_mask_rule", func(t *testing.T) {
-		rule, err := maskRuleSvc.CreateMaskRule(context.Background(),0, dsID, "appdb", "test_table", "field1", "full", "", "")
+		rule, err := maskRuleSvc.CreateMaskRule(context.Background(), 0, dsID, "appdb", "test_table", "field1", "full", "", "")
 		if err != nil {
 			t.Fatalf("CreateMaskRule: %v", err)
 		}
 
 		// Update
-		updated, err := maskRuleSvc.UpdateMaskRule(context.Background(),0, rule.ID, "", "", "phone", "", "")
+		updated, err := maskRuleSvc.UpdateMaskRule(context.Background(), 0, rule.ID, "", "", "phone", "", "")
 		if err != nil {
 			t.Fatalf("UpdateMaskRule: %v", err)
 		}
@@ -578,12 +578,12 @@ func TestIntegration_MaskRulesWithDataMasking(t *testing.T) {
 		}
 
 		// Delete
-		err = maskRuleSvc.DeleteMaskRule(context.Background(),0, rule.ID)
+		err = maskRuleSvc.DeleteMaskRule(context.Background(), 0, rule.ID)
 		if err != nil {
 			t.Fatalf("DeleteMaskRule: %v", err)
 		}
 
-		_, err = maskRuleSvc.GetMaskRule(context.Background(),rule.ID)
+		_, err = maskRuleSvc.GetMaskRule(context.Background(), rule.ID)
 		if err != ErrMaskRuleNotFound {
 			t.Errorf("GetMaskRule after delete: error = %v, want ErrMaskRuleNotFound", err)
 		}
@@ -656,7 +656,7 @@ func TestIntegration_AuditServiceBatchWithTicketOps(t *testing.T) {
 
 	// Write audit records through the batch service
 	for i := 0; i < 7; i++ {
-		auditSvc.Write(context.Background(),AuditRecord{
+		auditSvc.Write(context.Background(), AuditRecord{
 			UserID:     1,
 			Action:     "query_execute",
 			SQLContent: fmt.Sprintf("SELECT %d", i),
@@ -685,7 +685,7 @@ func TestIntegration_AuditServiceBatchWithTicketOps(t *testing.T) {
 	ticketSvc := NewTicketService(testDB, ticketAuditSvc, nil)
 	devID := seedIntegrationUser(t, testDB, "audit_dev", "developer")
 
-	_, err := ticketSvc.CreateTicket(context.Background(),devID, dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
+	_, err := ticketSvc.CreateTicket(context.Background(), devID, dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
 	if err != nil {
 		t.Fatalf("CreateTicket: %v", err)
 	}
@@ -797,13 +797,13 @@ func TestIntegration_NotificationWithTicketLifecycle(t *testing.T) {
 	setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 
 	// Approve -> notification sent
-	ticket, err = ticketSvc.ApproveTicket(context.Background(),ticket.ID, dbaID, "dba", "approved")
+	ticket, err = ticketSvc.ApproveTicket(context.Background(), ticket.ID, dbaID, "dba", "approved")
 	if err != nil {
 		t.Fatalf("ApproveTicket: %v", err)
 	}
 
 	// Execute -> notification sent
-	ticket, err = ticketSvc.ExecuteTicket(context.Background(),ticket.ID, devID, "developer", "notify_dev")
+	ticket, err = ticketSvc.ExecuteTicket(context.Background(), ticket.ID, devID, "developer", "notify_dev")
 	if err != nil {
 		t.Fatalf("ExecuteTicket: %v", err)
 	}
@@ -939,10 +939,10 @@ func TestIntegration_MaskingAndAuditLog(t *testing.T) {
 	maskedFields := mask.ApplyToRows(rows, maskRules)
 
 	// Write audit log with masked fields info
-	auditSvc.Write(context.Background(),AuditRecord{
-		UserID:            1,
-		Action:            "query_execute",
-		SQLContent:        "SELECT phone, email, name FROM users",
+	auditSvc.Write(context.Background(), AuditRecord{
+		UserID:             1,
+		Action:             "query_execute",
+		SQLContent:         "SELECT phone, email, name FROM users",
 		DesensitizedFields: fmt.Sprintf("%v", maskedFields),
 	})
 
@@ -980,32 +980,32 @@ func TestIntegration_StateMachineCompleteness(t *testing.T) {
 	dsID := seedIntegrationDatasource(t, testDB, "sm-db")
 
 	t.Run("submitted_to_ai_reviewed", func(t *testing.T) {
-		ticket, _ := ticketSvc.CreateTicket(context.Background(),devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
+		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
 		if !CanTransition(model.TicketStatusSubmitted, model.TicketStatusAIReviewed) {
 			t.Error("SUBMITTED -> AI_REVIEWED should be valid")
 		}
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusAIReviewed)
-		got, _ := ticketSvc.GetTicket(context.Background(),ticket.ID)
+		got, _ := ticketSvc.GetTicket(context.Background(), ticket.ID)
 		if got.Status != model.TicketStatusAIReviewed {
 			t.Errorf("status = %s, want AI_REVIEWED", got.Status)
 		}
 	})
 
 	t.Run("ai_reviewed_to_pending_approval", func(t *testing.T) {
-		ticket, _ := ticketSvc.CreateTicket(context.Background(),devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
+		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusAIReviewed)
 		if !CanTransition(model.TicketStatusAIReviewed, model.TicketStatusPendingApproval) {
 			t.Error("AI_REVIEWED -> PENDING_APPROVAL should be valid")
 		}
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
-		got, _ := ticketSvc.GetTicket(context.Background(),ticket.ID)
+		got, _ := ticketSvc.GetTicket(context.Background(), ticket.ID)
 		if got.Status != model.TicketStatusPendingApproval {
 			t.Errorf("status = %s, want PENDING_APPROVAL", got.Status)
 		}
 	})
 
 	t.Run("approved_to_executing_to_done", func(t *testing.T) {
-		ticket, _ := ticketSvc.CreateTicket(context.Background(),devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
+		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, dsID, "db", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusApproved)
 
 		// APPROVED -> EXECUTING is a valid transition
@@ -1014,7 +1014,7 @@ func TestIntegration_StateMachineCompleteness(t *testing.T) {
 		}
 
 		// ExecuteTicket goes directly to DONE
-		result, err := ticketSvc.ExecuteTicket(context.Background(),ticket.ID, devID, "developer", "sm_dev")
+		result, err := ticketSvc.ExecuteTicket(context.Background(), ticket.ID, devID, "developer", "sm_dev")
 		if err != nil {
 			t.Fatalf("ExecuteTicket: %v", err)
 		}
@@ -1102,7 +1102,7 @@ func TestIntegration_ConcurrentTicketOperations(t *testing.T) {
 	}
 
 	// List and verify count
-	tickets, total, err := ticketSvc.ListTickets(context.Background(),1, 100, "", "", "", "", "", "", devID, "developer")
+	tickets, total, err := ticketSvc.ListTickets(context.Background(), 1, 100, "", "", "", "", "", "", devID, "developer")
 	if err != nil {
 		t.Fatalf("ListTickets: %v", err)
 	}
@@ -1122,7 +1122,7 @@ func TestIntegration_ConcurrentTicketOperations(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			_, err := ticketSvc.ApproveTicket(context.Background(),ticketIDs[idx], dbaID, "dba", fmt.Sprintf("approved %d", idx))
+			_, err := ticketSvc.ApproveTicket(context.Background(), ticketIDs[idx], dbaID, "dba", fmt.Sprintf("approved %d", idx))
 			if err != nil {
 				errors[idx] = err
 			}

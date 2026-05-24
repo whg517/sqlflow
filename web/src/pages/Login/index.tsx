@@ -1,57 +1,63 @@
-import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Database } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { api } from '@/api/client'
+import { useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import { Database } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { api } from "@/api/client";
 
 function validateUsername(v: string): string | null {
-  if (!v) return '请输入用户名'
-  if (v.length < 3 || v.length > 32) return '用户名需 3-32 个字符'
-  return null
+  if (!v) return "请输入用户名";
+  if (v.length < 3 || v.length > 32) return "用户名需 3-32 个字符";
+  return null;
 }
 
 function validatePassword(v: string): string | null {
-  if (!v) return '请输入密码'
-  if (v.length < 8 || v.length > 128) return '密码需 8-128 个字符'
-  return null
+  if (!v) return "请输入密码";
+  if (v.length < 8 || v.length > 128) return "密码需 8-128 个字符";
+  return null;
 }
 
 export default function LoginPage() {
-  const navigate = useNavigate()
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [errors, setErrors] = useState<{ username?: string; password?: string }>({})
-  const [serverError, setServerError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const navigate = useNavigate();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<{
+    username?: string;
+    password?: string;
+  }>({});
+  const [serverError, setServerError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  function handleBlur(field: 'username' | 'password') {
-    const err = field === 'username' ? validateUsername(username) : validatePassword(password)
-    setErrors((prev) => ({ ...prev, [field]: err ?? undefined }))
+  function handleBlur(field: "username" | "password") {
+    const err =
+      field === "username"
+        ? validateUsername(username)
+        : validatePassword(password);
+    setErrors((prev) => ({ ...prev, [field]: err ?? undefined }));
   }
 
   async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    const uErr = validateUsername(username)
-    const pErr = validatePassword(password)
+    e.preventDefault();
+    const uErr = validateUsername(username);
+    const pErr = validatePassword(password);
     if (uErr || pErr) {
-      setErrors({ username: uErr ?? undefined, password: pErr ?? undefined })
-      return
+      setErrors({ username: uErr ?? undefined, password: pErr ?? undefined });
+      return;
     }
-    setLoading(true)
-    setServerError('')
+    setLoading(true);
+    setServerError("");
     try {
       const res = await api.post<{ code: number; data: { token: string } }>(
-        '/auth/login',
+        "/auth/login",
         { username, password },
-      )
-      localStorage.setItem('token', res.data.token)
-      navigate('/query', { replace: true })
+      );
+      localStorage.setItem("token", res.data.token);
+      navigate("/query", { replace: true });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : ''
-      setServerError(msg || '用户名或密码错误')
+      const msg = err instanceof Error ? err.message : "";
+      setServerError(msg || "用户名或密码错误");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -84,13 +90,15 @@ export default function LoginPage() {
               placeholder="用户名"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              onBlur={() => handleBlur('username')}
+              onBlur={() => handleBlur("username")}
               className="h-10 bg-[var(--bg-elevated)] border-[var(--border-default)]"
               autoComplete="username"
             />
             {/* Error — §3.1: text-xs text-danger, mt-1 */}
             {errors.username && (
-              <p className="mt-1 text-xs text-[var(--danger)]">{errors.username}</p>
+              <p className="mt-1 text-xs text-[var(--danger)]">
+                {errors.username}
+              </p>
             )}
           </div>
 
@@ -101,12 +109,14 @@ export default function LoginPage() {
               placeholder="密码"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              onBlur={() => handleBlur('password')}
+              onBlur={() => handleBlur("password")}
               className="h-10 bg-[var(--bg-elevated)] border-[var(--border-default)]"
               autoComplete="current-password"
             />
             {errors.password && (
-              <p className="mt-1 text-xs text-[var(--danger)]">{errors.password}</p>
+              <p className="mt-1 text-xs text-[var(--danger)]">
+                {errors.password}
+              </p>
             )}
           </div>
 
@@ -116,7 +126,7 @@ export default function LoginPage() {
             loading={loading}
             className="mt-1 h-10 w-full bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)]"
           >
-            {loading ? '登录中...' : '登 录'}
+            {loading ? "登录中..." : "登 录"}
           </Button>
         </form>
 
@@ -126,5 +136,5 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
-  )
+  );
 }

@@ -19,21 +19,21 @@ import (
 
 // BackupInfo represents a single backup file's metadata.
 type BackupInfo struct {
-	Filename  string    `json:"filename"`
-	Filepath  string    `json:"filepath"`
-	Size      int64     `json:"size"`
-	CreatedAt time.Time `json:"created_at"`
-	Compressed bool     `json:"compressed"`
+	Filename   string    `json:"filename"`
+	Filepath   string    `json:"filepath"`
+	Size       int64     `json:"size"`
+	CreatedAt  time.Time `json:"created_at"`
+	Compressed bool      `json:"compressed"`
 }
 
 // BackupService handles SQLite database backups with rotation and optional compression.
 type BackupService struct {
-	mu       sync.Mutex
-	db       *sql.DB
-	dbPath   string
-	cfg      config.BackupConfig
-	cancel   context.CancelFunc
-	done     chan struct{}
+	mu     sync.Mutex
+	db     *sql.DB
+	dbPath string
+	cfg    config.BackupConfig
+	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 // NewBackupService creates a new BackupService.

@@ -1,8 +1,8 @@
-import * as React from "react"
-import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
+import * as React from "react";
+import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 
-import { cn } from "@/lib/utils"
-import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
   return (
@@ -13,7 +13,7 @@ function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
       className={cn("mx-auto flex w-full justify-center", className)}
       {...props}
     />
-  )
+  );
 }
 
 function PaginationContent({
@@ -26,23 +26,19 @@ function PaginationContent({
       className={cn("flex flex-row items-center gap-1", className)}
       {...props}
     />
-  )
+  );
 }
 
 function PaginationItem({ className, ...props }: React.ComponentProps<"li">) {
   return (
-    <li
-      data-slot="pagination-item"
-      className={cn("", className)}
-      {...props}
-    />
-  )
+    <li data-slot="pagination-item" className={cn("", className)} {...props} />
+  );
 }
 
 type PaginationLinkProps = {
-  isActive?: boolean
-  size?: "default" | "sm" | "lg" | "icon" | "icon-sm" | "icon-lg"
-} & React.ComponentProps<"a">
+  isActive?: boolean;
+  size?: "default" | "sm" | "lg" | "icon" | "icon-sm" | "icon-lg";
+} & React.ComponentProps<"a">;
 
 function PaginationLink({
   className,
@@ -60,11 +56,11 @@ function PaginationLink({
           variant: isActive ? "outline" : "ghost",
           size,
         }),
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function PaginationPrevious({
@@ -81,7 +77,7 @@ function PaginationPrevious({
       <ChevronLeft className="size-4" />
       <span>上一页</span>
     </PaginationLink>
-  )
+  );
 }
 
 function PaginationNext({
@@ -98,7 +94,7 @@ function PaginationNext({
       <span>下一页</span>
       <ChevronRight className="size-4" />
     </PaginationLink>
-  )
+  );
 }
 
 function PaginationEllipsis({
@@ -115,7 +111,7 @@ function PaginationEllipsis({
       <MoreHorizontal className="size-4" />
       <span className="sr-only">More pages</span>
     </span>
-  )
+  );
 }
 
 export {
@@ -126,4 +122,4 @@ export {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-}
+};

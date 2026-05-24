@@ -92,9 +92,9 @@ func TestApplyStaticRules_Blocked(t *testing.T) {
 	svc := newTestService(t, db)
 
 	tests := []struct {
-		name    string
-		request *AIReviewRequest
-		want    ReviewDecision
+		name     string
+		request  *AIReviewRequest
+		want     ReviewDecision
 		wantRisk string
 	}{
 		{
@@ -174,7 +174,7 @@ func TestApplyStaticRules_Blocked(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := svc.applyStaticRules(context.Background(),tt.request)
+			result := svc.applyStaticRules(context.Background(), tt.request)
 			if result.Decision != tt.want {
 				t.Errorf("decision = %v, want %v", result.Decision, tt.want)
 			}
@@ -191,12 +191,12 @@ func TestApplyStaticRules_NilParseResult(t *testing.T) {
 	svc := newTestService(t, db)
 
 	req := &AIReviewRequest{
-		SQL:        "SELECT 1",
-		DBType:     "mysql",
+		SQL:         "SELECT 1",
+		DBType:      "mysql",
 		ParseResult: nil,
 	}
 
-	result := svc.applyStaticRules(context.Background(),req)
+	result := svc.applyStaticRules(context.Background(), req)
 	if result.Decision != DecisionConfirm {
 		t.Errorf("decision = %v, want %v", result.Decision, DecisionConfirm)
 	}
@@ -232,7 +232,7 @@ func TestApplyStaticRules_SensitiveTable(t *testing.T) {
 		},
 	}
 
-	result := svc.applyStaticRules(context.Background(),req)
+	result := svc.applyStaticRules(context.Background(), req)
 	if result.RiskLevel != AIRiskMedium {
 		t.Errorf("risk = %v, want %v (sensitive table should be medium)", result.RiskLevel, AIRiskMedium)
 	}

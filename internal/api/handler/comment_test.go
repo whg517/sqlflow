@@ -315,7 +315,7 @@ func TestCommentHandler_DeleteComment_Forbidden(t *testing.T) {
 	c.SetParamNames("id")
 	c.SetParamValues(intToStr(comment.ID))
 	c.Set(middleware.ContextKeyUserID, int64(999)) // different user
-	c.Set(middleware.ContextKeyRole, "developer")   // not admin/dba
+	c.Set(middleware.ContextKeyRole, "developer")  // not admin/dba
 
 	if err := h.DeleteComment(c); err != nil {
 		t.Fatalf("handler error: %v", err)

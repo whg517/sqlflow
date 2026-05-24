@@ -16,17 +16,17 @@ type User struct {
 
 // QueryHistory represents a user's query execution history record.
 type QueryHistory struct {
-	ID             int64     `json:"id"`
-	UserID         int64     `json:"user_id"`
-	DatasourceID   int64     `json:"datasource_id"`
-	Database       string    `json:"database"`
-	SQLContent     string    `json:"sql_content"`
-	SQLSummary     string    `json:"sql_summary"`
-	DBType         string    `json:"db_type"`
-	ExecutionTime  int64     `json:"execution_time"` // ms
-	ResultRows     int64     `json:"result_rows"`
-	AffectedRows   int64     `json:"affected_rows"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID            int64     `json:"id"`
+	UserID        int64     `json:"user_id"`
+	DatasourceID  int64     `json:"datasource_id"`
+	Database      string    `json:"database"`
+	SQLContent    string    `json:"sql_content"`
+	SQLSummary    string    `json:"sql_summary"`
+	DBType        string    `json:"db_type"`
+	ExecutionTime int64     `json:"execution_time"` // ms
+	ResultRows    int64     `json:"result_rows"`
+	AffectedRows  int64     `json:"affected_rows"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // TicketStatus represents the status of a ticket in the workflow.
@@ -69,34 +69,34 @@ type Ticket struct {
 
 // MaskRule represents a field-level masking rule.
 type MaskRule struct {
-	ID              int64     `json:"id"`
-	DatasourceID    int64     `json:"datasource_id"`
-	Database        string    `json:"database"`
-	TableName       string    `json:"table_name"`
-	Field           string    `json:"field"`
-	MaskType        string    `json:"mask_type"`
-	CustomRegex     string    `json:"custom_regex,omitempty"`
-	CustomTemplate  string    `json:"custom_template,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID             int64     `json:"id"`
+	DatasourceID   int64     `json:"datasource_id"`
+	Database       string    `json:"database"`
+	TableName      string    `json:"table_name"`
+	Field          string    `json:"field"`
+	MaskType       string    `json:"mask_type"`
+	CustomRegex    string    `json:"custom_regex,omitempty"`
+	CustomTemplate string    `json:"custom_template,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // SensitiveTable represents a table marked as containing sensitive data.
 type SensitiveTable struct {
-	ID              int64     `json:"id"`
-	DatasourceID    int64     `json:"datasource_id"`
-	Database        string    `json:"database"`
-	TableName       string    `json:"table_name"`
-	SensitivityLevel string   `json:"sensitivity_level"` // low, medium, high
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID               int64     `json:"id"`
+	DatasourceID     int64     `json:"datasource_id"`
+	Database         string    `json:"database"`
+	TableName        string    `json:"table_name"`
+	SensitivityLevel string    `json:"sensitivity_level"` // low, medium, high
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // RefreshToken represents a stored refresh token for token rotation.
 type RefreshToken struct {
 	ID        int64     `json:"id"`
 	UserID    int64     `json:"user_id"`
-	Token     string    `json:"-"`          // hashed token, never exposed
+	Token     string    `json:"-"` // hashed token, never exposed
 	ExpiresAt time.Time `json:"expires_at"`
 	Revoked   bool      `json:"revoked"`
 	CreatedAt time.Time `json:"created_at"`
@@ -135,9 +135,9 @@ type Comment struct {
 // AuditLogSearch represents an audit log entry returned by FTS5 full-text search.
 type AuditLogSearch struct {
 	AuditLog
-	HighlightSQLContent string `json:"highlight_sql_content,omitempty"`
-	HighlightSQLSummary string `json:"highlight_sql_summary,omitempty"`
-	Rank               float64 `json:"rank,omitempty"`
+	HighlightSQLContent string  `json:"highlight_sql_content,omitempty"`
+	HighlightSQLSummary string  `json:"highlight_sql_summary,omitempty"`
+	Rank                float64 `json:"rank,omitempty"`
 }
 
 // DataSource represents a registered database instance.

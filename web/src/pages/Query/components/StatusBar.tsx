@@ -1,29 +1,42 @@
-import { Download, Loader2, Play, ShieldAlert } from 'lucide-react'
-import { useState, useEffect, useMemo } from 'react'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { Download, Loader2, Play, ShieldAlert } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
-  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
-} from '@/components/ui/alert-dialog'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { exportQuery } from '@/api/query'
-import type { QueryResult } from '@/api/query'
-import { listSensitiveTables, type SensitiveTable } from '@/api/maskRule'
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { exportQuery } from "@/api/query";
+import type { QueryResult } from "@/api/query";
+import { listSensitiveTables, type SensitiveTable } from "@/api/maskRule";
 
 interface StatusBarProps {
-  executing: boolean
-  error: string | null
-  result: QueryResult | null
-  datasourceId: number | null
-  database: string
-  sql: string
-  onExecute: () => void
-  isMongo?: boolean
-  mongoCollection?: string
+  executing: boolean;
+  error: string | null;
+  result: QueryResult | null;
+  datasourceId: number | null;
+  database: string;
+  sql: string;
+  onExecute: () => void;
+  isMongo?: boolean;
+  mongoCollection?: string;
 }
 
 export default function StatusBar({
@@ -37,80 +50,84 @@ export default function StatusBar({
   isMongo,
   mongoCollection,
 }: StatusBarProps) {
-  const hasResult = result !== null && result.rows.length > 0
+  const hasResult = result !== null && result.rows.length > 0;
 
-  const [exportFormat, setExportFormat] = useState<'csv' | 'json' | null>(null)
-  const [confirmLargeExport, setConfirmLargeExport] = useState(false)
-  const [exporting, setExporting] = useState(false)
+  const [exportFormat, setExportFormat] = useState<"csv" | "json" | null>(null);
+  const [confirmLargeExport, setConfirmLargeExport] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Sensitive table detection
-  const [sensitiveTables, setSensitiveTables] = useState<SensitiveTable[]>([])
+  const [sensitiveTables, setSensitiveTables] = useState<SensitiveTable[]>([]);
 
   useEffect(() => {
     if (!datasourceId) {
-      const id = requestAnimationFrame(() => { setSensitiveTables([]) })
-      return () => cancelAnimationFrame(id)
+      const id = requestAnimationFrame(() => {
+        setSensitiveTables([]);
+      });
+      return () => cancelAnimationFrame(id);
     }
     listSensitiveTables({ datasource_id: String(datasourceId), page_size: 500 })
       .then((res) => setSensitiveTables(res.data ?? []))
-      .catch(() => setSensitiveTables([]))
-  }, [datasourceId])
+      .catch(() => setSensitiveTables([]));
+  }, [datasourceId]);
 
   // Derive detected sensitive tables from SQL and sensitive tables list
   const detectedSensitive = useMemo(() => {
-    if (!sql.trim() || sensitiveTables.length === 0) return []
+    if (!sql.trim() || sensitiveTables.length === 0) return [];
     // Extract table names from SQL (simple FROM/JOIN parsing)
-    const sqlLower = sql.toLowerCase()
-    const found = new Set<string>()
-    const tableRegex = /(?:from|join)\s+`?([\w]+)`?/gi
-    let match
+    const sqlLower = sql.toLowerCase();
+    const found = new Set<string>();
+    const tableRegex = /(?:from|join)\s+`?([\w]+)`?/gi;
+    let match;
     while ((match = tableRegex.exec(sqlLower)) !== null) {
-      const tableName = match[1]
-      if (sensitiveTables.some((t) => t.table_name.toLowerCase() === tableName)) {
-        found.add(tableName)
+      const tableName = match[1];
+      if (
+        sensitiveTables.some((t) => t.table_name.toLowerCase() === tableName)
+      ) {
+        found.add(tableName);
       }
     }
-    return Array.from(found)
-  }, [sql, sensitiveTables])
+    return Array.from(found);
+  }, [sql, sensitiveTables]);
 
   const canExecute = isMongo
     ? !executing && !!datasourceId && !!mongoCollection?.trim()
-    : !executing && !!sql.trim() && !!datasourceId
+    : !executing && !!sql.trim() && !!datasourceId;
 
-  async function doExport(format: 'csv' | 'json') {
+  async function doExport(format: "csv" | "json") {
     if (!datasourceId) {
-      toast.error('请先选择数据源')
-      return
+      toast.error("请先选择数据源");
+      return;
     }
     if (!sql.trim()) {
-      toast.error(isMongo ? '请填写查询内容' : '请输入 SQL')
-      return
+      toast.error(isMongo ? "请填写查询内容" : "请输入 SQL");
+      return;
     }
-    setExporting(true)
+    setExporting(true);
     try {
       await exportQuery({
         datasource_id: datasourceId,
         database,
         sql: sql.trim(),
         format,
-      })
-      toast.success('导出完成')
+      });
+      toast.success("导出完成");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '导出失败')
+      toast.error(err instanceof Error ? err.message : "导出失败");
     } finally {
-      setExporting(false)
-      setConfirmLargeExport(false)
-      setExportFormat(null)
+      setExporting(false);
+      setConfirmLargeExport(false);
+      setExportFormat(null);
     }
   }
 
-  function handleExport(format: 'csv' | 'json') {
+  function handleExport(format: "csv" | "json") {
     if (result && result.total > 10000) {
-      setExportFormat(format)
-      setConfirmLargeExport(true)
-      return
+      setExportFormat(format);
+      setConfirmLargeExport(true);
+      return;
     }
-    doExport(format)
+    doExport(format);
   }
 
   return (
@@ -157,7 +174,7 @@ export default function StatusBar({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  脱敏字段: {result.desensitized_fields.join(', ')}
+                  脱敏字段: {result.desensitized_fields.join(", ")}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -165,9 +182,7 @@ export default function StatusBar({
         )}
 
         {/* Error */}
-        {error && (
-          <span className="text-[var(--danger)]">{error}</span>
-        )}
+        {error && <span className="text-[var(--danger)]">{error}</span>}
 
         {/* Warnings */}
         {result?.warnings && result.warnings.length > 0 && (
@@ -191,13 +206,16 @@ export default function StatusBar({
             <TooltipTrigger asChild>
               <span className="inline-flex cursor-default items-center gap-1 rounded bg-red-500/15 px-1.5 py-0.5 text-[11px] font-medium text-red-400">
                 <ShieldAlert size={12} />
-                敏感表: {detectedSensitive.join(', ')}
+                敏感表: {detectedSensitive.join(", ")}
               </span>
             </TooltipTrigger>
             <TooltipContent>
               <div className="text-xs">
                 <p className="mb-1 font-medium text-red-400">⚠ 检测到敏感表</p>
-                <p>查询涉及 {detectedSensitive.length} 个敏感表，查询结果将自动脱敏处理。</p>
+                <p>
+                  查询涉及 {detectedSensitive.length}{" "}
+                  个敏感表，查询结果将自动脱敏处理。
+                </p>
               </div>
             </TooltipContent>
           </Tooltip>
@@ -231,32 +249,43 @@ export default function StatusBar({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => handleExport('csv')}>CSV</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => handleExport('json')}>JSON</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleExport("csv")}>
+            CSV
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleExport("json")}>
+            JSON
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
       {/* Large export confirmation */}
-      <AlertDialog open={confirmLargeExport} onOpenChange={setConfirmLargeExport}>
+      <AlertDialog
+        open={confirmLargeExport}
+        onOpenChange={setConfirmLargeExport}
+      >
         <AlertDialogContent className="border-[var(--border-default)] bg-[var(--bg-surface)]">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[var(--text-primary)]">确认导出</AlertDialogTitle>
+            <AlertDialogTitle className="text-[var(--text-primary)]">
+              确认导出
+            </AlertDialogTitle>
             <AlertDialogDescription className="text-[var(--text-secondary)]">
               当前结果共 {result?.total ?? 0} 行，导出可能耗时较长，是否继续？
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-[var(--border-default)]">取消</AlertDialogCancel>
+            <AlertDialogCancel className="border-[var(--border-default)]">
+              取消
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => exportFormat && doExport(exportFormat)}
               disabled={exporting}
               className="bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)]"
             >
-              {exporting ? '导出中...' : '确认导出'}
+              {exporting ? "导出中..." : "确认导出"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
+  );
 }

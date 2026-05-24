@@ -235,8 +235,8 @@ func (s *NotifyService) SendTestMessage() {
 
 // dingTalkRequest is the request body for DingTalk webhook.
 type dingTalkRequest struct {
-	MsgType  string              `json:"msgtype"`
-	Markdown *dingTalkMarkdown   `json:"markdown,omitempty"`
+	MsgType  string               `json:"msgtype"`
+	Markdown *dingTalkMarkdown    `json:"markdown,omitempty"`
 	Text     *dingTalkTextContent `json:"text,omitempty"`
 }
 

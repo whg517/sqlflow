@@ -11,14 +11,14 @@ import (
 
 // MySQLParseResult holds the parsed result of a MySQL SQL statement.
 type MySQLParseResult struct {
-	Operation     OperationType
-	Tables        []string
-	HasWhere      bool
+	Operation      OperationType
+	Tables         []string
+	HasWhere       bool
 	IsDropDatabase bool
-	IsDropTable   bool
-	IsTruncate    bool
-	HasLimit      bool
-	LimitCount    int64 // 0 means no limit or unknown
+	IsDropTable    bool
+	IsTruncate     bool
+	HasLimit       bool
+	LimitCount     int64 // 0 means no limit or unknown
 }
 
 // mysqlParser is a lazily-initialized shared parser instance.

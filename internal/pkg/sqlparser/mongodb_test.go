@@ -45,10 +45,10 @@ func TestParseMongo_Find(t *testing.T) {
 			wantEmptyFilter: false,
 		},
 		{
-			name:           "find_no_collection",
-			body:           `{"operation": "find", "filter": {"x": 1}}`,
-			wantCollection: "",
-			wantHasFilter: true,
+			name:            "find_no_collection",
+			body:            `{"operation": "find", "filter": {"x": 1}}`,
+			wantCollection:  "",
+			wantHasFilter:   true,
 			wantEmptyFilter: false,
 		},
 	}

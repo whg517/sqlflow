@@ -569,4 +569,3 @@ func CanTransition(from, to model.TicketStatus) bool {
 	}
 	return false
 }
-

@@ -418,4 +418,3 @@ func (s *MaskRuleService) GetSensitiveTablesForDatasource(ctx context.Context, d
 	}
 	return tables, nil
 }
-

@@ -19,13 +19,13 @@ const (
 
 // MongoParseResult holds the parsed result of a MongoDB command body.
 type MongoParseResult struct {
-	Operation        MongoOperation
-	Collection       string
-	HasFilter        bool
-	PipelineStages   []string
+	Operation         MongoOperation
+	Collection        string
+	HasFilter         bool
+	PipelineStages    []string
 	HasDangerousStage bool
-	IsMulti          bool // true for updateMany/deleteMany
-	HasEmptyFilter   bool // true if filter is {} or absent
+	IsMulti           bool // true for updateMany/deleteMany
+	HasEmptyFilter    bool // true if filter is {} or absent
 }
 
 // Allowed aggregation stages whitelist.

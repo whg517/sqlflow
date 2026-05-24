@@ -1223,20 +1223,20 @@ func TestDatasourceHandler_CRUDLifecycle(t *testing.T) {
 
 func TestToDatasourceResponse(t *testing.T) {
 	ds := &model.DataSource{
-		ID:         42,
-		Name:       "test-ds",
-		Type:       "mysql",
-		Host:       "127.0.0.1",
-		Port:       3306,
-		Username:   "root",
-		Database:   "appdb",
-		MaxOpen:    10,
-		MaxIdle:    5,
+		ID:          42,
+		Name:        "test-ds",
+		Type:        "mysql",
+		Host:        "127.0.0.1",
+		Port:        3306,
+		Username:    "root",
+		Database:    "appdb",
+		MaxOpen:     10,
+		MaxIdle:     5,
 		MaxLifetime: 3600,
 		MaxIdleTime: 600,
-		Status:     "active",
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+		Status:      "active",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 
 	resp := toDatasourceResponse(ds)

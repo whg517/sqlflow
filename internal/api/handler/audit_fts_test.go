@@ -48,11 +48,11 @@ func seedFTSAuditLogs(t *testing.T, auditSvc *service.AuditService, n int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
 		auditSvc.Write(contextWithTimeout(t), service.AuditRecord{
-			UserID:     int64(i%2 + 1), // alternating user 1 and 2
-			Action:     "query_execute",
+			UserID:       int64(i%2 + 1), // alternating user 1 and 2
+			Action:       "query_execute",
 			DatasourceID: int64(i % 3),
-			SQLContent: fmt.Sprintf("SELECT * FROM orders_%d WHERE status = 'active'", i),
-			SQLSummary: fmt.Sprintf("Query orders_%d", i),
+			SQLContent:   fmt.Sprintf("SELECT * FROM orders_%d WHERE status = 'active'", i),
+			SQLSummary:   fmt.Sprintf("Query orders_%d", i),
 		})
 	}
 }

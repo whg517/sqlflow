@@ -1,32 +1,52 @@
-import { useState, useEffect } from 'react'
-import { Loader2, CheckCircle2, XCircle, Ban, Play, Copy } from 'lucide-react'
-import { toast } from 'sonner'
+import { useState, useEffect } from "react";
+import { Loader2, CheckCircle2, XCircle, Ban, Play, Copy } from "lucide-react";
+import { toast } from "sonner";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
-} from '@/components/ui/sheet'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { ScrollArea } from '@/components/ui/scroll-area'
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
-  getTicket, approveTicket, rejectTicket, cancelTicket, executeTicket,
-  getStatusLabel, getStatusColor, getRiskLabel, getRiskColor, getRiskDot, formatTime,
-  type Ticket, type TicketStatus,
-} from '@/api/ticket'
-import CommentSection from './CommentSection'
+  getTicket,
+  approveTicket,
+  rejectTicket,
+  cancelTicket,
+  executeTicket,
+  getStatusLabel,
+  getStatusColor,
+  getRiskLabel,
+  getRiskColor,
+  getRiskDot,
+  formatTime,
+  type Ticket,
+  type TicketStatus,
+} from "@/api/ticket";
+import CommentSection from "./CommentSection";
 
 interface TicketDetailDrawerProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  ticketId: number | null
-  userRole: string
-  userId: number
-  onActionComplete: () => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  ticketId: number | null;
+  userRole: string;
+  userId: number;
+  onActionComplete: () => void;
 }
 
 export default function TicketDetailDrawer({
@@ -37,123 +57,127 @@ export default function TicketDetailDrawer({
   userId,
   onActionComplete,
 }: TicketDetailDrawerProps) {
-  const [ticket, setTicket] = useState<Ticket | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [actionLoading, setActionLoading] = useState(false)
+  const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // Approval dialog
-  const [approveOpen, setApproveOpen] = useState(false)
-  const [approveComment, setApproveComment] = useState('')
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [approveComment, setApproveComment] = useState("");
 
   // Reject dialog
-  const [rejectOpen, setRejectOpen] = useState(false)
-  const [rejectReason, setRejectReason] = useState('')
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   // Cancel dialog
-  const [cancelOpen, setCancelOpen] = useState(false)
-  const [cancelReason, setCancelReason] = useState('')
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   // Execute confirm
-  const [execOpen, setExecOpen] = useState(false)
+  const [execOpen, setExecOpen] = useState(false);
 
   useEffect(() => {
     if (open && ticketId) {
       const id = requestAnimationFrame(() => {
-        setLoading(true)
+        setLoading(true);
         getTicket(ticketId)
           .then((res) => setTicket(res.data))
-          .catch((err) => toast.error(err instanceof Error ? err.message : '获取工单失败'))
-          .finally(() => setLoading(false))
-      })
-      return () => cancelAnimationFrame(id)
+          .catch((err) =>
+            toast.error(err instanceof Error ? err.message : "获取工单失败"),
+          )
+          .finally(() => setLoading(false));
+      });
+      return () => cancelAnimationFrame(id);
     } else {
-      const id = requestAnimationFrame(() => { setTicket(null) })
-      return () => cancelAnimationFrame(id)
+      const id = requestAnimationFrame(() => {
+        setTicket(null);
+      });
+      return () => cancelAnimationFrame(id);
     }
-  }, [open, ticketId])
+  }, [open, ticketId]);
 
   function resetDialogs() {
-    setApproveOpen(false)
-    setApproveComment('')
-    setRejectOpen(false)
-    setRejectReason('')
-    setCancelOpen(false)
-    setCancelReason('')
-    setExecOpen(false)
+    setApproveOpen(false);
+    setApproveComment("");
+    setRejectOpen(false);
+    setRejectReason("");
+    setCancelOpen(false);
+    setCancelReason("");
+    setExecOpen(false);
   }
 
   async function handleAction(fn: () => Promise<unknown>, msg: string) {
-    setActionLoading(true)
+    setActionLoading(true);
     try {
-      await fn()
-      toast.success(msg)
-      resetDialogs()
-      onActionComplete()
+      await fn();
+      toast.success(msg);
+      resetDialogs();
+      onActionComplete();
       // Refresh ticket detail
       if (ticketId) {
-        const res = await getTicket(ticketId)
-        setTicket(res.data)
+        const res = await getTicket(ticketId);
+        setTicket(res.data);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '操作失败')
+      toast.error(err instanceof Error ? err.message : "操作失败");
     } finally {
-      setActionLoading(false)
+      setActionLoading(false);
     }
   }
 
   function handleApprove() {
-    handleAction(
-      () => approveTicket(ticketId!, approveComment),
-      '审批通过',
-    )
+    handleAction(() => approveTicket(ticketId!, approveComment), "审批通过");
   }
 
   function handleReject() {
     if (!rejectReason.trim()) {
-      toast.error('请填写驳回原因')
-      return
+      toast.error("请填写驳回原因");
+      return;
     }
-    handleAction(
-      () => rejectTicket(ticketId!, rejectReason.trim()),
-      '已驳回',
-    )
+    handleAction(() => rejectTicket(ticketId!, rejectReason.trim()), "已驳回");
   }
 
   function handleCancel() {
     if (!cancelReason.trim()) {
-      toast.error('请填写取消原因')
-      return
+      toast.error("请填写取消原因");
+      return;
     }
     handleAction(
       () => cancelTicket(ticketId!, cancelReason.trim()),
-      '工单已取消',
-    )
+      "工单已取消",
+    );
   }
 
   function handleExecute() {
-    handleAction(
-      () => executeTicket(ticketId!),
-      '工单已执行',
-    )
+    handleAction(() => executeTicket(ticketId!), "工单已执行");
   }
 
   // Permission checks
-  const isDBA = userRole === 'admin' || userRole === 'dba'
-  const isSubmitter = ticket?.submitter_id === userId
-  const status = ticket?.status
+  const isDBA = userRole === "admin" || userRole === "dba";
+  const isSubmitter = ticket?.submitter_id === userId;
+  const status = ticket?.status;
 
-  const canApprove = isDBA && status === 'PENDING_APPROVAL'
-  const canReject = isDBA && status === 'PENDING_APPROVAL'
-  const canCancel = (isSubmitter || isDBA) &&
-    ['SUBMITTED', 'AI_REVIEWED', 'PENDING_APPROVAL', 'APPROVED'].includes(status ?? '')
-  const canExecute = (isSubmitter || isDBA) && status === 'APPROVED'
+  const canApprove = isDBA && status === "PENDING_APPROVAL";
+  const canReject = isDBA && status === "PENDING_APPROVAL";
+  const canCancel =
+    (isSubmitter || isDBA) &&
+    ["SUBMITTED", "AI_REVIEWED", "PENDING_APPROVAL", "APPROVED"].includes(
+      status ?? "",
+    );
+  const canExecute = (isSubmitter || isDBA) && status === "APPROVED";
 
   // Parse AI review result
-  let aiReview: { summary?: string; suggestions?: string[]; impact_analysis?: string } | null = null
+  let aiReview: {
+    summary?: string;
+    suggestions?: string[];
+    impact_analysis?: string;
+  } | null = null;
   if (ticket?.ai_review_result) {
     try {
-      aiReview = JSON.parse(ticket.ai_review_result)
-    } catch { /* ignore */ }
+      aiReview = JSON.parse(ticket.ai_review_result);
+    } catch {
+      /* ignore */
+    }
   }
 
   return (
@@ -166,7 +190,7 @@ export default function TicketDetailDrawer({
         >
           <SheetHeader className="px-6 pt-6 pb-0">
             <SheetTitle className="text-[var(--text-primary)]">
-              工单 #{ticket?.id ?? '...'}
+              工单 #{ticket?.id ?? "..."}
             </SheetTitle>
           </SheetHeader>
 
@@ -183,21 +207,33 @@ export default function TicketDetailDrawer({
               <div className="space-y-5 px-6 py-4">
                 {/* Status + Meta */}
                 <div className="flex items-center gap-3">
-                  <Badge className={`${getStatusColor(status as TicketStatus)} border-0 text-xs`}>
+                  <Badge
+                    className={`${getStatusColor(status as TicketStatus)} border-0 text-xs`}
+                  >
                     {getStatusLabel(status as TicketStatus)}
                   </Badge>
                   {ticket.risk_level && (
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${getRiskColor(ticket.risk_level)}`}>
-                      <span className={`inline-block h-1.5 w-1.5 rounded-full ${getRiskDot(ticket.risk_level)}`} />
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${getRiskColor(ticket.risk_level)}`}
+                    >
+                      <span
+                        className={`inline-block h-1.5 w-1.5 rounded-full ${getRiskDot(ticket.risk_level)}`}
+                      />
                       {getRiskLabel(ticket.risk_level)}
                     </span>
                   )}
                 </div>
 
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--text-secondary)]">
-                  <span>提交人: {ticket.submitter_name || `用户#${ticket.submitter_id}`}</span>
+                  <span>
+                    提交人:{" "}
+                    {ticket.submitter_name || `用户#${ticket.submitter_id}`}
+                  </span>
                   <span>提交时间: {formatTime(ticket.created_at)}</span>
-                  <span>数据库: {ticket.db_type?.toUpperCase() ?? 'MySQL'} &gt; {ticket.database || '—'}</span>
+                  <span>
+                    数据库: {ticket.db_type?.toUpperCase() ?? "MySQL"} &gt;{" "}
+                    {ticket.database || "—"}
+                  </span>
                 </div>
 
                 <Separator className="bg-[var(--border-default)]" />
@@ -214,8 +250,8 @@ export default function TicketDetailDrawer({
                     <button
                       className="absolute top-2 right-2 rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-base)] hover:text-[var(--text-primary)]"
                       onClick={() => {
-                        navigator.clipboard.writeText(ticket.sql_content)
-                        toast.success('已复制')
+                        navigator.clipboard.writeText(ticket.sql_content);
+                        toast.success("已复制");
                       }}
                     >
                       <Copy size={12} />
@@ -231,17 +267,27 @@ export default function TicketDetailDrawer({
                     </label>
                     <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 space-y-2">
                       {aiReview.summary && (
-                        <p className="text-xs text-[var(--text-primary)]">{aiReview.summary}</p>
+                        <p className="text-xs text-[var(--text-primary)]">
+                          {aiReview.summary}
+                        </p>
                       )}
-                      {aiReview.suggestions && aiReview.suggestions.length > 0 && (
-                        <ul className="space-y-1 pl-3">
-                          {aiReview.suggestions.map((s, i) => (
-                            <li key={i} className="text-xs text-[var(--text-muted)] list-disc">{s}</li>
-                          ))}
-                        </ul>
-                      )}
+                      {aiReview.suggestions &&
+                        aiReview.suggestions.length > 0 && (
+                          <ul className="space-y-1 pl-3">
+                            {aiReview.suggestions.map((s, i) => (
+                              <li
+                                key={i}
+                                className="text-xs text-[var(--text-muted)] list-disc"
+                              >
+                                {s}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       {aiReview.impact_analysis && (
-                        <p className="text-xs text-[var(--text-muted)]">影响分析: {aiReview.impact_analysis}</p>
+                        <p className="text-xs text-[var(--text-muted)]">
+                          影响分析: {aiReview.impact_analysis}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -253,7 +299,9 @@ export default function TicketDetailDrawer({
                     <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
                       变更原因
                     </label>
-                    <p className="text-xs text-[var(--text-muted)]">{ticket.change_reason}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {ticket.change_reason}
+                    </p>
                   </div>
                 )}
 
@@ -267,7 +315,9 @@ export default function TicketDetailDrawer({
                       </label>
                       <div className="space-y-1 text-xs text-[var(--text-muted)]">
                         <p>
-                          {ticket.status === 'APPROVED' || ticket.status === 'DONE' || ticket.status === 'EXECUTING'
+                          {ticket.status === "APPROVED" ||
+                          ticket.status === "DONE" ||
+                          ticket.status === "EXECUTING"
                             ? `${formatTime(ticket.updated_at)} ${ticket.reviewer_name || `用户#${ticket.reviewer_id}`} 审批通过`
                             : `${formatTime(ticket.updated_at)} ${ticket.reviewer_name || `用户#${ticket.reviewer_id}`} 已拒绝`}
                         </p>
@@ -378,7 +428,9 @@ export default function TicketDetailDrawer({
           <AlertDialogFooter>
             <AlertDialogCancel disabled={actionLoading}>取消</AlertDialogCancel>
             <AlertDialogAction onClick={handleApprove} disabled={actionLoading}>
-              {actionLoading ? <Loader2 size={14} className="animate-spin" /> : null}
+              {actionLoading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : null}
               确认通过
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -412,7 +464,9 @@ export default function TicketDetailDrawer({
               disabled={actionLoading || !rejectReason.trim()}
               variant="destructive"
             >
-              {actionLoading ? <Loader2 size={14} className="animate-spin" /> : null}
+              {actionLoading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : null}
               确认驳回
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -441,8 +495,13 @@ export default function TicketDetailDrawer({
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={actionLoading}>返回</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancel} disabled={actionLoading || !cancelReason.trim()}>
-              {actionLoading ? <Loader2 size={14} className="animate-spin" /> : null}
+            <AlertDialogAction
+              onClick={handleCancel}
+              disabled={actionLoading || !cancelReason.trim()}
+            >
+              {actionLoading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : null}
               确认取消
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -455,18 +514,21 @@ export default function TicketDetailDrawer({
           <AlertDialogHeader>
             <AlertDialogTitle>执行工单</AlertDialogTitle>
             <AlertDialogDescription>
-              确认执行工单 #{ticketId} 的 SQL？此操作将直接在目标数据库上执行变更。
+              确认执行工单 #{ticketId} 的
+              SQL？此操作将直接在目标数据库上执行变更。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={actionLoading}>取消</AlertDialogCancel>
             <AlertDialogAction onClick={handleExecute} disabled={actionLoading}>
-              {actionLoading ? <Loader2 size={14} className="animate-spin" /> : null}
+              {actionLoading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : null}
               确认执行
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </>
-  )
+  );
 }

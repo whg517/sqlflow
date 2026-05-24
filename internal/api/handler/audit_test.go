@@ -349,9 +349,9 @@ func TestAuditHandler_ListAuditLogs_FilterCombinations(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		query      string
-		wantTotal  float64
+		name      string
+		query     string
+		wantTotal float64
 	}{
 		{"filter_by_datasource_id", "datasource_id=2", 1},
 		{"filter_by_action_and_keyword", "action=query_execute&keyword=orders", 1},

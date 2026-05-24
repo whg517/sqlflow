@@ -19,19 +19,19 @@ import (
 )
 
 var (
-	ErrDingTalkDisabled    = errors.New("dingtalk oauth is not enabled")
-	ErrDingTalkAuthFailed  = errors.New("dingtalk authentication failed")
-	ErrDingTalkGetUser     = errors.New("failed to get dingtalk user info")
+	ErrDingTalkDisabled   = errors.New("dingtalk oauth is not enabled")
+	ErrDingTalkAuthFailed = errors.New("dingtalk authentication failed")
+	ErrDingTalkGetUser    = errors.New("failed to get dingtalk user info")
 )
 
 // DingTalkUser represents the user info returned by DingTalk OAuth2 userinfo endpoint.
 type DingTalkUser struct {
-	OpenID   string `json:"openId"`
-	UnionID  string `json:"unionId"`
-	Nick     string `json:"nick"`
-	Avatar   string `json:"avatar"`
-	Email    string `json:"email"`
-	Mobile   string `json:"mobile"`
+	OpenID    string `json:"openId"`
+	UnionID   string `json:"unionId"`
+	Nick      string `json:"nick"`
+	Avatar    string `json:"avatar"`
+	Email     string `json:"email"`
+	Mobile    string `json:"mobile"`
 	StateCode string `json:"stateCode"`
 }
 

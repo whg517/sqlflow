@@ -1,6 +1,6 @@
-import * as React from "react"
+import * as React from "react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 function Input({
   className,
@@ -11,14 +11,14 @@ function Input({
   ...props
 }: React.ComponentProps<"input"> & {
   /** Compact height (h-7) for toolbars and filters */
-  inputSize?: "default" | "compact"
+  inputSize?: "default" | "compact";
   /** Icon rendered on the left inside the input */
-  startIcon?: React.ReactNode
+  startIcon?: React.ReactNode;
   /** Icon rendered on the right inside the input */
-  endIcon?: React.ReactNode
+  endIcon?: React.ReactNode;
 }) {
-  const hasStartIcon = !!startIcon
-  const hasEndIcon = !!endIcon
+  const hasStartIcon = !!startIcon;
+  const hasEndIcon = !!endIcon;
 
   return (
     <div className="relative w-full">
@@ -38,7 +38,7 @@ function Input({
           inputSize === "compact" ? "h-7 text-xs" : "h-9",
           hasStartIcon && "pl-8",
           hasEndIcon && "pr-8",
-          className
+          className,
         )}
         {...props}
       />
@@ -48,7 +48,7 @@ function Input({
         </span>
       )}
     </div>
-  )
+  );
 }
 
-export { Input }
+export { Input };

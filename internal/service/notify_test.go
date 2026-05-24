@@ -195,8 +195,8 @@ func TestNotifyService_SendsWebhook(t *testing.T) {
 
 func TestNotifyService_Signature(t *testing.T) {
 	var receivedURL struct {
-		mu   sync.Mutex
-		url  string
+		mu  sync.Mutex
+		url string
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -35,7 +35,7 @@ func TestCreateMaskRule(t *testing.T) {
 	svc, _ := newTestMaskRuleService(t)
 
 	t.Run("success", func(t *testing.T) {
-		rule, err := svc.CreateMaskRule(context.Background(),0, 1, "mydb", "users", "phone", "phone", "", "")
+		rule, err := svc.CreateMaskRule(context.Background(), 0, 1, "mydb", "users", "phone", "phone", "", "")
 		if err != nil {
 			t.Fatalf("CreateMaskRule: %v", err)
 		}
@@ -54,35 +54,35 @@ func TestCreateMaskRule(t *testing.T) {
 	})
 
 	t.Run("missing table name", func(t *testing.T) {
-		_, err := svc.CreateMaskRule(context.Background(),0, 1, "mydb", "", "phone", "phone", "", "")
+		_, err := svc.CreateMaskRule(context.Background(), 0, 1, "mydb", "", "phone", "phone", "", "")
 		if err != ErrMaskRuleTableRequired {
 			t.Errorf("expected ErrMaskRuleTableRequired, got %v", err)
 		}
 	})
 
 	t.Run("missing field name", func(t *testing.T) {
-		_, err := svc.CreateMaskRule(context.Background(),0, 1, "mydb", "users", "", "phone", "", "")
+		_, err := svc.CreateMaskRule(context.Background(), 0, 1, "mydb", "users", "", "phone", "", "")
 		if err != ErrMaskRuleFieldRequired {
 			t.Errorf("expected ErrMaskRuleFieldRequired, got %v", err)
 		}
 	})
 
 	t.Run("invalid mask type", func(t *testing.T) {
-		_, err := svc.CreateMaskRule(context.Background(),0, 1, "mydb", "users", "phone", "invalid_type", "", "")
+		_, err := svc.CreateMaskRule(context.Background(), 0, 1, "mydb", "users", "phone", "invalid_type", "", "")
 		if err != ErrMaskRuleTypeInvalid {
 			t.Errorf("expected ErrMaskRuleTypeInvalid, got %v", err)
 		}
 	})
 
 	t.Run("custom without regex", func(t *testing.T) {
-		_, err := svc.CreateMaskRule(context.Background(),0, 1, "mydb", "users", "phone", "custom", "", "")
+		_, err := svc.CreateMaskRule(context.Background(), 0, 1, "mydb", "users", "phone", "custom", "", "")
 		if err != ErrMaskRuleCustomRegexRequired {
 			t.Errorf("expected ErrMaskRuleCustomRegexRequired, got %v", err)
 		}
 	})
 
 	t.Run("custom with regex succeeds", func(t *testing.T) {
-		rule, err := svc.CreateMaskRule(context.Background(),0, 1, "mydb", "users", "id_number", "custom", `\d{3}\d+`, "***")
+		rule, err := svc.CreateMaskRule(context.Background(), 0, 1, "mydb", "users", "id_number", "custom", `\d{3}\d+`, "***")
 		if err != nil {
 			t.Fatalf("CreateMaskRule custom: %v", err)
 		}
@@ -93,9 +93,9 @@ func TestCreateMaskRule(t *testing.T) {
 
 	t.Run("duplicate rule", func(t *testing.T) {
 		// Create first
-		_, _ = svc.CreateMaskRule(context.Background(),0, 2, "mydb", "orders", "amount", "full", "", "")
+		_, _ = svc.CreateMaskRule(context.Background(), 0, 2, "mydb", "orders", "amount", "full", "", "")
 		// Create duplicate
-		_, err := svc.CreateMaskRule(context.Background(),0, 2, "mydb", "orders", "amount", "full", "", "")
+		_, err := svc.CreateMaskRule(context.Background(), 0, 2, "mydb", "orders", "amount", "full", "", "")
 		if err != ErrMaskRuleDuplicate {
 			t.Errorf("expected ErrMaskRuleDuplicate, got %v", err)
 		}
@@ -105,10 +105,10 @@ func TestCreateMaskRule(t *testing.T) {
 func TestGetMaskRule(t *testing.T) {
 	svc, _ := newTestMaskRuleService(t)
 
-	rule, _ := svc.CreateMaskRule(context.Background(),0, 1, "mydb", "users", "phone", "phone", "", "")
+	rule, _ := svc.CreateMaskRule(context.Background(), 0, 1, "mydb", "users", "phone", "phone", "", "")
 
 	t.Run("existing rule", func(t *testing.T) {
-		got, err := svc.GetMaskRule(context.Background(),rule.ID)
+		got, err := svc.GetMaskRule(context.Background(), rule.ID)
 		if err != nil {
 			t.Fatalf("GetMaskRule: %v", err)
 		}
@@ -118,7 +118,7 @@ func TestGetMaskRule(t *testing.T) {
 	})
 
 	t.Run("non-existent rule", func(t *testing.T) {
-		_, err := svc.GetMaskRule(context.Background(),99999)
+		_, err := svc.GetMaskRule(context.Background(), 99999)
 		if err != ErrMaskRuleNotFound {
 			t.Errorf("expected ErrMaskRuleNotFound, got %v", err)
 		}
@@ -128,13 +128,13 @@ func TestGetMaskRule(t *testing.T) {
 func TestListMaskRules(t *testing.T) {
 	svc, _ := newTestMaskRuleService(t)
 
-	svc.CreateMaskRule(context.Background(),0, 1, "db1", "users", "phone", "phone", "", "")
-	svc.CreateMaskRule(context.Background(),0, 1, "db1", "users", "email", "email", "", "")
-	svc.CreateMaskRule(context.Background(),0, 1, "db1", "orders", "amount", "full", "", "")
-	svc.CreateMaskRule(context.Background(),0, 2, "db2", "products", "price", "full", "", "")
+	svc.CreateMaskRule(context.Background(), 0, 1, "db1", "users", "phone", "phone", "", "")
+	svc.CreateMaskRule(context.Background(), 0, 1, "db1", "users", "email", "email", "", "")
+	svc.CreateMaskRule(context.Background(), 0, 1, "db1", "orders", "amount", "full", "", "")
+	svc.CreateMaskRule(context.Background(), 0, 2, "db2", "products", "price", "full", "", "")
 
 	t.Run("list all", func(t *testing.T) {
-		rules, total, err := svc.ListMaskRules(context.Background(),1, 10, "", "", "")
+		rules, total, err := svc.ListMaskRules(context.Background(), 1, 10, "", "", "")
 		if err != nil {
 			t.Fatalf("ListMaskRules: %v", err)
 		}
@@ -147,7 +147,7 @@ func TestListMaskRules(t *testing.T) {
 	})
 
 	t.Run("filter by datasource", func(t *testing.T) {
-		rules, total, err := svc.ListMaskRules(context.Background(),1, 10, "2", "", "")
+		rules, total, err := svc.ListMaskRules(context.Background(), 1, 10, "2", "", "")
 		if err != nil {
 			t.Fatalf("ListMaskRules: %v", err)
 		}
@@ -160,7 +160,7 @@ func TestListMaskRules(t *testing.T) {
 	})
 
 	t.Run("filter by table", func(t *testing.T) {
-		_, total, err := svc.ListMaskRules(context.Background(),1, 10, "", "", "users")
+		_, total, err := svc.ListMaskRules(context.Background(), 1, 10, "", "", "users")
 		if err != nil {
 			t.Fatalf("ListMaskRules: %v", err)
 		}
@@ -170,7 +170,7 @@ func TestListMaskRules(t *testing.T) {
 	})
 
 	t.Run("pagination", func(t *testing.T) {
-		rules, total, err := svc.ListMaskRules(context.Background(),1, 2, "", "", "")
+		rules, total, err := svc.ListMaskRules(context.Background(), 1, 2, "", "", "")
 		if err != nil {
 			t.Fatalf("ListMaskRules: %v", err)
 		}
@@ -186,10 +186,10 @@ func TestListMaskRules(t *testing.T) {
 func TestUpdateMaskRule(t *testing.T) {
 	svc, _ := newTestMaskRuleService(t)
 
-	rule, _ := svc.CreateMaskRule(context.Background(),0, 1, "mydb", "users", "phone", "phone", "", "")
+	rule, _ := svc.CreateMaskRule(context.Background(), 0, 1, "mydb", "users", "phone", "phone", "", "")
 
 	t.Run("update mask type", func(t *testing.T) {
-		updated, err := svc.UpdateMaskRule(context.Background(),0, rule.ID, "", "", "full", "", "")
+		updated, err := svc.UpdateMaskRule(context.Background(), 0, rule.ID, "", "", "full", "", "")
 		if err != nil {
 			t.Fatalf("UpdateMaskRule: %v", err)
 		}
@@ -199,14 +199,14 @@ func TestUpdateMaskRule(t *testing.T) {
 	})
 
 	t.Run("update non-existent", func(t *testing.T) {
-		_, err := svc.UpdateMaskRule(context.Background(),0, 99999, "", "", "full", "", "")
+		_, err := svc.UpdateMaskRule(context.Background(), 0, 99999, "", "", "full", "", "")
 		if err != ErrMaskRuleNotFound {
 			t.Errorf("expected ErrMaskRuleNotFound, got %v", err)
 		}
 	})
 
 	t.Run("update to invalid type", func(t *testing.T) {
-		_, err := svc.UpdateMaskRule(context.Background(),0, rule.ID, "", "", "invalid", "", "")
+		_, err := svc.UpdateMaskRule(context.Background(), 0, rule.ID, "", "", "invalid", "", "")
 		if err != ErrMaskRuleTypeInvalid {
 			t.Errorf("expected ErrMaskRuleTypeInvalid, got %v", err)
 		}
@@ -216,22 +216,22 @@ func TestUpdateMaskRule(t *testing.T) {
 func TestDeleteMaskRule(t *testing.T) {
 	svc, _ := newTestMaskRuleService(t)
 
-	rule, _ := svc.CreateMaskRule(context.Background(),0, 1, "mydb", "users", "phone", "phone", "", "")
+	rule, _ := svc.CreateMaskRule(context.Background(), 0, 1, "mydb", "users", "phone", "phone", "", "")
 
 	t.Run("delete existing", func(t *testing.T) {
-		err := svc.DeleteMaskRule(context.Background(),0, rule.ID)
+		err := svc.DeleteMaskRule(context.Background(), 0, rule.ID)
 		if err != nil {
 			t.Fatalf("DeleteMaskRule: %v", err)
 		}
 		// Verify deleted
-		_, err = svc.GetMaskRule(context.Background(),rule.ID)
+		_, err = svc.GetMaskRule(context.Background(), rule.ID)
 		if err != ErrMaskRuleNotFound {
 			t.Errorf("expected ErrMaskRuleNotFound after delete, got %v", err)
 		}
 	})
 
 	t.Run("delete non-existent", func(t *testing.T) {
-		err := svc.DeleteMaskRule(context.Background(),0, 99999)
+		err := svc.DeleteMaskRule(context.Background(), 0, 99999)
 		if err != ErrMaskRuleNotFound {
 			t.Errorf("expected ErrMaskRuleNotFound, got %v", err)
 		}
@@ -242,7 +242,7 @@ func TestCreateSensitiveTable(t *testing.T) {
 	svc, _ := newTestMaskRuleService(t)
 
 	t.Run("success", func(t *testing.T) {
-		st, err := svc.CreateSensitiveTable(context.Background(),0, 1, "mydb", "users", "high")
+		st, err := svc.CreateSensitiveTable(context.Background(), 0, 1, "mydb", "users", "high")
 		if err != nil {
 			t.Fatalf("CreateSensitiveTable: %v", err)
 		}
@@ -255,22 +255,22 @@ func TestCreateSensitiveTable(t *testing.T) {
 	})
 
 	t.Run("missing table name", func(t *testing.T) {
-		_, err := svc.CreateSensitiveTable(context.Background(),0, 1, "mydb", "", "medium")
+		_, err := svc.CreateSensitiveTable(context.Background(), 0, 1, "mydb", "", "medium")
 		if err != ErrSensitiveTableRequired {
 			t.Errorf("expected ErrSensitiveTableRequired, got %v", err)
 		}
 	})
 
 	t.Run("invalid sensitivity level", func(t *testing.T) {
-		_, err := svc.CreateSensitiveTable(context.Background(),0, 1, "mydb", "test_table", "critical")
+		_, err := svc.CreateSensitiveTable(context.Background(), 0, 1, "mydb", "test_table", "critical")
 		if err != ErrInvalidSensitivityLevel {
 			t.Errorf("expected ErrInvalidSensitivityLevel, got %v", err)
 		}
 	})
 
 	t.Run("duplicate", func(t *testing.T) {
-		_, _ = svc.CreateSensitiveTable(context.Background(),0, 2, "mydb", "orders", "medium")
-		_, err := svc.CreateSensitiveTable(context.Background(),0, 2, "mydb", "orders", "low")
+		_, _ = svc.CreateSensitiveTable(context.Background(), 0, 2, "mydb", "orders", "medium")
+		_, err := svc.CreateSensitiveTable(context.Background(), 0, 2, "mydb", "orders", "low")
 		if err != ErrSensitiveTableDuplicate {
 			t.Errorf("expected ErrSensitiveTableDuplicate, got %v", err)
 		}
@@ -280,12 +280,12 @@ func TestCreateSensitiveTable(t *testing.T) {
 func TestListSensitiveTables(t *testing.T) {
 	svc, _ := newTestMaskRuleService(t)
 
-	svc.CreateSensitiveTable(context.Background(),0, 1, "db1", "users", "high")
-	svc.CreateSensitiveTable(context.Background(),0, 1, "db1", "accounts", "medium")
-	svc.CreateSensitiveTable(context.Background(),0, 2, "db2", "orders", "low")
+	svc.CreateSensitiveTable(context.Background(), 0, 1, "db1", "users", "high")
+	svc.CreateSensitiveTable(context.Background(), 0, 1, "db1", "accounts", "medium")
+	svc.CreateSensitiveTable(context.Background(), 0, 2, "db2", "orders", "low")
 
 	t.Run("list all", func(t *testing.T) {
-		tables, total, err := svc.ListSensitiveTables(context.Background(),1, 10, "", "", "")
+		tables, total, err := svc.ListSensitiveTables(context.Background(), 1, 10, "", "", "")
 		if err != nil {
 			t.Fatalf("ListSensitiveTables: %v", err)
 		}
@@ -298,7 +298,7 @@ func TestListSensitiveTables(t *testing.T) {
 	})
 
 	t.Run("filter by datasource", func(t *testing.T) {
-		tables, total, err := svc.ListSensitiveTables(context.Background(),1, 10, "1", "", "")
+		tables, total, err := svc.ListSensitiveTables(context.Background(), 1, 10, "1", "", "")
 		if err != nil {
 			t.Fatalf("ListSensitiveTables: %v", err)
 		}
@@ -311,7 +311,7 @@ func TestListSensitiveTables(t *testing.T) {
 	})
 
 	t.Run("filter by table name fuzzy", func(t *testing.T) {
-		_, total, err := svc.ListSensitiveTables(context.Background(),1, 10, "", "", "user")
+		_, total, err := svc.ListSensitiveTables(context.Background(), 1, 10, "", "", "user")
 		if err != nil {
 			t.Fatalf("ListSensitiveTables: %v", err)
 		}
@@ -324,17 +324,17 @@ func TestListSensitiveTables(t *testing.T) {
 func TestDeleteSensitiveTable(t *testing.T) {
 	svc, _ := newTestMaskRuleService(t)
 
-	st, _ := svc.CreateSensitiveTable(context.Background(),0, 1, "mydb", "users", "high")
+	st, _ := svc.CreateSensitiveTable(context.Background(), 0, 1, "mydb", "users", "high")
 
 	t.Run("delete existing", func(t *testing.T) {
-		err := svc.DeleteSensitiveTable(context.Background(),0, st.ID)
+		err := svc.DeleteSensitiveTable(context.Background(), 0, st.ID)
 		if err != nil {
 			t.Fatalf("DeleteSensitiveTable: %v", err)
 		}
 	})
 
 	t.Run("delete non-existent", func(t *testing.T) {
-		err := svc.DeleteSensitiveTable(context.Background(),0, 99999)
+		err := svc.DeleteSensitiveTable(context.Background(), 0, 99999)
 		if err != ErrSensitiveTableNotFound {
 			t.Errorf("expected ErrSensitiveTableNotFound, got %v", err)
 		}
@@ -344,13 +344,13 @@ func TestDeleteSensitiveTable(t *testing.T) {
 func TestGetSensitiveTablesForDatasource(t *testing.T) {
 	svc, _ := newTestMaskRuleService(t)
 
-	svc.CreateSensitiveTable(context.Background(),0, 1, "db1", "users", "high")
-	svc.CreateSensitiveTable(context.Background(),0, 1, "db1", "accounts", "medium")
-	svc.CreateSensitiveTable(context.Background(),0, 1, "", "global_table", "low")
-	svc.CreateSensitiveTable(context.Background(),0, 2, "db2", "orders", "high")
+	svc.CreateSensitiveTable(context.Background(), 0, 1, "db1", "users", "high")
+	svc.CreateSensitiveTable(context.Background(), 0, 1, "db1", "accounts", "medium")
+	svc.CreateSensitiveTable(context.Background(), 0, 1, "", "global_table", "low")
+	svc.CreateSensitiveTable(context.Background(), 0, 2, "db2", "orders", "high")
 
 	t.Run("filter by datasource and database", func(t *testing.T) {
-		tables, err := svc.GetSensitiveTablesForDatasource(context.Background(),1, "db1")
+		tables, err := svc.GetSensitiveTablesForDatasource(context.Background(), 1, "db1")
 		if err != nil {
 			t.Fatalf("GetSensitiveTablesForDatasource: %v", err)
 		}
@@ -361,7 +361,7 @@ func TestGetSensitiveTablesForDatasource(t *testing.T) {
 	})
 
 	t.Run("filter by datasource only", func(t *testing.T) {
-		tables, err := svc.GetSensitiveTablesForDatasource(context.Background(),1, "")
+		tables, err := svc.GetSensitiveTablesForDatasource(context.Background(), 1, "")
 		if err != nil {
 			t.Fatalf("GetSensitiveTablesForDatasource: %v", err)
 		}
@@ -385,7 +385,7 @@ func TestMaskRuleAllTypes(t *testing.T) {
 	maskTypes := []string{"phone", "id_card", "name", "email", "bank_card", "address", "full"}
 	for _, mt := range maskTypes {
 		t.Run(mt, func(t *testing.T) {
-			rule, err := svc.CreateMaskRule(context.Background(),0, 1, "mydb", "test_table", "field_"+mt, mt, "", "")
+			rule, err := svc.CreateMaskRule(context.Background(), 0, 1, "mydb", "test_table", "field_"+mt, mt, "", "")
 			if err != nil {
 				t.Fatalf("CreateMaskRule(%s): %v", mt, err)
 			}
@@ -401,7 +401,7 @@ func TestMaskRuleTimestamps(t *testing.T) {
 	svc, _ := newTestMaskRuleService(t)
 
 	before := time.Now()
-	rule, _ := svc.CreateMaskRule(context.Background(),0, 1, "mydb", "users", "phone", "phone", "", "")
+	rule, _ := svc.CreateMaskRule(context.Background(), 0, 1, "mydb", "users", "phone", "phone", "", "")
 	after := time.Now()
 
 	if rule.CreatedAt.Before(before) || rule.CreatedAt.After(after) {

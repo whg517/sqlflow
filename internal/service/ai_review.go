@@ -68,7 +68,7 @@ type AIReviewRequest struct {
 
 // SSEEvent represents a Server-Sent Event for streaming reviews.
 type SSEEvent struct {
-	Type string      // "thinking", "content", "result", "error"
+	Type string // "thinking", "content", "result", "error"
 	Data interface{}
 }
 

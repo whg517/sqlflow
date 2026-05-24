@@ -131,10 +131,10 @@ func TestGenerateDingTalkUsername(t *testing.T) {
 		want   string
 	}{
 		{"with_nick", "JohnDoe", "abc123", "dt_JohnDoe"},
-		{"short_nick", "ab", "abc123", "dt_abc123"},       // nick too short, falls back
-		{"empty_nick", "", "def456ghi", "dt_def456ghi"},    // no nick
+		{"short_nick", "ab", "abc123", "dt_abc123"},                      // nick too short, falls back
+		{"empty_nick", "", "def456ghi", "dt_def456ghi"},                  // no nick
 		{"long_openid", "nick", "abcdefghijklmnopqrstuvwxyz", "dt_nick"}, // openid truncated
-		{"chinese_nick", "张三", "abc123", "dt_abc123"},    // non-ascii nick
+		{"chinese_nick", "张三", "abc123", "dt_abc123"},                    // non-ascii nick
 	}
 
 	for _, tt := range tests {

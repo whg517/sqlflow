@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useState, useEffect, useCallback } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Database,
   FileText,
@@ -19,7 +19,7 @@ import {
   LayoutDashboard,
   Sun,
   Moon,
-} from 'lucide-react'
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,37 +27,47 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import ChangePasswordDialog from '@/components/ChangePasswordDialog'
-import CommandPalette from '@/components/CommandPalette'
-import NetworkBanner from '@/components/NetworkBanner'
-import { useTheme } from '@/hooks/useTheme'
-import { api } from '@/api/client'
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import ChangePasswordDialog from "@/components/ChangePasswordDialog";
+import CommandPalette from "@/components/CommandPalette";
+import NetworkBanner from "@/components/NetworkBanner";
+import { useTheme } from "@/hooks/useTheme";
+import { api } from "@/api/client";
 
 const settingsSubItems = [
-  { to: '/settings/datasource', label: '数据源管理', icon: Server },
-  { to: '/settings/mask-rules', label: '脱敏规则', icon: EyeOff },
-  { to: '/settings/ai-config', label: 'AI 配置', icon: Bot },
-]
+  { to: "/settings/datasource", label: "数据源管理", icon: Server },
+  { to: "/settings/mask-rules", label: "脱敏规则", icon: EyeOff },
+  { to: "/settings/ai-config", label: "AI 配置", icon: Bot },
+];
 
 interface CurrentUser {
-  username: string
-  role: string
+  username: string;
+  role: string;
 }
 
 // --- NavItem defined outside Layout to avoid react-hooks/static-components error ---
 
 interface NavItemProps {
-  to: string
-  icon: React.ElementType
-  label: string
-  collapsed: boolean
-  navLinkClass: (isActive: boolean) => string
+  to: string;
+  icon: React.ElementType;
+  label: string;
+  collapsed: boolean;
+  navLinkClass: (isActive: boolean) => string;
 }
 
-function NavItem({ to, icon: Icon, label, collapsed, navLinkClass }: NavItemProps) {
+function NavItem({
+  to,
+  icon: Icon,
+  label,
+  collapsed,
+  navLinkClass,
+}: NavItemProps) {
   return collapsed ? (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -74,75 +84,79 @@ function NavItem({ to, icon: Icon, label, collapsed, navLinkClass }: NavItemProp
       <Icon size={18} />
       <span>{label}</span>
     </NavLink>
-  )
+  );
 }
 
 export default function Layout() {
-  const location = useLocation()
+  const location = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(
-    location.pathname.startsWith('/settings'),
-  )
-  const isSettingsActive = location.pathname.startsWith('/settings')
+    location.pathname.startsWith("/settings"),
+  );
+  const isSettingsActive = location.pathname.startsWith("/settings");
 
-  const { theme, toggle } = useTheme()
-  const [user, setUser] = useState<CurrentUser | null>(null)
-  const [pwdOpen, setPwdOpen] = useState(false)
+  const { theme, toggle } = useTheme();
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [pwdOpen, setPwdOpen] = useState(false);
   const [manuallyCollapsed, setManuallyCollapsed] = useState(() => {
-    return localStorage.getItem('sidebar-collapsed') === 'true'
-  })
-  const [autoCollapsed, setAutoCollapsed] = useState(false)
-  const [cmdOpen, setCmdOpen] = useState(false)
+    return localStorage.getItem("sidebar-collapsed") === "true";
+  });
+  const [autoCollapsed, setAutoCollapsed] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
 
   // Auto-collapse at 1024-1279px per §6.2 responsive strategy
   useEffect(() => {
-    const mql = window.matchMedia('(min-width: 1024px) and (max-width: 1279px)')
+    const mql = window.matchMedia(
+      "(min-width: 1024px) and (max-width: 1279px)",
+    );
     const handler = (e: MediaQueryListEvent | MediaQueryList) => {
-      setAutoCollapsed(e.matches)
-    }
-    handler(mql)
-    mql.addEventListener('change', handler)
-    return () => mql.removeEventListener('change', handler)
-  }, [])
+      setAutoCollapsed(e.matches);
+    };
+    handler(mql);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
 
-  const collapsed = autoCollapsed || manuallyCollapsed
+  const collapsed = autoCollapsed || manuallyCollapsed;
 
   useEffect(() => {
     api
-      .get<{ code: number; data: CurrentUser }>('/auth/me')
+      .get<{ code: number; data: CurrentUser }>("/auth/me")
       .then((res) => {
-        if (res.code === 0) setUser(res.data)
+        if (res.code === 0) setUser(res.data);
       })
-      .catch(() => {})
-  }, [])
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem('sidebar-collapsed', String(manuallyCollapsed))
-  }, [manuallyCollapsed])
+    localStorage.setItem("sidebar-collapsed", String(manuallyCollapsed));
+  }, [manuallyCollapsed]);
 
-  const initial = user?.username ? user.username[0].toUpperCase() : 'U'
+  const initial = user?.username ? user.username[0].toUpperCase() : "U";
 
-  const toggleCollapse = useCallback(() => setManuallyCollapsed((c) => !c), [])
+  const toggleCollapse = useCallback(() => setManuallyCollapsed((c) => !c), []);
 
-  const sidebarWidth = collapsed ? 'w-[56px] min-w-[56px]' : 'w-[220px] min-w-[220px]'
+  const sidebarWidth = collapsed
+    ? "w-[56px] min-w-[56px]"
+    : "w-[220px] min-w-[220px]";
 
   // §2.2 Navigation item interaction — clean indicator style
   const navLinkClass = (isActive: boolean) =>
     `flex items-center rounded-md no-underline transition-colors ${
-      collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3.5 py-2.5 text-sm'
+      collapsed ? "justify-center px-0 py-2.5" : "gap-2.5 px-3.5 py-2.5 text-sm"
     } ${
       isActive
-        ? 'font-medium text-[var(--accent-primary)] bg-[var(--accent-muted)] border-l-2 border-[var(--accent-primary)]'
-        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] border-l-2 border-transparent'
-    }`
+        ? "font-medium text-[var(--accent-primary)] bg-[var(--accent-muted)] border-l-2 border-[var(--accent-primary)]"
+        : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] border-l-2 border-transparent"
+    }`;
 
   const settingsButtonClass = () =>
     `flex w-full items-center rounded-md text-left transition-colors ${
-      collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3.5 py-2.5 text-sm'
+      collapsed ? "justify-center px-0 py-2.5" : "gap-2.5 px-3.5 py-2.5 text-sm"
     } ${
       isSettingsActive
-        ? 'font-medium text-[var(--accent-primary)] bg-[var(--accent-muted)] border-l-2 border-[var(--accent-primary)]'
-        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] border-l-2 border-transparent'
-    }`
+        ? "font-medium text-[var(--accent-primary)] bg-[var(--accent-muted)] border-l-2 border-[var(--accent-primary)]"
+        : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)] border-l-2 border-transparent"
+    }`;
 
   return (
     <div className="flex h-full">
@@ -160,14 +174,53 @@ export default function Layout() {
         </div>
 
         {/* Navigation */}
-        <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-0.5 p-2 pl-0">
-          <NavItem to="/" icon={LayoutDashboard} label="概览" collapsed={collapsed} navLinkClass={navLinkClass} />
-          <NavItem to="/query" icon={Database} label="查询" collapsed={collapsed} navLinkClass={navLinkClass} />
-          <NavItem to="/tickets" icon={FileText} label="工单" collapsed={collapsed} navLinkClass={navLinkClass} />
-          <NavItem to="/permissions" icon={ShieldCheck} label="权限" collapsed={collapsed} navLinkClass={navLinkClass} />
-          <NavItem to="/audit" icon={ScrollText} label="审计" collapsed={collapsed} navLinkClass={navLinkClass} />
-          {user?.role === 'admin' && (
-            <NavItem to="/users" icon={User} label="用户管理" collapsed={collapsed} navLinkClass={navLinkClass} />
+        <nav
+          aria-label="Main navigation"
+          className="flex flex-1 flex-col gap-0.5 p-2 pl-0"
+        >
+          <NavItem
+            to="/"
+            icon={LayoutDashboard}
+            label="概览"
+            collapsed={collapsed}
+            navLinkClass={navLinkClass}
+          />
+          <NavItem
+            to="/query"
+            icon={Database}
+            label="查询"
+            collapsed={collapsed}
+            navLinkClass={navLinkClass}
+          />
+          <NavItem
+            to="/tickets"
+            icon={FileText}
+            label="工单"
+            collapsed={collapsed}
+            navLinkClass={navLinkClass}
+          />
+          <NavItem
+            to="/permissions"
+            icon={ShieldCheck}
+            label="权限"
+            collapsed={collapsed}
+            navLinkClass={navLinkClass}
+          />
+          <NavItem
+            to="/audit"
+            icon={ScrollText}
+            label="审计"
+            collapsed={collapsed}
+            navLinkClass={navLinkClass}
+          />
+          {user?.role === "admin" && (
+            <NavItem
+              to="/users"
+              icon={User}
+              label="用户管理"
+              collapsed={collapsed}
+              navLinkClass={navLinkClass}
+            />
           )}
 
           {/* Separator */}
@@ -177,7 +230,10 @@ export default function Layout() {
           {collapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={() => setSettingsOpen(!settingsOpen)} className={settingsButtonClass()}>
+                <button
+                  onClick={() => setSettingsOpen(!settingsOpen)}
+                  className={settingsButtonClass()}
+                >
                   <Settings size={18} />
                 </button>
               </TooltipTrigger>
@@ -186,12 +242,15 @@ export default function Layout() {
               </TooltipContent>
             </Tooltip>
           ) : (
-            <button onClick={() => setSettingsOpen(!settingsOpen)} className={settingsButtonClass()}>
+            <button
+              onClick={() => setSettingsOpen(!settingsOpen)}
+              className={settingsButtonClass()}
+            >
               <Settings size={18} />
               <span className="flex-1">设置</span>
               <ChevronDown
                 size={14}
-                className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''}`}
+                className={`transition-transform duration-200 ${settingsOpen ? "rotate-180" : ""}`}
               />
             </button>
           )}
@@ -206,8 +265,8 @@ export default function Layout() {
                   className={({ isActive }) =>
                     `flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs no-underline transition-colors ${
                       isActive
-                        ? 'font-medium text-[var(--accent-primary)]'
-                        : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
+                        ? "font-medium text-[var(--accent-primary)]"
+                        : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                     }`
                   }
                 >
@@ -253,13 +312,16 @@ export default function Layout() {
                 <Avatar size="sm">
                   <AvatarFallback className="text-xs">{initial}</AvatarFallback>
                 </Avatar>
-                <ChevronDown size={14} className="text-[var(--text-tertiary)]" />
+                <ChevronDown
+                  size={14}
+                  className="text-[var(--text-tertiary)]"
+                />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel className="flex items-center gap-2">
                 <User size={14} />
-                <span>{user?.username ?? '—'}</span>
+                <span>{user?.username ?? "—"}</span>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setPwdOpen(true)}>
@@ -267,15 +329,15 @@ export default function Layout() {
                 修改密码
               </DropdownMenuItem>
               <DropdownMenuItem onClick={toggle}>
-                {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-                {theme === 'dark' ? '浅色模式' : '深色模式'}
+                {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+                {theme === "dark" ? "浅色模式" : "深色模式"}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
                 onClick={() => {
-                  localStorage.removeItem('token')
-                  window.location.href = '/login'
+                  localStorage.removeItem("token");
+                  window.location.href = "/login";
                 }}
               >
                 <LogOut size={14} />
@@ -293,5 +355,5 @@ export default function Layout() {
       <ChangePasswordDialog open={pwdOpen} onOpenChange={setPwdOpen} />
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />
     </div>
-  )
+  );
 }

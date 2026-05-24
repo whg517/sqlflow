@@ -33,12 +33,12 @@ type CasbinRule struct {
 
 // Policy represents a Casbin policy line for API responses.
 type Policy struct {
-	ID    int64    `json:"id"`
-	PType string   `json:"ptype"`
-	Sub   string   `json:"sub"`
-	Dom   string   `json:"dom"`
-	Obj   string   `json:"obj"`
-	Act   string   `json:"act"`
+	ID    int64  `json:"id"`
+	PType string `json:"ptype"`
+	Sub   string `json:"sub"`
+	Dom   string `json:"dom"`
+	Obj   string `json:"obj"`
+	Act   string `json:"act"`
 }
 
 // RoleInfo represents a role with its associated policies.

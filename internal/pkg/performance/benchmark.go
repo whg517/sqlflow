@@ -14,7 +14,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
 )
 
 // RequestSpec defines a single HTTP request for benchmarking.
@@ -91,8 +90,8 @@ func DefaultBenchmarkConfig(baseURL string) *BenchmarkConfig {
 // NewBenchmarkResult initializes a Result with the given name and config.
 func NewBenchmarkResult(name string, cfg *BenchmarkConfig) *Result {
 	return &Result{
-		Name:        name,
-		Concurrency: cfg.Concurrency,
+		Name:          name,
+		Concurrency:   cfg.Concurrency,
 		TotalRequests: cfg.TotalReqs,
 	}
 }
@@ -112,14 +111,14 @@ func RunHTTPBenchmark(name string, spec RequestSpec, cfg *BenchmarkConfig) *Resu
 	}
 
 	var (
-		latencies   []time.Duration
-		mu          sync.Mutex
-		wg          sync.WaitGroup
-		reqCounter  int64
-		successCnt  int64
-		failureCnt  int64
-		errorMsgs   []string
-		errorMu     sync.Mutex
+		latencies  []time.Duration
+		mu         sync.Mutex
+		wg         sync.WaitGroup
+		reqCounter int64
+		successCnt int64
+		failureCnt int64
+		errorMsgs  []string
+		errorMu    sync.Mutex
 	)
 
 	// Work dispatcher
@@ -183,10 +182,10 @@ func executeRequest(client *http.Client, spec RequestSpec) LatencyRecord {
 	trace := &httptrace.ClientTrace{
 		DNSStart:             func(_ httptrace.DNSStartInfo) { dnsStart = time.Now() },
 		DNSDone:              func(_ httptrace.DNSDoneInfo) { dnsDur = time.Since(dnsStart) },
-		TLSHandshakeStart:   func() { tlsStart = time.Now() },
-		TLSHandshakeDone:    func(tls.ConnectionState, error) { tlsDur = time.Since(tlsStart) },
-		ConnectStart:        func(_, _ string) { tcpStart = time.Now() },
-		ConnectDone:         func(_, _ string, err error) { tcpDur = time.Since(tcpStart) },
+		TLSHandshakeStart:    func() { tlsStart = time.Now() },
+		TLSHandshakeDone:     func(tls.ConnectionState, error) { tlsDur = time.Since(tlsStart) },
+		ConnectStart:         func(_, _ string) { tcpStart = time.Now() },
+		ConnectDone:          func(_, _ string, err error) { tcpDur = time.Since(tcpStart) },
 		GotFirstResponseByte: func() { firstByteDur = time.Since(firstByteStart) },
 	}
 
@@ -205,11 +204,11 @@ func executeRequest(client *http.Client, spec RequestSpec) LatencyRecord {
 	resp, err := client.Do(req)
 	if err != nil {
 		return LatencyRecord{
-			Total:      time.Since(start),
-			DNS:        dnsDur,
-			TCPConnect: tcpDur,
+			Total:        time.Since(start),
+			DNS:          dnsDur,
+			TCPConnect:   tcpDur,
 			TLSHandshake: tlsDur,
-			Error:      err,
+			Error:        err,
 		}
 	}
 	defer resp.Body.Close()

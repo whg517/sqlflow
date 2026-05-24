@@ -16,15 +16,15 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 
 	t.Run("create_and_list_single", func(t *testing.T) {
 		h := &model.QueryHistory{
-			UserID:       userID,
-			DatasourceID: dsID,
-			Database:     "testdb",
-			SQLContent:   "SELECT * FROM users LIMIT 10",
-			SQLSummary:   "SELECT * FROM users",
-			DBType:       "mysql",
+			UserID:        userID,
+			DatasourceID:  dsID,
+			Database:      "testdb",
+			SQLContent:    "SELECT * FROM users LIMIT 10",
+			SQLSummary:    "SELECT * FROM users",
+			DBType:        "mysql",
 			ExecutionTime: 25,
-			ResultRows:   10,
-			AffectedRows: 0,
+			ResultRows:    10,
+			AffectedRows:  0,
 		}
 		if err := svc.CreateHistory(context.Background(), h); err != nil {
 			t.Fatalf("CreateHistory: %v", err)
@@ -55,15 +55,15 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 		// Insert 5 more records
 		for i := 0; i < 5; i++ {
 			h := &model.QueryHistory{
-				UserID:       userID,
-				DatasourceID: dsID,
-				Database:     "testdb",
-				SQLContent:   "SELECT 1",
-				SQLSummary:   "SELECT 1",
-				DBType:       "mysql",
+				UserID:        userID,
+				DatasourceID:  dsID,
+				Database:      "testdb",
+				SQLContent:    "SELECT 1",
+				SQLSummary:    "SELECT 1",
+				DBType:        "mysql",
 				ExecutionTime: int64(i),
-				ResultRows:   1,
-				AffectedRows: 0,
+				ResultRows:    1,
+				AffectedRows:  0,
 			}
 			if err := svc.CreateHistory(context.Background(), h); err != nil {
 				t.Fatalf("CreateHistory %d: %v", i, err)
@@ -265,15 +265,15 @@ func TestQueryHistoryService_CreateHistoryWithZeroValues(t *testing.T) {
 
 	t.Run("zero_optional_fields", func(t *testing.T) {
 		h := &model.QueryHistory{
-			UserID:       userID,
-			DatasourceID: dsID,
-			Database:     "",
-			SQLContent:   "SELECT 1",
-			SQLSummary:   "",
-			DBType:       "mysql",
+			UserID:        userID,
+			DatasourceID:  dsID,
+			Database:      "",
+			SQLContent:    "SELECT 1",
+			SQLSummary:    "",
+			DBType:        "mysql",
 			ExecutionTime: 0,
-			ResultRows:   0,
-			AffectedRows: 0,
+			ResultRows:    0,
+			AffectedRows:  0,
 		}
 		if err := svc.CreateHistory(context.Background(), h); err != nil {
 			t.Fatalf("CreateHistory: %v", err)

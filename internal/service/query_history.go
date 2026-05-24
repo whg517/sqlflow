@@ -121,5 +121,3 @@ func (s *QueryHistoryService) cleanupOldRecords(userID int64) {
 		userID, userID, maxHistoryPerUser,
 	)
 }
-
-

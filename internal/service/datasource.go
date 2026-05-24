@@ -15,9 +15,9 @@ import (
 )
 
 var (
-	ErrDatasourceNotFound  = errors.New("数据源不存在")
-	ErrDatasourceNameExists = errors.New("数据源名称已存在")
-	ErrDatasourceDisabled  = errors.New("数据源已禁用")
+	ErrDatasourceNotFound    = errors.New("数据源不存在")
+	ErrDatasourceNameExists  = errors.New("数据源名称已存在")
+	ErrDatasourceDisabled    = errors.New("数据源已禁用")
 	ErrInvalidDatasourceType = errors.New("数据源类型必须是 mysql 或 mongodb")
 )
 

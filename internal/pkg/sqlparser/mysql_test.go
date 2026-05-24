@@ -143,8 +143,8 @@ func TestParseMySQL_Joins(t *testing.T) {
 			wantTables: []string{"a", "b", "c"},
 		},
 		{
-			name:       "self_join",
-			sql:        "SELECT e1.name, e2.name FROM employees e1 JOIN employees e2 ON e1.manager_id = e2.id",
+			name: "self_join",
+			sql:  "SELECT e1.name, e2.name FROM employees e1 JOIN employees e2 ON e1.manager_id = e2.id",
 			// Same table with different aliases — deduplicated
 			wantTables: []string{"employees"},
 		},

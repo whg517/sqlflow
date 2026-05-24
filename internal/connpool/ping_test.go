@@ -383,8 +383,12 @@ func TestMySQLPing_TableDriven(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "expired_context",
-			ctx:      func() context.Context { ctx, _ := context.WithTimeout(context.Background(), 1*time.Nanosecond); time.Sleep(time.Millisecond); return ctx }(),
+			name: "expired_context",
+			ctx: func() context.Context {
+				ctx, _ := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+				time.Sleep(time.Millisecond)
+				return ctx
+			}(),
 			host:     "127.0.0.1",
 			port:     3306,
 			user:     "root",
@@ -446,8 +450,12 @@ func TestMySQLGetTables_TableDriven(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "expired_context",
-			ctx:      func() context.Context { ctx, _ := context.WithTimeout(context.Background(), 1*time.Nanosecond); time.Sleep(time.Millisecond); return ctx }(),
+			name: "expired_context",
+			ctx: func() context.Context {
+				ctx, _ := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+				time.Sleep(time.Millisecond)
+				return ctx
+			}(),
 			host:     "127.0.0.1",
 			port:     3306,
 			user:     "root",

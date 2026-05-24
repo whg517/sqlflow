@@ -1,22 +1,28 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { MessageSquare, Send, Trash2, CornerDownRight, Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Separator } from '@/components/ui/separator'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  MessageSquare,
+  Send,
+  Trash2,
+  CornerDownRight,
+  Loader2,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   listComments,
   createComment,
   deleteComment,
   formatCommentTime,
   type Comment,
-} from '@/api/comment'
+} from "@/api/comment";
 
 interface CommentSectionProps {
-  orderId: number
-  currentUserId: number
-  currentUserRole: string
+  orderId: number;
+  currentUserId: number;
+  currentUserRole: string;
 }
 
 export default function CommentSection({
@@ -24,114 +30,126 @@ export default function CommentSection({
   currentUserId,
   currentUserRole,
 }: CommentSectionProps) {
-  const [comments, setComments] = useState<Comment[]>([])
-  const [loading, setLoading] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [content, setContent] = useState('')
-  const [replyTo, setReplyTo] = useState<Comment | null>(null)
-  const [deletingId, setDeletingId] = useState<number | null>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [content, setContent] = useState("");
+  const [replyTo, setReplyTo] = useState<Comment | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const fetchComments = useCallback(async () => {
-    setLoading(true)
+    setLoading(true);
     try {
-      const res = await listComments(orderId)
-      setComments(res.data || [])
+      const res = await listComments(orderId);
+      setComments(res.data || []);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '获取评论失败')
+      toast.error(err instanceof Error ? err.message : "获取评论失败");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [orderId])
+  }, [orderId]);
 
   // Fetch comments when orderId changes — schedule outside synchronous effect body
-  const prevOrderIdRef = useRef(orderId)
+  const prevOrderIdRef = useRef(orderId);
   useEffect(() => {
     if (orderId > 0 && orderId !== prevOrderIdRef.current) {
-      const id = requestAnimationFrame(() => { fetchComments() })
-      prevOrderIdRef.current = orderId
-      return () => cancelAnimationFrame(id)
+      const id = requestAnimationFrame(() => {
+        fetchComments();
+      });
+      prevOrderIdRef.current = orderId;
+      return () => cancelAnimationFrame(id);
     }
-    prevOrderIdRef.current = orderId
-  }, [orderId, fetchComments])
+    prevOrderIdRef.current = orderId;
+  }, [orderId, fetchComments]);
 
   // Auto-scroll to bottom when comments change
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [comments])
+  }, [comments]);
 
   async function handleSubmit() {
-    const text = content.trim()
-    if (!text) return
+    const text = content.trim();
+    if (!text) return;
 
-    setSubmitting(true)
+    setSubmitting(true);
     try {
-      const res = await createComment(orderId, text, replyTo?.id)
-      setComments((prev) => [...prev, res.data])
-      setContent('')
-      setReplyTo(null)
+      const res = await createComment(orderId, text, replyTo?.id);
+      setComments((prev) => [...prev, res.data]);
+      setContent("");
+      setReplyTo(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '发送评论失败')
+      toast.error(err instanceof Error ? err.message : "发送评论失败");
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   function handleReply(comment: Comment) {
-    setReplyTo(comment)
+    setReplyTo(comment);
     // Focus the textarea
-    const textarea = document.querySelector<HTMLTextAreaElement>('[data-comment-input]')
-    textarea?.focus()
+    const textarea = document.querySelector<HTMLTextAreaElement>(
+      "[data-comment-input]",
+    );
+    textarea?.focus();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      handleSubmit()
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSubmit();
     }
-    if (e.key === 'Escape' && replyTo) {
-      setReplyTo(null)
+    if (e.key === "Escape" && replyTo) {
+      setReplyTo(null);
     }
   }
 
   async function handleDelete(commentId: number) {
-    setDeletingId(commentId)
+    setDeletingId(commentId);
     try {
-      await deleteComment(commentId)
-      setComments((prev) => prev.filter((c) => c.id !== commentId && c.parent_id !== commentId))
-      toast.success('评论已删除')
+      await deleteComment(commentId);
+      setComments((prev) =>
+        prev.filter((c) => c.id !== commentId && c.parent_id !== commentId),
+      );
+      toast.success("评论已删除");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '删除评论失败')
+      toast.error(err instanceof Error ? err.message : "删除评论失败");
     } finally {
-      setDeletingId(null)
+      setDeletingId(null);
     }
   }
 
   function canDelete(comment: Comment): boolean {
-    return comment.user_id === currentUserId || currentUserRole === 'admin' || currentUserRole === 'dba'
+    return (
+      comment.user_id === currentUserId ||
+      currentUserRole === "admin" ||
+      currentUserRole === "dba"
+    );
   }
 
   // Build a tree structure: top-level comments and their replies
-  const topLevelComments = comments.filter((c) => c.parent_id === 0)
-  const repliesMap = new Map<number, Comment[]>()
-  comments.filter((c) => c.parent_id > 0).forEach((c) => {
-    const existing = repliesMap.get(c.parent_id) || []
-    existing.push(c)
-    repliesMap.set(c.parent_id, existing)
-  })
+  const topLevelComments = comments.filter((c) => c.parent_id === 0);
+  const repliesMap = new Map<number, Comment[]>();
+  comments
+    .filter((c) => c.parent_id > 0)
+    .forEach((c) => {
+      const existing = repliesMap.get(c.parent_id) || [];
+      existing.push(c);
+      repliesMap.set(c.parent_id, existing);
+    });
 
   function getInitials(name: string): string {
-    return (name || '?').charAt(0).toUpperCase()
+    return (name || "?").charAt(0).toUpperCase();
   }
 
   function renderComment(comment: Comment, isReply: boolean = false) {
-    const replies = repliesMap.get(comment.id) || []
-    const isDeleting = deletingId === comment.id
+    const replies = repliesMap.get(comment.id) || [];
+    const isDeleting = deletingId === comment.id;
 
     return (
-      <div key={comment.id} className={isReply ? 'ml-8 mt-2' : ''}>
+      <div key={comment.id} className={isReply ? "ml-8 mt-2" : ""}>
         <div className="group flex gap-3 py-2">
           <Avatar size="sm" className="mt-0.5 shrink-0">
             <AvatarFallback className="bg-[var(--accent-primary)] text-white text-[10px]">
@@ -164,7 +182,11 @@ export default function CommentSection({
                   onClick={() => handleDelete(comment.id)}
                   disabled={isDeleting}
                 >
-                  {isDeleting ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                  {isDeleting ? (
+                    <Loader2 size={10} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={10} />
+                  )}
                   删除
                 </button>
               )}
@@ -174,7 +196,7 @@ export default function CommentSection({
         {/* Render replies */}
         {replies.map((reply) => renderComment(reply, true))}
       </div>
-    )
+    );
   }
 
   return (
@@ -209,7 +231,10 @@ export default function CommentSection({
       <div ref={scrollRef} className="max-h-[280px] overflow-y-auto py-1">
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 size={16} className="animate-spin text-[var(--text-muted)]" />
+            <Loader2
+              size={16}
+              className="animate-spin text-[var(--text-muted)]"
+            />
           </div>
         ) : comments.length === 0 ? (
           <div className="py-6 text-center text-xs text-[var(--text-muted)]">
@@ -230,7 +255,11 @@ export default function CommentSection({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={replyTo ? `回复 ${replyTo.username}...` : '输入评论... (Ctrl+Enter 发送)'}
+            placeholder={
+              replyTo
+                ? `回复 ${replyTo.username}...`
+                : "输入评论... (Ctrl+Enter 发送)"
+            }
             className="min-h-[60px] max-h-[120px] resize-none border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
             disabled={submitting}
           />
@@ -249,5 +278,5 @@ export default function CommentSection({
         </div>
       </div>
     </div>
-  )
+  );
 }

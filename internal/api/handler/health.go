@@ -27,10 +27,10 @@ func NewHealthHandler(db *sql.DB) *HealthHandler {
 
 // HealthResponse is the JSON response for /health.
 type HealthResponse struct {
-	Status string `json:"status"`
+	Status  string `json:"status"`
 	Version string `json:"version"`
-	Uptime int64  `json:"uptime"`
-	DB     string `json:"db"`
+	Uptime  int64  `json:"uptime"`
+	DB      string `json:"db"`
 }
 
 // Health returns the health status of the service.
@@ -41,10 +41,10 @@ func (h *HealthHandler) Health(c echo.Context) error {
 	}
 
 	resp := HealthResponse{
-		Status: "ok",
+		Status:  "ok",
 		Version: h.version,
-		Uptime: int64(time.Since(h.started).Seconds()),
-		DB:     dbStatus,
+		Uptime:  int64(time.Since(h.started).Seconds()),
+		DB:      dbStatus,
 	}
 
 	if dbStatus != "ok" {

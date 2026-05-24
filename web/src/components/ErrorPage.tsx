@@ -1,13 +1,13 @@
-import { useNavigate } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
-import { ShieldX, FileQuestion } from 'lucide-react'
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { ShieldX, FileQuestion } from "lucide-react";
 
 interface ErrorPageProps {
-  code: 403 | 404
+  code: 403 | 404;
 }
 
 export default function ErrorPage({ code }: ErrorPageProps) {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
   if (code === 403) {
     return (
@@ -21,7 +21,7 @@ export default function ErrorPage({ code }: ErrorPageProps) {
           返回上一页
         </Button>
       </div>
-    )
+    );
   }
 
   return (
@@ -31,9 +31,9 @@ export default function ErrorPage({ code }: ErrorPageProps) {
       <p className="text-sm text-[var(--text-secondary)]">
         页面不存在或已被移除
       </p>
-      <Button variant="outline" onClick={() => navigate('/query')}>
+      <Button variant="outline" onClick={() => navigate("/query")}>
         返回首页
       </Button>
     </div>
-  )
+  );
 }

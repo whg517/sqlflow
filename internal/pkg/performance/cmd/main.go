@@ -5,11 +5,12 @@
 //	go run ./internal/pkg/performance/cmd/... -url http://localhost:8080 -reqs 200 -concurrency 20
 //
 // Flags:
-//   -url         Server base URL (default: http://localhost:8080)
-//   -reqs        Total requests per endpoint (default: 200)
-//   -concurrency Concurrent goroutines (default: 20)
-//   -output      Output file path for JSON report (default: stdout)
-//   -version     Print version and exit
+//
+//	-url         Server base URL (default: http://localhost:8080)
+//	-reqs        Total requests per endpoint (default: 200)
+//	-concurrency Concurrent goroutines (default: 20)
+//	-output      Output file path for JSON report (default: stdout)
+//	-version     Print version and exit
 package main
 
 import (

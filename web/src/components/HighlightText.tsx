@@ -1,35 +1,40 @@
-import { useMemo } from 'react'
+import { useMemo } from "react";
 
 interface HighlightTextProps {
-  text: string
-  keyword: string
-  className?: string
-  maxLen?: number
+  text: string;
+  keyword: string;
+  className?: string;
+  maxLen?: number;
 }
 
 /**
  * Highlights occurrences of `keyword` in `text` using <mark> tags.
  * Truncates text to `maxLen` characters if provided.
  */
-export default function HighlightText({ text, keyword, className, maxLen = 120 }: HighlightTextProps) {
+export default function HighlightText({
+  text,
+  keyword,
+  className,
+  maxLen = 120,
+}: HighlightTextProps) {
   const parts = useMemo(() => {
     if (!keyword.trim()) {
-      const display = text.length > maxLen ? text.slice(0, maxLen) + '…' : text
-      return [{ text: display, highlight: false }]
+      const display = text.length > maxLen ? text.slice(0, maxLen) + "…" : text;
+      return [{ text: display, highlight: false }];
     }
 
-    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const regex = new RegExp(`(${escaped})`, 'gi')
-    const display = text.length > maxLen ? text.slice(0, maxLen) + '…' : text
-    const segments = display.split(regex)
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(${escaped})`, "gi");
+    const display = text.length > maxLen ? text.slice(0, maxLen) + "…" : text;
+    const segments = display.split(regex);
 
     return segments
       .filter((s) => s.length > 0)
       .map((s) => ({
         text: s,
         highlight: regex.test(s),
-      }))
-  }, [text, keyword, maxLen])
+      }));
+  }, [text, keyword, maxLen]);
 
   return (
     <span className={className}>
@@ -43,5 +48,5 @@ export default function HighlightText({ text, keyword, className, maxLen = 120 }
         ),
       )}
     </span>
-  )
+  );
 }

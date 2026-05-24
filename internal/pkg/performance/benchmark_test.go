@@ -149,14 +149,14 @@ func TestBaselineResultJSON(t *testing.T) {
 func TestGenerateSummary(t *testing.T) {
 	r := NewReport(nil)
 	r.HTTPResults = append(r.HTTPResults, &Result{
-		Name:          "Login (POST /api/auth/login)",
-		Concurrency:   10,
-		TotalRequests: 100,
-		SuccessCount:  95,
-		FailureCount:  5,
-		AvgLatency:    50 * time.Millisecond,
-		P95Latency:    200 * time.Millisecond,
-		P99Latency:    500 * time.Millisecond,
+		Name:           "Login (POST /api/auth/login)",
+		Concurrency:    10,
+		TotalRequests:  100,
+		SuccessCount:   95,
+		FailureCount:   5,
+		AvgLatency:     50 * time.Millisecond,
+		P95Latency:     200 * time.Millisecond,
+		P99Latency:     500 * time.Millisecond,
 		RequestsPerSec: 95.0,
 	})
 
@@ -230,16 +230,16 @@ func TestConcurrentWriteBenchmark(t *testing.T) {
 func TestBaselineCheck(t *testing.T) {
 	r := NewReport(nil)
 	r.HTTPResults = append(r.HTTPResults, &Result{
-		Name:        "Login (POST /api/auth/login)",
-		P95Latency:  100 * time.Millisecond, // under baseline
+		Name:       "Login (POST /api/auth/login)",
+		P95Latency: 100 * time.Millisecond, // under baseline
 	})
 	r.HTTPResults = append(r.HTTPResults, &Result{
-		Name:        "Dashboard Stats (GET /api/dashboard/stats)",
-		P95Latency:  500 * time.Millisecond, // over baseline (200ms)
+		Name:       "Dashboard Stats (GET /api/dashboard/stats)",
+		P95Latency: 500 * time.Millisecond, // over baseline (200ms)
 	})
 	r.HTTPResults = append(r.HTTPResults, &Result{
-		Name:        "Ticket Create (POST /api/tickets)",
-		P95Latency:  1000 * time.Millisecond, // over baseline (500ms)
+		Name:       "Ticket Create (POST /api/tickets)",
+		P95Latency: 1000 * time.Millisecond, // over baseline (500ms)
 	})
 
 	r.CheckBaselines()
@@ -363,11 +363,11 @@ func TestNewBenchmarkResult(t *testing.T) {
 func TestReportJSON(t *testing.T) {
 	r := NewReport(nil)
 	r.HTTPResults = append(r.HTTPResults, &Result{
-		Name:         "Test",
-		Concurrency:  5,
+		Name:          "Test",
+		Concurrency:   5,
 		TotalRequests: 10,
-		SuccessCount: 10,
-		AvgLatency:   10 * time.Millisecond,
+		SuccessCount:  10,
+		AvgLatency:    10 * time.Millisecond,
 	})
 
 	json := r.JSON()
@@ -379,10 +379,10 @@ func TestReportJSON(t *testing.T) {
 func TestGenerateSuggestions_FailureRate(t *testing.T) {
 	r := NewReport(nil)
 	r.HTTPResults = append(r.HTTPResults, &Result{
-		Name:          "Flaky Endpoint",
-		TotalRequests: 100,
-		FailureCount:  10, // 10% failure rate
-		P99Latency:    100 * time.Millisecond,
+		Name:           "Flaky Endpoint",
+		TotalRequests:  100,
+		FailureCount:   10, // 10% failure rate
+		P99Latency:     100 * time.Millisecond,
 		RequestsPerSec: 50,
 	})
 
@@ -402,10 +402,10 @@ func TestGenerateSuggestions_FailureRate(t *testing.T) {
 func TestGenerateSuggestions_HighP99(t *testing.T) {
 	r := NewReport(nil)
 	r.HTTPResults = append(r.HTTPResults, &Result{
-		Name:          "Slow Endpoint",
-		TotalRequests: 100,
-		FailureCount:  0,
-		P99Latency:    5 * time.Second, // over 2s
+		Name:           "Slow Endpoint",
+		TotalRequests:  100,
+		FailureCount:   0,
+		P99Latency:     5 * time.Second, // over 2s
 		RequestsPerSec: 50,
 	})
 
@@ -425,10 +425,10 @@ func TestGenerateSuggestions_HighP99(t *testing.T) {
 func TestGenerateSuggestions_LowQPS(t *testing.T) {
 	r := NewReport(nil)
 	r.HTTPResults = append(r.HTTPResults, &Result{
-		Name:          "Bottleneck Endpoint",
-		TotalRequests: 100,
-		FailureCount:  0,
-		P99Latency:    100 * time.Millisecond,
+		Name:           "Bottleneck Endpoint",
+		TotalRequests:  100,
+		FailureCount:   0,
+		P99Latency:     100 * time.Millisecond,
 		RequestsPerSec: 5, // under 10
 	})
 
@@ -448,10 +448,10 @@ func TestGenerateSuggestions_LowQPS(t *testing.T) {
 func TestGenerateSuggestions_AllPass(t *testing.T) {
 	r := NewReport(nil)
 	r.HTTPResults = append(r.HTTPResults, &Result{
-		Name:          "Good Endpoint",
-		TotalRequests: 100,
-		FailureCount:  0,
-		P99Latency:    100 * time.Millisecond,
+		Name:           "Good Endpoint",
+		TotalRequests:  100,
+		FailureCount:   0,
+		P99Latency:     100 * time.Millisecond,
 		RequestsPerSec: 100,
 	})
 
@@ -504,19 +504,19 @@ func TestGenerateSuggestions_DBSlowSelect(t *testing.T) {
 // TestResultJSONSerialization verifies Result struct JSON output.
 func TestResultJSONSerialization(t *testing.T) {
 	r := &Result{
-		Name:          "Test",
-		Concurrency:   5,
-		TotalRequests: 10,
-		SuccessCount:  10,
-		FailureCount:  0,
-		TotalDuration: 100 * time.Millisecond,
-		AvgLatency:    10 * time.Millisecond,
-		P50Latency:    10 * time.Millisecond,
-		P90Latency:    15 * time.Millisecond,
-		P95Latency:    20 * time.Millisecond,
-		P99Latency:    25 * time.Millisecond,
-		MinLatency:    5 * time.Millisecond,
-		MaxLatency:    30 * time.Millisecond,
+		Name:           "Test",
+		Concurrency:    5,
+		TotalRequests:  10,
+		SuccessCount:   10,
+		FailureCount:   0,
+		TotalDuration:  100 * time.Millisecond,
+		AvgLatency:     10 * time.Millisecond,
+		P50Latency:     10 * time.Millisecond,
+		P90Latency:     15 * time.Millisecond,
+		P95Latency:     20 * time.Millisecond,
+		P99Latency:     25 * time.Millisecond,
+		MinLatency:     5 * time.Millisecond,
+		MaxLatency:     30 * time.Millisecond,
 		RequestsPerSec: 100.0,
 	}
 	json := r.JSON()

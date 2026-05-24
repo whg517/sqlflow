@@ -69,7 +69,7 @@ func TestAuditService_WriteSync(t *testing.T) {
 
 	// Write several records — each is persisted immediately.
 	for i := 0; i < 10; i++ {
-		svc.Write(context.Background(),AuditRecord{
+		svc.Write(context.Background(), AuditRecord{
 			UserID:     int64(i + 1),
 			Action:     "query_execute",
 			SQLContent: fmt.Sprintf("SELECT %d", i),
@@ -93,7 +93,7 @@ func TestAuditService_WriteSingleRecord(t *testing.T) {
 
 	svc := NewAuditService(db, 0, 0)
 
-	svc.Write(context.Background(),AuditRecord{
+	svc.Write(context.Background(), AuditRecord{
 		UserID:     1,
 		Action:     "export",
 		SQLContent: "SELECT * FROM orders",
@@ -122,7 +122,7 @@ func TestAuditService_List_NoFilters(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
-		svc.Write(context.Background(),AuditRecord{
+		svc.Write(context.Background(), AuditRecord{
 			UserID:     1,
 			Action:     "query_execute",
 			SQLContent: fmt.Sprintf("SELECT %d", i),
@@ -133,7 +133,7 @@ func TestAuditService_List_NoFilters(t *testing.T) {
 	svc2 := NewAuditService(db, 100, 50*time.Millisecond)
 	defer svc2.Close()
 
-	logs, total, err := svc2.List(context.Background(),1, 10, "", "", "", "", "", "")
+	logs, total, err := svc2.List(context.Background(), 1, 10, "", "", "", "", "", "")
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestAuditService_List_WithFilters(t *testing.T) {
 	}
 	svc := NewAuditService(db, 100, 50*time.Millisecond)
 	for _, r := range records {
-		svc.Write(context.Background(),r)
+		svc.Write(context.Background(), r)
 	}
 	svc.Close()
 
@@ -170,7 +170,7 @@ func TestAuditService_List_WithFilters(t *testing.T) {
 	defer svc2.Close()
 
 	t.Run("filter by action", func(t *testing.T) {
-		_, total, err := svc2.List(context.Background(),1, 10, "", "query_execute", "", "", "", "")
+		_, total, err := svc2.List(context.Background(), 1, 10, "", "query_execute", "", "", "", "")
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -180,7 +180,7 @@ func TestAuditService_List_WithFilters(t *testing.T) {
 	})
 
 	t.Run("filter by user_id", func(t *testing.T) {
-		_, total, err := svc2.List(context.Background(),1, 10, "1", "", "", "", "", "")
+		_, total, err := svc2.List(context.Background(), 1, 10, "1", "", "", "", "", "")
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -190,7 +190,7 @@ func TestAuditService_List_WithFilters(t *testing.T) {
 	})
 
 	t.Run("filter by datasource_id", func(t *testing.T) {
-		_, total, err := svc2.List(context.Background(),1, 10, "", "", "2", "", "", "")
+		_, total, err := svc2.List(context.Background(), 1, 10, "", "", "2", "", "", "")
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -200,7 +200,7 @@ func TestAuditService_List_WithFilters(t *testing.T) {
 	})
 
 	t.Run("filter by keyword in sql_content", func(t *testing.T) {
-		_, total, err := svc2.List(context.Background(),1, 10, "", "", "", "", "", "orders")
+		_, total, err := svc2.List(context.Background(), 1, 10, "", "", "", "", "", "orders")
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -221,7 +221,7 @@ func TestAuditService_List_Pagination(t *testing.T) {
 
 	svc := NewAuditService(db, 100, 50*time.Millisecond)
 	for i := 0; i < 15; i++ {
-		svc.Write(context.Background(),AuditRecord{
+		svc.Write(context.Background(), AuditRecord{
 			UserID:     1,
 			Action:     "query_execute",
 			SQLContent: fmt.Sprintf("SELECT %d", i),
@@ -233,7 +233,7 @@ func TestAuditService_List_Pagination(t *testing.T) {
 	defer svc2.Close()
 
 	// Page 1 with size 5.
-	logs, total, err := svc2.List(context.Background(),1, 5, "", "", "", "", "", "")
+	logs, total, err := svc2.List(context.Background(), 1, 5, "", "", "", "", "", "")
 	if err != nil {
 		t.Fatalf("list page 1: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestAuditService_List_Pagination(t *testing.T) {
 	}
 
 	// Page 3 with size 5.
-	logs, _, err = svc2.List(context.Background(),3, 5, "", "", "", "", "", "")
+	logs, _, err = svc2.List(context.Background(), 3, 5, "", "", "", "", "", "")
 	if err != nil {
 		t.Fatalf("list page 3: %v", err)
 	}
@@ -254,7 +254,7 @@ func TestAuditService_List_Pagination(t *testing.T) {
 	}
 
 	// Page 4 with size 5 should be empty.
-	logs, _, err = svc2.List(context.Background(),4, 5, "", "", "", "", "", "")
+	logs, _, err = svc2.List(context.Background(), 4, 5, "", "", "", "", "", "")
 	if err != nil {
 		t.Fatalf("list page 4: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestAuditService_List_Empty(t *testing.T) {
 	svc := NewAuditService(db, 100, 50*time.Millisecond)
 	defer svc.Close()
 
-	logs, total, err := svc.List(context.Background(),1, 10, "", "", "", "", "", "")
+	logs, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "")
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -324,11 +324,11 @@ func TestAuditService_List_KeywordWithWildcards(t *testing.T) {
 		{UserID: 1, Action: "query_execute", SQLContent: "SELECT 50%_off FROM promotions"},
 	}
 	for _, r := range records {
-		svc.Write(context.Background(),r)
+		svc.Write(context.Background(), r)
 	}
 
 	t.Run("keyword with % only matches literal", func(t *testing.T) {
-		_, total, err := svc.List(context.Background(),1, 10, "", "", "", "", "", "100%")
+		_, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "100%")
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -339,7 +339,7 @@ func TestAuditService_List_KeywordWithWildcards(t *testing.T) {
 	})
 
 	t.Run("keyword with _ only matches literal", func(t *testing.T) {
-		_, total, err := svc.List(context.Background(),1, 10, "", "", "", "", "", "discount_100")
+		_, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "discount_100")
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -350,7 +350,7 @@ func TestAuditService_List_KeywordWithWildcards(t *testing.T) {
 	})
 
 	t.Run("keyword with both % and _", func(t *testing.T) {
-		_, total, err := svc.List(context.Background(),1, 10, "", "", "", "", "", "50%_off")
+		_, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "50%_off")
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -361,7 +361,7 @@ func TestAuditService_List_KeywordWithWildcards(t *testing.T) {
 	})
 
 	t.Run("plain keyword matches multiple", func(t *testing.T) {
-		_, total, err := svc.List(context.Background(),1, 10, "", "", "", "", "", "SELECT")
+		_, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "SELECT")
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -376,7 +376,7 @@ func TestAuditService_CloseIsNoop(t *testing.T) {
 	defer db.Close()
 
 	svc := NewAuditService(db, 0, 0)
-	svc.Write(context.Background(),AuditRecord{UserID: 1, Action: "query_execute"})
+	svc.Write(context.Background(), AuditRecord{UserID: 1, Action: "query_execute"})
 	svc.Close()
 
 	// Close is a no-op; data is already written.
@@ -445,19 +445,19 @@ func TestAuditService_Write_AllFields(t *testing.T) {
 	svc.Write(context.Background(), rec)
 
 	var (
-		id                int64
-		userID            int64
-		action            string
-		datasourceID      int64
-		database          string
-		sqlContent        string
-		sqlSummary        string
-		resultRows        int64
-		affectedRows      int64
-		executionTimeMs   int64
-		errorMessage      string
+		id                 int64
+		userID             int64
+		action             string
+		datasourceID       int64
+		database           string
+		sqlContent         string
+		sqlSummary         string
+		resultRows         int64
+		affectedRows       int64
+		executionTimeMs    int64
+		errorMessage       string
 		desensitizedFields string
-		ipAddress         string
+		ipAddress          string
 	)
 	err := db.QueryRow(
 		`SELECT id, user_id, action, datasource_id, database, sql_content, sql_summary,

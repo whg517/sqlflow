@@ -19,14 +19,14 @@ import (
 
 // Baseline represents performance thresholds that the system should meet.
 type Baseline struct {
-	APILoginP95       time.Duration `json:"api_login_p95"`
-	APIDashboardP95   time.Duration `json:"api_dashboard_p95"`
-	APITicketListP95  time.Duration `json:"api_ticket_list_p95"`
+	APILoginP95        time.Duration `json:"api_login_p95"`
+	APIDashboardP95    time.Duration `json:"api_dashboard_p95"`
+	APITicketListP95   time.Duration `json:"api_ticket_list_p95"`
 	APITicketCreateP95 time.Duration `json:"api_ticket_create_p95"`
-	DBInsertP99       time.Duration `json:"db_insert_p99"`
-	DBSelectP99       time.Duration `json:"db_select_p99"`
-	DBIndexSelectP99  time.Duration `json:"db_index_select_p99"`
-	MinQPS            float64       `json:"min_qps_login"`
+	DBInsertP99        time.Duration `json:"db_insert_p99"`
+	DBSelectP99        time.Duration `json:"db_select_p99"`
+	DBIndexSelectP99   time.Duration `json:"db_index_select_p99"`
+	MinQPS             float64       `json:"min_qps_login"`
 }
 
 // DefaultBaseline returns recommended performance baselines for sqlflow.
@@ -53,13 +53,13 @@ type BaselineResult struct {
 
 // Report holds the complete performance test report.
 type Report struct {
-	Timestamp    time.Time       `json:"timestamp"`
-	Duration     time.Duration   `json:"duration"`
-	HTTPResults  []*Result       `json:"http_results"`
-	DBResults    []DBQueryResult `json:"db_results"`
-	Baseline     *Baseline       `json:"baseline"`
+	Timestamp    time.Time        `json:"timestamp"`
+	Duration     time.Duration    `json:"duration"`
+	HTTPResults  []*Result        `json:"http_results"`
+	DBResults    []DBQueryResult  `json:"db_results"`
+	Baseline     *Baseline        `json:"baseline"`
 	BaselinePass []BaselineResult `json:"baseline_pass"`
-	Summary      string          `json:"summary"`
+	Summary      string           `json:"summary"`
 }
 
 // NewReport creates an empty report.

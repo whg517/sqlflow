@@ -353,14 +353,14 @@ func TestQueryHandler_ListHistory_WithRecords(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		ctx := contextWithTimeout(t)
 		history := &model.QueryHistory{
-			UserID:       userID,
-			DatasourceID: ds.ID,
-			Database:     "testdb",
-			SQLContent:   fmt.Sprintf("SELECT %d", i),
-			SQLSummary:   fmt.Sprintf("SELECT %d", i),
-			DBType:       "mysql",
+			UserID:        userID,
+			DatasourceID:  ds.ID,
+			Database:      "testdb",
+			SQLContent:    fmt.Sprintf("SELECT %d", i),
+			SQLSummary:    fmt.Sprintf("SELECT %d", i),
+			DBType:        "mysql",
 			ExecutionTime: 10,
-			ResultRows:   1,
+			ResultRows:    1,
 		}
 		if err := historySvc.CreateHistory(ctx, history); err != nil {
 			t.Fatalf("create history %d: %v", i, err)
@@ -403,14 +403,14 @@ func TestQueryHandler_ListHistory_Pagination(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		ctx := contextWithTimeout(t)
 		history := &model.QueryHistory{
-			UserID:       userID,
-			DatasourceID: ds.ID,
-			Database:     "testdb",
-			SQLContent:   fmt.Sprintf("SELECT * FROM t WHERE id=%d", i),
-			SQLSummary:   fmt.Sprintf("SELECT * FROM t WHERE id=%d", i),
-			DBType:       "mysql",
+			UserID:        userID,
+			DatasourceID:  ds.ID,
+			Database:      "testdb",
+			SQLContent:    fmt.Sprintf("SELECT * FROM t WHERE id=%d", i),
+			SQLSummary:    fmt.Sprintf("SELECT * FROM t WHERE id=%d", i),
+			DBType:        "mysql",
 			ExecutionTime: int64(i * 10),
-			ResultRows:   1,
+			ResultRows:    1,
 		}
 		if err := historySvc.CreateHistory(ctx, history); err != nil {
 			t.Fatalf("create history %d: %v", i, err)
@@ -418,11 +418,11 @@ func TestQueryHandler_ListHistory_Pagination(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		query     string
-		wantLen   int
-		wantPage  int64
-		wantSize  int64
+		name     string
+		query    string
+		wantLen  int
+		wantPage int64
+		wantSize int64
 	}{
 		{"page1_size2", "page=1&page_size=2", 2, 1, 2},
 		{"page2_size2", "page=2&page_size=2", 2, 2, 2},

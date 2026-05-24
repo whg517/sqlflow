@@ -7,9 +7,9 @@ import (
 
 func TestSplitByComma(t *testing.T) {
 	tests := []struct {
-		name string
+		name  string
 		input string
-		want []string
+		want  []string
 	}{
 		{"single", "a", []string{"a"}},
 		{"two", "a,b", []string{"a", "b"}},
