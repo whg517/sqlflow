@@ -8,8 +8,12 @@ function getToken(): string | null {
 
 function handleUnauthorized() {
   localStorage.removeItem("token");
-  toast.error("登录已过期，请重新登录");
-  window.location.href = "/login";
+  localStorage.removeItem("refresh_token");
+  // Avoid infinite redirect if already on login page
+  if (window.location.pathname !== "/login") {
+    toast.error("登录已过期，请重新登录");
+    window.location.href = "/login";
+  }
 }
 
 async function request<T>(
@@ -32,8 +36,9 @@ async function request<T>(
   });
 
   if (res.status === 401) {
+    const data = await res.json().catch(() => ({}));
     handleUnauthorized();
-    throw new Error("Unauthorized");
+    throw new Error(data.error || "Unauthorized");
   }
 
   if (res.status === 403) {
