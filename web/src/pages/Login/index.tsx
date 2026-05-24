@@ -47,11 +47,15 @@ export default function LoginPage() {
     setLoading(true);
     setServerError("");
     try {
-      const res = await api.post<{ code: number; data: { token: string } }>(
+      const res = await api.post<{
+        code: number;
+        data: { access_token: string; refresh_token: string; token_type: string; expires_in: number; user: { id: number; username: string; role: string } };
+      }>(
         "/auth/login",
         { username, password },
       );
-      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("token", res.data.access_token);
+      localStorage.setItem("refresh_token", res.data.refresh_token);
       navigate("/query", { replace: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
