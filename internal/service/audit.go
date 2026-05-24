@@ -44,7 +44,7 @@ func (s *AuditService) Write(ctx context.Context, rec AuditRecord) {
 func (s *AuditService) Close() {}
 
 // List retrieves a paginated list of audit logs with filtering.
-// Supported filters: userID, action, datasourceID, start/end (time), keyword (searches sql_content, username, action).
+// Supported filters: userID, action, datasourceID, start/end (time), keyword (searches sql_content, sql_summary, username, action, error_message, database, ip_address).
 func (s *AuditService) List(ctx context.Context, page, pageSize int, userID, action, datasourceID, start, end, keyword string) ([]model.AuditLog, int64, error) {
 	p := ParsePagination(page, pageSize)
 
@@ -67,8 +67,8 @@ func (s *AuditService) List(ctx context.Context, page, pageSize int, userID, act
 	if keyword != "" {
 		keywordLike := "%" + escapeLike(keyword) + "%"
 		filters = append(filters, FilterClause{
-			Condition: "(a.sql_content LIKE ? ESCAPE '\\' OR u.username LIKE ? ESCAPE '\\' OR a.action LIKE ? ESCAPE '\\')",
-			Args:      []interface{}{keywordLike, keywordLike, keywordLike},
+			Condition: "(a.sql_content LIKE ? ESCAPE '\\' OR a.sql_summary LIKE ? ESCAPE '\\' OR u.username LIKE ? ESCAPE '\\' OR a.action LIKE ? ESCAPE '\\' OR a.error_message LIKE ? ESCAPE '\\' OR a.database LIKE ? ESCAPE '\\' OR a.ip_address LIKE ? ESCAPE '\\')",
+			Args:      []interface{}{keywordLike, keywordLike, keywordLike, keywordLike, keywordLike, keywordLike, keywordLike},
 		})
 	}
 

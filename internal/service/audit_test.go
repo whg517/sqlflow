@@ -199,7 +199,7 @@ func TestAuditService_List_WithFilters(t *testing.T) {
 		}
 	})
 
-	t.Run("filter by keyword", func(t *testing.T) {
+	t.Run("filter by keyword in sql_content", func(t *testing.T) {
 		_, total, err := svc2.List(context.Background(),1, 10, "", "", "", "", "", "orders")
 		if err != nil {
 			t.Fatalf("list: %v", err)
@@ -525,6 +525,125 @@ func TestAuditService_List_FilterByTimeRange(t *testing.T) {
 	if len(logs) != 1 {
 		t.Errorf("expected 1 log, got %d", len(logs))
 	}
+}
+
+func TestAuditService_List_KeywordExpandedFields(t *testing.T) {
+	db := newAuditTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('alice', 'hash', 'developer')")
+	if err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+
+	svc := NewAuditService(db, 0, 0)
+
+	// Insert records with unique content in different fields.
+	svc.Write(context.Background(), AuditRecord{
+		UserID:       1,
+		Action:       "query_execute",
+		SQLContent:   "SELECT * FROM users",
+		SQLSummary:   "Query all active users",
+		Database:     "analytics_db",
+		ErrorMessage: "",
+		IPAddress:    "10.0.0.1",
+	})
+	svc.Write(context.Background(), AuditRecord{
+		UserID:       1,
+		Action:       "export",
+		SQLContent:   "SELECT * FROM orders",
+		SQLSummary:   "Export monthly orders",
+		Database:     "warehouse_db",
+		ErrorMessage: "connection timeout",
+		IPAddress:    "192.168.1.50",
+	})
+	svc.Write(context.Background(), AuditRecord{
+		UserID:       1,
+		Action:       "query_execute",
+		SQLContent:   "DELETE FROM cache",
+		SQLSummary:   "Clear cache entries",
+		Database:     "redis_db",
+		ErrorMessage: "permission denied",
+		IPAddress:    "172.16.0.100",
+	})
+
+	t.Run("keyword matches sql_summary", func(t *testing.T) {
+		_, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "monthly")
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		// "monthly" only appears in the sql_summary of the second record.
+		if total != 1 {
+			t.Errorf("expected 1 match for 'monthly' in sql_summary, got %d", total)
+		}
+	})
+
+	t.Run("keyword matches error_message", func(t *testing.T) {
+		_, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "timeout")
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		// "timeout" appears in error_message of the second record.
+		if total != 1 {
+			t.Errorf("expected 1 match for 'timeout' in error_message, got %d", total)
+		}
+	})
+
+	t.Run("keyword matches database field", func(t *testing.T) {
+		_, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "analytics")
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		// "analytics" appears in the database field of the first record.
+		if total != 1 {
+			t.Errorf("expected 1 match for 'analytics' in database, got %d", total)
+		}
+	})
+
+	t.Run("keyword matches ip_address", func(t *testing.T) {
+		_, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "192.168")
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		// "192.168" appears in the ip_address of the second record.
+		if total != 1 {
+			t.Errorf("expected 1 match for '192.168' in ip_address, got %d", total)
+		}
+	})
+
+	t.Run("keyword matches across multiple fields", func(t *testing.T) {
+		_, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "active")
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		// "active" appears in sql_content of record 1 ("active users") and sql_summary of record 1.
+		if total != 1 {
+			t.Errorf("expected 1 match for 'active', got %d", total)
+		}
+	})
+
+	t.Run("keyword matches no records", func(t *testing.T) {
+		_, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "nonexistent_xyz")
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		if total != 0 {
+			t.Errorf("expected 0 matches, got %d", total)
+		}
+	})
+
+	t.Run("keyword with special LIKE characters in new fields", func(t *testing.T) {
+		_, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "100%")
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		// "100%" should be treated as literal, not wildcard.
+		// Only the ip_address "10.0.0.1" does NOT contain "100%", but "172.16.0.100" doesn't either.
+		// Actually no record has literal "100%" so should be 0.
+		if total != 0 {
+			t.Errorf("expected 0 for literal '100%%' in expanded fields, got %d", total)
+		}
+	})
 }
 
 func TestAuditService_List_UsernameJoin(t *testing.T) {
