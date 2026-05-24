@@ -73,9 +73,9 @@ export const ROLE_LABEL_MAP: Record<string, string> = {
 }
 
 export const ROLE_BADGE_CLASS: Record<string, string> = {
-  admin: 'bg-red-500/20 text-red-400',
-  dba: 'bg-blue-500/20 text-blue-400',
-  developer: 'bg-green-500/20 text-green-400',
+  admin: 'bg-orange-500/20 text-orange-400',
+  dba: 'bg-violet-500/20 text-violet-400',
+  developer: 'bg-blue-500/20 text-blue-400',
 }
 
 export const ROLE_OPTIONS = [

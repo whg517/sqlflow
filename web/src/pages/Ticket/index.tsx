@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Search, FileText } from 'lucide-react'
+import { Plus, Search, FileText, ChevronLeft, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -201,7 +201,7 @@ export default function TicketPage() {
         <Button
           variant="ghost"
           size="sm"
-          className={`h-8 px-3 text-sm ${scopeFilter === 'mine' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}
+          className={`h-7 px-2 text-xs ${scopeFilter === 'mine' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}
           onClick={() => {
             setScopeFilter(scopeFilter === 'mine' ? '' : 'mine')
             setPage(1)
@@ -213,7 +213,7 @@ export default function TicketPage() {
           <Button
             variant="ghost"
             size="sm"
-            className={`h-8 px-3 text-sm ${scopeFilter === 'pending' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}
+            className={`h-7 px-2 text-xs ${scopeFilter === 'pending' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}
             onClick={() => {
               setScopeFilter(scopeFilter === 'pending' ? '' : 'pending')
               setPage(1)
@@ -227,7 +227,7 @@ export default function TicketPage() {
 
         {/* Datasource filter */}
         <Select value={datasourceFilter} onValueChange={(v) => { setDatasourceFilter(v === '__all__' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-8 w-36 border-[var(--border-default)] bg-[var(--bg-elevated)] text-sm">
+          <SelectTrigger className="h-7 w-32 border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
             <SelectValue placeholder="数据源" />
           </SelectTrigger>
           <SelectContent>
@@ -240,7 +240,7 @@ export default function TicketPage() {
 
         {/* Risk filter */}
         <Select value={riskFilter} onValueChange={(v) => { setRiskFilter(v === '__all__' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-8 w-32 border-[var(--border-default)] bg-[var(--bg-elevated)] text-sm">
+          <SelectTrigger className="h-7 w-28 border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
             <SelectValue placeholder="AI 风险" />
           </SelectTrigger>
           <SelectContent>
@@ -259,7 +259,7 @@ export default function TicketPage() {
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder="搜索 SQL 内容..."
-            className="h-8 w-52 rounded-md border-[var(--border-default)] bg-[var(--bg-elevated)] pl-8 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+            className="h-7 w-48 rounded-md border-[var(--border-default)] bg-[var(--bg-elevated)] pl-7 pr-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
           />
         </div>
       </div>
@@ -371,20 +371,23 @@ export default function TicketPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0 text-xs"
+              className="h-7 w-7 p-0 text-xs text-[var(--text-secondary)]"
               disabled={page <= 1}
               onClick={() => setPage(page - 1)}
             >
-              &lt;
+              <ChevronLeft size={14} />
             </Button>
+            <span className="min-w-[60px] text-center text-xs text-[var(--text-secondary)]">
+              {page} / {totalPages}
+            </span>
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0 text-xs"
+              className="h-7 w-7 p-0 text-xs text-[var(--text-secondary)]"
               disabled={page >= totalPages}
               onClick={() => setPage(page + 1)}
             >
-              &gt;
+              <ChevronRight size={14} />
             </Button>
           </div>
         </div>

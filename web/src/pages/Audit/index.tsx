@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Search, Download, ChevronRight, ChevronDown, Loader2, Copy, Check, Link2,
+  Search, Download, ChevronLeft, ChevronRight, ChevronDown, Loader2, Copy, Check, Link2,
   FileText, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -119,7 +119,7 @@ function ExpandedRow({ log, datasourceName, datasourceType }: {
       <td colSpan={6} className="p-0">
         <div className="overflow-hidden">
           <div className="p-4">
-            <div className="grid grid-cols-2 gap-x-8 gap-y-3 lg:grid-cols-4">
+            <div className="grid grid-cols-4 gap-3">
           {/* Full SQL */}
           <div className="col-span-full">
             <div className="mb-1 flex items-center justify-between">
@@ -463,7 +463,7 @@ export default function AuditPage() {
       <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-2.5">
         {/* User filter */}
         <Select value={userFilter} onValueChange={(v) => { setUserFilter(v === '__all__' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-8 w-[120px] border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
+          <SelectTrigger className="h-7 w-[120px] border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
             <SelectValue placeholder="全部用户" />
           </SelectTrigger>
           <SelectContent>
@@ -476,7 +476,7 @@ export default function AuditPage() {
 
         {/* Action filter */}
         <Select value={actionFilter} onValueChange={(v) => { setActionFilter(v === '__all__' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-8 w-[120px] border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
+          <SelectTrigger className="h-7 w-[120px] border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
             <SelectValue placeholder="操作类型" />
           </SelectTrigger>
           <SelectContent>
@@ -489,7 +489,7 @@ export default function AuditPage() {
 
         {/* Datasource filter */}
         <Select value={datasourceFilter} onValueChange={(v) => { setDatasourceFilter(v === '__all__' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-8 w-[132px] border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
+          <SelectTrigger className="h-7 w-[132px] border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
             <SelectValue placeholder="数据源" />
           </SelectTrigger>
           <SelectContent>
@@ -509,26 +509,26 @@ export default function AuditPage() {
             type="date"
             value={startDate}
             onChange={(e) => { setStartDate(e.target.value); setPage(1) }}
-            className="h-8 w-[130px] border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-primary)]"
+            className="h-7 w-[130px] border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-primary)]"
           />
           <span className="text-xs text-[var(--text-muted)]">~</span>
           <Input
             type="date"
             value={endDate}
             onChange={(e) => { setEndDate(e.target.value); setPage(1) }}
-            className="h-8 w-[130px] border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-primary)]"
+            className="h-7 w-[130px] border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-primary)]"
           />
         </div>
 
         {/* Search — 7 field full-text */}
         <div className="relative ml-auto">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder="搜索 SQL/表名/用户/IP/数据库/错误/脱敏..."
-            className="h-8 w-[260px] rounded-md border-[var(--border-default)] bg-[var(--bg-elevated)] pl-8 pr-8 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-[width] duration-200 focus:w-[320px]"
+            className="h-7 w-[260px] rounded-md border-[var(--border-default)] bg-[var(--bg-elevated)] pl-8 pr-8 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-[width] duration-200 focus:w-[320px]"
           />
           {searchInput && (
             <button
@@ -687,20 +687,23 @@ export default function AuditPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0 text-xs"
+              className="h-7 w-7 p-0 text-xs text-[var(--text-secondary)]"
               disabled={page <= 1}
               onClick={() => setPage(page - 1)}
             >
-              &lt;
+              <ChevronLeft size={14} />
             </Button>
+            <span className="min-w-[60px] text-center text-xs text-[var(--text-secondary)]">
+              {page} / {totalPages}
+            </span>
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0 text-xs"
+              className="h-7 w-7 p-0 text-xs text-[var(--text-secondary)]"
               disabled={page >= totalPages}
               onClick={() => setPage(page + 1)}
             >
-              &gt;
+              <ChevronRight size={14} />
             </Button>
           </div>
         </div>

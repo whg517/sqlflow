@@ -457,7 +457,7 @@ export default function MongoEditor({
   return (
     <div className="flex h-full flex-col gap-0 overflow-hidden bg-[var(--bg-surface)]">
       {/* Controls bar */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border-default)] px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-default)] px-3 py-2">
         {/* Collection input with autocomplete */}
         <div className="relative">
           <input

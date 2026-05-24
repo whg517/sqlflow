@@ -264,7 +264,7 @@ export default function QueryPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar: datasource selectors + history button */}
-      <div className="flex items-center gap-3 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2.5">
+      <div className="flex items-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2">
         <Select
           value={activeTab?.datasourceId ? String(activeTab.datasourceId) : ''}
           onValueChange={(v) => {

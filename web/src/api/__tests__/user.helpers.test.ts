@@ -22,15 +22,15 @@ describe('User API Helpers', () => {
 
   describe('ROLE_BADGE_CLASS', () => {
     it('maps admin to red badge', () => {
-      expect(ROLE_BADGE_CLASS.admin).toBe('bg-red-500/20 text-red-400')
+      expect(ROLE_BADGE_CLASS.admin).toBe('bg-orange-500/20 text-orange-400')
     })
 
     it('maps dba to blue badge', () => {
-      expect(ROLE_BADGE_CLASS.dba).toBe('bg-blue-500/20 text-blue-400')
+      expect(ROLE_BADGE_CLASS.dba).toBe('bg-violet-500/20 text-violet-400')
     })
 
     it('maps developer to green badge', () => {
-      expect(ROLE_BADGE_CLASS.developer).toBe('bg-green-500/20 text-green-400')
+      expect(ROLE_BADGE_CLASS.developer).toBe('bg-blue-500/20 text-blue-400')
     })
   })
 
