@@ -105,7 +105,6 @@ sql-platform/
 
 - `feat(web): SF-FEAT0019 page-level style fixes`
 - `fix(api): SF-FIX0001 JWT expiry handling`
-- `chore: clean up docs/`
-- `refactor: SF-QA0023 consolidate e2e tests`
+- `refactor(web): SF-QA0023 consolidate e2e tests`
 
 每个需求对应独立 commit，不要混入不相关修改。
