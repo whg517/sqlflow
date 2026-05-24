@@ -142,7 +142,7 @@ export default function Layout() {
   // §2.2 Navigation item interaction — clean indicator style
   const navLinkClass = (isActive: boolean) =>
     `flex items-center rounded-md no-underline transition-colors ${
-      collapsed ? "justify-center px-0 py-2.5" : "gap-2.5 px-3.5 py-2.5 text-sm"
+      collapsed ? "justify-center px-0 py-3" : "gap-2.5 px-3.5 py-3 text-sm"
     } ${
       isActive
         ? "font-medium text-[var(--accent-primary)] bg-[var(--accent-muted)] border-l-2 border-[var(--accent-primary)]"
@@ -151,7 +151,7 @@ export default function Layout() {
 
   const settingsButtonClass = () =>
     `flex w-full items-center rounded-md text-left transition-colors ${
-      collapsed ? "justify-center px-0 py-2.5" : "gap-2.5 px-3.5 py-2.5 text-sm"
+      collapsed ? "justify-center px-0 py-3" : "gap-2.5 px-3.5 py-3 text-sm"
     } ${
       isSettingsActive
         ? "font-medium text-[var(--accent-primary)] bg-[var(--accent-muted)] border-l-2 border-[var(--accent-primary)]"
@@ -176,7 +176,7 @@ export default function Layout() {
         {/* Navigation */}
         <nav
           aria-label="Main navigation"
-          className="flex flex-1 flex-col gap-0.5 p-2 pl-0"
+          className="flex flex-1 flex-col gap-1 p-3 pl-1"
         >
           <NavItem
             to="/"
@@ -224,7 +224,7 @@ export default function Layout() {
           )}
 
           {/* Separator */}
-          <div className="my-1 border-t border-[var(--border-subtle)]" />
+          <div className="my-2.5 border-t border-[var(--border-subtle)]" />
 
           {/* Settings with submenu — §2.2 */}
           {collapsed ? (
@@ -257,13 +257,13 @@ export default function Layout() {
 
           {/* Settings submenu — §2.2: ml-4, border-l border-subtle */}
           {settingsOpen && !collapsed && (
-            <div className="ml-4 flex flex-col gap-0.5 border-l border-[var(--border-subtle)] pl-2">
+            <div className="ml-4 flex flex-col gap-1 border-l border-[var(--border-subtle)] pl-2.5 pt-1">
               {settingsSubItems.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) =>
-                    `flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs no-underline transition-colors ${
+                    `flex items-center gap-2 rounded-md px-2.5 py-2 text-xs no-underline transition-colors ${
                       isActive
                         ? "font-medium text-[var(--accent-primary)]"
                         : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
@@ -279,7 +279,7 @@ export default function Layout() {
         </nav>
 
         {/* Collapse toggle — §2.2: border-t, icon swap */}
-        <div className="border-t border-[var(--border-subtle)] p-2">
+        <div className="border-t border-[var(--border-subtle)] p-3">
           <button
             onClick={toggleCollapse}
             className="flex w-full items-center justify-center rounded-md px-3 py-2 text-sm text-[var(--text-tertiary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
