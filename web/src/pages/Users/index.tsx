@@ -6,7 +6,7 @@ import {
   type ColumnDef,
 } from '@tanstack/react-table'
 import { toast } from 'sonner'
-import { Plus, Pencil, KeyRound, Ban, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, KeyRound, Ban, Search, ChevronLeft, ChevronRight, Users as UsersIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -371,8 +371,16 @@ export default function UsersPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[var(--border-default)] px-6 py-4">
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">用户管理</h1>
+      <div className="flex items-center justify-between border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-4">
+        <div className="flex items-center gap-2.5">
+          <UsersIcon size={18} className="text-[var(--accent-primary)]" />
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">用户管理</h1>
+          {total > 0 && (
+            <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5 text-xs text-[var(--text-muted)]">
+              {total}
+            </span>
+          )}
+        </div>
         <Button
           onClick={openCreateDialog}
           size="sm"
@@ -384,7 +392,7 @@ export default function UsersPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-6 bg-[var(--bg-base)]">
         <div className="space-y-4">
           {/* Search + Count */}
           <div className="flex items-center justify-between">
@@ -394,7 +402,7 @@ export default function UsersPage() {
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 placeholder="搜索用户名..."
-                className="h-8 pl-8 text-sm border-[var(--border-default)] bg-[var(--bg-elevated)]"
+                className="h-8 pl-8 text-sm border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
               />
             </div>
             <p className="text-xs text-[var(--text-muted)]">
@@ -427,8 +435,13 @@ export default function UsersPage() {
                   </TableRow>
                 ) : !filteredUsers.length ? (
                   <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center text-[var(--text-muted)]">
-                      {keyword ? '没有匹配的用户' : '暂无用户数据'}
+                    <TableCell colSpan={columns.length} className="h-32">
+                      <div className="flex flex-col items-center gap-2">
+                        <UsersIcon size={20} className="text-[var(--text-muted)]" />
+                        <span className="text-sm text-[var(--text-muted)]">
+                          {keyword ? '没有匹配的用户' : '暂无用户数据'}
+                        </span>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (

@@ -6,7 +6,7 @@ import {
   type ColumnDef,
 } from '@tanstack/react-table'
 import { toast } from 'sonner'
-import { Plus, Pencil, KeyRound, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, KeyRound, Trash2, ChevronLeft, ChevronRight, Shield } from 'lucide-react'
 import { api } from '@/api/client'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -646,8 +646,11 @@ export default function PermissionsPage() {
   return (
     <div className="flex h-full flex-col">
       <Tabs defaultValue="users" className="flex flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-[var(--border-default)] px-6 py-3">
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">权限管理</h1>
+        <div className="flex items-center justify-between border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3">
+          <div className="flex items-center gap-2.5">
+            <Shield size={18} className="text-[var(--accent-primary)]" />
+            <h1 className="text-xl font-semibold text-[var(--text-primary)]">权限管理</h1>
+          </div>
           <TabsList className="bg-[var(--bg-elevated)]">
             <TabsTrigger value="roles">角色管理</TabsTrigger>
             <TabsTrigger value="policies">权限策略</TabsTrigger>
@@ -655,19 +658,31 @@ export default function PermissionsPage() {
           </TabsList>
         </div>
 
-        <TabsContent value="roles" className="flex-1 p-6">
-          <div className="flex h-32 items-center justify-center text-[var(--text-muted)]">
-            角色管理功能开发中...
+        <TabsContent value="roles" className="flex-1 p-6 bg-[var(--bg-base)]">
+          <div className="flex h-48 flex-col items-center justify-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bg-elevated)]">
+              <Shield size={24} className="text-[var(--text-muted)]" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-[var(--text-secondary)]">角色管理功能开发中</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">当前角色体系包含管理员、DBA、开发人员三种预设角色</p>
+            </div>
           </div>
         </TabsContent>
 
-        <TabsContent value="policies" className="flex-1 p-6">
-          <div className="flex h-32 items-center justify-center text-[var(--text-muted)]">
-            权限策略功能开发中...
+        <TabsContent value="policies" className="flex-1 p-6 bg-[var(--bg-base)]">
+          <div className="flex h-48 flex-col items-center justify-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bg-elevated)]">
+              <Shield size={24} className="text-[var(--text-muted)]" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-[var(--text-secondary)]">权限策略功能开发中</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">未来将支持基于策略的细粒度权限控制</p>
+            </div>
           </div>
         </TabsContent>
 
-        <TabsContent value="users" className="flex-1 overflow-auto p-6">
+        <TabsContent value="users" className="flex-1 overflow-auto p-6 bg-[var(--bg-base)]">
           <UserManagementTab />
         </TabsContent>
       </Tabs>

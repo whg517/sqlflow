@@ -96,6 +96,9 @@ export function getActionColor(action: string): string {
   return actionColorMap[action] ?? 'bg-slate-500/20 text-slate-400'
 }
 
+/** Badge style helper — alias for getActionColor with consistent naming */
+export const getActionBadgeStyle = getActionColor
+
 export function formatAuditTime(iso: string): string {
   const d = new Date(iso)
   const month = String(d.getMonth() + 1).padStart(2, '0')

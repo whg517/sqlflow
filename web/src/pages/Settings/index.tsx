@@ -293,8 +293,16 @@ function DataSourceTab() {
               </TableRow>
             ) : !sources.length ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-[var(--text-muted)]">
-                  暂无数据源，点击上方按钮添加
+                <TableCell colSpan={7} className="h-32">
+                  <div className="flex flex-col items-center gap-2">
+                    <Database size={20} className="text-[var(--text-muted)]" />
+                    <span className="text-sm text-[var(--text-muted)]">
+                      暂无数据源
+                    </span>
+                    <span className="text-xs text-[var(--text-muted)]">
+                      点击上方「添加数据源」按钮配置数据库连接
+                    </span>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -529,29 +537,32 @@ export default function SettingsPage() {
   return (
     <div className="flex h-full">
       {/* Left sidebar */}
-      <nav className="w-44 shrink-0 border-r border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
+      <nav className="w-48 shrink-0 border-r border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
         <h1 className="mb-4 px-3 text-xl font-semibold text-[var(--text-primary)]">设置</h1>
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
               className={cn(
-                'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+                'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-all duration-150',
                 activeTab === key
-                  ? 'bg-[var(--accent-primary)]/15 text-[var(--accent-primary)]'
+                  ? 'bg-[var(--accent-muted)] text-[var(--accent-primary)] font-medium'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]',
               )}
             >
               <Icon size={16} />
               {label}
+              {key === 'ai-config' && (
+                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)]" />
+              )}
             </button>
           ))}
         </div>
       </nav>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-6 bg-[var(--bg-base)]">
         {activeTab === 'datasource' && <DataSourceTab />}
         {activeTab === 'mask-rules' && <MaskRulesTab />}
         {activeTab === 'ai-config' && <AIConfigTab />}

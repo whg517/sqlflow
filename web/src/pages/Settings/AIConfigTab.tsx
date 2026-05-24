@@ -181,8 +181,9 @@ function AIConfigSection() {
           <>
             <CheckCircle2 size={18} className="text-emerald-400" />
             <span className="text-sm text-[var(--text-primary)]">
-              AI 评审已启用 — 模型: <span className="font-mono font-medium">{resolvedModel || config?.model}</span>
+              AI 评审已启用 — 模型: <span className="font-mono font-medium text-[var(--accent-primary)]">{resolvedModel || config?.model}</span>
             </span>
+            <Badge className="ml-1 border-0 bg-emerald-500/20 text-emerald-400 text-[10px]">已启用</Badge>
           </>
         ) : (
           <>
@@ -385,6 +386,7 @@ function DingTalkSection() {
           <>
             <CheckCircle2 size={18} className="text-emerald-400" />
             <span className="text-sm text-[var(--text-primary)]">钉钉通知已启用</span>
+            <Badge className="ml-1 border-0 bg-blue-500/20 text-blue-400 text-[10px]">已启用</Badge>
           </>
         ) : (
           <>

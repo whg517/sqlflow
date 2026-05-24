@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Search, Download, ChevronRight, ChevronDown, Loader2, Copy, Check, Link2,
+  FileText, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -17,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { api } from '@/api/client'
 import {
   listAuditLogs,
-  getActionLabel, getActionColor, formatAuditTime, formatExecutionTime,
+  getActionLabel, getActionBadgeStyle, formatAuditTime, formatExecutionTime,
   actionOptions,
   type AuditLog,
 } from '@/api/audit'
@@ -346,6 +347,20 @@ export default function AuditPage() {
   }, [fetchLogs])
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  // Reset all filters
+  function handleResetFilters() {
+    setUserFilter('')
+    setActionFilter('')
+    setDatasourceFilter('')
+    setStartDate('')
+    setEndDate('')
+    setKeyword('')
+    setSearchInput('')
+    setPage(1)
+  }
+
+  const hasActiveFilters = userFilter || actionFilter || datasourceFilter || startDate || endDate || keyword
+
   // Search handler
   function handleSearch() {
     setKeyword(searchInput.trim())
@@ -402,28 +417,49 @@ export default function AuditPage() {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3">
-        <h1 className="text-base font-semibold text-[var(--text-primary)]">审计日志</h1>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-8 gap-1.5 border-[var(--border-default)] px-3 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
-          onClick={handleExport}
-          disabled={exporting || loading}
-        >
-          {exporting ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Download size={14} />
+        <div className="flex items-center gap-2.5">
+          <FileText size={18} className="text-[var(--accent-primary)]" />
+          <h1 className="text-base font-semibold text-[var(--text-primary)]">审计日志</h1>
+          {total > 0 && (
+            <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5 text-xs text-[var(--text-muted)]">
+              {total} 条
+            </span>
           )}
-          {exporting ? '导出中...' : '导出 CSV'}
-        </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          {hasActiveFilters && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1.5 px-3 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              onClick={handleResetFilters}
+            >
+              <Filter size={13} />
+              清除筛选
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 border-[var(--border-default)] px-3 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
+            onClick={handleExport}
+            disabled={exporting || loading}
+          >
+            {exporting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Download size={14} />
+            )}
+            {exporting ? '导出中...' : '导出 CSV'}
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-2.5">
         {/* User filter */}
         <Select value={userFilter} onValueChange={(v) => { setUserFilter(v === '__all__' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-7 w-28 border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
+          <SelectTrigger className="h-8 w-[120px] border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
             <SelectValue placeholder="全部用户" />
           </SelectTrigger>
           <SelectContent>
@@ -436,7 +472,7 @@ export default function AuditPage() {
 
         {/* Action filter */}
         <Select value={actionFilter} onValueChange={(v) => { setActionFilter(v === '__all__' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-7 w-28 border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
+          <SelectTrigger className="h-8 w-[120px] border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
             <SelectValue placeholder="操作类型" />
           </SelectTrigger>
           <SelectContent>
@@ -449,7 +485,7 @@ export default function AuditPage() {
 
         {/* Datasource filter */}
         <Select value={datasourceFilter} onValueChange={(v) => { setDatasourceFilter(v === '__all__' ? '' : v); setPage(1) }}>
-          <SelectTrigger className="h-7 w-32 border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
+          <SelectTrigger className="h-8 w-[132px] border-[var(--border-default)] bg-[var(--bg-elevated)] text-xs">
             <SelectValue placeholder="数据源" />
           </SelectTrigger>
           <SelectContent>
@@ -460,33 +496,44 @@ export default function AuditPage() {
           </SelectContent>
         </Select>
 
+        {/* Separator */}
+        <div className="mx-1 h-5 w-px bg-[var(--border-subtle)]" />
+
         {/* Date range */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <Input
             type="date"
             value={startDate}
             onChange={(e) => { setStartDate(e.target.value); setPage(1) }}
-            className="h-7 w-[124px] border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-primary)]"
+            className="h-8 w-[130px] border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-primary)]"
           />
           <span className="text-xs text-[var(--text-muted)]">~</span>
           <Input
             type="date"
             value={endDate}
             onChange={(e) => { setEndDate(e.target.value); setPage(1) }}
-            className="h-7 w-[124px] border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-primary)]"
+            className="h-8 w-[130px] border-[var(--border-default)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-primary)]"
           />
         </div>
 
-        {/* Search */}
+        {/* Search — 7 field full-text */}
         <div className="relative ml-auto">
-          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            placeholder="搜索 SQL / 表名..."
-            className="h-7 w-48 rounded-md border-[var(--border-default)] bg-[var(--bg-elevated)] pl-7 pr-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+            placeholder="搜索 SQL/表名/用户/IP/数据库/错误/脱敏..."
+            className="h-8 w-[260px] rounded-md border-[var(--border-default)] bg-[var(--bg-elevated)] pl-8 pr-8 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-[width] duration-200 focus:w-[320px]"
           />
+          {searchInput && (
+            <button
+              onClick={() => { setSearchInput(''); setKeyword('') }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            >
+              ×
+            </button>
+          )}
         </div>
       </div>
 
@@ -497,8 +544,28 @@ export default function AuditPage() {
             <Loader2 className="h-5 w-5 animate-spin text-[var(--text-muted)]" />
           </div>
         ) : logs.length === 0 ? (
-          <div className="flex h-32 flex-col items-center justify-center gap-2">
-            <p className="text-sm text-[var(--text-muted)]">暂无审计日志</p>
+          <div className="flex h-48 flex-col items-center justify-center gap-3 py-12">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bg-elevated)]">
+              <FileText size={24} className="text-[var(--text-muted)]" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-[var(--text-secondary)]">
+                {hasActiveFilters ? '没有匹配的审计日志' : '暂无审计日志'}
+              </p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                {hasActiveFilters ? '尝试调整筛选条件或清空搜索关键词' : '执行 SQL 查询后，审计记录将在此展示'}
+              </p>
+            </div>
+            {hasActiveFilters && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 border-[var(--border-default)] text-xs"
+                onClick={handleResetFilters}
+              >
+                清除所有筛选
+              </Button>
+            )}
           </div>
         ) : (
           <Table>
@@ -525,9 +592,9 @@ export default function AuditPage() {
                     >
                       <TableCell className="w-8 px-2">
                         {isExpanded ? (
-                          <ChevronDown size={14} className="text-[var(--text-muted)] transition-transform" />
+                          <ChevronDown size={14} className="text-[var(--text-muted)] transition-transform duration-200" />
                         ) : (
-                          <ChevronRight size={14} className="text-[var(--text-muted)] transition-transform" />
+                          <ChevronRight size={14} className="text-[var(--text-muted)] transition-transform duration-200" />
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-[var(--text-muted)]">
@@ -537,7 +604,7 @@ export default function AuditPage() {
                         {log.username || `#${log.user_id}`}
                       </TableCell>
                       <TableCell>
-                        <Badge className={`${getActionColor(log.action)} border-0 text-[10px]`}>
+                        <Badge className={`${getActionBadgeStyle(log.action)} border-0 text-[10px]`}>
                           {getActionLabel(log.action)}
                         </Badge>
                       </TableCell>

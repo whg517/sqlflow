@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, type FormEvent } from 'react'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, ShieldCheck, ShieldAlert } from 'lucide-react'
+import { Plus, Pencil, Trash2, ShieldCheck, ShieldAlert, FileWarning } from 'lucide-react'
 import { api } from '@/api/client'
 import {
   listMaskRules,
@@ -246,8 +246,16 @@ function SensitiveTablesTab() {
               </TableRow>
             ) : !tables.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-[var(--text-muted)]">
-                  暂无敏感表标记，点击上方按钮添加
+                <TableCell colSpan={6} className="h-32">
+                  <div className="flex flex-col items-center gap-2">
+                    <ShieldAlert size={20} className="text-[var(--text-muted)]" />
+                    <span className="text-sm text-[var(--text-muted)]">
+                      暂无敏感表标记
+                    </span>
+                    <span className="text-xs text-[var(--text-muted)]">
+                      点击上方「标记敏感表」按钮添加
+                    </span>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -627,8 +635,16 @@ function FieldRulesTab() {
               </TableRow>
             ) : !rules.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-[var(--text-muted)]">
-                  暂无脱敏规则，点击上方按钮添加
+                <TableCell colSpan={6} className="h-32">
+                  <div className="flex flex-col items-center gap-2">
+                    <FileWarning size={20} className="text-[var(--text-muted)]" />
+                    <span className="text-sm text-[var(--text-muted)]">
+                      暂无脱敏规则
+                    </span>
+                    <span className="text-xs text-[var(--text-muted)]">
+                      点击上方「添加脱敏规则」按钮配置
+                    </span>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -861,21 +877,21 @@ export default function MaskRulesTab() {
       <div className="flex items-center gap-1 rounded-lg bg-[var(--bg-elevated)] p-1 w-fit">
         <button
           onClick={() => setSubTab('sensitive-tables')}
-          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
+          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
             subTab === 'sensitive-tables'
-              ? 'bg-[var(--accent-primary)] text-white'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              ? 'bg-[var(--accent-primary)] text-white shadow-sm'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
           }`}
         >
-          <ShieldCheck size={14} />
+          <ShieldAlert size={14} />
           敏感表标记
         </button>
         <button
           onClick={() => setSubTab('field-rules')}
-          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
+          className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
             subTab === 'field-rules'
-              ? 'bg-[var(--accent-primary)] text-white'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              ? 'bg-[var(--accent-primary)] text-white shadow-sm'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
           }`}
         >
           <ShieldCheck size={14} />
