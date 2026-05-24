@@ -74,11 +74,11 @@ const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   active: { label: '正常', cls: 'bg-emerald-500/20 text-emerald-400' },
-  disabled: { label: '已禁用', cls: 'bg-gray-500/20 text-gray-400' },
+  disabled: { label: '已禁用', cls: 'bg-muted text-[var(--text-muted)]' },
   error: { label: '异常', cls: 'bg-red-500/20 text-red-400' },
 }
 
-const DEFAULT_BADGE = { label: '未知', cls: 'bg-gray-500/20 text-gray-400' }
+const DEFAULT_BADGE = { label: '未知', cls: 'bg-muted text-[var(--text-muted)]' }
 
 // --- Validators ---
 

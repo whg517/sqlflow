@@ -262,7 +262,7 @@ export default function UsersPage() {
         cell: ({ getValue }) => {
           const role = getValue() as string
           return (
-            <Badge className={ROLE_BADGE_CLASS[role] ?? 'bg-gray-500/20 text-gray-400'}>
+            <Badge className={ROLE_BADGE_CLASS[role] ?? 'bg-muted text-[var(--text-muted)]'}>
               {ROLE_LABEL_MAP[role] ?? role}
             </Badge>
           )
@@ -299,7 +299,7 @@ export default function UsersPage() {
               className={
                 active
                   ? 'bg-emerald-500/20 text-emerald-400'
-                  : 'bg-gray-500/20 text-gray-400'
+                  : 'bg-muted text-[var(--text-muted)]'
               }
             >
               {active ? '活跃' : '已禁用'}
