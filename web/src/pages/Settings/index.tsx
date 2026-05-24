@@ -315,7 +315,7 @@ function DataSourceTab() {
   // --- Render ---
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">
           数据源配置
@@ -663,10 +663,10 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("datasource");
 
   return (
-    <div className="flex h-[calc(100%-48px)]">
+    <div className="flex h-full">
       {/* Left sidebar */}
-      <nav className="settings-sidebar w-44 shrink-0 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
-        <h1 className="mb-4 px-3 text-xl font-semibold text-[var(--text-primary)]">
+      <nav className="settings-sidebar w-44 shrink-0 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
+        <h1 className="mb-5 px-3 text-xl font-semibold text-[var(--text-primary)]">
           设置
         </h1>
         <div className="space-y-0.5">
@@ -692,7 +692,7 @@ export default function SettingsPage() {
       </nav>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] ml-4 p-6">
+      <div className="flex-1 overflow-auto rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] ml-5 p-5">
         {activeTab === "datasource" && <DataSourceTab />}
         {activeTab === "mask-rules" && <MaskRulesTab />}
         {activeTab === "ai-config" && <AIConfigTab />}

@@ -691,10 +691,10 @@ function UserManagementTab() {
 
 export default function PermissionsPage() {
   return (
-    <div className="flex h-[calc(100%-48px)] flex-col">
+    <div className="flex h-full flex-col">
       <Tabs defaultValue="users" className="flex flex-1 flex-col">
         {/* Header — clean, no border-b bg-surface */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
             <Shield size={18} className="text-[var(--accent-primary)]" />
             <h1 className="text-xl font-semibold text-[var(--text-primary)]">
@@ -710,7 +710,7 @@ export default function PermissionsPage() {
 
         {/* Tab content — card wrapper */}
         <div className="flex-1 overflow-hidden rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] flex flex-col">
-        <TabsContent value="roles" className="flex-1 p-4 overflow-auto">
+        <TabsContent value="roles" className="flex-1 p-5 overflow-auto">
           <div className="flex h-48 flex-col items-center justify-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bg-elevated)]">
               <Shield size={24} className="text-[var(--text-muted)]" />
@@ -728,7 +728,7 @@ export default function PermissionsPage() {
 
         <TabsContent
           value="policies"
-          className="flex-1 p-4 overflow-auto"
+          className="flex-1 p-5 overflow-auto"
         >
           <div className="flex h-48 flex-col items-center justify-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bg-elevated)]">
@@ -747,7 +747,7 @@ export default function PermissionsPage() {
 
         <TabsContent
           value="users"
-          className="flex-1 overflow-auto p-4"
+          className="flex-1 overflow-auto p-5"
         >
           <UserManagementTab />
         </TabsContent>

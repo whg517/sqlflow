@@ -403,9 +403,9 @@ export default function UsersPage() {
   });
 
   return (
-    <div className="flex h-[calc(100%-48px)] flex-col">
+    <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2.5">
           <UsersIcon size={18} className="text-[var(--accent-primary)]" />
           <h1 className="text-xl font-semibold text-[var(--text-primary)]">
@@ -429,7 +429,7 @@ export default function UsersPage() {
 
       {/* Content — card wrapper */}
       <div className="flex-1 overflow-auto rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)]">
-        <div className="p-4 space-y-4">
+        <div className="p-5 space-y-5">
           {/* Search + Count */}
           <div className="flex items-center justify-between">
             <div className="relative w-64">
