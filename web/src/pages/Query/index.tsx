@@ -2,6 +2,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Clock } from "lucide-react";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -17,6 +23,7 @@ import {
   type MongoQueryBody,
   type AIReviewResult,
 } from "@/api/query";
+import { explainQuery, type ExplainResult } from "@/api/explain";
 import { useQueryStore, type MongoOperation } from "@/store/queryStore";
 import {
   useSchemaCompletion,
@@ -31,6 +38,7 @@ import StatusBar from "./components/StatusBar";
 import ResizableSplit from "./components/ResizableSplit";
 import AIReviewCard from "./components/AIReviewCard";
 import TicketSubmitSheet from "./components/TicketSubmitSheet";
+import ExplainPanel from "./components/ExplainPanel";
 
 // --- Types ---
 
@@ -69,6 +77,10 @@ export default function QueryPage() {
   const [datasources, setDatasources] = useState<DataSourceOption[]>([]);
   const [ticketSheetOpen, setTicketSheetOpen] = useState(false);
   const [schemaData, setSchemaData] = useState<SchemaData | null>(null);
+  const [explainSheetOpen, setExplainSheetOpen] = useState(false);
+  const [explainResult, setExplainResult] = useState<ExplainResult | null>(null);
+  const [explaining, setExplaining] = useState(false);
+  const [explainError, setExplainError] = useState<string | null>(null);
 
   const { fetchTables, fetchColumns, clearDatasourceCache } =
     useSchemaCompletion();
@@ -260,6 +272,31 @@ export default function QueryPage() {
     doExecute,
   ]);
 
+  // Handle EXPLAIN
+  const handleExplain = useCallback(async () => {
+    if (!activeTab?.datasourceId || !activeTab.sql.trim()) return;
+
+    setExplaining(true);
+    setExplainError(null);
+    setExplainResult(null);
+    setExplainSheetOpen(true);
+
+    try {
+      const result = await explainQuery(
+        activeTab.sql.trim(),
+        activeTab.datasourceId,
+        activeTab.database,
+      );
+      setExplainResult(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "获取执行计划失败";
+      setExplainError(msg);
+      toast.error(msg);
+    } finally {
+      setExplaining(false);
+    }
+  }, [activeTab]);
+
   // Handle confirmed execute (medium risk)
   const handleConfirmExecute = useCallback(() => {
     if (!activeTab) return;
@@ -448,6 +485,8 @@ export default function QueryPage() {
                 database={activeTab?.database ?? ""}
                 sql={currentSql}
                 onExecute={handleExecute}
+                onExplain={handleExplain}
+                explaining={explaining}
                 isMongo={isMongo}
                 mongoCollection={activeTab?.mongoCollection ?? ""}
               />
@@ -467,6 +506,28 @@ export default function QueryPage() {
         reviewResult={activeTab?.aiReviewResult ?? null}
         onSubmitSuccess={handleTicketSuccess}
       />
+
+      {/* Explain panel sheet */}
+      <Sheet open={explainSheetOpen} onOpenChange={setExplainSheetOpen}>
+        <SheetContent
+          side="right"
+          className="w-[700px] sm:max-w-[700px] border-[var(--border-default)] bg-[var(--bg-surface)]"
+        >
+          <SheetHeader>
+            <SheetTitle className="text-[var(--text-primary)]">
+              执行计划
+            </SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 overflow-auto">
+            <ExplainPanel
+              plan={explainResult?.plan ?? []}
+              formatted={explainResult?.formatted ?? ""}
+              loading={explaining}
+              error={explainError}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

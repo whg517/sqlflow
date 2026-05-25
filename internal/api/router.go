@@ -76,6 +76,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 
 	// Query execution & history (authenticated users)
 	authGroup.POST("/api/query/execute", queryHandler.ExecuteQuery)
+	authGroup.POST("/api/query/explain", queryHandler.ExplainQuery)
 	authGroup.POST("/api/query/review", aiReviewHandler.ReviewStream)
 	authGroup.POST("/api/query/export", queryHandler.ExportQuery)
 	authGroup.GET("/api/query/history", queryHandler.ListHistory)

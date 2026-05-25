@@ -1,4 +1,4 @@
-import { Download, Loader2, Play, ShieldAlert } from "lucide-react";
+import { Download, Loader2, Play, ShieldAlert, GitBranch } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,8 @@ interface StatusBarProps {
   database: string;
   sql: string;
   onExecute: () => void;
+  onExplain?: () => void;
+  explaining?: boolean;
   isMongo?: boolean;
   mongoCollection?: string;
 }
@@ -47,6 +49,8 @@ export default function StatusBar({
   database,
   sql,
   onExecute,
+  onExplain,
+  explaining,
   isMongo,
   mongoCollection,
 }: StatusBarProps) {
@@ -225,6 +229,29 @@ export default function StatusBar({
           <span className="text-[var(--text-muted)]">Ctrl+Enter 执行</span>
         )}
       </div>
+
+      {/* Explain button */}
+      {!isMongo && onExplain && (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={!sql.trim() || !datasourceId || explaining}
+          onClick={onExplain}
+          className="h-7 gap-1 px-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-30"
+        >
+          {explaining ? (
+            <>
+              <Loader2 size={12} className="animate-spin" />
+              分析中...
+            </>
+          ) : (
+            <>
+              <GitBranch size={12} />
+              执行计划
+            </>
+          )}
+        </Button>
+      )}
 
       {/* Export */}
       <DropdownMenu>

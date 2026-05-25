@@ -35,6 +35,12 @@ type executeQueryRequest struct {
 	SQL          string `json:"sql"`
 }
 
+type explainQueryRequest struct {
+	DatasourceID int64  `json:"datasource_id"`
+	Database     string `json:"database"`
+	SQL          string `json:"sql"`
+}
+
 // ExecuteQuery handles POST /api/query/execute.
 //
 // @Summary 执行SQL查询
@@ -81,6 +87,43 @@ func (h *QueryHandler) ExecuteQuery(c echo.Context) error {
 		default:
 			log.Printf("ExecuteQuery failed: %v", err)
 			return resp.InternalError(c, "查询执行失败")
+		}
+	}
+
+	return resp.OK(c, result)
+}
+
+// ExplainQuery handles POST /api/query/explain.
+func (h *QueryHandler) ExplainQuery(c echo.Context) error {
+	var req explainQueryRequest
+	if err := c.Bind(&req); err != nil {
+		return resp.BadRequest(c, "请求格式错误")
+	}
+
+	if req.DatasourceID == 0 {
+		return resp.BadRequest(c, "数据源ID不能为空")
+	}
+	if req.SQL == "" {
+		return resp.BadRequest(c, "SQL不能为空")
+	}
+
+	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	role := c.Get(middleware.ContextKeyRole).(string)
+
+	result, err := h.querySvc.ExplainQuery(c.Request().Context(), userID, role, req.DatasourceID, req.Database, req.SQL)
+	if err != nil {
+		switch err {
+		case service.ErrExplainNonSelect:
+			return resp.BadRequest(c, "EXPLAIN 仅支持 SELECT 语句")
+		case service.ErrExplainNotSupported:
+			return resp.BadRequest(c, "EXPLAIN 仅支持 MySQL 数据源")
+		case service.ErrSQLTimeout:
+			return resp.BadRequest(c, "查询超时（30秒）")
+		case service.ErrEmptySQL:
+			return resp.BadRequest(c, "SQL不能为空")
+		default:
+			log.Printf("ExplainQuery failed: %v", err)
+			return resp.InternalError(c, "获取执行计划失败")
 		}
 	}
 
