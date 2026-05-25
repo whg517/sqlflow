@@ -46,6 +46,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	auditHandler := handler.NewAuditHandler(auditSvc)
 	dashboardHandler := handler.NewDashboardHandler(dashboardSvc)
 	backupHandler := handler.NewBackupHandler(backupSvc)
+	performanceHandler := handler.NewPerformanceHandler(historySvc)
 
 	// Public routes
 	e.POST("/api/auth/login", userHandler.Login)
@@ -74,6 +75,10 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.GET("/api/query/history", queryHandler.ListHistory)
 	authGroup.DELETE("/api/query/history/:id", queryHandler.DeleteHistory)
 	authGroup.DELETE("/api/query/history", queryHandler.ClearHistory)
+
+	// Performance analysis (authenticated users)
+	authGroup.GET("/api/query/performance/slow", performanceHandler.ListSlowQueries)
+	authGroup.GET("/api/query/performance/stats", performanceHandler.GetPerformanceStats)
 
 	// Ticket routes (authenticated users can create/list/view; approve/reject/execute restricted by role)
 	authGroup.POST("/api/tickets", ticketHandler.CreateTicket)

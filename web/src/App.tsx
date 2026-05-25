@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import ErrorPage from "./components/ErrorPage";
 import DashboardPage from "./pages/Dashboard";
 import QueryPage from "./pages/Query";
+import PerformancePage from "./pages/Performance";
 import TicketPage from "./pages/Ticket";
 import TicketNewPage from "./pages/TicketNew";
 import AuditPage from "./pages/Audit";
@@ -34,6 +35,14 @@ function App() {
               element={
                 <ErrorBoundary title="查询页面出现了问题">
                   <QueryPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/performance"
+              element={
+                <ErrorBoundary title="性能分析页面出现了问题">
+                  <PerformancePage />
                 </ErrorBoundary>
               }
             />

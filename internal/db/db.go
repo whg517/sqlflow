@@ -119,6 +119,16 @@ CREATE TABLE IF NOT EXISTS query_history (
 		return fmt.Errorf("migrate query_history index: %w", err)
 	}
 
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_query_history_exec_time ON query_history(execution_time)`)
+	if err != nil {
+		return fmt.Errorf("migrate query_history exec_time index: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_query_history_created_at ON query_history(created_at)`)
+	if err != nil {
+		return fmt.Errorf("migrate query_history created_at index: %w", err)
+	}
+
 	_, err = db.Exec(`
 CREATE TABLE IF NOT EXISTS audit_logs (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,

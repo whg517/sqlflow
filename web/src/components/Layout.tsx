@@ -18,6 +18,7 @@ import {
   Search,
   LayoutDashboard,
   Sun,
+  Gauge,
   Moon,
 } from "lucide-react";
 import {
@@ -210,6 +211,13 @@ export default function Layout() {
             to="/audit"
             icon={ScrollText}
             label="审计"
+            collapsed={collapsed}
+            navLinkClass={navLinkClass}
+          />
+          <NavItem
+            to="/performance"
+            icon={Gauge}
+            label="性能分析"
             collapsed={collapsed}
             navLinkClass={navLinkClass}
           />
