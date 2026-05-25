@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# pre-commit hook: prevent committing on non-main branch from the main worktree.
+# Rule: the primary worktree must remain on 'main' at all times.
+# Feature development must happen in .worktree/<branch>/ directories.
+
+set -euo pipefail
+
+worktree_root=$(git rev-parse --show-toplevel)
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+# Only enforce on the primary worktree (not .worktree/ subdirs)
+if [[ "$worktree_root" == */sql-platform ]] && [[ ! "$worktree_root" == */.worktree/* ]]; then
+  if [ "$current_branch" != "main" ]; then
+    cat >&2 <<EOF
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  🛑 禁止在主目录的非 main 分支上提交                     ┃
+┃                                                         ┃
+┃  当前分支: $current_branch
+┃  要求分支: main                                          ┃
+┃                                                         ┃
+┃  Worktree 开发规范:                                      ┃
+┃  1. git worktree add -b feature/XXX .worktree/feature/XXX┃
+┃  2. 在 worktree 中开发并提交                              ┃
+┃  3. 主目录始终保持在 main 分支                            ┃
+┃                                                         ┃
+┃  如需保留当前修改:                                        ┃
+┃  git stash && git checkout main && git stash pop        ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+EOF
+    exit 1
+  fi
+fi
