@@ -67,6 +67,9 @@ func main() {
 	defer auditSvc.Close()
 	log.Println("audit service initialized")
 
+	exportSvc := service.NewExportService(database.DB, auditSvc)
+	log.Println("export service initialized")
+
 	querySvc := service.NewQueryService(database.DB, dsSvc, historySvc, permSvc, auditSvc, cfg.EncryptionKey, connMgr)
 	log.Println("query service initialized")
 
@@ -129,7 +132,7 @@ func main() {
 	defer backupSvc.Stop()
 
 	// Start server
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, database.DB, cfg)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, database.DB, cfg)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server

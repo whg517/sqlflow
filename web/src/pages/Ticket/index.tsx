@@ -6,6 +6,8 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
+  Download,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -44,6 +46,7 @@ import {
   type Ticket,
   type TicketStatus,
 } from "@/api/ticket";
+import { exportTickets } from "@/api/export";
 import TicketDetailDrawer from "./components/TicketDetailDrawer";
 
 // --- Status Tab Config ---
@@ -111,6 +114,9 @@ export default function TicketPage() {
   // Detail drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+
+  // Export state
+  const [exporting, setExporting] = useState(false);
 
   // Open detail drawer if `id` param present in URL (from global search)
   useEffect(() => {
@@ -210,6 +216,38 @@ export default function TicketPage() {
     fetchTickets();
   }
 
+  // Export handler — server-side export with watermark
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const blob = await exportTickets({
+        status: activeTab !== "all" ? activeTab : undefined,
+        datasource_id: datasourceFilter || undefined,
+        risk_level: riskFilter || undefined,
+        keyword: keyword || undefined,
+      });
+      if (blob.size === 0) {
+        toast.info("没有可导出的数据");
+        return;
+      }
+      // Trigger download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tickets_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("工单导出成功（含水印）");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "导出失败";
+      toast.error(msg);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const totalPages = Math.ceil(total / pageSize);
 
   return (
@@ -219,14 +257,30 @@ export default function TicketPage() {
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">
           变更工单
         </h1>
-        <Button
-          size="sm"
-          className="h-8 gap-1.5 bg-[var(--accent-primary)] px-3 text-xs text-white hover:bg-[var(--accent-hover)]"
-          onClick={() => navigate("/tickets/new")}
-        >
-          <Plus size={14} />
-          提交新工单
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 border-[var(--border-default)] px-3 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
+            onClick={handleExport}
+            disabled={exporting || loading}
+          >
+            {exporting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Download size={14} />
+            )}
+            {exporting ? "导出中..." : "导出 CSV"}
+          </Button>
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 bg-[var(--accent-primary)] px-3 text-xs text-white hover:bg-[var(--accent-hover)]"
+            onClick={() => navigate("/tickets/new")}
+          >
+            <Plus size={14} />
+            提交新工单
+          </Button>
+        </div>
       </div>
 
       {/* Tabs + Filters + Table — all inside a card */}

@@ -50,6 +50,7 @@ import {
   actionOptions,
   type AuditLog,
 } from "@/api/audit";
+import { exportAuditLogs, type AuditExportParams } from "@/api/export";
 import {
   getStatusLabel,
   getStatusColor,
@@ -70,49 +71,17 @@ interface UserOption {
   username: string;
 }
 
-// --- Export CSV ---
+// --- Export CSV (server-side with watermark) ---
 
-function exportToCsv(logs: AuditLog[]) {
-  const headers = [
-    "时间",
-    "用户",
-    "操作",
-    "数据源ID",
-    "数据库",
-    "SQL内容",
-    "返回行数",
-    "影响行数",
-    "耗时(ms)",
-    "错误信息",
-    "脱敏字段",
-    "IP地址",
-  ];
-  const rows = logs.map((l) => [
-    l.created_at,
-    l.username,
-    l.action,
-    String(l.datasource_id),
-    l.database,
-    `"${(l.sql_content || "").replace(/"/g, '""')}"`,
-    String(l.result_rows),
-    String(l.affected_rows),
-    String(l.execution_time_ms),
-    l.error_message || "",
-    l.desensitized_fields || "",
-    l.ip_address || "",
-  ]);
-  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-  const BOM = "\uFEFF";
-  const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8;" });
+function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `audit_logs_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  toast.success(`已导出 ${logs.length} 条审计日志`);
 }
 
 // --- AI Review Block ---
@@ -608,13 +577,11 @@ export default function AuditPage() {
     });
   }
 
-  // Export handler — fetch all matching logs (up to 10000) for export
+  // Export handler — server-side export with watermark
   async function handleExport() {
     setExporting(true);
     try {
-      const res = await listAuditLogs({
-        page: 1,
-        page_size: 10000,
+      const blob = await exportAuditLogs({
         user_id: userFilter || undefined,
         action: actionFilter || undefined,
         datasource_id: datasourceFilter || undefined,
@@ -622,14 +589,15 @@ export default function AuditPage() {
         end: endDate || undefined,
         keyword: keyword || undefined,
       });
-      const data = res.data ?? [];
-      if (data.length === 0) {
+      if (blob.size === 0) {
         toast.info("没有可导出的数据");
         return;
       }
-      exportToCsv(data);
+      downloadBlob(blob, `audit_logs_${new Date().toISOString().slice(0, 10)}.csv`);
+      toast.success("审计日志导出成功（含水印）");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "导出失败");
+      const msg = err instanceof Error ? err.message : "导出失败";
+      toast.error(msg);
     } finally {
       setExporting(false);
     }

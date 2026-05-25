@@ -15,8 +15,8 @@ export const MOCK_USERS = {
 }
 
 export const MOCK_DATASOURCES = [
-  { id: 1, name: 'test-mysql', type: 'mysql', status: 'active' },
-  { id: 2, name: 'test-mongo', type: 'mongodb', status: 'active' },
+  { id: 1, name: 'test-mysql', type: 'mysql', status: 'active', host: '127.0.0.1', port: 3306, username: 'root', database: 'testdb', max_open: 10, created_at: '2025-01-01T00:00:00Z' },
+  { id: 2, name: 'test-mongo', type: 'mongodb', status: 'active', host: '127.0.0.1', port: 27017, username: 'mongo', database: 'mongodb', max_open: 10, created_at: '2025-01-15T00:00:00Z' },
 ]
 
 export const MOCK_TOKEN = 'mock-jwt-e2e-testing-token'
@@ -87,6 +87,71 @@ export const MOCK_CREATED_TICKET = {
     change_reason: 'Test ticket for E2E testing flow',
   },
 }
+
+export const MOCK_PERFORMANCE_STATS = {
+  code: 0,
+  message: 'ok',
+  data: {
+    total_queries: 1500,
+    slow_queries: 23,
+    avg_time: 85,
+    slow_query_rate: 1.5,
+    daily_trend: [
+      { date: '2025-05-19', count: 200, avg_time: 78, slow_count: 2 },
+      { date: '2025-05-20', count: 215, avg_time: 92, slow_count: 5 },
+      { date: '2025-05-21', count: 180, avg_time: 65, slow_count: 1 },
+      { date: '2025-05-22', count: 250, avg_time: 110, slow_count: 8 },
+      { date: '2025-05-23', count: 190, avg_time: 72, slow_count: 3 },
+      { date: '2025-05-24', count: 220, avg_time: 88, slow_count: 2 },
+      { date: '2025-05-25', count: 245, avg_time: 95, slow_count: 2 },
+    ],
+    datasource_stats: [
+      { datasource_id: 1, datasource_name: 'test-mysql', count: 1200, avg_time: 90 },
+      { datasource_id: 2, datasource_name: 'test-mongo', count: 300, avg_time: 60 },
+    ],
+    top_slow_queries: [
+      { id: 1, sql_summary: 'SELECT * FROM orders WHERE ...', execution_time: 5200, datasource_name: 'test-mysql', created_at: '2025-05-22T10:30:00Z' },
+      { id: 2, sql_summary: 'UPDATE users SET ...', execution_time: 3800, datasource_name: 'test-mysql', created_at: '2025-05-22T14:15:00Z' },
+      { id: 3, sql_summary: 'SELECT o.*, u.name FROM orders ...', execution_time: 2500, datasource_name: 'test-mysql', created_at: '2025-05-22T09:20:00Z' },
+    ],
+  },
+}
+
+export const MOCK_SLOW_QUERIES = {
+  code: 0,
+  message: 'ok',
+  data: [
+    { id: 1, user_id: 1, datasource_id: 1, database: 'testdb', sql_content: 'SELECT * FROM orders JOIN users ON ...', sql_summary: 'SELECT * FROM orders JOIN ...', db_type: 'mysql', execution_time: 5200, result_rows: 50000, affected_rows: 0, created_at: '2025-05-22T10:30:00Z' },
+    { id: 2, user_id: 1, datasource_id: 1, database: 'testdb', sql_content: 'UPDATE users SET status = ... WHERE id IN (...)', sql_summary: 'UPDATE users SET status ...', db_type: 'mysql', execution_time: 3800, result_rows: 0, affected_rows: 1500, created_at: '2025-05-22T14:15:00Z' },
+    { id: 3, user_id: 2, datasource_id: 1, database: 'testdb', sql_content: 'SELECT o.*, u.name FROM orders o LEFT JOIN ...', sql_summary: 'SELECT o.*, u.name FROM ...', db_type: 'mysql', execution_time: 2500, result_rows: 80000, affected_rows: 0, created_at: '2025-05-22T09:20:00Z' },
+    { id: 4, user_id: 1, datasource_id: 2, database: 'mongodb', sql_content: 'db.orders.find({...}).sort(...)', sql_summary: 'db.orders.find({...}).sort(...)', db_type: 'mongodb', execution_time: 1800, result_rows: 25000, affected_rows: 0, created_at: '2025-05-23T11:00:00Z' },
+    { id: 5, user_id: 3, datasource_id: 1, database: 'testdb', sql_content: 'DELETE FROM temp_logs WHERE created_at < ...', sql_summary: 'DELETE FROM temp_logs WHERE ...', db_type: 'mysql', execution_time: 1500, result_rows: 0, affected_rows: 100000, created_at: '2025-05-23T08:00:00Z' },
+  ],
+  page: 1,
+  page_size: 20,
+  total: 5,
+}
+
+export const MOCK_MASK_RULES = [
+  { id: 1, datasource_id: 1, table_name: 'users', column_name: 'email', mask_type: 'partial', mask_length: 3, sensitivity: 'high', description: '邮箱脱敏' },
+  { id: 2, datasource_id: 1, table_name: 'users', column_name: 'phone', mask_type: 'partial', mask_length: 3, sensitivity: 'high', description: '手机号脱敏' },
+  { id: 3, datasource_id: 1, table_name: 'users', column_name: 'id_card', mask_type: 'full', mask_length: 0, sensitivity: 'critical', description: '身份证全脱敏' },
+]
+
+export const MOCK_SENSITIVE_TABLES = [
+  { id: 1, datasource_id: 1, table_name: 'users', column_count: 3, created_at: '2025-05-20T00:00:00Z' },
+  { id: 2, datasource_id: 1, table_name: 'payments', column_count: 5, created_at: '2025-05-21T00:00:00Z' },
+]
+
+export const MOCK_MASK_TABLES = ['users', 'payments', 'orders', 'products', 'temp_logs']
+
+export const MOCK_MASK_COLUMNS = [
+  { column_name: 'email', column_type: 'varchar', is_sensitive: true },
+  { column_name: 'phone', column_type: 'varchar', is_sensitive: true },
+  { column_name: 'id_card', column_type: 'varchar', is_sensitive: true },
+  { column_name: 'name', column_type: 'varchar', is_sensitive: false },
+  { column_name: 'id', column_type: 'int', is_sensitive: false },
+]
 
 export const MOCK_HISTORY = {
   code: 0,
@@ -169,8 +234,9 @@ export function mockApiRoutes(page: Page, opts?: MockOptions) {
     })
   })
 
-  // Datasources
+  // Datasources (GET only — CRUD handled below)
   page.route(/\/api\/datasources(\?.*)?$/, async (route: Route) => {
+    if (route.request().method() !== 'GET') return // let CRUD handler below handle
     if (opts?.denyDatasources) {
       await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
     } else {
@@ -182,11 +248,15 @@ export function mockApiRoutes(page: Page, opts?: MockOptions) {
     }
   })
 
+  // Datasource tables (simple list — column detail handled below)
   page.route('**/api/datasources/*/tables', async (route: Route) => {
+    const url = route.request().url()
+    // If URL has more path segments (e.g. .../tables/users/columns), skip to column handler
+    if (/\/tables\/[^/]+\/columns/.test(url)) return
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ code: 0, data: ['users', 'orders', 'products'] }),
+      body: JSON.stringify({ code: 0, data: MOCK_MASK_TABLES }),
     })
   })
 
@@ -328,23 +398,8 @@ export function mockApiRoutes(page: Page, opts?: MockOptions) {
     }
   })
 
-  // Users (admin-only)
-  page.route(/\/api\/users(\?.*)?$/, async (route: Route) => {
-    if (role === 'admin') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          code: 0,
-          data: [MOCK_USERS.admin, MOCK_USERS.developer, MOCK_USERS.dba],
-        }),
-      })
-    } else {
-      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
-    }
-  })
+  // Users list (admin-only) — handled by CRUD block below
 
-  // Roles & policies (admin-only)
   page.route('**/api/roles**', async (route: Route) => {
     if (role === 'admin') {
       await route.fulfill({
@@ -387,27 +442,10 @@ export function mockApiRoutes(page: Page, opts?: MockOptions) {
     }
   })
 
-  // Mask rules (admin-only)
-  page.route('**/api/mask-rules**', async (route: Route) => {
-    if (role === 'admin') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 0, data: [] }),
-      })
-    } else {
-      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
-    }
-  })
+  // Mask rules & sensitive tables handled by new handlers below
 
-  // Sensitive tables (admin-only)
-  page.route('**/api/sensitive-tables**', async (route: Route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ code: 0, data: [] }),
-    })
-  })
+  // Fallback sensitive-tables glob (non-regex) — no-op since regex handlers above take priority
+
 
   // Audit logs (admin-only)
   page.route('**/api/audit-logs**', async (route: Route) => {
@@ -426,6 +464,44 @@ export function mockApiRoutes(page: Page, opts?: MockOptions) {
     } else {
       await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
     }
+  })
+
+  // Export audit logs (admin/dba)
+  page.route(/\/api\/export\/audit/, async (route: Route) => {
+    if (role === 'admin' || role === 'dba') {
+      const BOM = '\uFEFF'
+      const csv = BOM + 'ID,时间,用户,操作,数据源ID,数据库,SQL内容\n'
+      + '1,2026-05-25 10:00:00,admin,query_execute,1,testdb,SELECT 1\n'
+      + '# 导出水印: 导出人=' + user.username + ' | 导出时间=2026-05-25 10:00:00 UTC | 仅限内部使用\n'
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/csv; charset=utf-8',
+        headers: {
+          'Content-Disposition': 'attachment; filename="audit_logs_2026-05-25.csv"',
+          'X-Export-Rows': '1',
+        },
+        body: csv,
+      })
+    } else {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ code: 403, message: '没有导出权限' }) })
+    }
+  })
+
+  // Export tickets (all authenticated users)
+  page.route(/\/api\/export\/tickets/, async (route: Route) => {
+    const BOM = '\uFEFF'
+    const csv = BOM + 'ID,提交人,状态,数据库\n'
+    + '1,admin,SUBMITTED,testdb\n'
+    + '# 导出水印: 导出人=' + user.username + ' | 导出时间=2026-05-25 10:00:00 UTC | 仅限内部使用\n'
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/csv; charset=utf-8',
+      headers: {
+        'Content-Disposition': 'attachment; filename="tickets_2026-05-25.csv"',
+        'X-Export-Rows': '1',
+      },
+      body: csv,
+    })
   })
 
   // Settings (admin-only)
@@ -485,6 +561,189 @@ export function mockApiRoutes(page: Page, opts?: MockOptions) {
       contentType: 'application/json',
       body: JSON.stringify({ code: 0, data: { token: MOCK_TOKEN } }),
     })
+  })
+
+  // Performance stats
+  page.route(/\/api\/query\/performance\/stats/, async (route: Route) => {
+    if (role === 'admin' || role === 'dba') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(MOCK_PERFORMANCE_STATS),
+      })
+    } else {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
+    }
+  })
+
+  // Slow queries
+  page.route(/\/api\/query\/performance\/slow/, async (route: Route) => {
+    if (role === 'admin' || role === 'dba') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(MOCK_SLOW_QUERIES),
+      })
+    } else {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
+    }
+  })
+
+  // Mask rules (admin-only)
+  page.route(/\/api\/mask-rules(\?.*)?$/, async (route: Route) => {
+    if (role !== 'admin') {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
+      return
+    }
+    if (route.request().method() === 'POST') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, message: 'ok', data: { id: 99, ...route.request().postDataJSON() } }),
+      })
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, data: MOCK_MASK_RULES }),
+      })
+    }
+  })
+
+  page.route('**/api/mask-rules/*', async (route: Route) => {
+    if (role !== 'admin') {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 0, message: 'ok' }),
+    })
+  })
+
+  // Sensitive tables (admin-only)
+  page.route(/\/api\/sensitive-tables(\?.*)?$/, async (route: Route) => {
+    if (role !== 'admin') {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
+      return
+    }
+    if (route.request().method() === 'POST') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, message: 'ok', data: { id: 99, ...route.request().postDataJSON() } }),
+      })
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, data: MOCK_SENSITIVE_TABLES, total: MOCK_SENSITIVE_TABLES.length }),
+      })
+    }
+  })
+
+  page.route('**/api/sensitive-tables/*', async (route: Route) => {
+    if (role !== 'admin') {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 0, message: 'ok' }),
+    })
+  })
+
+  // AI config
+  page.route('**/api/ai-config/test', async (route: Route) => {
+    if (role !== 'admin') {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 0, data: { success: true, message: 'AI 连接测试成功', latency_ms: 350 } }),
+    })
+  })
+
+  // Datasource table columns (for mask rules)
+  page.route(/\/api\/datasources\/\d+\/tables\/[^/]+\/columns/, async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 0, data: MOCK_MASK_COLUMNS }),
+    })
+  })
+
+  // Datasource test connection
+  page.route(/\/api\/datasources\/\d+\/test/, async (route: Route) => {
+    if (role !== 'admin') {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 0, data: { message: '连接测试成功', success: true } }),
+    })
+  })
+
+  // Individual datasource CRUD (PUT / DELETE)
+  page.route(/\/api\/datasources\/\d+$/, async (route: Route) => {
+    if (role !== 'admin') {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
+      return
+    }
+    const method = route.request().method()
+    if (method === 'PUT') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 0, message: 'ok' }) })
+    } else if (method === 'DELETE') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 0, message: 'ok' }) })
+    } else {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 0, data: MOCK_DATASOURCES[0] }) })
+    }
+  })
+
+  // Users CRUD (list + POST)
+  page.route(/\/api\/users(\?.*)?$/, async (route: Route) => {
+    if (role !== 'admin') {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
+      return
+    }
+    if (route.request().method() === 'POST') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 0, message: 'ok' }) })
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, data: { users: [MOCK_USERS.admin, MOCK_USERS.developer, MOCK_USERS.dba], total: 3 } }),
+      })
+    }
+  })
+
+  // Individual user CRUD (PUT / DELETE)
+  page.route(/\/api\/users\/\d+$/, async (route: Route) => {
+    if (role !== 'admin') {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
+      return
+    }
+    const method = route.request().method()
+    if (method === 'PUT') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 0, message: 'ok' }) })
+    } else if (method === 'DELETE') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 0, message: 'ok' }) })
+    }
+  })
+
+  // User reset password
+  page.route(/\/api\/users\/\d+\/reset-password/, async (route: Route) => {
+    if (role !== 'admin') {
+      await route.fulfill({ status: 403, contentType: 'application/json', body: '{}' })
+      return
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 0, message: 'ok' }) })
   })
 }
 

@@ -15,7 +15,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, db *sql.DB, cfg *config.Config) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, db *sql.DB, cfg *config.Config) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -50,6 +50,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	maskRuleHandler := handler.NewMaskRuleHandler(maskRuleSvc)
 	aiReviewHandler := handler.NewAIReviewHandler(aiReviewSvc, dsSvc)
 	auditHandler := handler.NewAuditHandler(auditSvc)
+	exportHandler := handler.NewExportHandler(exportSvc)
 	dashboardHandler := handler.NewDashboardHandler(dashboardSvc)
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	performanceHandler := handler.NewPerformanceHandler(historySvc)
@@ -144,6 +145,10 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	// Audit logs (admin/dba can view)
 	adminGroup.GET("/api/audit-logs", auditHandler.ListAuditLogs)
 	adminGroup.GET("/api/audit-logs/search", auditHandler.SearchAuditLogs)
+
+	// Export routes — audit export requires admin/dba; ticket export requires auth
+	adminGroup.GET("/api/export/audit", exportHandler.ExportAuditLogs)
+	authGroup.GET("/api/export/tickets", exportHandler.ExportTickets)
 
 	// Database backup management (admin)
 	adminGroup.POST("/api/backups", backupHandler.TriggerBackup)

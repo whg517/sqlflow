@@ -215,4 +215,37 @@ export const api = {
   post: <T>(path: string, body: unknown) => request<T>("POST", path, body),
   put: <T>(path: string, body: unknown) => request<T>("PUT", path, body),
   del: <T>(path: string) => request<T>("DELETE", path),
+  /** Fetch a binary response (Blob) with auth headers. */
+  async getBlob(path: string): Promise<Blob> {
+    const token = getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}${path}`, {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    if (res.status === 401) {
+      handleUnauthorized();
+      throw new Error("Unauthorized");
+    }
+    if (res.status === 403) {
+      throw new Error("Forbidden");
+    }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const msg = data.message || `导出失败 (${res.status})`;
+      throw new Error(msg);
+    }
+    return res.blob();
+  },
 };
