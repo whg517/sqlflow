@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     error_message       TEXT    NOT NULL DEFAULT '',
     desensitized_fields TEXT    NOT NULL DEFAULT '',
     ip_address          TEXT    NOT NULL DEFAULT '',
+    ai_review_result    TEXT    NOT NULL DEFAULT '',
+    ticket_id           INTEGER NOT NULL DEFAULT 0,
     created_at          DATETIME NOT NULL DEFAULT (datetime('now'))
 );
 	`)
