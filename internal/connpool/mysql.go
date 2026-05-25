@@ -15,7 +15,7 @@ func MySQLPing(ctx context.Context, host string, port int, user, password string
 	if err != nil {
 		return fmt.Errorf("open mysql: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping mysql: %w", err)
@@ -30,13 +30,13 @@ func MySQLGetTables(ctx context.Context, host string, port int, user, password, 
 	if err != nil {
 		return nil, fmt.Errorf("open mysql: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rows, err := db.QueryContext(ctx, "SHOW TABLES")
 	if err != nil {
 		return nil, fmt.Errorf("show tables: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tables []string
 	for rows.Next() {

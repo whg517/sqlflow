@@ -803,7 +803,7 @@ func TestIntegration_NotificationWithTicketLifecycle(t *testing.T) {
 	}
 
 	// Execute -> notification sent
-	ticket, err = ticketSvc.ExecuteTicket(context.Background(), ticket.ID, devID, "developer", "notify_dev")
+	_, err = ticketSvc.ExecuteTicket(context.Background(), ticket.ID, devID, "developer", "notify_dev")
 	if err != nil {
 		t.Fatalf("ExecuteTicket: %v", err)
 	}

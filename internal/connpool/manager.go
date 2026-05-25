@@ -96,7 +96,7 @@ func (m *Manager) GetMySQL(dsID int64, host string, port int, user, password, da
 func (m *Manager) Remove(dsID int64, host string, port int, database string) {
 	key := poolKey(dsID, host, port, database)
 	if v, ok := m.mysqlPools.LoadAndDelete(key); ok {
-		v.(*sql.DB).Close()
+		_ = v.(*sql.DB).Close()
 	}
 }
 
@@ -115,7 +115,7 @@ func (m *Manager) InjectMongoForTest(dsID int64, uri string, client *mongo.Clien
 // Close closes all cached connection pools (MySQL and MongoDB).
 func (m *Manager) Close() {
 	m.mysqlPools.Range(func(key, value interface{}) bool {
-		value.(*sql.DB).Close()
+		_ = value.(*sql.DB).Close()
 		m.mysqlPools.Delete(key)
 		return true
 	})
@@ -124,7 +124,7 @@ func (m *Manager) Close() {
 	defer cancel()
 
 	m.mongoPools.Range(func(key, value interface{}) bool {
-		value.(*mongo.Client).Disconnect(ctx)
+		_ = value.(*mongo.Client).Disconnect(ctx)
 		m.mongoPools.Delete(key)
 		return true
 	})
@@ -163,7 +163,7 @@ func (m *Manager) GetMongoDB(ctx context.Context, dsID int64, uri string) (*mong
 	}
 
 	if err := client.Ping(connectCtx, nil); err != nil {
-		client.Disconnect(connectCtx)
+		_ = client.Disconnect(connectCtx)
 		return nil, fmt.Errorf("ping mongodb: %w", err)
 	}
 
@@ -196,7 +196,7 @@ func (m *Manager) RemoveMongo(dsID int64) {
 		if strings.HasPrefix(key.(string), prefix) {
 			m.mongoPools.Delete(key)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			value.(*mongo.Client).Disconnect(ctx)
+			_ = value.(*mongo.Client).Disconnect(ctx)
 			cancel()
 		}
 		return true

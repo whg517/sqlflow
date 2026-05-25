@@ -69,7 +69,7 @@ func (s *RefreshTokenService) RotateToken(ctx context.Context, oldRawToken strin
 	if err != nil {
 		return "", 0, fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	rt := &model.RefreshToken{}
 	err = tx.QueryRowContext(ctx,

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,7 +64,7 @@ func (a *sqliteAdapter) loadPolicyData(ctx context.Context) ([]CasbinRule, error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var rules []CasbinRule
 	for rows.Next() {
@@ -89,7 +90,7 @@ func (a *sqliteAdapter) LoadPolicy(model model.Model) error {
 				line += ", " + p
 			}
 		}
-		persist.LoadPolicyLine(line, model)
+		_ = persist.LoadPolicyLine(line, model)
 	}
 	return nil
 }
@@ -101,7 +102,9 @@ func (a *sqliteAdapter) SavePolicy(model model.Model) error {
 	}
 	_, err = tx.ExecContext(context.Background(), `DELETE FROM casbin_rule`)
 	if err != nil {
-		tx.Rollback()
+		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+			slog.Warn("failed to rollback", "error", err)
+		}
 		return err
 	}
 
@@ -112,7 +115,9 @@ func (a *sqliteAdapter) SavePolicy(model model.Model) error {
 				ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
 			)
 			if err != nil {
-				tx.Rollback()
+				if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+					slog.Warn("failed to rollback", "error", err)
+				}
 				return err
 			}
 		}
@@ -125,7 +130,9 @@ func (a *sqliteAdapter) SavePolicy(model model.Model) error {
 				ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
 			)
 			if err != nil {
-				tx.Rollback()
+				if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+					slog.Warn("failed to rollback", "error", err)
+				}
 				return err
 			}
 		}
@@ -323,7 +330,7 @@ func (s *PermissionService) GetPolicies(ctx context.Context, page, pageSize int6
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var policies []Policy
 	for rows.Next() {
@@ -344,7 +351,7 @@ func (s *PermissionService) GetPoliciesForRole(ctx context.Context, role string)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var policies []Policy
 	for rows.Next() {

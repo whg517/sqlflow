@@ -468,10 +468,6 @@ func TestExecuteQuery_PermissionDenied(t *testing.T) {
 	if err == nil {
 		t.Error("expected error (permission denied or connection), got nil")
 	}
-	// The error should mention permission if the permission check rejected it
-	if err != nil && (err.Error() == "没有表 users 的查询权限" || err.Error() == "权限校验失败") {
-		// Permission was denied — correct behavior
-	}
 }
 
 func TestExecuteQuery_AdminHasWildcardPermission(t *testing.T) {
@@ -531,7 +527,7 @@ func TestApplyDesensitization_NoRules(t *testing.T) {
 }
 
 func TestApplyDesensitization_WithRules(t *testing.T) {
-	qs, testDB := setupQueryService(t)
+	_, testDB := setupQueryService(t)
 	ctx := context.Background()
 
 	connMgr := connpool.NewManager()
@@ -545,7 +541,7 @@ func TestApplyDesensitization_WithRules(t *testing.T) {
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(testDB, 0, 0)
-	qs = NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	result := &QueryResult{
 		Columns: []string{"id", "phone"},
@@ -845,7 +841,7 @@ func TestApplyDesensitization_FieldNotInRow(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadMaskRules(t *testing.T) {
-	qs, testDB := setupQueryService(t)
+	_, testDB := setupQueryService(t)
 	ctx := context.Background()
 
 	connMgr := connpool.NewManager()
@@ -861,7 +857,7 @@ func TestLoadMaskRules(t *testing.T) {
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(testDB, 0, 0)
-	qs = NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	rules := qs.loadMaskRules(ctx, dsID, "testdb", []string{"users"})
 	if len(rules) < 2 {
@@ -1258,7 +1254,7 @@ func TestExecuteMongoDB_ParseError(t *testing.T) {
 	ctx := context.Background()
 
 	// Inject a disconnected mongo client to get past connection step
-	mongoClient, _ := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	mongoClient, _ := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017")) //nolint:staticcheck // need disconnected client for test
 	uri := buildMongoURI("127.0.0.1", 19999, "root", "pass")
 	qs.connMgr.InjectMongoForTest(1, uri, mongoClient)
 
@@ -1275,7 +1271,7 @@ func TestExecuteMongoDB_MissingDatabase(t *testing.T) {
 	qs, _ := setupQueryService(t)
 	ctx := context.Background()
 
-	mongoClient, _ := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	mongoClient, _ := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017")) //nolint:staticcheck // need disconnected client for test
 	uri := buildMongoURI("127.0.0.1", 19999, "root", "pass")
 	qs.connMgr.InjectMongoForTest(1, uri, mongoClient)
 
@@ -1292,7 +1288,7 @@ func TestExecuteMongoDB_MissingCollection(t *testing.T) {
 	qs, _ := setupQueryService(t)
 	ctx := context.Background()
 
-	mongoClient, _ := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	mongoClient, _ := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017")) //nolint:staticcheck // need disconnected client for test
 	uri := buildMongoURI("127.0.0.1", 19999, "root", "pass")
 	qs.connMgr.InjectMongoForTest(1, uri, mongoClient)
 

@@ -91,7 +91,7 @@ func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSo
 	if err != nil {
 		return nil, fmt.Errorf("query datasources: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var list []model.DataSource
 	for rows.Next() {
@@ -269,7 +269,7 @@ func (s *DatasourceService) GetTables(ctx context.Context, id int64) ([]string, 
 		if err != nil {
 			return nil, fmt.Errorf("show tables: %w", err)
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		tables := make([]string, 0)
 		for rows.Next() {
@@ -343,7 +343,7 @@ func (s *DatasourceService) getMySQLColumns(ctx context.Context, ds *model.DataS
 	if err != nil {
 		return nil, fmt.Errorf("query columns: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var columns []ColumnInfo
 	for rows.Next() {
@@ -380,7 +380,7 @@ func (s *DatasourceService) getMongoColumns(ctx context.Context, ds *model.DataS
 	if err != nil {
 		return nil, fmt.Errorf("aggregate mongo columns: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	seen := make(map[string]string) // name → type
 	for cursor.Next(ctx) {

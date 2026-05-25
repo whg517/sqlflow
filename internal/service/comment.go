@@ -94,7 +94,7 @@ func (s *CommentService) ListComments(ctx context.Context, orderID int64) ([]mod
 	if err != nil {
 		return nil, fmt.Errorf("查询评论失败: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var comments []model.Comment
 	for rows.Next() {

@@ -40,7 +40,7 @@ func (e *simpleValueExpr) SetProjectionOffset(offset int) { e.projOffset = offse
 
 // Format implements ast.ExprNode.
 func (e *simpleValueExpr) Format(w io.Writer) {
-	fmt.Fprintf(w, "%v", e.val)
+	_, _ = fmt.Fprintf(w, "%v", e.val)
 }
 
 // Restore implements ast.Node.

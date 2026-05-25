@@ -157,7 +157,7 @@ func (s *MaskRuleService) ListMaskRules(ctx context.Context, page, pageSize int,
 	if err != nil {
 		return nil, 0, fmt.Errorf("查询脱敏规则失败: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	rules := make([]model.MaskRule, 0)
 	for rows.Next() {
@@ -324,7 +324,7 @@ func (s *MaskRuleService) ListSensitiveTables(ctx context.Context, page, pageSiz
 	if err != nil {
 		return nil, 0, fmt.Errorf("查询敏感表失败: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	tables := make([]model.SensitiveTable, 0)
 	for rows.Next() {
@@ -403,7 +403,7 @@ func (s *MaskRuleService) GetSensitiveTablesForDatasource(ctx context.Context, d
 	if err != nil {
 		return nil, fmt.Errorf("查询敏感表失败: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	tables := make([]model.SensitiveTable, 0)
 	for rows.Next() {

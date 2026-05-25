@@ -243,6 +243,7 @@ func (s *TicketService) ListTickets(ctx context.Context, page, pageSize int, sta
 	if err != nil {
 		return nil, 0, fmt.Errorf("查询工单列表失败: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 
 	// Read all rows first before populating names, since MaxOpenConns(1)
 	// means the rows cursor holds the only connection.
@@ -250,16 +251,13 @@ func (s *TicketService) ListTickets(ctx context.Context, page, pageSize int, sta
 	for rows.Next() {
 		t, err := scanTicket(rows)
 		if err != nil {
-			rows.Close()
 			continue
 		}
 		tickets = append(tickets, *t)
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
 		return nil, 0, fmt.Errorf("遍历工单失败: %w", err)
 	}
-	rows.Close()
 
 	// Now populate user names (requires additional queries)
 	for i := range tickets {

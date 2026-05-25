@@ -1,6 +1,6 @@
 # ============================================================
 # SQLFlow CI — PR 触发
-# 后端：Go vet → Test → Build
+# 后端：golangci-lint → Test → Build
 # 前端：npm ci → lint → tsc → build
 # ⚠️ 任意步骤失败都会阻塞合并
 # ============================================================
@@ -20,9 +20,9 @@ env:
   NODE_VERSION: "24"
 
 jobs:
-  # ── 后端：lint + test + build ──
+  # ── 后端：golangci-lint + test + build ──
   backend:
-    name: Backend (vet / test / build)
+    name: Backend (lint / test / build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,8 +32,11 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: go.sum
 
-      - name: Go vet
-        run: go vet ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.12
+          args: --timeout=5m
 
       - name: Go test
         run: go test ./... -v -race -count=1

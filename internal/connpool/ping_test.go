@@ -375,7 +375,7 @@ func TestMySQLPing_TableDriven(t *testing.T) {
 	}{
 		{
 			name:     "cancelled_context",
-			ctx:      func() context.Context { ctx, _ := context.WithCancel(context.Background()); return ctx }(),
+			ctx:      func() context.Context { ctx, cancel := context.WithCancel(context.Background()); cancel(); return ctx }(),
 			host:     "127.0.0.1",
 			port:     3306,
 			user:     "root",
@@ -385,8 +385,9 @@ func TestMySQLPing_TableDriven(t *testing.T) {
 		{
 			name: "expired_context",
 			ctx: func() context.Context {
-				ctx, _ := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 				time.Sleep(time.Millisecond)
+				cancel()
 				return ctx
 			}(),
 			host:     "127.0.0.1",
@@ -396,8 +397,12 @@ func TestMySQLPing_TableDriven(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "empty_host",
-			ctx:      func() context.Context { ctx, _ := context.WithTimeout(context.Background(), 2*time.Second); return ctx }(),
+			name: "empty_host",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				cancel()
+				return ctx
+			}(),
 			host:     "",
 			port:     3306,
 			user:     "root",
@@ -407,7 +412,8 @@ func TestMySQLPing_TableDriven(t *testing.T) {
 		{
 			name: "timeout_context_short",
 			ctx: func() context.Context {
-				ctx, _ := context.WithTimeout(context.Background(), 50*time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+				cancel()
 				return ctx
 			}(),
 			host:     "192.0.2.1", // TEST-NET-1, unreachable
@@ -441,7 +447,7 @@ func TestMySQLGetTables_TableDriven(t *testing.T) {
 	}{
 		{
 			name:     "cancelled_context",
-			ctx:      func() context.Context { ctx, _ := context.WithCancel(context.Background()); return ctx }(),
+			ctx:      func() context.Context { ctx, cancel := context.WithCancel(context.Background()); cancel(); return ctx }(),
 			host:     "127.0.0.1",
 			port:     3306,
 			user:     "root",
@@ -452,8 +458,9 @@ func TestMySQLGetTables_TableDriven(t *testing.T) {
 		{
 			name: "expired_context",
 			ctx: func() context.Context {
-				ctx, _ := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 				time.Sleep(time.Millisecond)
+				cancel()
 				return ctx
 			}(),
 			host:     "127.0.0.1",
@@ -466,7 +473,8 @@ func TestMySQLGetTables_TableDriven(t *testing.T) {
 		{
 			name: "timeout_short",
 			ctx: func() context.Context {
-				ctx, _ := context.WithTimeout(context.Background(), 50*time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+				cancel()
 				return ctx
 			}(),
 			host:     "192.0.2.1",
@@ -478,7 +486,7 @@ func TestMySQLGetTables_TableDriven(t *testing.T) {
 		},
 		{
 			name:     "empty_database",
-			ctx:      func() context.Context { ctx, _ := context.WithCancel(context.Background()); return ctx }(),
+			ctx:      func() context.Context { ctx, cancel := context.WithCancel(context.Background()); cancel(); return ctx }(),
 			host:     "127.0.0.1",
 			port:     3306,
 			user:     "root",
@@ -510,26 +518,35 @@ func TestMongoPing_TableDriven(t *testing.T) {
 	}{
 		{
 			name:    "cancelled_context",
-			ctx:     func() context.Context { ctx, _ := context.WithCancel(context.Background()); return ctx }(),
+			ctx:     func() context.Context { ctx, cancel := context.WithCancel(context.Background()); cancel(); return ctx }(),
 			uri:     "mongodb://localhost:27017",
 			wantErr: true,
 		},
 		{
-			name:    "invalid_uri",
-			ctx:     func() context.Context { ctx, _ := context.WithTimeout(context.Background(), 3*time.Second); return ctx }(),
+			name: "invalid_uri",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				cancel()
+				return ctx
+			}(),
 			uri:     "not-a-valid-uri",
 			wantErr: true,
 		},
 		{
-			name:    "empty_uri",
-			ctx:     func() context.Context { ctx, _ := context.WithTimeout(context.Background(), 3*time.Second); return ctx }(),
+			name: "empty_uri",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				cancel()
+				return ctx
+			}(),
 			uri:     "",
 			wantErr: true,
 		},
 		{
 			name: "unreachable_host",
 			ctx: func() context.Context {
-				ctx, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+				cancel()
 				return ctx
 			}(),
 			uri:     "mongodb://192.0.2.1:27017",

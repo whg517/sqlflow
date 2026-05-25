@@ -211,7 +211,7 @@ func executeRequest(client *http.Client, spec RequestSpec) LatencyRecord {
 			Error:        err,
 		}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Drain body to ensure full read timing
 	_, _ = io.Copy(io.Discard, resp.Body)

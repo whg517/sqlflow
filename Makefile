@@ -47,17 +47,20 @@ web-test: ## Run frontend unit tests (Vitest)
 
 ##@ Quality
 
-lint: ## Lint all (Go vet + ESLint)
-lint: go-vet web-lint
+lint: ## Lint all (golangci-lint + ESLint)
+lint: go-lint web-lint
 
-go-vet: ## Run Go vet
+go-lint: ## Run golangci-lint
+	golangci-lint run ./...
+
+go-vet: ## Run Go vet (superseded by golangci-lint, kept for compat)
 	go vet ./...
 
 web-lint: ## Run ESLint
 	cd web && npm run lint
 
-fmt: ## Format all code (go fmt + prettier)
-	go fmt ./...
+fmt: ## Format all code (go fmt + goimports + prettier)
+	golangci-lint fmt ./...
 	cd web && npx prettier --write "src/**/*.{ts,tsx}"
 
 verify: ## Full CI check (lint + build + test)

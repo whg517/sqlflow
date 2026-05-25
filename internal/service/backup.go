@@ -128,7 +128,7 @@ func (s *BackupService) RunBackup() error {
 		gzPath := destPath + ".gz"
 		if err := s.compressFile(destPath, gzPath); err != nil {
 			// Remove the uncompressed file on compression failure
-			os.Remove(destPath)
+			_ = os.Remove(destPath)
 			return fmt.Errorf("compress backup: %w", err)
 		}
 		// Remove the uncompressed backup
@@ -170,7 +170,7 @@ func (s *BackupService) sqliteBackup(destPath string) error {
 	if err != nil {
 		return fmt.Errorf("open source db: %w", err)
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	srcInfo, err := srcFile.Stat()
 	if err != nil {
@@ -181,7 +181,7 @@ func (s *BackupService) sqliteBackup(destPath string) error {
 	if err != nil {
 		return fmt.Errorf("create backup file: %w", err)
 	}
-	defer destFile.Close()
+	defer func() { _ = destFile.Close() }()
 
 	written, err := io.Copy(destFile, srcFile)
 	if err != nil {
@@ -200,17 +200,17 @@ func (s *BackupService) compressFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	dstFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
+	defer func() { _ = dstFile.Close() }()
 
 	gzWriter := gzip.NewWriter(dstFile)
 	gzWriter.Name = filepath.Base(src)
-	defer gzWriter.Close()
+	defer func() { _ = gzWriter.Close() }()
 
 	if _, err := io.Copy(gzWriter, srcFile); err != nil {
 		return err

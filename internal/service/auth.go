@@ -154,13 +154,10 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, oldPassw
 		return err
 	}
 
-	// Revoke all refresh tokens for security
-	if err := s.refreshTokenSvc.RevokeAllTokens(ctx, userID); err != nil {
-		// Log but don't fail the password change
-		err = fmt.Errorf("password changed but failed to revoke refresh tokens: %w", err)
-	}
+	// Revoke all refresh tokens for security (best-effort, ignore failure)
+	_ = s.refreshTokenSvc.RevokeAllTokens(ctx, userID)
 
-	return err
+	return nil
 }
 
 // UserCount returns the number of users in the database.
@@ -189,7 +186,7 @@ func (s *AuthService) ListUsers(ctx context.Context, page, pageSize int64) ([]*m
 	if err != nil {
 		return nil, 0, fmt.Errorf("query users: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var users []*model.User
 	for rows.Next() {
@@ -260,13 +257,10 @@ func (s *AuthService) ResetPassword(ctx context.Context, userID int64, newPasswo
 		return ErrUserNotFound
 	}
 
-	// Revoke all refresh tokens for security
-	if err := s.refreshTokenSvc.RevokeAllTokens(ctx, userID); err != nil {
-		// Log but don't fail the password reset
-		err = fmt.Errorf("password reset but failed to revoke refresh tokens: %w", err)
-	}
+	// Revoke all refresh tokens for security (best-effort, ignore failure)
+	_ = s.refreshTokenSvc.RevokeAllTokens(ctx, userID)
 
-	return err
+	return nil
 }
 
 // Claims represents JWT claims.

@@ -246,7 +246,7 @@ func (s *QueryService) executeMySQL(ctx context.Context, datasourceID int64, dat
 		}
 		return nil, fmt.Errorf("执行查询失败: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	cols, err := rows.Columns()
 	if err != nil {
@@ -337,7 +337,7 @@ func (s *QueryService) executeMongoDB(ctx context.Context, datasourceID int64, d
 			bodyMap := parseMongoBody(body)
 			if f, ok := bodyMap["filter"]; ok {
 				bsonBytes, _ := bson.MarshalExtJSON(f, false, false)
-				bson.Unmarshal(bsonBytes, &filter)
+				_ = bson.Unmarshal(bsonBytes, &filter)
 			}
 		}
 		cursor, err = collection.Find(ctx, filter, findOpts)
@@ -347,7 +347,7 @@ func (s *QueryService) executeMongoDB(ctx context.Context, datasourceID int64, d
 		bodyMap := parseMongoBody(body)
 		if p, ok := bodyMap["pipeline"]; ok {
 			bsonBytes, _ := bson.MarshalExtJSON(p, false, false)
-			bson.Unmarshal(bsonBytes, &pipeline)
+			_ = bson.Unmarshal(bsonBytes, &pipeline)
 		}
 		cursor, err = collection.Aggregate(ctx, pipeline)
 
@@ -361,7 +361,7 @@ func (s *QueryService) executeMongoDB(ctx context.Context, datasourceID int64, d
 		}
 		return nil, fmt.Errorf("执行MongoDB查询失败: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	resultRows := make([]map[string]interface{}, 0, rowLimit)
 	rowCount := 0
@@ -475,7 +475,7 @@ func (s *QueryService) loadMaskRules(ctx context.Context, datasourceID int64, da
 		log.Printf("load mask rules: %v", err)
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var rules []mask.Rule
 	for rows.Next() {
