@@ -32,6 +32,18 @@ type createTicketRequest struct {
 }
 
 // CreateTicket handles POST /api/tickets.
+//
+// @Summary 创建工单
+// @Description 提交SQL变更工单
+// @Tags 工单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body createTicketRequest true "创建工单请求"
+// @Success 201 {object} resp.SuccessResponse "创建成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 500 {object} resp.ErrorResponse "创建工单失败"
+// @Router /tickets [post]
 func (h *TicketHandler) CreateTicket(c echo.Context) error {
 	var req createTicketRequest
 	if err := c.Bind(&req); err != nil {
@@ -67,6 +79,17 @@ func (h *TicketHandler) CreateTicket(c echo.Context) error {
 }
 
 // GetTicket handles GET /api/tickets/:id.
+//
+// @Summary 获取工单详情
+// @Description 获取指定工单的详细信息
+// @Tags 工单
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "工单ID"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的工单ID"
+// @Failure 404 {object} resp.ErrorResponse "工单不存在"
+// @Router /tickets/{id} [get]
 func (h *TicketHandler) GetTicket(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -88,6 +111,23 @@ func (h *TicketHandler) GetTicket(c echo.Context) error {
 }
 
 // ListTickets handles GET /api/tickets.
+//
+// @Summary 获取工单列表
+// @Description 获取工单列表，支持按状态、数据源、提交者等筛选
+// @Tags 工单
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(50)
+// @Param status query string false "工单状态"
+// @Param datasource_id query string false "数据源ID"
+// @Param submitter_id query string false "提交者ID"
+// @Param risk_level query string false "风险等级"
+// @Param keyword query string false "搜索关键词"
+// @Param scope query string false "范围 (my/all)"
+// @Success 200 {object} resp.PageResponse "成功"
+// @Failure 500 {object} resp.ErrorResponse "获取工单列表失败"
+// @Router /tickets [get]
 func (h *TicketHandler) ListTickets(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
@@ -124,6 +164,20 @@ type approveTicketRequest struct {
 }
 
 // ApproveTicket handles POST /api/tickets/:id/approve.
+//
+// @Summary 审批通过工单
+// @Description 审批通过指定工单
+// @Tags 工单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "工单ID"
+// @Param body body approveTicketRequest true "审批请求"
+// @Success 200 {object} resp.SuccessResponse "审批成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的工单ID或状态"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Failure 404 {object} resp.ErrorResponse "工单不存在"
+// @Router /tickets/{id}/approve [post]
 func (h *TicketHandler) ApproveTicket(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -161,6 +215,20 @@ type rejectTicketRequest struct {
 }
 
 // RejectTicket handles POST /api/tickets/:id/reject.
+//
+// @Summary 驳回工单
+// @Description 驳回指定工单
+// @Tags 工单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "工单ID"
+// @Param body body rejectTicketRequest true "驳回请求"
+// @Success 200 {object} resp.SuccessResponse "驳回成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的工单ID或驳回原因为空"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Failure 404 {object} resp.ErrorResponse "工单不存在"
+// @Router /tickets/{id}/reject [post]
 func (h *TicketHandler) RejectTicket(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -204,6 +272,20 @@ type cancelTicketRequest struct {
 }
 
 // CancelTicket handles POST /api/tickets/:id/cancel.
+//
+// @Summary 取消工单
+// @Description 取消指定工单
+// @Tags 工单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "工单ID"
+// @Param body body cancelTicketRequest true "取消请求"
+// @Success 200 {object} resp.SuccessResponse "取消成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的工单ID或取消原因为空"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Failure 404 {object} resp.ErrorResponse "工单不存在"
+// @Router /tickets/{id}/cancel [post]
 func (h *TicketHandler) CancelTicket(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -243,6 +325,18 @@ func (h *TicketHandler) CancelTicket(c echo.Context) error {
 }
 
 // ExecuteTicket handles POST /api/tickets/:id/execute.
+//
+// @Summary 执行工单
+// @Description 立即执行已审批通过的工单
+// @Tags 工单
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "工单ID"
+// @Success 200 {object} resp.SuccessResponse "执行成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的工单ID或工单不可执行"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Failure 404 {object} resp.ErrorResponse "工单不存在"
+// @Router /tickets/{id}/execute [post]
 func (h *TicketHandler) ExecuteTicket(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -276,6 +370,20 @@ type scheduleTicketRequest struct {
 }
 
 // ScheduleTicket handles POST /api/tickets/:id/schedule.
+//
+// @Summary 定时执行工单
+// @Description 设置工单定时执行时间
+// @Tags 工单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "工单ID"
+// @Param body body scheduleTicketRequest true "定时执行请求"
+// @Success 200 {object} resp.SuccessResponse "设置成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的工单ID或时间格式"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Failure 404 {object} resp.ErrorResponse "工单不存在"
+// @Router /tickets/{id}/schedule [post]
 func (h *TicketHandler) ScheduleTicket(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -322,6 +430,18 @@ func (h *TicketHandler) ScheduleTicket(c echo.Context) error {
 }
 
 // CancelSchedule handles POST /api/tickets/:id/cancel-schedule.
+//
+// @Summary 取消定时执行
+// @Description 取消工单的定时执行计划
+// @Tags 工单
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "工单ID"
+// @Success 200 {object} resp.SuccessResponse "取消成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的工单ID或工单未设置定时"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Failure 404 {object} resp.ErrorResponse "工单不存在"
+// @Router /tickets/{id}/cancel-schedule [post]
 func (h *TicketHandler) CancelSchedule(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {

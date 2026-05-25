@@ -36,6 +36,18 @@ type executeQueryRequest struct {
 }
 
 // ExecuteQuery handles POST /api/query/execute.
+//
+// @Summary 执行SQL查询
+// @Description 在指定数据源上执行SQL查询，仅允许SELECT操作
+// @Tags 查询
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body executeQueryRequest true "查询请求"
+// @Success 200 {object} resp.SuccessResponse{data=service.QueryResult} "查询成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 403 {object} resp.ErrorResponse "操作被拦截"
+// @Router /query/execute [post]
 func (h *QueryHandler) ExecuteQuery(c echo.Context) error {
 	var req executeQueryRequest
 	if err := c.Bind(&req); err != nil {
@@ -76,6 +88,18 @@ func (h *QueryHandler) ExecuteQuery(c echo.Context) error {
 }
 
 // ListHistory handles GET /api/query/history.
+//
+// @Summary 获取查询历史
+// @Description 获取当前用户的SQL查询历史记录
+// @Tags 查询
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(50)
+// @Param keyword query string false "搜索关键词"
+// @Success 200 {object} resp.PageResponse "成功"
+// @Failure 500 {object} resp.ErrorResponse "获取查询历史失败"
+// @Router /query/history [get]
 func (h *QueryHandler) ListHistory(c echo.Context) error {
 	userID := c.Get(middleware.ContextKeyUserID).(int64)
 
@@ -103,6 +127,16 @@ func (h *QueryHandler) ListHistory(c echo.Context) error {
 }
 
 // DeleteHistory handles DELETE /api/query/history/:id.
+//
+// @Summary 删除查询历史
+// @Description 删除指定的查询历史记录
+// @Tags 查询
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "历史记录ID"
+// @Success 200 {object} resp.SuccessResponse "删除成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的ID"
+// @Router /query/history/{id} [delete]
 func (h *QueryHandler) DeleteHistory(c echo.Context) error {
 	userID := c.Get(middleware.ContextKeyUserID).(int64)
 
@@ -120,6 +154,15 @@ func (h *QueryHandler) DeleteHistory(c echo.Context) error {
 }
 
 // ClearHistory handles DELETE /api/query/history.
+//
+// @Summary 清空查询历史
+// @Description 清空当前用户的所有查询历史记录
+// @Tags 查询
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse "已清空"
+// @Failure 500 {object} resp.ErrorResponse "清空查询历史失败"
+// @Router /query/history [delete]
 func (h *QueryHandler) ClearHistory(c echo.Context) error {
 	userID := c.Get(middleware.ContextKeyUserID).(int64)
 
@@ -138,6 +181,18 @@ type exportQueryRequest struct {
 }
 
 // ExportQuery handles POST /api/query/export.
+//
+// @Summary 导出查询结果
+// @Description 导出SQL查询结果为CSV或JSON文件
+// @Tags 查询
+// @Accept json
+// @Produce octet-stream
+// @Security BearerAuth
+// @Param body body exportQueryRequest true "导出请求"
+// @Success 200 {file} file "导出文件"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 403 {object} resp.ErrorResponse "操作被拦截"
+// @Router /query/export [post]
 func (h *QueryHandler) ExportQuery(c echo.Context) error {
 	var req exportQueryRequest
 	if err := c.Bind(&req); err != nil {

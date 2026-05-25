@@ -34,6 +34,18 @@ type reviewRequest struct {
 }
 
 // ReviewStream handles POST /api/query/review — SSE streaming AI review.
+//
+// @Summary AI审核SQL
+// @Description 使用AI对SQL进行审核，以SSE流式返回审核结果
+// @Tags 查询
+// @Accept json
+// @Produce text/event-stream
+// @Security BearerAuth
+// @Param body body reviewRequest true "审核请求"
+// @Success 200 {string} string "SSE事件流"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 500 {object} resp.ErrorResponse "AI评审启动失败"
+// @Router /query/review [post]
 func (h *AIReviewHandler) ReviewStream(c echo.Context) error {
 	var req reviewRequest
 	if err := c.Bind(&req); err != nil {

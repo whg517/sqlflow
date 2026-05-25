@@ -85,6 +85,18 @@ func toDatasourceResponse(ds *model.DataSource) datasourceResponse {
 }
 
 // CreateDatasource handles POST /api/datasources (admin).
+//
+// @Summary 创建数据源
+// @Description 管理员创建新的数据源连接
+// @Tags 数据源
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body createDatasourceRequest true "创建数据源请求"
+// @Success 201 {object} resp.SuccessResponse{data=datasourceResponse} "创建成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 500 {object} resp.ErrorResponse "创建数据源失败"
+// @Router /datasources [post]
 func (h *DatasourceHandler) CreateDatasource(c echo.Context) error {
 	var req createDatasourceRequest
 	if err := c.Bind(&req); err != nil {
@@ -129,6 +141,15 @@ func (h *DatasourceHandler) CreateDatasource(c echo.Context) error {
 }
 
 // ListDatasources handles GET /api/datasources (admin).
+//
+// @Summary 获取数据源列表
+// @Description 管理员获取所有数据源列表
+// @Tags 数据源
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse{data=[]datasourceResponse} "成功"
+// @Failure 500 {object} resp.ErrorResponse "获取数据源列表失败"
+// @Router /datasources [get]
 func (h *DatasourceHandler) ListDatasources(c echo.Context) error {
 	list, err := h.dsSvc.ListDataSources(c.Request().Context())
 	if err != nil {
@@ -144,6 +165,17 @@ func (h *DatasourceHandler) ListDatasources(c echo.Context) error {
 }
 
 // GetDatasource handles GET /api/datasources/:id (admin).
+//
+// @Summary 获取数据源详情
+// @Description 管理员获取指定数据源详细信息
+// @Tags 数据源
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "数据源ID"
+// @Success 200 {object} resp.SuccessResponse{data=datasourceResponse} "成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的数据源ID"
+// @Failure 404 {object} resp.ErrorResponse "数据源不存在"
+// @Router /datasources/{id} [get]
 func (h *DatasourceHandler) GetDatasource(c echo.Context) error {
 	id, err := parseDatasourceID(c)
 	if err != nil {
@@ -162,6 +194,19 @@ func (h *DatasourceHandler) GetDatasource(c echo.Context) error {
 }
 
 // UpdateDatasource handles PUT /api/datasources/:id (admin).
+//
+// @Summary 更新数据源
+// @Description 管理员更新指定数据源配置
+// @Tags 数据源
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "数据源ID"
+// @Param body body updateDatasourceRequest true "更新数据源请求"
+// @Success 200 {object} resp.SuccessResponse{data=datasourceResponse} "更新成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 404 {object} resp.ErrorResponse "数据源不存在"
+// @Router /datasources/{id} [put]
 func (h *DatasourceHandler) UpdateDatasource(c echo.Context) error {
 	id, err := parseDatasourceID(c)
 	if err != nil {
@@ -207,6 +252,17 @@ func (h *DatasourceHandler) UpdateDatasource(c echo.Context) error {
 }
 
 // DisableDatasource handles DELETE /api/datasources/:id (admin).
+//
+// @Summary 禁用数据源
+// @Description 管理员禁用指定数据源
+// @Tags 数据源
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "数据源ID"
+// @Success 200 {object} resp.SuccessResponse "数据源已禁用"
+// @Failure 400 {object} resp.ErrorResponse "无效的数据源ID"
+// @Failure 404 {object} resp.ErrorResponse "数据源不存在"
+// @Router /datasources/{id} [delete]
 func (h *DatasourceHandler) DisableDatasource(c echo.Context) error {
 	id, err := parseDatasourceID(c)
 	if err != nil {
@@ -224,6 +280,17 @@ func (h *DatasourceHandler) DisableDatasource(c echo.Context) error {
 }
 
 // TestConnection handles POST /api/datasources/:id/test (admin).
+//
+// @Summary 测试数据源连接
+// @Description 管理员测试指定数据源的连接状态
+// @Tags 数据源
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "数据源ID"
+// @Success 200 {object} resp.SuccessResponse{data=map[string]interface{}} "测试结果"
+// @Failure 400 {object} resp.ErrorResponse "无效的数据源ID"
+// @Failure 404 {object} resp.ErrorResponse "数据源不存在"
+// @Router /datasources/{id}/test [post]
 func (h *DatasourceHandler) TestConnection(c echo.Context) error {
 	id, err := parseDatasourceID(c)
 	if err != nil {
@@ -253,6 +320,18 @@ func (h *DatasourceHandler) TestConnection(c echo.Context) error {
 }
 
 // GetTableColumns handles GET /api/datasources/:id/tables/:name/columns (authenticated).
+//
+// @Summary 获取表字段列表
+// @Description 获取指定数据源中指定表的字段列表
+// @Tags 数据源
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "数据源ID"
+// @Param name path string true "表名"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的数据源ID或表名"
+// @Failure 404 {object} resp.ErrorResponse "数据源不存在"
+// @Router /datasources/{id}/tables/{name}/columns [get]
 func (h *DatasourceHandler) GetTableColumns(c echo.Context) error {
 	id, err := parseDatasourceID(c)
 	if err != nil {
@@ -280,6 +359,17 @@ func (h *DatasourceHandler) GetTableColumns(c echo.Context) error {
 }
 
 // GetTables handles GET /api/datasources/:id/tables (authenticated).
+//
+// @Summary 获取表列表
+// @Description 获取指定数据源中的所有表列表
+// @Tags 数据源
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "数据源ID"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的数据源ID"
+// @Failure 404 {object} resp.ErrorResponse "数据源不存在"
+// @Router /datasources/{id}/tables [get]
 func (h *DatasourceHandler) GetTables(c echo.Context) error {
 	id, err := parseDatasourceID(c)
 	if err != nil {

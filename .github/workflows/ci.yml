@@ -38,6 +38,12 @@ jobs:
           version: v2.12
           args: --timeout=5m
 
+      - name: Generate Swagger docs
+        run: |
+          go install github.com/swaggo/swag/cmd/swag@latest
+          swag init -g cmd/server/main.go -o docs
+          git diff --exit-code docs/ || (echo "Swagger docs out of sync. Run 'swag init' and commit." && exit 1)
+
       - name: Go test
         run: go test ./... -v -race -count=1
 

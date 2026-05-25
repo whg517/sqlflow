@@ -22,6 +22,23 @@ func NewAuditHandler(auditSvc *service.AuditService) *AuditHandler {
 // ListAuditLogs handles GET /api/audit-logs.
 // SearchAuditLogs handles GET /api/audit-logs/search.
 // Uses FTS5 for full-text search with keyword, action, time range, and user_id filters.
+//
+// @Summary 全文搜索审计日志
+// @Description 使用FTS5全文搜索审计日志
+// @Tags 审计
+// @Produce json
+// @Security BearerAuth
+// @Param keyword query string true "搜索关键词"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(50)
+// @Param user_id query string false "用户ID"
+// @Param action query string false "操作类型"
+// @Param start query string false "开始时间"
+// @Param end query string false "结束时间"
+// @Success 200 {object} resp.PageResponse "成功"
+// @Failure 400 {object} resp.ErrorResponse "keyword 参数必填"
+// @Failure 500 {object} resp.ErrorResponse "搜索失败"
+// @Router /audit-logs/search [get]
 func (h *AuditHandler) SearchAuditLogs(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
@@ -58,6 +75,23 @@ func (h *AuditHandler) SearchAuditLogs(c echo.Context) error {
 }
 
 // ListAuditLogs handles GET /api/audit-logs.
+//
+// @Summary 获取审计日志列表
+// @Description 获取审计日志列表，支持分页和筛选
+// @Tags 审计
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(50)
+// @Param user_id query string false "用户ID"
+// @Param action query string false "操作类型"
+// @Param datasource_id query string false "数据源ID"
+// @Param start query string false "开始时间"
+// @Param end query string false "结束时间"
+// @Param keyword query string false "搜索关键词"
+// @Success 200 {object} resp.PageResponse "成功"
+// @Failure 500 {object} resp.ErrorResponse "获取审计日志失败"
+// @Router /audit-logs [get]
 func (h *AuditHandler) ListAuditLogs(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))

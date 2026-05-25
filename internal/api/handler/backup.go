@@ -19,6 +19,15 @@ func NewBackupHandler(backupSvc *service.BackupService) *BackupHandler {
 }
 
 // TriggerBackup handles POST /api/backups — manually trigger an immediate backup.
+//
+// @Summary 手动触发备份
+// @Description 管理员手动触发一次数据库备份
+// @Tags 备份
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse "备份已创建"
+// @Failure 500 {object} resp.ErrorResponse "备份失败"
+// @Router /backups [post]
 func (h *BackupHandler) TriggerBackup(c echo.Context) error {
 	if err := h.backupSvc.RunBackup(); err != nil {
 		log.Printf("TriggerBackup failed: %v", err)
@@ -28,6 +37,15 @@ func (h *BackupHandler) TriggerBackup(c echo.Context) error {
 }
 
 // ListBackups handles GET /api/backups — list all existing backup files.
+//
+// @Summary 获取备份列表
+// @Description 管理员获取所有备份文件列表
+// @Tags 备份
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Failure 500 {object} resp.ErrorResponse "获取备份列表失败"
+// @Router /backups [get]
 func (h *BackupHandler) ListBackups(c echo.Context) error {
 	backups, err := h.backupSvc.ListBackups()
 	if err != nil {
@@ -38,6 +56,16 @@ func (h *BackupHandler) ListBackups(c echo.Context) error {
 }
 
 // DeleteBackup handles DELETE /api/backups/:filename — delete a specific backup file.
+//
+// @Summary 删除备份
+// @Description 管理员删除指定的备份文件
+// @Tags 备份
+// @Produce json
+// @Security BearerAuth
+// @Param filename path string true "备份文件名"
+// @Success 200 {object} resp.SuccessResponse "备份已删除"
+// @Failure 400 {object} resp.ErrorResponse "缺少备份文件名"
+// @Router /backups/{filename} [delete]
 func (h *BackupHandler) DeleteBackup(c echo.Context) error {
 	filename := c.Param("filename")
 	if filename == "" {
@@ -51,6 +79,17 @@ func (h *BackupHandler) DeleteBackup(c echo.Context) error {
 }
 
 // DownloadBackup handles GET /api/backups/:filename/download — download a backup file.
+//
+// @Summary 下载备份
+// @Description 管理员下载指定的备份文件
+// @Tags 备份
+// @Produce octet-stream
+// @Security BearerAuth
+// @Param filename path string true "备份文件名"
+// @Success 200 {file} file "备份文件"
+// @Failure 400 {object} resp.ErrorResponse "缺少备份文件名"
+// @Failure 404 {object} resp.ErrorResponse "备份文件不存在"
+// @Router /backups/{filename}/download [get]
 func (h *BackupHandler) DownloadBackup(c echo.Context) error {
 	filename := c.Param("filename")
 	if filename == "" {
