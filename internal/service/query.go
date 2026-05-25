@@ -509,6 +509,260 @@ func parseMongoBody(body string) map[string]interface{} {
 	return m
 }
 
+// ExplainRow represents a single row from MySQL EXPLAIN output.
+type ExplainRow struct {
+	ID           int64   `json:"id"`
+	SelectType   string  `json:"select_type"`
+	Table        string  `json:"table"`
+	Partitions   *string `json:"partitions"`
+	Type         string  `json:"type"`
+	PossibleKeys *string `json:"possible_keys"`
+	Key          *string `json:"key"`
+	KeyLen       *string `json:"key_len"`
+	Ref          *string `json:"ref"`
+	Rows         int64   `json:"rows"`
+	Filtered     float64 `json:"filtered"`
+	Extra        *string `json:"extra"`
+}
+
+// ExplainResult holds the result of an EXPLAIN query.
+type ExplainResult struct {
+	Query        string       `json:"query"`
+	DatasourceID int64        `json:"datasource_id"`
+	Plan         []ExplainRow `json:"plan"`
+	Formatted    string       `json:"formatted"`
+}
+
+var (
+	ErrExplainNotSupported = errors.New("EXPLAIN 仅支持 MySQL 数据源")
+	ErrExplainNonSelect    = errors.New("EXPLAIN 仅支持 SELECT 语句")
+)
+
+// ExplainQuery executes EXPLAIN for a SQL query and returns structured results.
+func (s *QueryService) ExplainQuery(ctx context.Context, userID int64, role string, datasourceID int64, database, sqlContent string) (*ExplainResult, error) {
+	if strings.TrimSpace(sqlContent) == "" {
+		return nil, ErrEmptySQL
+	}
+
+	// Only allow SELECT statements
+	upper := strings.TrimSpace(strings.ToUpper(sqlContent))
+	if !strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "EXPLAIN") {
+		return nil, ErrExplainNonSelect
+	}
+
+	// Strip leading EXPLAIN if user already prefixed it
+	explainSQL := sqlContent
+	if strings.HasPrefix(upper, "EXPLAIN") {
+		explainSQL = strings.TrimSpace(sqlContent[len("EXPLAIN"):])
+	}
+
+	// Get datasource
+	ds, err := s.dsSvc.GetDataSource(ctx, datasourceID)
+	if err != nil {
+		return nil, fmt.Errorf("获取数据源失败: %w", err)
+	}
+	if ds.Status == "disabled" {
+		return nil, ErrDatasourceDisabled
+	}
+	if ds.Type != "mysql" {
+		return nil, ErrExplainNotSupported
+	}
+
+	// Decrypt password
+	password, err := crypto.Decrypt(ds.PasswordEncrypted, s.encryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("解密密码失败: %w", err)
+	}
+
+	// Parse SQL for table-level permission check
+	parseResult, err := sqlparser.ParseSQL(explainSQL, "mysql")
+	if err != nil {
+		return nil, fmt.Errorf("SQL解析失败: %w", err)
+	}
+
+	for _, table := range parseResult.Tables {
+		allowed, err := s.permSvc.Enforce(role, fmt.Sprintf("ds_%d", datasourceID), table, "select")
+		if err != nil {
+			return nil, fmt.Errorf("权限校验失败: %w", err)
+		}
+		if !allowed {
+			return nil, fmt.Errorf("没有表 %s 的查询权限", table)
+		}
+	}
+
+	// Build pool config
+	poolCfg := connpool.MySQLPoolConfig{
+		MaxOpen:     ds.MaxOpen,
+		MaxIdle:     ds.MaxIdle,
+		MaxLifetime: ds.MaxLifetime,
+		MaxIdleTime: ds.MaxIdleTime,
+	}
+
+	// Get connection
+	dbName := database
+	if dbName == "" {
+		dbName = "information_schema"
+	}
+
+	targetDB, err := s.connMgr.GetMySQL(datasourceID, ds.Host, ds.Port, ds.Username, password, dbName, poolCfg)
+	if err != nil {
+		return nil, fmt.Errorf("连接数据库失败: %w", err)
+	}
+
+	// Execute EXPLAIN with timeout
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
+
+	rows, err := targetDB.QueryContext(ctx, "EXPLAIN "+explainSQL)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, ErrSQLTimeout
+		}
+		return nil, fmt.Errorf("执行 EXPLAIN 失败: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	explainColumns := []string{"id", "select_type", "table", "partitions", "type", "possible_keys", "key", "key_len", "ref", "rows", "filtered", "Extra"}
+	var plan []ExplainRow
+
+	for rows.Next() {
+		var r ExplainRow
+		var id, rowsVal sql.NullInt64
+		var filtered sql.NullFloat64
+		var selectType, table, typeVal sql.NullString
+		var partitions, possibleKeys, key, keyLen, ref, extra sql.NullString
+
+		if err := rows.Scan(&id, &selectType, &table, &partitions, &typeVal, &possibleKeys, &key, &keyLen, &ref, &rowsVal, &filtered, &extra); err != nil {
+			return nil, fmt.Errorf("读取 EXPLAIN 结果失败: %w", err)
+		}
+
+		r.ID = id.Int64
+		r.Rows = rowsVal.Int64
+		r.Filtered = filtered.Float64
+		r.SelectType = selectType.String
+		r.Table = table.String
+		r.Type = typeVal.String
+		r.Partitions = nullableString(partitions)
+		r.PossibleKeys = nullableString(possibleKeys)
+		r.Key = nullableString(key)
+		r.KeyLen = nullableString(keyLen)
+		r.Ref = nullableString(ref)
+		r.Extra = nullableString(extra)
+
+		plan = append(plan, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("遍历 EXPLAIN 结果失败: %w", err)
+	}
+
+	// Build formatted text table
+	formatted := formatExplainTable(explainColumns, plan)
+
+	// Write audit log (best-effort)
+	s.auditSvc.Write(ctx, AuditRecord{
+		UserID:       userID,
+		Action:       "explain",
+		DatasourceID: datasourceID,
+		Database:     database,
+		SQLContent:   sqlContent,
+		SQLSummary:   truncateSQL(sqlContent),
+	})
+
+	return &ExplainResult{
+		Query:        sqlContent,
+		DatasourceID: datasourceID,
+		Plan:         plan,
+		Formatted:    formatted,
+	}, nil
+}
+
+func nullableString(ns sql.NullString) *string {
+	if !ns.Valid {
+		return nil
+	}
+	return &ns.String
+}
+
+func formatExplainTable(columns []string, rows []ExplainRow) string {
+	// Build row data as string slices
+	strRows := make([][]string, len(rows))
+	for i, r := range rows {
+		strRows[i] = []string{
+			fmt.Sprintf("%d", r.ID),
+			r.SelectType,
+			r.Table,
+			derefOrNull(r.Partitions),
+			r.Type,
+			derefOrNull(r.PossibleKeys),
+			derefOrNull(r.Key),
+			derefOrNull(r.KeyLen),
+			derefOrNull(r.Ref),
+			fmt.Sprintf("%d", r.Rows),
+			fmt.Sprintf("%.2f", r.Filtered),
+			derefOrNull(r.Extra),
+		}
+	}
+
+	// Calculate column widths
+	widths := make([]int, len(columns))
+	for i, col := range columns {
+		widths[i] = len(col)
+	}
+	for _, row := range strRows {
+		for i, val := range row {
+			if i < len(widths) && len(val) > widths[i] {
+				widths[i] = len(val)
+			}
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString("EXPLAIN\n")
+
+	// Build separator line
+	sep := func() {
+		b.WriteByte('+')
+		for _, w := range widths {
+			b.WriteString(strings.Repeat("-", w+2))
+			b.WriteByte('+')
+		}
+		b.WriteByte('\n')
+	}
+
+	sep()
+
+	// Header row
+	b.WriteByte('|')
+	for i, col := range columns {
+		fmt.Fprintf(&b, " %-*s |", widths[i], col)
+	}
+	b.WriteByte('\n')
+
+	sep()
+
+	// Data rows
+	for _, row := range strRows {
+		b.WriteByte('|')
+		for i, val := range row {
+			if i < len(widths) {
+				fmt.Fprintf(&b, " %-*s |", widths[i], val)
+			}
+		}
+		b.WriteByte('\n')
+	}
+
+	sep()
+
+	return b.String()
+}
+
+func derefOrNull(s *string) string {
+	if s == nil {
+		return "NULL"
+	}
+	return *s
+}
+
 // truncateSQL returns the first 100 characters of a SQL string.
 func truncateSQL(sql string) string {
 	if len(sql) > 100 {
