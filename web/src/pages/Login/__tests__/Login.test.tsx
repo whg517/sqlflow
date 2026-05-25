@@ -31,7 +31,16 @@ function mockLoginSuccess(token = "jwt-token-123") {
   mockFetch.mockResolvedValueOnce({
     ok: true,
     status: 200,
-    json: async () => ({ code: 0, data: { token } }),
+    json: async () => ({
+      code: 0,
+      data: {
+        access_token: token,
+        refresh_token: "refresh-" + token,
+        token_type: "Bearer",
+        expires_in: 3600,
+        user: { id: 1, username: "admin", role: "admin" },
+      },
+    }),
   });
 }
 
@@ -243,14 +252,14 @@ describe("LoginPage", () => {
       await userEvent.click(screen.getByRole("button", { name: "登 录" }));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith("/api/auth/login", {
+        expect(mockFetch).toHaveBeenCalledWith("/api/auth/login", expect.objectContaining({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             username: "testuser",
             password: "mypassword1",
           }),
-        });
+        }));
       });
     });
   });
@@ -283,8 +292,8 @@ describe("LoginPage", () => {
       await userEvent.click(screen.getByRole("button", { name: "登 录" }));
 
       await waitFor(() => {
-        // TypeError.message is 'Failed to fetch'
-        expect(screen.getByText("Failed to fetch")).toBeInTheDocument();
+        // TypeError is caught by client.ts and re-thrown as "网络连接失败"
+        expect(screen.getByText("网络连接失败")).toBeInTheDocument();
       });
     });
 

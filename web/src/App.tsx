@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Layout from "./components/Layout";
 import AuthGuard from "./components/AuthGuard";
+import ErrorBoundary from "./components/ErrorBoundary";
 import ErrorPage from "./components/ErrorPage";
 import DashboardPage from "./pages/Dashboard";
 import QueryPage from "./pages/Query";
@@ -28,11 +29,32 @@ function App() {
             }
           >
             <Route path="/" element={<DashboardPage />} />
-            <Route path="/query" element={<QueryPage />} />
-            <Route path="/tickets" element={<TicketPage />} />
+            <Route
+              path="/query"
+              element={
+                <ErrorBoundary title="查询页面出现了问题">
+                  <QueryPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/tickets"
+              element={
+                <ErrorBoundary title="工单页面出现了问题">
+                  <TicketPage />
+                </ErrorBoundary>
+              }
+            />
             <Route path="/tickets/new" element={<TicketNewPage />} />
             <Route path="/permissions" element={<PermissionsPage />} />
-            <Route path="/audit" element={<AuditPage />} />
+            <Route
+              path="/audit"
+              element={
+                <ErrorBoundary title="审计页面出现了问题">
+                  <AuditPage />
+                </ErrorBoundary>
+              }
+            />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/datasource" element={<SettingsPage />} />
