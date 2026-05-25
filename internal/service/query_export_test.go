@@ -286,7 +286,7 @@ func TestExportQuery_UnsupportedDBType(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestExportQuery_Success(t *testing.T) {
-	qs, testDB := setupExportService(t)
+	_, testDB := setupExportService(t)
 	ctx, cancel := exportCtx(t)
 	defer cancel()
 
@@ -302,7 +302,7 @@ func TestExportQuery_Success(t *testing.T) {
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(testDB, 0, 0)
-	qs = NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	// Also add select policy for admin on this datasource domain
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "select")
@@ -326,7 +326,7 @@ func TestExportQuery_Success(t *testing.T) {
 }
 
 func TestExportQuery_SuccessWithDesensitization(t *testing.T) {
-	qs, testDB := setupExportService(t)
+	_, testDB := setupExportService(t)
 	ctx, cancel := exportCtx(t)
 	defer cancel()
 
@@ -342,7 +342,7 @@ func TestExportQuery_SuccessWithDesensitization(t *testing.T) {
 
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(testDB, 0, 0)
-	qs = NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	// Add a mask rule for this datasource
 	now := time.Now()
@@ -368,7 +368,7 @@ func TestExportQuery_SuccessWithDesensitization(t *testing.T) {
 }
 
 func TestExportQuery_EmptyResult(t *testing.T) {
-	qs, testDB := setupExportService(t)
+	_, testDB := setupExportService(t)
 	ctx, cancel := exportCtx(t)
 	defer cancel()
 
@@ -384,7 +384,7 @@ func TestExportQuery_EmptyResult(t *testing.T) {
 
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(testDB, 0, 0)
-	qs = NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	// Query the users table (empty in the injected SQLite) with an impossible condition
 	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb",
@@ -444,7 +444,7 @@ func TestExportQuery_RowLimitExceeded(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestExportQuery_AuditOnSuccess(t *testing.T) {
-	qs, testDB := setupExportService(t)
+	_, testDB := setupExportService(t)
 	ctx, cancel := exportCtx(t)
 	defer cancel()
 
@@ -460,7 +460,7 @@ func TestExportQuery_AuditOnSuccess(t *testing.T) {
 
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(testDB, 0, 0)
-	qs = NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	userID := seedUser(t, testDB, "export-user", "admin")
 
@@ -483,7 +483,7 @@ func TestExportQuery_AuditOnSuccess(t *testing.T) {
 }
 
 func TestExportQuery_AuditOnFailure(t *testing.T) {
-	qs, testDB := setupExportService(t)
+	_, testDB := setupExportService(t)
 	ctx, cancel := exportCtx(t)
 	defer cancel()
 
@@ -496,7 +496,7 @@ func TestExportQuery_AuditOnFailure(t *testing.T) {
 
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(testDB, 0, 0)
-	qs = NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	userID := seedUser(t, testDB, "export-fail-user", "admin")
 
@@ -524,7 +524,7 @@ func TestExportQuery_AuditOnFailure(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestExportQuery_DefaultDBType(t *testing.T) {
-	qs, testDB := setupExportService(t)
+	_, testDB := setupExportService(t)
 	ctx, cancel := exportCtx(t)
 	defer cancel()
 
@@ -540,7 +540,7 @@ func TestExportQuery_DefaultDBType(t *testing.T) {
 
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(testDB, 0, 0)
-	qs = NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	// Pass empty dbType — should default to datasource type (mysql)
 	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1 AS id", "")

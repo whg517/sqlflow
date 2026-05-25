@@ -103,7 +103,7 @@ func (s *AuditService) List(ctx context.Context, page, pageSize int, userID, act
 	if err != nil {
 		return nil, 0, fmt.Errorf("查询审计日志失败: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	logs := make([]model.AuditLog, 0)
 	for rows.Next() {
@@ -244,7 +244,7 @@ func (s *AuditService) Search(ctx context.Context, params SearchParams) (*Search
 	if err != nil {
 		return nil, fmt.Errorf("FTS search query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	logs := make([]model.AuditLogSearch, 0)
 	for rows.Next() {

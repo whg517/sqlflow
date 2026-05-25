@@ -231,7 +231,7 @@ func extractLimitCount(limit *ast.Limit) int64 {
 		}
 		if val, ok := ve.GetValue().(string); ok {
 			var n int64
-			fmt.Sscanf(val, "%d", &n)
+			_, _ = fmt.Sscanf(val, "%d", &n)
 			return n
 		}
 	}
@@ -244,7 +244,7 @@ func extractLimitCount(limit *ast.Limit) int64 {
 			return int64(v)
 		case string:
 			var n int64
-			fmt.Sscanf(v, "%d", &n)
+			_, _ = fmt.Sscanf(v, "%d", &n)
 			return n
 		}
 	}

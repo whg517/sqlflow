@@ -1,0 +1,59 @@
+# =============================================================================
+# SQLFlow — golangci-lint v2 configuration
+# =============================================================================
+# 渐进式引入：必选 linter 严格模式，推荐 linter 允许 nolint 过渡。
+# 目标：CI 中 golangci-lint 失败阻断合并。
+# =============================================================================
+
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # 编译级（零容忍）
+    - errcheck       # 未检查的 error 返回值
+    - govet          # go vet 全量检查
+    - ineffassign    # 无效赋值检测
+    - staticcheck    # 最全面的静态分析（含 gosimple）
+    - unused         # 未使用的声明
+
+    # 代码风格
+    - misspell       # 拼写检查
+
+formatters:
+  enable:
+    - gofmt
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  require-explanation: false
+  sort-results: true
+  # 渐进式引入：测试文件暂不强制 errcheck
+  exclude-dirs:
+    - testdata
+
+severity:
+  default-severity: warning
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    exclude-functions:
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - fmt.Fprint
+      - fmt.Println
+      - fmt.Print
+      - fmt.Sprintf
+
+  govet:
+    enable-all: true
+
+  misspell:
+    locale: US
+    ignore-words:
+      - sqlflow

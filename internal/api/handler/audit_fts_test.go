@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -223,21 +222,5 @@ func TestAuditHandler_SearchAuditLogs_EmptyDB(t *testing.T) {
 	total, _ := result["total"].(float64)
 	if total != 0 {
 		t.Errorf("expected 0 from empty DB, got total = %v", total)
-	}
-}
-
-// verifySearchResponseStructure checks the JSON structure of a search response.
-func verifySearchResponseStructure(t *testing.T, body []byte) {
-	t.Helper()
-	var result map[string]interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		t.Fatalf("decode: %v; body=%s", err, string(body))
-	}
-
-	// Required top-level fields.
-	for _, field := range []string{"code", "message", "data", "page", "page_size", "total"} {
-		if _, ok := result[field]; !ok {
-			t.Errorf("missing field %q in response", field)
-		}
 	}
 }

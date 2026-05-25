@@ -18,7 +18,7 @@ func MongoPing(ctx context.Context, uri string) error {
 	if err != nil {
 		return fmt.Errorf("connect mongodb: %w", err)
 	}
-	defer client.Disconnect(ctx)
+	defer func() { _ = client.Disconnect(ctx) }()
 
 	if err := client.Ping(ctx, nil); err != nil {
 		return fmt.Errorf("ping mongodb: %w", err)

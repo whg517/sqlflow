@@ -47,8 +47,6 @@ func (h *NotifyHandler) UpdateNotifyConfig(c echo.Context) error {
 	return resp.OK(c, h.notifySvc.GetConfig())
 }
 
-type testNotifyRequest struct{}
-
 // TestNotify handles POST /api/settings/dingtalk/test — sends a test notification.
 func (h *NotifyHandler) TestNotify(c echo.Context) error {
 	if !h.notifySvc.IsEnabled() {

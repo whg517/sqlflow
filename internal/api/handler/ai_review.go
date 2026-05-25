@@ -98,18 +98,18 @@ func (h *AIReviewHandler) ReviewStream(c echo.Context) error {
 			continue
 		}
 
-		fmt.Fprintf(c.Response().Writer, "event: %s\ndata: %s\n\n", event.Type, data)
+		_, _ = fmt.Fprintf(c.Response().Writer, "event: %s\ndata: %s\n\n", event.Type, data)
 		if canFlush {
 			flusher.Flush()
 		}
 	}
 
 	// Send final [DONE] marker
-	fmt.Fprint(c.Response().Writer, "event: done\ndata: {}\n\n")
+	_, _ = fmt.Fprint(c.Response().Writer, "event: done\ndata: {}\n\n")
 	if canFlush {
 		flusher.Flush()
 	}
 
-	c.Response().Writer.(io.Closer).Close()
+	_ = c.Response().Writer.(io.Closer).Close()
 	return nil
 }

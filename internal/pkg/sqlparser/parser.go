@@ -215,7 +215,7 @@ func CheckSensitiveTables(ctx context.Context, db *sql.DB, tables []string, data
 	if err != nil {
 		return nil, fmt.Errorf("query sensitive tables: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var sensitive []string
 	for rows.Next() {

@@ -370,7 +370,7 @@ func (s *AIReviewService) callLLM(ctx context.Context, req *AIReviewRequest, sta
 	if err != nil {
 		return nil, fmt.Errorf("call LLM API: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -453,7 +453,7 @@ func (s *AIReviewService) streamLLM(ctx context.Context, req *AIReviewRequest, s
 
 	if resp.StatusCode != http.StatusOK {
 		cancel()
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		ch := make(chan SSEEvent, 2)
 		ch <- SSEEvent{Type: "error", Data: fmt.Sprintf("AI服务返回错误(%d)，使用静态规则", resp.StatusCode)}
 		ch <- SSEEvent{Type: "result", Data: s.fallbackResult(staticResult, req)}
@@ -464,7 +464,7 @@ func (s *AIReviewService) streamLLM(ctx context.Context, req *AIReviewRequest, s
 	ch := make(chan SSEEvent, 32)
 	go func() {
 		defer cancel()
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		defer close(ch)
 		s.processSSEStream(resp.Body, ch, req, staticResult)
 	}()
@@ -569,23 +569,23 @@ func buildUserPrompt(req *AIReviewRequest, staticResult *AIReviewResult) string 
 	var b strings.Builder
 
 	b.WriteString("Please review the following SQL statement:\n\n")
-	b.WriteString(fmt.Sprintf("Database type: %s\n", req.DBType))
-	b.WriteString(fmt.Sprintf("Operation type: %s\n", req.Operation))
+	fmt.Fprintf(&b, "Database type: %s\n", req.DBType)
+	fmt.Fprintf(&b, "Operation type: %s\n", req.Operation)
 
 	if len(req.Tables) > 0 {
-		b.WriteString(fmt.Sprintf("Tables involved: %s\n", strings.Join(req.Tables, ", ")))
+		fmt.Fprintf(&b, "Tables involved: %s\n", strings.Join(req.Tables, ", "))
 	}
 	if req.Database != "" {
-		b.WriteString(fmt.Sprintf("Database: %s\n", req.Database))
+		fmt.Fprintf(&b, "Database: %s\n", req.Database)
 	}
 	if len(staticResult.Warnings) > 0 {
-		b.WriteString(fmt.Sprintf("Static analysis warnings: %s\n", strings.Join(staticResult.Warnings, "; ")))
+		fmt.Fprintf(&b, "Static analysis warnings: %s\n", strings.Join(staticResult.Warnings, "; "))
 	}
 	if staticResult.RiskLevel != "" {
-		b.WriteString(fmt.Sprintf("Static risk assessment: %s\n", staticResult.RiskLevel))
+		fmt.Fprintf(&b, "Static risk assessment: %s\n", staticResult.RiskLevel)
 	}
 
-	b.WriteString(fmt.Sprintf("\nSQL:\n%s\n", req.SQL))
+	fmt.Fprintf(&b, "\nSQL:\n%s\n", req.SQL)
 
 	if req.DBType == "mongodb" {
 		b.WriteString("\nNote: This is a MongoDB operation. Analyze accordingly.\n")

@@ -144,7 +144,7 @@ func (s *DingTalkOAuthService) getAccessToken(code string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -177,7 +177,7 @@ func (s *DingTalkOAuthService) getUserInfo(accessToken string) (*DingTalkUser, e
 	if err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

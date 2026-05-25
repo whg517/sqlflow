@@ -54,7 +54,7 @@ func serveFrontend(e *echo.Echo) {
 			// SPA fallback: serve index.html for all other non-API routes
 			c.Response().Header().Set(echo.HeaderContentType, "text/html; charset=utf-8")
 			c.Response().WriteHeader(http.StatusOK)
-			c.Response().Write(indexHTML)
+			_, _ = c.Response().Write(indexHTML)
 			return nil
 		}
 	})

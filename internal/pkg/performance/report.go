@@ -125,15 +125,15 @@ func (r *Report) GenerateSummary() string {
 	sb.WriteString("【HTTP 接口并发测试】\n")
 	sb.WriteString("-" + strings.Repeat("-", 79) + "\n")
 	for _, hr := range r.HTTPResults {
-		sb.WriteString(fmt.Sprintf("  %s\n", hr.Name))
-		sb.WriteString(fmt.Sprintf("    并发数: %d  |  总请求数: %d  |  成功: %d  |  失败: %d\n",
-			hr.Concurrency, hr.TotalRequests, hr.SuccessCount, hr.FailureCount))
-		sb.WriteString(fmt.Sprintf("    吞吐量: %.1f req/s\n", hr.RequestsPerSec))
-		sb.WriteString(fmt.Sprintf("    延迟  Avg: %v  P50: %v  P90: %v  P95: %v  P99: %v\n",
-			hr.AvgLatency, hr.P50Latency, hr.P90Latency, hr.P95Latency, hr.P99Latency))
-		sb.WriteString(fmt.Sprintf("    范围  Min: %v  Max: %v\n", hr.MinLatency, hr.MaxLatency))
+		fmt.Fprintf(&sb, "  %s\n", hr.Name)
+		fmt.Fprintf(&sb, "    并发数: %d  |  总请求数: %d  |  成功: %d  |  失败: %d\n",
+			hr.Concurrency, hr.TotalRequests, hr.SuccessCount, hr.FailureCount)
+		fmt.Fprintf(&sb, "    吞吐量: %.1f req/s\n", hr.RequestsPerSec)
+		fmt.Fprintf(&sb, "    延迟  Avg: %v  P50: %v  P90: %v  P95: %v  P99: %v\n",
+			hr.AvgLatency, hr.P50Latency, hr.P90Latency, hr.P95Latency, hr.P99Latency)
+		fmt.Fprintf(&sb, "    范围  Min: %v  Max: %v\n", hr.MinLatency, hr.MaxLatency)
 		if len(hr.ErrorMessages) > 0 {
-			sb.WriteString(fmt.Sprintf("    错误示例: %s\n", hr.ErrorMessages[0]))
+			fmt.Fprintf(&sb, "    错误示例: %s\n", hr.ErrorMessages[0])
 		}
 		sb.WriteString("\n")
 	}
@@ -142,13 +142,13 @@ func (r *Report) GenerateSummary() string {
 	sb.WriteString("【数据库查询性能】\n")
 	sb.WriteString("-" + strings.Repeat("-", 79) + "\n")
 	for _, dr := range r.DBResults {
-		sb.WriteString(fmt.Sprintf("  %s\n", dr.Name))
-		sb.WriteString(fmt.Sprintf("    迭代次数: %d\n", dr.Iterations))
-		sb.WriteString(fmt.Sprintf("    延迟  Avg: %v  P50: %v  P90: %v  P99: %v\n",
-			dr.AvgDuration, dr.P50Duration, dr.P90Duration, dr.P99Duration))
-		sb.WriteString(fmt.Sprintf("    范围  Min: %v  Max: %v\n", dr.MinDuration, dr.MaxDuration))
+		fmt.Fprintf(&sb, "  %s\n", dr.Name)
+		fmt.Fprintf(&sb, "    迭代次数: %d\n", dr.Iterations)
+		fmt.Fprintf(&sb, "    延迟  Avg: %v  P50: %v  P90: %v  P99: %v\n",
+			dr.AvgDuration, dr.P50Duration, dr.P90Duration, dr.P99Duration)
+		fmt.Fprintf(&sb, "    范围  Min: %v  Max: %v\n", dr.MinDuration, dr.MaxDuration)
 		if dr.RowsPerSecond > 0 {
-			sb.WriteString(fmt.Sprintf("    吞吐量: %.0f rows/s\n", dr.RowsPerSecond))
+			fmt.Fprintf(&sb, "    吞吐量: %.0f rows/s\n", dr.RowsPerSecond)
 		}
 		sb.WriteString("\n")
 	}
@@ -163,7 +163,7 @@ func (r *Report) GenerateSummary() string {
 			status = "❌ FAIL"
 			allPassed = false
 		}
-		sb.WriteString(fmt.Sprintf("  %s  %s: 实际=%v  基准=%v\n", status, bp.Name, bp.Actual, bp.Expected))
+		fmt.Fprintf(&sb, "  %s  %s: 实际=%v  基准=%v\n", status, bp.Name, bp.Actual, bp.Expected)
 	}
 	sb.WriteString("\n")
 
@@ -175,7 +175,7 @@ func (r *Report) GenerateSummary() string {
 		sb.WriteString("  🎉 所有指标均在基准线内，无需额外优化！\n")
 	} else {
 		for i, s := range suggestions {
-			sb.WriteString(fmt.Sprintf("  %d. %s\n", i+1, s))
+			fmt.Fprintf(&sb, "  %d. %s\n", i+1, s)
 		}
 	}
 	sb.WriteString("\n")
@@ -375,7 +375,7 @@ func RunFullBenchmark(testServerURL string, totalReqs, concurrency int) *Report 
 // RunDBBenchmarks performs database-level benchmarks using a temporary SQLite database.
 func runDBBenchmarks(report *Report) {
 	tmpDB := setupTestDB()
-	defer tmpDB.Close()
+	defer func() { _ = tmpDB.Close() }()
 
 	ctx := context.Background()
 	seedDB(ctx, tmpDB)
@@ -413,7 +413,7 @@ func runDBBenchmarks(report *Report) {
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		for rows.Next() {
 			var id, userID int
 			var action, sqlContent string
@@ -447,7 +447,7 @@ func setupTestDB() *sql.DB {
 // seedDB populates the database with test data.
 func seedDB(ctx context.Context, d *sql.DB) {
 	// Insert seed user
-	d.ExecContext(ctx, `INSERT INTO users (username, password_hash, role) VALUES ('benchuser', 'hash', 'developer')`)
+	_, _ = d.ExecContext(ctx, `INSERT INTO users (username, password_hash, role) VALUES ('benchuser', 'hash', 'developer')`)
 
 	// Insert seed audit log entries for query tests
 	stmt, err := d.PrepareContext(ctx,
@@ -455,7 +455,7 @@ func seedDB(ctx context.Context, d *sql.DB) {
 	if err != nil {
 		log.Fatalf("prepare seed: %v", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for i := 0; i < 100; i++ {
 		_, _ = stmt.ExecContext(ctx,
@@ -471,7 +471,7 @@ func benchmarkDBOperation(name string, iterations int, op func(context.Context, 
 	durations := make([]time.Duration, iterations)
 	ctx := context.Background()
 	testDB := setupTestDB()
-	defer testDB.Close()
+	defer func() { _ = testDB.Close() }()
 	seedDB(ctx, testDB)
 
 	// Warmup
@@ -504,7 +504,7 @@ func benchmarkDBOperation(name string, iterations int, op func(context.Context, 
 // benchmarkConcurrentWrites measures write latency under concurrent goroutine contention.
 func benchmarkConcurrentWrites(reqsPerGoroutine, goroutines int) DBQueryResult {
 	testDB := setupTestDB()
-	defer testDB.Close()
+	defer func() { _ = testDB.Close() }()
 	seedDB(context.Background(), testDB)
 
 	var (
@@ -567,7 +567,7 @@ func extractTokenFromLogin(baseURL string) string {
 		log.Printf("  login failed: %v", err)
 		return ""
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

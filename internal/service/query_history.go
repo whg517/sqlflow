@@ -70,7 +70,7 @@ func (s *QueryHistoryService) ListHistory(ctx context.Context, userID int64, pag
 	if err != nil {
 		return nil, 0, fmt.Errorf("query history: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var list []model.QueryHistory
 	for rows.Next() {
@@ -114,7 +114,7 @@ func (s *QueryHistoryService) ClearHistory(ctx context.Context, userID int64) er
 
 // cleanupOldRecords removes records exceeding the per-user limit.
 func (s *QueryHistoryService) cleanupOldRecords(userID int64) {
-	s.db.Exec(
+	_, _ = s.db.Exec(
 		`DELETE FROM query_history WHERE user_id = ? AND id NOT IN (
 			SELECT id FROM query_history WHERE user_id = ? ORDER BY id DESC LIMIT ?
 		)`,

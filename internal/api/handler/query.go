@@ -208,25 +208,25 @@ func writeCSV(c echo.Context, result *service.QueryResult) error {
 	// Write header row
 	for i, col := range result.Columns {
 		if i > 0 {
-			w.Write([]byte{','})
+			_, _ = w.Write([]byte{','})
 		}
-		w.Write([]byte(csvEscape(col)))
+		_, _ = w.Write([]byte(csvEscape(col)))
 	}
-	w.Write([]byte{'\n'})
+	_, _ = w.Write([]byte{'\n'})
 
 	// Write data rows
 	for _, row := range result.Rows {
 		for i, col := range result.Columns {
 			if i > 0 {
-				w.Write([]byte{','})
+				_, _ = w.Write([]byte{','})
 			}
 			val := ""
 			if v, ok := row[col]; ok && v != nil {
 				val = fmt.Sprintf("%v", v)
 			}
-			w.Write([]byte(csvEscape(val)))
+			_, _ = w.Write([]byte(csvEscape(val)))
 		}
-		w.Write([]byte{'\n'})
+		_, _ = w.Write([]byte{'\n'})
 	}
 
 	return nil

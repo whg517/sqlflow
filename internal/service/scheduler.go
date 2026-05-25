@@ -82,7 +82,7 @@ func (s *Scheduler) executeDueTickets(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		t, err := scanTicket(rows)
