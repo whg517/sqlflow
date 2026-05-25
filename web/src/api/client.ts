@@ -10,31 +10,107 @@ const STATUS_MESSAGES: Record<number, string> = {
   429: "操作过于频繁，请稍后再试",
 };
 
-function getToken(): string | null {
+// --- Token storage ---
+
+function getAccessToken(): string | null {
   return localStorage.getItem("token");
 }
 
-function handleUnauthorized() {
+function getRefreshToken(): string | null {
+  return localStorage.getItem("refresh_token");
+}
+
+function setTokens(accessToken: string, refreshToken: string) {
+  localStorage.setItem("token", accessToken);
+  localStorage.setItem("refresh_token", refreshToken);
+}
+
+function clearTokens() {
   localStorage.removeItem("token");
   localStorage.removeItem("refresh_token");
-  // Avoid infinite redirect if already on login page
+}
+
+// --- Token refresh queue ---
+
+type TokenSubscriber = (token: string) => void;
+let isRefreshing = false;
+let refreshSubscribers: TokenSubscriber[] = [];
+
+function subscribeTokenRefresh(cb: TokenSubscriber) {
+  refreshSubscribers.push(cb);
+}
+
+function notifySubscribers(token: string) {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+}
+
+function rejectSubscribers() {
+  refreshSubscribers = [];
+}
+
+async function refreshAccessToken(): Promise<string> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    throw new Error("No refresh token available");
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!res.ok) {
+    throw new Error("Refresh token request failed");
+  }
+
+  const data = await res.json();
+  const newAccessToken = data.data?.access_token;
+  const newRefreshToken = data.data?.refresh_token;
+
+  if (!newAccessToken || !newRefreshToken) {
+    throw new Error("Invalid refresh response");
+  }
+
+  setTokens(newAccessToken, newRefreshToken);
+  return newAccessToken;
+}
+
+// --- Unauthorized handler ---
+
+function handleUnauthorized() {
+  clearTokens();
   if (window.location.pathname !== "/login") {
     toast.error("登录已过期，请重新登录");
     window.location.href = "/login";
   }
 }
 
+// --- Error extraction ---
+
 async function extractErrorMessage(res: Response): Promise<string> {
   const data = await res.json().catch(() => ({}));
   return data.message || data.error || "";
 }
+
+// --- Core request function ---
 
 async function request<T>(
   method: string,
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const token = getToken();
+  const token = getAccessToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -67,26 +143,66 @@ async function request<T>(
     clearTimeout(timeoutId);
   }
 
+  // --- 401: attempt token refresh ---
   if (res.status === 401) {
-    await extractErrorMessage(res);
-    handleUnauthorized();
-    throw new Error("Unauthorized");
+    // Don't retry the refresh endpoint itself
+    if (path === "/auth/refresh") {
+      handleUnauthorized();
+      throw new Error("Unauthorized");
+    }
+
+    // If another request is already refreshing, queue this one
+    if (isRefreshing) {
+      return new Promise<T>((resolve, reject) => {
+        subscribeTokenRefresh(async (newToken: string) => {
+          try {
+            // Retry original request with the new token
+            headers["Authorization"] = `Bearer ${newToken}`;
+            resolve(request<T>(method, path, body));
+          } catch (err) {
+            reject(err);
+          }
+        });
+      });
+    }
+
+    // Kick off a refresh
+    isRefreshing = true;
+
+    try {
+      const newToken = await refreshAccessToken();
+      // Notify all queued requests with the new token
+      notifySubscribers(newToken);
+      // Retry the original request with new token
+      return request<T>(method, path, body);
+    } catch {
+      // Refresh failed — reject queued subscribers and redirect
+      rejectSubscribers();
+      handleUnauthorized();
+      throw new Error("Unauthorized");
+    } finally {
+      isRefreshing = false;
+    }
   }
 
+  // --- 403 Forbidden ---
   if (res.status === 403) {
     window.location.href = "/403";
     throw new Error("Forbidden");
   }
 
+  // --- 5xx Server Error ---
   if (res.status >= 500) {
     const serverMsg = await extractErrorMessage(res);
     toast.error(serverMsg || "服务器错误，请稍后重试");
     throw new Error(serverMsg || `Server error: ${res.status}`);
   }
 
+  // --- Other client errors ---
   if (!res.ok) {
     const serverMsg = await extractErrorMessage(res);
-    const userMsg = STATUS_MESSAGES[res.status] || serverMsg || `请求失败 (${res.status})`;
+    const userMsg =
+      STATUS_MESSAGES[res.status] || serverMsg || `请求失败 (${res.status})`;
     toast.error(userMsg);
     throw new Error(serverMsg || `Request failed: ${res.status}`);
   }

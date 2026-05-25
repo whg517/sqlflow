@@ -345,6 +345,7 @@ export default function Layout() {
                 variant="destructive"
                 onClick={() => {
                   localStorage.removeItem("token");
+                  localStorage.removeItem("refresh_token");
                   window.location.href = "/login";
                 }}
               >
