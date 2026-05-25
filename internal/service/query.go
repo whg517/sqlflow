@@ -62,6 +62,8 @@ type AuditRecord struct {
 	ErrorMessage       string
 	DesensitizedFields string
 	IPAddress          string
+	AIReviewResult     string
+	TicketID           int64
 }
 
 // QueryService handles SQL query execution logic.

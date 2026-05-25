@@ -134,6 +134,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     error_message       TEXT    NOT NULL DEFAULT '',
     desensitized_fields TEXT    NOT NULL DEFAULT '',
     ip_address          TEXT    NOT NULL DEFAULT '',
+    ai_review_result    TEXT    NOT NULL DEFAULT '',
+    ticket_id           INTEGER NOT NULL DEFAULT 0,
     created_at          DATETIME NOT NULL DEFAULT (datetime('now'))
 );
 	`)
@@ -159,6 +161,11 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at)`)
 	if err != nil {
 		return fmt.Errorf("migrate audit_logs created_at index: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_ticket_id ON audit_logs(ticket_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate audit_logs ticket_id index: %w", err)
 	}
 
 	// FTS5 virtual table for full-text search on audit logs.

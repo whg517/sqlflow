@@ -118,6 +118,8 @@ type AuditLog struct {
 	ErrorMessage       string    `json:"error_message,omitempty"`
 	DesensitizedFields string    `json:"desensitized_fields,omitempty"`
 	IPAddress          string    `json:"ip_address,omitempty"`
+	AIReviewResult     string    `json:"ai_review_result,omitempty"`
+	TicketID           int64     `json:"ticket_id,omitempty"`
 	CreatedAt          time.Time `json:"created_at"`
 }
 

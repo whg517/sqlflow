@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
@@ -12,6 +12,9 @@ import {
   Link2,
   FileText,
   Filter,
+  ShieldCheck,
+  Shield,
+  ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -48,9 +51,9 @@ import {
   type AuditLog,
 } from "@/api/audit";
 import {
-  listTickets,
   getStatusLabel,
   getStatusColor,
+  getTicket,
   type Ticket,
 } from "@/api/ticket";
 
@@ -112,6 +115,157 @@ function exportToCsv(logs: AuditLog[]) {
   toast.success(`已导出 ${logs.length} 条审计日志`);
 }
 
+// --- AI Review Block ---
+
+interface ParsedAIReview {
+  risk_level: "low" | "medium" | "high";
+  summary: string;
+  suggestions: string[];
+}
+
+const riskConfig: Record<
+  string,
+  {
+    label: string;
+    icon: typeof ShieldCheck;
+    badgeClass: string;
+  }
+> = {
+  low: {
+    label: "低风险",
+    icon: ShieldCheck,
+    badgeClass: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+  },
+  medium: {
+    label: "中风险",
+    icon: Shield,
+    badgeClass: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+  },
+  high: {
+    label: "高风险",
+    icon: ShieldAlert,
+    badgeClass: "bg-red-500/20 text-red-400 border-red-500/30",
+  },
+};
+
+function parseAIReviewResult(raw: string): ParsedAIReview | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed.risk_level && !parsed.summary && !parsed.suggestions) return null;
+    return {
+      risk_level: parsed.risk_level || "medium",
+      summary: parsed.summary || "",
+      suggestions: Array.isArray(parsed.suggestions)
+        ? parsed.suggestions.filter(Boolean)
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function AiReviewBlock({ review }: { review: ParsedAIReview }) {
+  const risk = riskConfig[review.risk_level] || riskConfig.medium;
+  const RiskIcon = risk.icon;
+
+  return (
+    <div className="col-span-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/50 p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <RiskIcon size={14} className={risk.badgeClass.split(" ")[1]} />
+        <span className="text-xs font-medium text-[var(--text-secondary)]">
+          AI 评审
+        </span>
+        <Badge className={`${risk.badgeClass} border text-[10px]`}>
+          {risk.label}
+        </Badge>
+      </div>
+      {review.summary && (
+        <p className="mb-2 text-xs leading-relaxed text-[var(--text-primary)]">
+          {review.summary}
+        </p>
+      )}
+      {review.suggestions.length > 0 && (
+        <ul className="space-y-1">
+          {review.suggestions.map((s, i) => (
+            <li
+              key={i}
+              className="flex items-start gap-1.5 text-xs text-[var(--text-secondary)]"
+            >
+              <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[var(--text-muted)]" />
+              {s}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// --- Ticket Block ---
+
+function TicketBlock({ ticketId }: { ticketId: number }) {
+  const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchTicket() {
+      if (!ticketId) return;
+      setLoading(true);
+      try {
+        const res = await getTicket(ticketId);
+        if (!cancelled && res.data) {
+          setTicket(res.data);
+        }
+      } catch {
+        // Silently ignore ticket lookup failures
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    fetchTicket();
+    return () => {
+      cancelled = true;
+    };
+  }, [ticketId]);
+
+  if (loading) {
+    return (
+      <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+        <Loader2 size={12} className="animate-spin" />
+        查找关联工单…
+      </span>
+    );
+  }
+
+  if (!ticket) return null;
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        navigate(`/tickets?id=${ticket.id}`);
+      }}
+      className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2.5 py-1 text-xs transition-colors hover:bg-[var(--bg-surface)]"
+    >
+      <Link2 size={12} className="text-[var(--text-muted)]" />
+      <span className="font-medium text-[var(--text-primary)]">
+        #{ticket.id}
+      </span>
+      <span className="text-[var(--text-secondary)]">
+        {ticket.sql_summary || ticket.sql_content.slice(0, 40)}
+      </span>
+      <Badge
+        className={`${getStatusColor(ticket.status)} ml-1 border-0 text-[10px]`}
+      >
+        {getStatusLabel(ticket.status)}
+      </Badge>
+    </button>
+  );
+}
+
 // --- Expandable Row ---
 
 function ExpandedRow({
@@ -124,40 +278,11 @@ function ExpandedRow({
   datasourceType: string;
 }) {
   const [copied, setCopied] = useState(false);
-  const [linkedTicket, setLinkedTicket] = useState<Ticket | null>(null);
-  const [ticketLoading, setTicketLoading] = useState(false);
-  const navigate = useNavigate();
 
-  // Fetch linked ticket by matching datasource_id + sql_content
-  useEffect(() => {
-    let cancelled = false;
-    async function searchTicket() {
-      if (!log.datasource_id || !log.sql_content?.trim()) return;
-      setTicketLoading(true);
-      try {
-        const res = await listTickets({
-          datasource_id: String(log.datasource_id),
-          keyword: log.sql_content.trim().slice(0, 100),
-          page_size: 5,
-        });
-        if (cancelled) return;
-        const matched = (res.data ?? []).find(
-          (t) =>
-            t.datasource_id === log.datasource_id &&
-            t.sql_content?.trim() === log.sql_content?.trim(),
-        );
-        if (matched) setLinkedTicket(matched);
-      } catch {
-        // Silently ignore ticket lookup failures
-      } finally {
-        if (!cancelled) setTicketLoading(false);
-      }
-    }
-    searchTicket();
-    return () => {
-      cancelled = true;
-    };
-  }, [log.datasource_id, log.sql_content]);
+  const aiReview = useMemo(
+    () => parseAIReviewResult(log.ai_review_result),
+    [log.ai_review_result],
+  );
 
   function handleCopy() {
     navigator.clipboard.writeText(log.sql_content);
@@ -285,46 +410,20 @@ function ExpandedRow({
                 </p>
               </div>
 
-              {/* Linked ticket */}
-              <div className="col-span-full">
-                <span className="text-xs text-[var(--text-muted)]">
-                  关联工单
-                </span>
-                <div className="mt-1">
-                  {ticketLoading ? (
-                    <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
-                      <Loader2 size={12} className="animate-spin" />
-                      查找中…
-                    </span>
-                  ) : linkedTicket ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/tickets?id=${linkedTicket.id}`);
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2.5 py-1 text-xs transition-colors hover:bg-[var(--bg-surface)]"
-                    >
-                      <Link2 size={12} className="text-[var(--text-muted)]" />
-                      <span className="font-medium text-[var(--text-primary)]">
-                        #{linkedTicket.id}
-                      </span>
-                      <span className="text-[var(--text-secondary)]">
-                        {linkedTicket.sql_summary ||
-                          linkedTicket.sql_content.slice(0, 40)}
-                      </span>
-                      <Badge
-                        className={`${getStatusColor(linkedTicket.status)} ml-1 border-0 text-[10px]`}
-                      >
-                        {getStatusLabel(linkedTicket.status)}
-                      </Badge>
-                    </button>
-                  ) : (
-                    <span className="text-xs text-[var(--text-muted)]">
-                      无关联工单
-                    </span>
-                  )}
+              {/* Linked ticket — use ticket_id for precise matching */}
+              {log.ticket_id > 0 && (
+                <div className="col-span-full">
+                  <span className="text-xs text-[var(--text-muted)]">
+                    关联工单
+                  </span>
+                  <div className="mt-1">
+                    <TicketBlock ticketId={log.ticket_id} />
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* AI Review result */}
+              {aiReview && <AiReviewBlock review={aiReview} />}
 
               {/* Desensitization info */}
               {log.desensitized_fields && (

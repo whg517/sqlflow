@@ -29,11 +29,12 @@ func (s *AuditService) Write(ctx context.Context, rec AuditRecord) {
 		return
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, desensitized_fields, ip_address)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, desensitized_fields, ip_address, ai_review_result, ticket_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		rec.UserID, rec.Action, rec.DatasourceID, rec.Database,
 		rec.SQLContent, rec.SQLSummary, rec.ResultRows, rec.AffectedRows,
 		rec.ExecutionTimeMs, rec.ErrorMessage, rec.DesensitizedFields, rec.IPAddress,
+		rec.AIReviewResult, rec.TicketID,
 	)
 	if err != nil {
 		log.Printf("audit write: insert: %v", err)
@@ -89,7 +90,7 @@ func (s *AuditService) List(ctx context.Context, page, pageSize int, userID, act
 	querySQL := fmt.Sprintf(
 		`SELECT a.id, a.user_id, a.action, a.datasource_id, a.database, a.sql_content, a.sql_summary,
 		        a.result_rows, a.affected_rows, a.execution_time_ms, a.error_message,
-		        a.desensitized_fields, a.ip_address, a.created_at,
+		        a.desensitized_fields, a.ip_address, a.ai_review_result, a.ticket_id, a.created_at,
 		        COALESCE(u.username, '') AS username
 		 FROM audit_logs a
 		 LEFT JOIN users u ON a.user_id = u.id
@@ -111,7 +112,8 @@ func (s *AuditService) List(ctx context.Context, page, pageSize int, userID, act
 			&a.ID, &a.UserID, &a.Action, &a.DatasourceID, &a.Database,
 			&a.SQLContent, &a.SQLSummary,
 			&a.ResultRows, &a.AffectedRows, &a.ExecutionTimeMs,
-			&a.ErrorMessage, &a.DesensitizedFields, &a.IPAddress, &a.CreatedAt,
+			&a.ErrorMessage, &a.DesensitizedFields, &a.IPAddress,
+			&a.AIReviewResult, &a.TicketID, &a.CreatedAt,
 			&a.Username,
 		); err != nil {
 			continue
@@ -223,7 +225,7 @@ func (s *AuditService) Search(ctx context.Context, params SearchParams) (*Search
 	querySQL := fmt.Sprintf(
 		`SELECT a.id, a.user_id, a.action, a.datasource_id, a.database, a.sql_content, a.sql_summary,
 		        a.result_rows, a.affected_rows, a.execution_time_ms, a.error_message,
-		        a.desensitized_fields, a.ip_address, a.created_at,
+		        a.desensitized_fields, a.ip_address, a.ai_review_result, a.ticket_id, a.created_at,
 		        COALESCE(u.username, '') AS username,
 		        snippet(audit_logs_fts, 1, '<mark>', '</mark>', '...', 32) AS hl_sql_content,
 		        snippet(audit_logs_fts, 2, '<mark>', '</mark>', '...', 32) AS hl_sql_summary,
@@ -251,7 +253,8 @@ func (s *AuditService) Search(ctx context.Context, params SearchParams) (*Search
 			&a.ID, &a.UserID, &a.Action, &a.DatasourceID, &a.Database,
 			&a.SQLContent, &a.SQLSummary,
 			&a.ResultRows, &a.AffectedRows, &a.ExecutionTimeMs,
-			&a.ErrorMessage, &a.DesensitizedFields, &a.IPAddress, &a.CreatedAt,
+			&a.ErrorMessage, &a.DesensitizedFields, &a.IPAddress,
+			&a.AIReviewResult, &a.TicketID, &a.CreatedAt,
 			&a.Username,
 			&a.HighlightSQLContent, &a.HighlightSQLSummary, &a.Rank,
 		); err != nil {

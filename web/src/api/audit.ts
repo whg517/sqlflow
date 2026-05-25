@@ -17,6 +17,8 @@ export interface AuditLog {
   error_message: string;
   desensitized_fields: string;
   ip_address: string;
+  ai_review_result: string;
+  ticket_id: number;
   created_at: string;
 }
 
