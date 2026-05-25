@@ -33,6 +33,18 @@ type createMaskRuleRequest struct {
 }
 
 // CreateMaskRule handles POST /api/mask-rules.
+//
+// @Summary 创建脱敏规则
+// @Description 管理员创建数据脱敏规则
+// @Tags 脱敏规则
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body createMaskRuleRequest true "创建脱敏规则请求"
+// @Success 201 {object} resp.SuccessResponse "创建成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 500 {object} resp.ErrorResponse "创建脱敏规则失败"
+// @Router /mask-rules [post]
 func (h *MaskRuleHandler) CreateMaskRule(c echo.Context) error {
 	var req createMaskRuleRequest
 	if err := c.Bind(&req); err != nil {
@@ -80,6 +92,17 @@ func (h *MaskRuleHandler) CreateMaskRule(c echo.Context) error {
 }
 
 // GetMaskRule handles GET /api/mask-rules/:id.
+//
+// @Summary 获取脱敏规则详情
+// @Description 管理员获取指定脱敏规则详情
+// @Tags 脱敏规则
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "规则ID"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的规则ID"
+// @Failure 404 {object} resp.ErrorResponse "规则不存在"
+// @Router /mask-rules/{id} [get]
 func (h *MaskRuleHandler) GetMaskRule(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -101,6 +124,20 @@ func (h *MaskRuleHandler) GetMaskRule(c echo.Context) error {
 }
 
 // ListMaskRules handles GET /api/mask-rules.
+//
+// @Summary 获取脱敏规则列表
+// @Description 管理员获取脱敏规则列表，支持分页和筛选
+// @Tags 脱敏规则
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(50)
+// @Param datasource_id query string false "数据源ID"
+// @Param database query string false "数据库名"
+// @Param table_name query string false "表名"
+// @Success 200 {object} resp.PageResponse "成功"
+// @Failure 500 {object} resp.ErrorResponse "获取脱敏规则列表失败"
+// @Router /mask-rules [get]
 func (h *MaskRuleHandler) ListMaskRules(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
@@ -134,6 +171,19 @@ type updateMaskRuleRequest struct {
 }
 
 // UpdateMaskRule handles PUT /api/mask-rules/:id.
+//
+// @Summary 更新脱敏规则
+// @Description 管理员更新指定脱敏规则
+// @Tags 脱敏规则
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "规则ID"
+// @Param body body updateMaskRuleRequest true "更新脱敏规则请求"
+// @Success 200 {object} resp.SuccessResponse "更新成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 404 {object} resp.ErrorResponse "规则不存在"
+// @Router /mask-rules/{id} [put]
 func (h *MaskRuleHandler) UpdateMaskRule(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -169,6 +219,17 @@ func (h *MaskRuleHandler) UpdateMaskRule(c echo.Context) error {
 }
 
 // DeleteMaskRule handles DELETE /api/mask-rules/:id.
+//
+// @Summary 删除脱敏规则
+// @Description 管理员删除指定脱敏规则
+// @Tags 脱敏规则
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "规则ID"
+// @Success 200 {object} resp.SuccessResponse "删除成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的规则ID"
+// @Failure 404 {object} resp.ErrorResponse "规则不存在"
+// @Router /mask-rules/{id} [delete]
 func (h *MaskRuleHandler) DeleteMaskRule(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -200,6 +261,18 @@ type createSensitiveTableRequest struct {
 }
 
 // CreateSensitiveTable handles POST /api/sensitive-tables.
+//
+// @Summary 创建敏感表
+// @Description 管理员标记指定表为敏感表
+// @Tags 敏感表
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body createSensitiveTableRequest true "创建敏感表请求"
+// @Success 201 {object} resp.SuccessResponse "创建成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 500 {object} resp.ErrorResponse "创建敏感表失败"
+// @Router /sensitive-tables [post]
 func (h *MaskRuleHandler) CreateSensitiveTable(c echo.Context) error {
 	var req createSensitiveTableRequest
 	if err := c.Bind(&req); err != nil {
@@ -239,6 +312,20 @@ func (h *MaskRuleHandler) CreateSensitiveTable(c echo.Context) error {
 }
 
 // ListSensitiveTables handles GET /api/sensitive-tables.
+//
+// @Summary 获取敏感表列表
+// @Description 管理员获取敏感表列表，支持分页和筛选
+// @Tags 敏感表
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(50)
+// @Param datasource_id query string false "数据源ID"
+// @Param database query string false "数据库名"
+// @Param table_name query string false "表名"
+// @Success 200 {object} resp.PageResponse "成功"
+// @Failure 500 {object} resp.ErrorResponse "获取敏感表列表失败"
+// @Router /sensitive-tables [get]
 func (h *MaskRuleHandler) ListSensitiveTables(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
@@ -264,6 +351,17 @@ func (h *MaskRuleHandler) ListSensitiveTables(c echo.Context) error {
 }
 
 // DeleteSensitiveTable handles DELETE /api/sensitive-tables/:id.
+//
+// @Summary 删除敏感表
+// @Description 管理员删除指定敏感表标记
+// @Tags 敏感表
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "记录ID"
+// @Success 200 {object} resp.SuccessResponse "删除成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的记录ID"
+// @Failure 404 {object} resp.ErrorResponse "记录不存在"
+// @Router /sensitive-tables/{id} [delete]
 func (h *MaskRuleHandler) DeleteSensitiveTable(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {

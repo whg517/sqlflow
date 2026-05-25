@@ -59,6 +59,17 @@ type refreshRequest struct {
 }
 
 // Login handles POST /api/auth/login.
+//
+// @Summary 用户登录
+// @Description 使用用户名和密码登录，返回 JWT token
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body loginRequest true "登录信息"
+// @Success 200 {object} resp.SuccessResponse{data=loginResponse} "登录成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 401 {object} resp.ErrorResponse "用户名或密码错误"
+// @Router /auth/login [post]
 func (h *UserHandler) Login(c echo.Context) error {
 	var req loginRequest
 	if err := c.Bind(&req); err != nil {
@@ -93,6 +104,17 @@ func (h *UserHandler) Login(c echo.Context) error {
 
 // Refresh handles POST /api/auth/refresh.
 // It accepts a refresh_token and returns a new access_token + rotated refresh_token.
+//
+// @Summary 刷新Token
+// @Description 使用 refresh_token 获取新的 access_token
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body refreshRequest true "刷新Token请求"
+// @Success 200 {object} resp.SuccessResponse{data=loginResponse} "刷新成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 401 {object} resp.ErrorResponse "refresh_token 无效或已过期"
+// @Router /auth/refresh [post]
 func (h *UserHandler) Refresh(c echo.Context) error {
 	var req refreshRequest
 	if err := c.Bind(&req); err != nil {
@@ -137,6 +159,15 @@ func (h *UserHandler) Refresh(c echo.Context) error {
 }
 
 // Me handles GET /api/auth/me.
+//
+// @Summary 获取当前用户信息
+// @Description 获取当前登录用户的详细信息
+// @Tags 认证
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse{data=userDetailResponse} "成功"
+// @Failure 401 {object} resp.ErrorResponse "未认证"
+// @Router /auth/me [get]
 func (h *UserHandler) Me(c echo.Context) error {
 	userID := c.Get(middleware.ContextKeyUserID).(int64)
 
@@ -154,6 +185,18 @@ func (h *UserHandler) Me(c echo.Context) error {
 }
 
 // ChangePassword handles PUT /api/auth/password.
+//
+// @Summary 修改密码
+// @Description 修改当前用户密码
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body changePasswordRequest true "修改密码请求"
+// @Success 200 {object} resp.SuccessResponse "密码修改成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 401 {object} resp.ErrorResponse "旧密码错误"
+// @Router /auth/password [put]
 func (h *UserHandler) ChangePassword(c echo.Context) error {
 	userID := c.Get(middleware.ContextKeyUserID).(int64)
 
@@ -238,6 +281,18 @@ type userListResponse struct {
 }
 
 // CreateUser handles POST /api/users (admin only).
+//
+// @Summary 创建用户
+// @Description 管理员创建新用户
+// @Tags 用户管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body createUserRequest true "创建用户请求"
+// @Success 201 {object} resp.SuccessResponse{data=userDetailResponse} "创建成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 500 {object} resp.ErrorResponse "创建用户失败"
+// @Router /users [post]
 func (h *UserHandler) CreateUser(c echo.Context) error {
 	var req createUserRequest
 	if err := c.Bind(&req); err != nil {
@@ -268,6 +323,17 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 }
 
 // ListUsers handles GET /api/users (admin only).
+//
+// @Summary 获取用户列表
+// @Description 管理员获取所有用户列表
+// @Tags 用户管理
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
+// @Success 200 {object} resp.SuccessResponse{data=userListResponse} "成功"
+// @Failure 500 {object} resp.ErrorResponse "获取用户列表失败"
+// @Router /users [get]
 func (h *UserHandler) ListUsers(c echo.Context) error {
 	page, pageSize := parsePagination(c)
 
@@ -290,6 +356,17 @@ func (h *UserHandler) ListUsers(c echo.Context) error {
 }
 
 // GetUser handles GET /api/users/:id (admin only).
+//
+// @Summary 获取用户详情
+// @Description 管理员获取指定用户详细信息
+// @Tags 用户管理
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户ID"
+// @Success 200 {object} resp.SuccessResponse{data=userDetailResponse} "成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的用户ID"
+// @Failure 404 {object} resp.ErrorResponse "用户不存在"
+// @Router /users/{id} [get]
 func (h *UserHandler) GetUser(c echo.Context) error {
 	id, err := parseUserID(c)
 	if err != nil {
@@ -310,6 +387,20 @@ func (h *UserHandler) GetUser(c echo.Context) error {
 }
 
 // UpdateUser handles PUT /api/users/:id (admin only).
+//
+// @Summary 更新用户角色
+// @Description 管理员更新指定用户的角色
+// @Tags 用户管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户ID"
+// @Param body body updateUserRequest true "更新用户请求"
+// @Success 200 {object} resp.SuccessResponse{data=userDetailResponse} "更新成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 403 {object} resp.ErrorResponse "不能编辑自己的角色"
+// @Failure 404 {object} resp.ErrorResponse "用户不存在"
+// @Router /users/{id} [put]
 func (h *UserHandler) UpdateUser(c echo.Context) error {
 	currentUserID := c.Get(middleware.ContextKeyUserID).(int64)
 
@@ -354,6 +445,18 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 }
 
 // DeleteUser handles DELETE /api/users/:id (admin only).
+//
+// @Summary 删除用户
+// @Description 管理员删除指定用户
+// @Tags 用户管理
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户ID"
+// @Success 200 {object} resp.SuccessResponse "删除成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的用户ID"
+// @Failure 403 {object} resp.ErrorResponse "不能删除自己或最后一个管理员"
+// @Failure 404 {object} resp.ErrorResponse "用户不存在"
+// @Router /users/{id} [delete]
 func (h *UserHandler) DeleteUser(c echo.Context) error {
 	currentUserID := c.Get(middleware.ContextKeyUserID).(int64)
 
@@ -392,6 +495,19 @@ func (h *UserHandler) DeleteUser(c echo.Context) error {
 }
 
 // ResetPassword handles PUT /api/users/:id/reset-password (admin only).
+//
+// @Summary 重置用户密码
+// @Description 管理员重置指定用户密码
+// @Tags 用户管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户ID"
+// @Param body body resetPasswordRequest true "重置密码请求"
+// @Success 200 {object} resp.SuccessResponse "密码重置成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 404 {object} resp.ErrorResponse "用户不存在"
+// @Router /users/{id}/reset-password [put]
 func (h *UserHandler) ResetPassword(c echo.Context) error {
 	id, err := parseUserID(c)
 	if err != nil {

@@ -1,3 +1,11 @@
+// @title SQLFlow API
+// @version 1.0
+// @description SQL 审核、查询和工单管理平台 API
+// @host localhost:8080
+// @BasePath /api
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 package main
 
 import (

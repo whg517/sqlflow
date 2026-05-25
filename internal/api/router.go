@@ -9,6 +9,9 @@ import (
 	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/pkg/metrics"
 	"github.com/whg517/sqlflow/internal/service"
+
+	echoSwagger "github.com/swaggo/echo-swagger"
+	_ "github.com/whg517/sqlflow/docs"
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
@@ -34,6 +37,9 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	if cfg.Metrics.Enabled {
 		e.GET("/metrics", healthHandler.Metrics)
 	}
+
+	// Swagger UI
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	// Auth handlers
 	userHandler := handler.NewUserHandler(authSvc)
