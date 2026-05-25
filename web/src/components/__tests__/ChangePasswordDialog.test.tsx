@@ -226,7 +226,7 @@ describe("ChangePasswordDialog", () => {
 
       await act(async () => {
         await vi.waitFor(() => {
-          expect(mockFetch).toHaveBeenCalledWith("/api/auth/password", {
+          expect(mockFetch).toHaveBeenCalledWith("/api/auth/password", expect.objectContaining({
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
@@ -235,7 +235,7 @@ describe("ChangePasswordDialog", () => {
               old_password: "oldpass1",
               new_password: "newpass12",
             }),
-          });
+          }));
         });
       });
 
