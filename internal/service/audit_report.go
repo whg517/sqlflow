@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -138,6 +140,9 @@ type ReportParams struct {
 func (p ReportParams) normalizedDays() int {
 	if p.Days <= 0 {
 		return 7
+	}
+	if p.Days > 365 {
+		return 365
 	}
 	return p.Days
 }
@@ -423,7 +428,9 @@ func (s *AuditReportService) GetPerformanceReport(ctx context.Context, params Re
 		`SELECT execution_time_ms FROM audit_logs WHERE created_at >= ? AND execution_time_ms > 0 ORDER BY execution_time_ms ASC LIMIT 1 OFFSET (SELECT COUNT(*) FROM audit_logs WHERE created_at >= ? AND execution_time_ms > 0) * 95 / 100 - 1`, startDate, startDate,
 	).Scan(&stats.P95ExecutionMs)
 	if err != nil {
-		// Not enough data for P95 — set to 0
+		if !errors.Is(err, sql.ErrNoRows) {
+			log.Printf("P95 query failed: %v", err)
+		}
 		stats.P95ExecutionMs = 0
 	}
 

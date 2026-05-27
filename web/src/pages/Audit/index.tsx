@@ -192,8 +192,8 @@ function TicketBlock({ ticketId }: { ticketId: number }) {
         if (!cancelled && res.data) {
           setTicket(res.data);
         }
-      } catch {
-        // Silently ignore ticket lookup failures
+      } catch (err) {
+        console.error("Failed to fetch ticket:", err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -252,8 +252,8 @@ function GitLinksForAudit({ auditLogId }: { auditLogId: number }) {
       try {
         const res = await listGitLinks("audit_log", auditLogId);
         if (!cancelled) setLinks(res.data ?? []);
-      } catch {
-        // silently ignore
+      } catch (err) {
+        console.error("Failed to fetch git links:", err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -563,13 +563,13 @@ export default function AuditPage() {
       .then((res) => {
         setDatasources(res.data ?? []);
       })
-      .catch(() => {});
+      .catch((err) => { console.error("Failed to fetch datasources:", err); });
     api
       .get<{ code: number; data: UserOption[] }>("/users")
       .then((res) => {
         setUsers(res.data ?? []);
       })
-      .catch(() => {});
+      .catch((err) => { console.error("Failed to fetch users:", err); });
   }, []);
 
   // Fetch audit logs

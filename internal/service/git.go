@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/whg517/sqlflow/internal/model"
@@ -70,6 +72,23 @@ func validateInput(input CreateGitLinkInput) error {
 func (s *GitService) CreateGitLink(ctx context.Context, input CreateGitLinkInput) (*model.GitLink, error) {
 	if err := validateInput(input); err != nil {
 		return nil, err
+	}
+
+	// Check for duplicates: same entity + link_type + commit_hash
+	var existingID int64
+	checkQuery := `SELECT id FROM git_links WHERE entity_type = ? AND entity_id = ? AND link_type = ? AND commit_hash = ? LIMIT 1`
+	checkArgs := []interface{}{input.EntityType, input.EntityID, string(input.LinkType), input.CommitHash}
+	if input.LinkType == model.GitLinkTypePR {
+		checkQuery = `SELECT id FROM git_links WHERE entity_type = ? AND entity_id = ? AND link_type = ? AND pr_number = ? LIMIT 1`
+		checkArgs = []interface{}{input.EntityType, input.EntityID, string(input.LinkType), input.PRNumber}
+	}
+	err := s.db.QueryRowContext(ctx, checkQuery, checkArgs...).Scan(&existingID)
+	if err == nil {
+		// Duplicate found
+		return nil, ErrGitLinkDuplicate
+	}
+	if err != sql.ErrNoRows {
+		return nil, fmt.Errorf("check duplicate git link: %w", err)
 	}
 
 	now := time.Now()
@@ -156,7 +175,7 @@ func (s *GitService) ListGitLinks(ctx context.Context, entityType string, entity
 			&link.PRNumber, &link.PRTitle, &link.PRURL, &link.RepoURL, &link.Branch,
 			&link.CreatedBy, &link.CreatedAt,
 		); err != nil {
-			continue
+			return nil, fmt.Errorf("scan git link row: %w", err)
 		}
 		links = append(links, link)
 	}
@@ -201,4 +220,40 @@ func (s *GitService) PopulateGitLinks(ctx context.Context, ticket *model.Ticket)
 		return
 	}
 	ticket.GitLinks = links
+}
+
+// BatchPopulateGitLinks fetches git links for multiple tickets in a single query.
+func (s *GitService) BatchPopulateGitLinks(ctx context.Context, tickets []model.Ticket) {
+	if len(tickets) == 0 {
+		return
+	}
+	ids := make([]string, len(tickets))
+	idMap := make(map[int64]int, len(tickets))
+	for i, t := range tickets {
+		ids[i] = strconv.FormatInt(t.ID, 10)
+		idMap[t.ID] = i
+	}
+
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, entity_type, entity_id, link_type, commit_hash, commit_msg, author_name, author_email, pr_number, pr_title, pr_url, repo_url, branch, created_by, created_at
+		 FROM git_links WHERE entity_type = 'ticket' AND entity_id IN (`+strings.Join(ids, ",")+`) ORDER BY created_at DESC`,
+	)
+	if err != nil {
+		return
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var link model.GitLink
+		var created sql.NullTime
+		if err := rows.Scan(&link.ID, &link.EntityType, &link.EntityID, &link.LinkType, &link.CommitHash, &link.CommitMsg, &link.AuthorName, &link.AuthorEmail, &link.PRNumber, &link.PRTitle, &link.PRURL, &link.RepoURL, &link.Branch, &link.CreatedBy, &created); err != nil {
+			continue // batch populate: skip bad rows to avoid failing entire batch
+		}
+		if created.Valid {
+			link.CreatedAt = created.Time
+		}
+		if idx, ok := idMap[link.EntityID]; ok {
+			tickets[idx].GitLinks = append(tickets[idx].GitLinks, link)
+		}
+	}
 }

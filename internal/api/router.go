@@ -55,7 +55,6 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	performanceHandler := handler.NewPerformanceHandler(historySvc)
 	gitHandler := handler.NewGitHandler(gitSvc)
-	gitHandler := handler.NewGitHandler(gitSvc)
 	tokenHandler := handler.NewTokenHandler(tokenSvc)
 	reportHandler := handler.NewAuditReportHandler(reportSvc)
 

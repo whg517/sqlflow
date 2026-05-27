@@ -402,8 +402,8 @@ export default function GitInfoSection({
     try {
       const res = await listGitLinks("ticket", ticketId);
       setLinks(res.data ?? []);
-    } catch {
-      // silently ignore
+    } catch (err) {
+      console.error("Failed to fetch git links:", err);
     } finally {
       setLoading(false);
     }

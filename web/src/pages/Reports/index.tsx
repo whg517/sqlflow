@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   BarChart3,
   AlertTriangle,
@@ -10,7 +10,6 @@ import {
   Clock,
   ShieldCheck,
   Shield,
-  ShieldAlert,
   ArrowUp,
   ArrowDown,
   Loader2,
@@ -26,11 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Table,
-  TableBody,
   TableCell,
-  TableHead,
-  TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import {
@@ -60,7 +55,7 @@ function StatCard({
   icon: React.ElementType;
   label: string;
   value: string | number;
-  sub?: string;
+  sub?: React.ReactNode;
   color: string;
   bg: string;
 }) {
@@ -88,15 +83,17 @@ function TableSection({
   title,
   loading,
   emptyText,
+  className,
   children,
 }: {
   title: string;
   loading: boolean;
   emptyText: string;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <Card>
+    <Card className={className}>
       <CardContent className="space-y-3 p-4">
         <h3 className="text-sm font-medium text-[var(--text-primary)]">
           {title}

@@ -273,11 +273,9 @@ func (s *TicketService) ListTickets(ctx context.Context, page, pageSize int, sta
 		s.populateTicketNames(ctx, &tickets[i])
 	}
 
-	// Populate git links if service is available
+	// Populate git links if service is available (batch query to avoid N+1)
 	if s.gitSvc != nil {
-		for i := range tickets {
-			s.gitSvc.PopulateGitLinks(ctx, &tickets[i])
-		}
+		s.gitSvc.BatchPopulateGitLinks(ctx, tickets)
 	}
 
 	return tickets, total, nil
