@@ -129,6 +129,15 @@ func main() {
 	log.Println("git service initialized")
 	ticketSvc.SetGitService(gitSvc)
 
+	// Initialize SLA service and scheduler (single-instance, constructor injection)
+	slaSvc := service.NewSLAService(database.DB, notifySvc)
+	ticketSvc.SetSLAService(slaSvc)
+
+	slaScheduler := service.NewSLAScheduler(slaSvc, 10*time.Minute)
+	slaScheduler.Start()
+	defer slaScheduler.Stop()
+	log.Println("SLA scheduler started (interval=10m)")
+
 	// Initialize API token service
 	tokenSvc := service.NewTokenService(database.DB)
 	log.Println("api token service initialized")

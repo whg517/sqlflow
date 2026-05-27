@@ -204,6 +204,19 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.GET("/api/admin/tokens", tokenHandler.ListAllTokens)
 	adminGroup.DELETE("/api/admin/tokens/:id", tokenHandler.RevokeAnyToken)
 
+	// SLA configuration management (admin only)
+	slaSvc := service.NewSLAService(db, notifySvc)
+	slaHandler := handler.NewSLAHandler(slaSvc)
+
+	adminGroup.GET("/api/settings/sla", slaHandler.ListSLAConfigs)
+	adminGroup.POST("/api/settings/sla", slaHandler.CreateSLAConfig)
+	adminGroup.PUT("/api/settings/sla/:id", slaHandler.UpdateSLAConfig)
+	adminGroup.DELETE("/api/settings/sla/:id", slaHandler.DeleteSLAConfig)
+	adminGroup.GET("/api/sla-notifications", slaHandler.ListSLANotifications)
+
+	// Ticket SLA status query (authenticated users)
+	authGroup.GET("/api/tickets/sla-status", slaHandler.GetTicketSLAStatuses)
+
 	// Frontend SPA (must be after API routes)
 	serveFrontend(e)
 

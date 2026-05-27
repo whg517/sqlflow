@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -61,6 +62,7 @@ type TicketService struct {
 	auditSvc  *AuditService
 	notifySvc *NotifyService
 	gitSvc    *GitService
+	slaSvc    *SLAService
 }
 
 // NewTicketService creates a new TicketService.
@@ -76,6 +78,13 @@ func (s *TicketService) SetNotifyService(notifySvc *NotifyService) {
 // SetGitService sets the git service (for deferred initialization).
 func (s *TicketService) SetGitService(gitSvc *GitService) {
 	s.gitSvc = gitSvc
+}
+
+// SetSLAService injects the SLA service for cross-service lifecycle hooks
+// (e.g., clear SLA on ticket approve/reject).
+// This is set during application bootstrap — do not call after startup.
+func (s *TicketService) SetSLAService(slaSvc *SLAService) {
+	s.slaSvc = slaSvc
 }
 
 // scanTicket scans a single ticket row from a sql.Rows or sql.Row.
@@ -323,6 +332,13 @@ func (s *TicketService) ApproveTicket(ctx context.Context, ticketID, reviewerID 
 		s.notifySvc.NotifyTicketApproved(t)
 	}
 
+	// Clear SLA deadline on approval
+	if s.slaSvc != nil {
+		if err := s.slaSvc.ClearTicketSLA(ctx, ticketID); err != nil {
+			log.Printf("ticket: clear SLA on approve failed: %v", err)
+		}
+	}
+
 	return t, nil
 }
 
@@ -370,6 +386,13 @@ func (s *TicketService) RejectTicket(ctx context.Context, ticketID, reviewerID i
 	// Send DingTalk notification for rejection
 	if s.notifySvc != nil {
 		s.notifySvc.NotifyTicketRejected(t)
+	}
+
+	// Clear SLA deadline on rejection
+	if s.slaSvc != nil {
+		if err := s.slaSvc.ClearTicketSLA(ctx, ticketID); err != nil {
+			log.Printf("ticket: clear SLA on reject failed: %v", err)
+		}
 	}
 
 	return t, nil

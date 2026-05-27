@@ -103,6 +103,8 @@ type Ticket struct {
 	ReviewComment  string       `json:"review_comment,omitempty"`
 	ScheduledAt    *time.Time   `json:"scheduled_at,omitempty"`
 	ExecutedAt     *time.Time   `json:"executed_at,omitempty"`
+	SLADeadline    *time.Time   `json:"sla_deadline,omitempty"`
+	SLAStatus      string       `json:"sla_status,omitempty"`
 	CreatedAt      time.Time    `json:"created_at"`
 	UpdatedAt      time.Time    `json:"updated_at"`
 	GitLinks       []GitLink    `json:"git_links,omitempty"`
@@ -254,6 +256,31 @@ type APIToken struct {
 	Description string     `json:"description,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+// SLAConfig defines the SLA timeout rule for a priority level.
+type SLAConfig struct {
+	ID              int64     `json:"id"`
+	Priority        string    `json:"priority"`
+	TimeoutMinutes  int       `json:"timeout_minutes"`
+	ReminderPercent int       `json:"reminder_percent"`
+	EscalateToRole  string    `json:"escalate_to_role"`
+	EscalateToUser  string    `json:"escalate_to_user"`
+	Enabled         bool      `json:"enabled"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// SLANotification records a SLA action log entry.
+// Maps to the sla_action_log table.
+type SLANotification struct {
+	ID               int64     `json:"id"`
+	TicketID         int64     `json:"ticket_id"`
+	NotificationType string    `json:"notification_type"` // reminder | escalate
+	Stage            string    `json:"stage"`             // alias for dedup_key (backward compat)
+	NotifiedUser     string    `json:"notified_user"`
+	NotifiedAt       time.Time `json:"notified_at"`
+	SLAConfigID      int64     `json:"sla_config_id"`
 }
 
 // PermissionRequestStatus represents the status of a permission request.

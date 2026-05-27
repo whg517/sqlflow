@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Download,
   Loader2,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,14 @@ import {
   type ExportTask,
 } from "@/api/export";
 import TicketDetailDrawer from "./components/TicketDetailDrawer";
+import {
+  getTicketSLAStatuses,
+  getSLAStatusLabel,
+  getSLAStatusColor,
+  getSLADot,
+  formatSLARemaining,
+  type SLATicketStatus,
+} from "@/api/sla";
 
 // --- Status Tab Config ---
 
@@ -126,6 +135,9 @@ export default function TicketPage() {
   const [asyncExportTask, setAsyncExportTask] = useState<ExportTask | null>(null);
   const [exportPolling, setExportPolling] = useState(false);
 
+  // SLA status
+  const [slaStatuses, setSlaStatuses] = useState<Record<number, SLATicketStatus>>({});
+
   // Open detail drawer if `id` param present in URL (from global search)
   useEffect(() => {
     const idParam = searchParams.get("id");
@@ -196,6 +208,24 @@ export default function TicketPage() {
     });
     return () => cancelAnimationFrame(id);
   }, [fetchTickets]);
+
+  // Fetch SLA statuses for PENDING_APPROVAL tickets
+  useEffect(() => {
+    const pendingIds = tickets
+      .filter((t) => t.status === "PENDING_APPROVAL")
+      .map((t) => t.id);
+    if (pendingIds.length === 0) {
+      setSlaStatuses({});
+      return;
+    }
+    getTicketSLAStatuses(pendingIds)
+      .then((res) => {
+        setSlaStatuses(res.data ?? {});
+      })
+      .catch(() => {
+        // ignore SLA fetch errors
+      });
+  }, [tickets]);
 
   // Tab change
   function handleTabChange(value: string) {
@@ -534,6 +564,9 @@ export default function TicketPage() {
                 <TableHead className="w-24 text-xs text-[var(--text-secondary)]">
                   状态
                 </TableHead>
+                <TableHead className="w-24 text-xs text-[var(--text-secondary)]">
+                  SLA
+                </TableHead>
                 <TableHead className="w-28 text-xs text-[var(--text-secondary)]">
                   提交时间
                 </TableHead>
@@ -590,6 +623,34 @@ export default function TicketPage() {
                     >
                       {getStatusLabel(t.status as TicketStatus)}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {t.status === "PENDING_APPROVAL" && slaStatuses[t.id] ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className={`inline-block h-1.5 w-1.5 rounded-full ${getSLADot(slaStatuses[t.id].sla_status)}`}
+                            />
+                            <span
+                              className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${getSLAStatusColor(slaStatuses[t.id].sla_status)}`}
+                            >
+                              {formatSLARemaining(slaStatuses[t.id].time_remaining_seconds)}
+                            </span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="text-xs">
+                          {getSLAStatusLabel(slaStatuses[t.id].sla_status)}
+                          {slaStatuses[t.id].time_remaining_seconds <= 0
+                            ? " (已超时)"
+                            : ` (剩余 ${formatSLARemaining(slaStatuses[t.id].time_remaining_seconds)})`}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <span className="text-xs text-[var(--text-muted)]">
+                        —
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-xs text-[var(--text-muted)]">
                     {formatTime(t.created_at)}

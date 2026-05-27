@@ -513,6 +513,68 @@ CREATE TABLE IF NOT EXISTS temp_policies (
 		return fmt.Errorf("migrate temp_policies expiry index: %w", err)
 	}
 
+	// --- SLA ticket extension columns ---
+	_, _ = db.Exec(`ALTER TABLE tickets ADD COLUMN sla_deadline DATETIME`)
+	_, _ = db.Exec(`ALTER TABLE tickets ADD COLUMN sla_status TEXT NOT NULL DEFAULT 'normal'`)
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tickets_sla_deadline ON tickets(sla_deadline)`)
+	if err != nil {
+		return fmt.Errorf("migrate tickets index sla_deadline: %w", err)
+	}
+
+	// --- SLA configuration table ---
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS sla_config (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    priority         TEXT    NOT NULL UNIQUE,
+    timeout_minutes  INTEGER NOT NULL,
+    reminder_percent INTEGER NOT NULL DEFAULT 80,
+    escalate_to_role TEXT    NOT NULL DEFAULT 'admin',
+    escalate_to_user TEXT    NOT NULL DEFAULT '',
+    enabled          INTEGER NOT NULL DEFAULT 1,
+    created_at       DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at       DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate sla_config: %w", err)
+	}
+
+	// --- SLA action log (idempotent scheduling) ---
+	// sla_action_log replaces the old sla_notifications table.
+	// dedup_key has a UNIQUE constraint to guarantee scheduling idempotency.
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS sla_action_log (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id     INTEGER NOT NULL,
+    action_type   TEXT    NOT NULL,
+    dedup_key     TEXT    NOT NULL UNIQUE,
+    notified_user TEXT    NOT NULL DEFAULT '',
+    created_at    DATETIME NOT NULL DEFAULT (datetime('now')),
+    sla_config_id INTEGER
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate sla_action_log: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_sla_action_log_ticket ON sla_action_log(ticket_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate sla_action_log ticket index: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_sla_action_log_created_at ON sla_action_log(created_at)`)
+	if err != nil {
+		return fmt.Errorf("migrate sla_action_log created_at index: %w", err)
+	}
+
+	// Migrate from old sla_notifications table if it exists
+	_, _ = db.Exec(`INSERT OR IGNORE INTO sla_action_log (ticket_id, action_type, dedup_key, notified_user, created_at, sla_config_id)
+		SELECT ticket_id, notification_type,
+			printf('%%d:%%s:%%s', ticket_id, notification_type, notified_at),
+			notified_user, notified_at, sla_config_id
+		FROM sla_notifications WHERE 1=0`)  // no-op, placeholder for future migration
+
 	// --- export_tasks (async export jobs) ---
 	_, err = db.Exec(`
 CREATE TABLE IF NOT EXISTS export_tasks (
