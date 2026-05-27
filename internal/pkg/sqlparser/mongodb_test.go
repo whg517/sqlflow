@@ -471,7 +471,7 @@ func TestParseMongo_AdditionalStages(t *testing.T) {
 			name:          "lookup_stage",
 			body:          `{"operation": "aggregate", "collection": "orders", "pipeline": [{"$lookup": {"from": "users", "localField": "user_id", "foreignField": "_id", "as": "user"}}]}`,
 			wantStages:    []string{"$lookup"},
-			wantDangerous: true,
+			wantDangerous: false,
 		},
 		{
 			name:          "skip_stage",
@@ -530,5 +530,107 @@ func TestParseMongo_ExtraFieldsIgnored(t *testing.T) {
 	}
 	if result.Collection != "users" {
 		t.Errorf("Collection = %q, want %q", result.Collection, "users")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Expanded Whitelist: Newly Allowed Stages
+// ---------------------------------------------------------------------------
+
+func TestParseMongo_ExpandedWhitelist(t *testing.T) {
+	tests := []struct {
+		name          string
+		body          string
+		wantStages    []string
+		wantDangerous bool
+	}{
+		{
+			name:          "facet_stage",
+			body:          `{"operation": "aggregate", "collection": "orders", "pipeline": [{"$facet": {"byStatus": [{"$group": {"_id": "$status"}}], "top10": [{"$sort": {"amount": -1}}, {"$limit": 10}]}}]}`,
+			wantStages:    []string{"$facet"},
+			wantDangerous: false,
+		},
+		{
+			name:          "replaceRoot_stage",
+			body:          `{"operation": "aggregate", "collection": "orders", "pipeline": [{"$replaceRoot": {"newRoot": "$details"}}]}`,
+			wantStages:    []string{"$replaceRoot"},
+			wantDangerous: false,
+		},
+		{
+			name:          "set_unset_stages",
+			body:          `{"operation": "aggregate", "collection": "orders", "pipeline": [{"$set": {"total": {"$multiply": ["$price", "$qty"]}}}, {"$unset": "temp"}]}`,
+			wantStages:    []string{"$set", "$unset"},
+			wantDangerous: false,
+		},
+		{
+			name:          "bucket_stage",
+			body:          `{"operation": "aggregate", "collection": "orders", "pipeline": [{"$bucket": {"groupBy": "$price", "boundaries": [0, 100, 500, 1000], "default": "other"}}]}`,
+			wantStages:    []string{"$bucket"},
+			wantDangerous: false,
+		},
+		{
+			name:          "sample_stage",
+			body:          `{"operation": "aggregate", "collection": "orders", "pipeline": [{"$sample": {"size": 5}}]}`,
+			wantStages:    []string{"$sample"},
+			wantDangerous: false,
+		},
+		{
+			name:          "geoNear_stage",
+			body:          `{"operation": "aggregate", "collection": "stores", "pipeline": [{"$geoNear": {"near": {"type": "Point", "coordinates": [-73.99, 40.73]}, "distanceField": "dist", "maxDistance": 1000}}]}`,
+			wantStages:    []string{"$geoNear"},
+			wantDangerous: false,
+		},
+		{
+			name:          "graphLookup_stage",
+			body:          `{"operation": "aggregate", "collection": "employees", "pipeline": [{"$graphLookup": {"from": "employees", "startWith": "$reportsTo", "connectFromField": "reportsTo", "connectToField": "name", "as": "chain"}}]}`,
+			wantStages:    []string{"$graphLookup"},
+			wantDangerous: false,
+		},
+		{
+			name:          "replaceWith_stage",
+			body:          `{"operation": "aggregate", "collection": "t", "pipeline": [{"$replaceWith": "$nested"}]}`,
+			wantStages:    []string{"$replaceWith"},
+			wantDangerous: false,
+		},
+		{
+			name:          "complex_safe_pipeline",
+			body:          `{"operation": "aggregate", "collection": "orders", "pipeline": [{"$match": {"status": "active"}}, {"$lookup": {"from": "users", "localField": "user_id", "foreignField": "_id", "as": "user"}}, {"$unwind": "$user"}, {"$set": {"userName": "$user.name"}}, {"$group": {"_id": "$userName", "total": {"$sum": "$amount"}}}, {"$sort": {"total": -1}}, {"$limit": 20}]}`,
+			wantStages:    []string{"$match", "$lookup", "$unwind", "$set", "$group", "$sort", "$limit"},
+			wantDangerous: false,
+		},
+		// Explicitly blocked stages
+		{
+			name:          "out_still_blocked",
+			body:          `{"operation": "aggregate", "collection": "orders", "pipeline": [{"$match": {}}, {"$out": "backup"}]}`,
+			wantStages:    []string{"$match", "$out"},
+			wantDangerous: true,
+		},
+		{
+			name:          "merge_still_blocked",
+			body:          `{"operation": "aggregate", "collection": "orders", "pipeline": [{"$merge": {"into": "target"}}]}`,
+			wantStages:    []string{"$merge"},
+			wantDangerous: true,
+		},
+		{
+			name:          "currentOp_blocked",
+			body:          `{"operation": "aggregate", "collection": "admin", "pipeline": [{"$currentOp": {}}]}`,
+			wantStages:    []string{"$currentOp"},
+			wantDangerous: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ParseMongo(tt.body)
+			if err != nil {
+				t.Fatalf("ParseMongo error: %v", err)
+			}
+			if !equalStringSlices(result.PipelineStages, tt.wantStages) {
+				t.Errorf("PipelineStages = %v, want %v", result.PipelineStages, tt.wantStages)
+			}
+			if result.HasDangerousStage != tt.wantDangerous {
+				t.Errorf("HasDangerousStage = %v, want %v", result.HasDangerousStage, tt.wantDangerous)
+			}
+		})
 	}
 }

@@ -29,10 +29,76 @@ type MongoParseResult struct {
 }
 
 // Allowed aggregation stages whitelist.
+// These are safe read-only / transformation stages that do not modify data or collections.
 var allowedAggStages = map[string]bool{
-	"$match": true, "$group": true, "$project": true, "$sort": true,
-	"$limit": true, "$skip": true, "$count": true, "$unwind": true,
+	// Filtering & matching
+	"$match": true,
+
+	// Grouping & accumulation
+	"$group": true,
+	"$count": true,
+	"$bucket": true,
+	"$bucketAuto": true,
+	"$densify": true,
+	"$fill": true,
+
+	// Projection & shaping
+	"$project": true,
 	"$addFields": true,
+	"$set": true,       // $set is an alias for $addFields (MongoDB 4.2+)
+	"$unset": true,     // $unset removes fields (safe, read-only transform)
+	"$unsetField": true,
+	"$setField": true,
+	"$replaceRoot": true,
+	"$replaceWith": true, // alias for $replaceRoot
+	"$setWindowFields": true,
+
+	// Sorting & pagination
+	"$sort": true,
+	"$limit": true,
+	"$skip": true,
+
+	// Unwinding arrays
+	"$unwind": true,
+
+	// Joining collections (read-only lookup)
+	"$lookup": true,
+	"$graphLookup": true,
+
+	// Faceted search / multiple pipelines
+	"$facet": true,
+
+	// Statistical / geo
+	"$geoNear": true,
+	"$near": true,
+	"$nearSphere": true,
+	"$sample": true,
+	"$search": true,
+	"$searchMeta": true,
+	"$vectorSearch": true,
+
+	// Date / expression helpers (used inside stages, but also valid as stages in some contexts)
+	"$documents": true,
+	"$sortArray": true,
+	"$reduce": true,
+	"$map": true,
+	"$filter": true,
+
+	// Collation / plan hints (meta directives)
+	"$collStats": true,
+	"$indexStats": true,
+	"$planCacheStats": true,
+}
+
+// blockedAggStages are explicitly blocked stages that would modify data or pose security risk.
+// Even if someone tries to use them, they will be caught as dangerous.
+var blockedAggStages = map[string]bool{
+	"$out":            true, // writes to collection
+	"$merge":          true, // writes to collection
+	"$currentOp":      true, // exposes system operations
+	"$listLocalSessions": true,
+	"$listSessions":   true,
+	"$changeStream":   true,
 }
 
 // ParseMongo parses a MongoDB command JSON body and returns structured result.
@@ -71,7 +137,11 @@ func ParseMongo(body string) (*MongoParseResult, error) {
 			if stageMap, ok := stage.(map[string]interface{}); ok {
 				for key := range stageMap {
 					result.PipelineStages = append(result.PipelineStages, key)
-					if !allowedAggStages[key] {
+					// Check if stage is in the explicitly blocked list
+					if blockedAggStages[key] {
+						result.HasDangerousStage = true
+					} else if !allowedAggStages[key] {
+						// Unknown stages are also treated as dangerous for safety
 						result.HasDangerousStage = true
 					}
 				}
