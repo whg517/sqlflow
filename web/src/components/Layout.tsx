@@ -23,6 +23,7 @@ import {
   Moon,
   BarChart3,
   ShieldAlert,
+  Code2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -253,6 +254,15 @@ export default function Layout() {
             to="/tokens"
             icon={Key}
             label="API Token"
+            collapsed={collapsed}
+            navLinkClass={navLinkClass}
+          />
+
+          {/* SQL Templates */}
+          <NavItem
+            to="/sql-templates"
+            icon={Code2}
+            label="SQL 模板"
             collapsed={collapsed}
             navLinkClass={navLinkClass}
           />

@@ -61,6 +61,10 @@ const PermRequestPage = lazyPage(() => import("@/pages/PermRequestPage"), {
   title: "临时权限页面出现了问题",
 });
 
+const SQLTemplatePage = lazyPage(() => import("@/pages/SQLTemplatePage"), {
+  title: "SQL 模板页面出现了问题",
+});
+
 // ── App ─────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -91,6 +95,7 @@ function App() {
             <Route path="/settings/ai-config" element={<SettingsPage />} />
             <Route path="/tokens" element={<TokenPage />} />
             <Route path="/permission-requests" element={<PermRequestPage />} />
+            <Route path="/sql-templates" element={<SQLTemplatePage />} />
             <Route path="/403" element={<ErrorPage code={403} />} />
             <Route path="/404" element={<ErrorPage code={404} />} />
             <Route path="*" element={<Navigate to="/" replace />} />

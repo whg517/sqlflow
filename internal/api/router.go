@@ -15,7 +15,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, db *sql.DB, cfg *config.Config) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, db *sql.DB, cfg *config.Config) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -58,6 +58,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	tokenHandler := handler.NewTokenHandler(tokenSvc)
 	reportHandler := handler.NewAuditReportHandler(reportSvc)
 	permReqHandler := handler.NewPermReqHandler(permReqSvc)
+	sqlTemplateHandler := handler.NewSQLTemplateHandler(templateSvc)
 
 	// Public routes
 	e.POST("/api/auth/login", userHandler.Login)
@@ -113,6 +114,14 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.POST("/api/git-links", gitHandler.CreateGitLink)
 	authGroup.GET("/api/git-links", gitHandler.ListGitLinks)
 	authGroup.DELETE("/api/git-links/:id", gitHandler.DeleteGitLink)
+
+	// SQL Template management (authenticated users)
+	authGroup.POST("/api/sql-templates", sqlTemplateHandler.CreateTemplate)
+	authGroup.GET("/api/sql-templates", sqlTemplateHandler.ListTemplates)
+	authGroup.GET("/api/sql-templates/:id", sqlTemplateHandler.GetTemplate)
+	authGroup.PUT("/api/sql-templates/:id", sqlTemplateHandler.UpdateTemplate)
+	authGroup.DELETE("/api/sql-templates/:id", sqlTemplateHandler.DeleteTemplate)
+	authGroup.POST("/api/sql-templates/:id/render", sqlTemplateHandler.RenderTemplate)
 
 	// API Token management (authenticated users manage their own tokens)
 	authGroup.POST("/api/tokens", tokenHandler.CreateToken)

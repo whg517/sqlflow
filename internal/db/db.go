@@ -607,6 +607,37 @@ CREATE TABLE IF NOT EXISTS export_tasks (
 		return fmt.Errorf("migrate export_tasks status index: %w", err)
 	}
 
+	// --- sql_templates ---
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS sql_templates (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    name        TEXT    NOT NULL,
+    description TEXT    NOT NULL DEFAULT '',
+    sql_content TEXT    NOT NULL,
+    db_type     TEXT    NOT NULL DEFAULT 'mysql',
+    category    TEXT    NOT NULL DEFAULT 'general',
+    params_json TEXT    NOT NULL DEFAULT '[]',
+    is_public   INTEGER NOT NULL DEFAULT 0,
+    created_at  DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at  DATETIME NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, name)
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate sql_templates: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_sql_templates_user ON sql_templates(user_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate sql_templates user index: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_sql_templates_category ON sql_templates(category)`)
+	if err != nil {
+		return fmt.Errorf("migrate sql_templates category index: %w", err)
+	}
+
 	return nil
 }
 

@@ -283,6 +283,21 @@ type SLANotification struct {
 	SLAConfigID      int64     `json:"sla_config_id"`
 }
 
+// SQLTemplate represents a reusable SQL template/snippet.
+type SQLTemplate struct {
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	SQLContent  string    `json:"sql_content"`
+	DBType      string    `json:"db_type"`
+	Category    string    `json:"category"`
+	ParamsJSON  string    `json:"params_json"`
+	IsPublic    bool      `json:"is_public"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 // PermissionRequestStatus represents the status of a permission request.
 type PermissionRequestStatus string
 

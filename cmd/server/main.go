@@ -142,6 +142,10 @@ func main() {
 	tokenSvc := service.NewTokenService(database.DB)
 	log.Println("api token service initialized")
 
+	// Initialize SQL template service
+	templateSvc := service.NewSQLTemplateService(database.DB)
+	log.Println("sql template service initialized")
+
 	// Seed initial admin if users table is empty
 	count, err := authSvc.UserCount(context.Background())
 	if err != nil {
@@ -162,7 +166,7 @@ func main() {
 	defer backupSvc.Stop()
 
 	// Start server
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, database.DB, cfg)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, database.DB, cfg)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server

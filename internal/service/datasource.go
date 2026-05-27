@@ -625,11 +625,8 @@ func mapPGType(pgType, udtName string) string {
 
 func buildMongoURI(host string, port int, user, password string) string {
 	if user != "" && password != "" {
-		// URL-encode credentials to prevent injection via special characters.
-		// host is NOT encoded — it's an IP or domain, QueryEscape would break dots.
-		return "mongodb://" + url.QueryEscape(user) + ":" + url.QueryEscape(password) + "@" + host + ":" + strconv.Itoa(port)
 	}
-	return "mongodb://" + host + ":" + strconv.Itoa(port)
+	return "mongodb://" + url.QueryEscape(host) + ":" + strconv.Itoa(port)
 }
 
 // parseESUrls 将逗号分隔的 ES URL 字符串解析为 []string。
