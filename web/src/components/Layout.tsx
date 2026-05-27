@@ -12,6 +12,7 @@ import {
   Bot,
   ChevronDown,
   KeyRound,
+  Key,
   User,
   PanelLeftClose,
   PanelLeft,
@@ -238,6 +239,15 @@ export default function Layout() {
               navLinkClass={navLinkClass}
             />
           )}
+
+          {/* API Token management */}
+          <NavItem
+            to="/tokens"
+            icon={Key}
+            label="API Token"
+            collapsed={collapsed}
+            navLinkClass={navLinkClass}
+          />
 
           {/* Separator */}
           <div className="my-3 border-t border-[var(--border-subtle)]" />

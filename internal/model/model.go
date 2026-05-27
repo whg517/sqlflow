@@ -190,3 +190,21 @@ type GitLink struct {
 	CreatedBy   int64        `json:"created_by"`
 	CreatedAt   time.Time    `json:"created_at"`
 }
+
+// APIToken represents a personal API token for external integrations.
+type APIToken struct {
+	ID          int64      `json:"id"`
+	UserID      int64      `json:"user_id"`
+	Username    string     `json:"username,omitempty"`
+	Name        string     `json:"name"`
+	TokenHash   string     `json:"-"`
+	TokenPrefix string     `json:"token_prefix"`
+	Scopes      string     `json:"scopes"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+	UseCount    int64      `json:"use_count"`
+	IsActive    bool       `json:"is_active"`
+	Description string     `json:"description,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}

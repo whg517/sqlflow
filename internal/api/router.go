@@ -15,7 +15,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, reportSvc *service.AuditReportService, db *sql.DB, cfg *config.Config) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, db *sql.DB, cfg *config.Config) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -55,6 +55,8 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	performanceHandler := handler.NewPerformanceHandler(historySvc)
 	gitHandler := handler.NewGitHandler(gitSvc)
+	gitHandler := handler.NewGitHandler(gitSvc)
+	tokenHandler := handler.NewTokenHandler(tokenSvc)
 	reportHandler := handler.NewAuditReportHandler(reportSvc)
 
 	// Public routes
@@ -67,8 +69,8 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	e.GET("/api/v1/auth/dingtalk/callback", dingTalkHandler.Callback)
 	e.GET("/api/v1/auth/dingtalk/enabled", dingTalkHandler.Enabled)
 
-	// Authenticated routes
-	authGroup := e.Group("", middleware.JWT(authSvc))
+	// Authenticated routes (supports both JWT and API Token)
+	authGroup := e.Group("", middleware.Auth(authSvc, tokenSvc))
 	authGroup.GET("/api/dashboard/stats", dashboardHandler.GetStats)
 	authGroup.GET("/api/auth/me", userHandler.Me)
 	authGroup.PUT("/api/auth/password", userHandler.ChangePassword)
@@ -112,8 +114,14 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.GET("/api/git-links", gitHandler.ListGitLinks)
 	authGroup.DELETE("/api/git-links/:id", gitHandler.DeleteGitLink)
 
-	// Admin-only routes
-	adminGroup := e.Group("", middleware.JWT(authSvc), middleware.Admin())
+	// API Token management (authenticated users manage their own tokens)
+	authGroup.POST("/api/tokens", tokenHandler.CreateToken)
+	authGroup.GET("/api/tokens", tokenHandler.ListMyTokens)
+	authGroup.GET("/api/tokens/stats", tokenHandler.GetTokenStats)
+	authGroup.DELETE("/api/tokens/:id", tokenHandler.RevokeMyToken)
+
+	// Admin-only routes (supports both JWT and API Token with admin scope)
+	adminGroup := e.Group("", middleware.Auth(authSvc, tokenSvc), middleware.Admin())
 	adminGroup.POST("/api/users", userHandler.CreateUser)
 	adminGroup.GET("/api/users", userHandler.ListUsers)
 	adminGroup.GET("/api/users/:id", userHandler.GetUser)
@@ -175,6 +183,10 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.PUT("/api/settings/dingtalk", notifyHandler.UpdateNotifyConfig)
 	adminGroup.POST("/api/settings/dingtalk/test", notifyHandler.TestNotify)
 	adminGroup.PUT("/api/settings/ai", notifyHandler.UpdateAIConfig)
+
+	// API Token admin management
+	adminGroup.GET("/api/admin/tokens", tokenHandler.ListAllTokens)
+	adminGroup.DELETE("/api/admin/tokens/:id", tokenHandler.RevokeAnyToken)
 
 	// Frontend SPA (must be after API routes)
 	serveFrontend(e)

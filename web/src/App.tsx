@@ -15,6 +15,7 @@ import ReportsPage from "./pages/Reports";
 import UsersPage from "./pages/Users";
 import PermissionsPage from "./pages/Permissions";
 import SettingsPage from "./pages/Settings";
+import TokenPage from "./pages/TokenPage";
 import LoginPage from "./pages/Login";
 
 function App() {
@@ -78,6 +79,14 @@ function App() {
             <Route path="/settings/datasource" element={<SettingsPage />} />
             <Route path="/settings/mask-rules" element={<SettingsPage />} />
             <Route path="/settings/ai-config" element={<SettingsPage />} />
+            <Route
+              path="/tokens"
+              element={
+                <ErrorBoundary title="Token 管理页面出现了问题">
+                  <TokenPage />
+                </ErrorBoundary>
+              }
+            />
             <Route path="/403" element={<ErrorPage code={403} />} />
             <Route path="/404" element={<ErrorPage code={404} />} />
             <Route path="*" element={<Navigate to="/" replace />} />

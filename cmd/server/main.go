@@ -121,6 +121,10 @@ func main() {
 	log.Println("git service initialized")
 	ticketSvc.SetGitService(gitSvc)
 
+	// Initialize API token service
+	tokenSvc := service.NewTokenService(database.DB)
+	log.Println("api token service initialized")
+
 	// Seed initial admin if users table is empty
 	count, err := authSvc.UserCount(context.Background())
 	if err != nil {
@@ -141,7 +145,7 @@ func main() {
 	defer backupSvc.Stop()
 
 	// Start server
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, reportSvc, database.DB, cfg)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, tokenSvc, reportSvc, database.DB, cfg)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server
