@@ -34,6 +34,13 @@ type createDatasourceRequest struct {
 	MaxIdle     int    `json:"max_idle"`
 	MaxLifetime int    `json:"max_lifetime"`
 	MaxIdleTime int    `json:"max_idle_time"`
+	// Elasticsearch 特有字段
+	ESUrls         string `json:"es_urls"`
+	ESVersion      string `json:"es_version"`
+	ESAuthType     string `json:"es_auth_type"`
+	ESApiKey       string `json:"es_api_key"`
+	ESIndexPattern string `json:"es_index_pattern"`
+	ESVerifyCerts  bool   `json:"es_verify_certs"`
 }
 
 type updateDatasourceRequest struct {
@@ -50,6 +57,13 @@ type updateDatasourceRequest struct {
 	MaxIdle     int    `json:"max_idle"`
 	MaxLifetime int    `json:"max_lifetime"`
 	MaxIdleTime int    `json:"max_idle_time"`
+	// Elasticsearch 特有字段
+	ESUrls         string `json:"es_urls"`
+	ESVersion      string `json:"es_version"`
+	ESAuthType     string `json:"es_auth_type"`
+	ESApiKey       string `json:"es_api_key"`
+	ESIndexPattern string `json:"es_index_pattern"`
+	ESVerifyCerts  bool   `json:"es_verify_certs"`
 }
 
 type datasourceResponse struct {
@@ -67,32 +81,43 @@ type datasourceResponse struct {
 	MaxLifetime int    `json:"max_lifetime"`
 	MaxIdleTime int    `json:"max_idle_time"`
 	Status      string `json:"status"`
+	// Elasticsearch 特有字段
+	ESUrls         string `json:"es_urls,omitempty"`
+	ESVersion      string `json:"es_version,omitempty"`
+	ESAuthType     string `json:"es_auth_type,omitempty"`
+	ESIndexPattern string `json:"es_index_pattern,omitempty"`
+	ESVerifyCerts  bool   `json:"es_verify_certs,omitempty"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
 
 func toDatasourceResponse(ds *model.DataSource) datasourceResponse {
 	return datasourceResponse{
-		ID:          ds.ID,
-		Name:        ds.Name,
-		Type:        ds.Type,
-		Host:        ds.Host,
-		Port:        ds.Port,
-		Username:    ds.Username,
-		Database:    ds.Database,
-		SSLMode:     ds.SSLMode,
-		SchemaName:  ds.SchemaName,
-		MaxOpen:     ds.MaxOpen,
-		MaxIdle:     ds.MaxIdle,
-		MaxLifetime: ds.MaxLifetime,
-		MaxIdleTime: ds.MaxIdleTime,
-		Status:      ds.Status,
-		CreatedAt:   ds.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:   ds.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:             ds.ID,
+		Name:           ds.Name,
+		Type:           ds.Type,
+		Host:           ds.Host,
+		Port:           ds.Port,
+		Username:       ds.Username,
+		Database:       ds.Database,
+		SSLMode:        ds.SSLMode,
+		SchemaName:     ds.SchemaName,
+		MaxOpen:        ds.MaxOpen,
+		MaxIdle:        ds.MaxIdle,
+		MaxLifetime:    ds.MaxLifetime,
+		MaxIdleTime:    ds.MaxIdleTime,
+		Status:         ds.Status,
+		ESUrls:         ds.ESUrls,
+		ESVersion:      ds.ESVersion,
+		ESAuthType:     ds.ESAuthType,
+		ESIndexPattern: ds.ESIndexPattern,
+		ESVerifyCerts:  ds.ESVerifyCerts,
+		CreatedAt:      ds.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:      ds.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
-var validDatasourceTypesMsg = "数据源类型必须是 mysql、postgresql 或 mongodb"
+var validDatasourceTypesMsg = "数据源类型必须是 mysql、postgresql、mongodb 或 elasticsearch"
 
 // CreateDatasource handles POST /api/datasources (admin).
 //
@@ -143,6 +168,12 @@ func (h *DatasourceHandler) CreateDatasource(c echo.Context) error {
 		MaxIdle:           req.MaxIdle,
 		MaxLifetime:       req.MaxLifetime,
 		MaxIdleTime:       req.MaxIdleTime,
+		ESUrls:            req.ESUrls,
+		ESVersion:         req.ESVersion,
+		ESAuthType:        req.ESAuthType,
+		ESApiKey:          req.ESApiKey,
+		ESIndexPattern:    req.ESIndexPattern,
+		ESVerifyCerts:     req.ESVerifyCerts,
 	}
 
 	if err := h.dsSvc.CreateDataSource(c.Request().Context(), ds); err != nil {
@@ -248,6 +279,12 @@ func (h *DatasourceHandler) UpdateDatasource(c echo.Context) error {
 		MaxIdle:           req.MaxIdle,
 		MaxLifetime:       req.MaxLifetime,
 		MaxIdleTime:       req.MaxIdleTime,
+		ESUrls:            req.ESUrls,
+		ESVersion:         req.ESVersion,
+		ESAuthType:        req.ESAuthType,
+		ESApiKey:          req.ESApiKey,
+		ESIndexPattern:    req.ESIndexPattern,
+		ESVerifyCerts:     req.ESVerifyCerts,
 	}
 
 	if err := h.dsSvc.UpdateDataSource(c.Request().Context(), id, ds); err != nil {

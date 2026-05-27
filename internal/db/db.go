@@ -377,6 +377,14 @@ CREATE TABLE IF NOT EXISTS comments (
 	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN sslmode TEXT DEFAULT ''`)
 	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN schema_name TEXT DEFAULT ''`)
 
+	// Elasticsearch datasource support
+	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN es_urls TEXT DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN es_version TEXT DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN es_auth_type TEXT DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN es_api_key TEXT DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN es_index_pattern TEXT DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN es_verify_certs INTEGER NOT NULL DEFAULT 1`)
+
 	// Git links table for associating tickets/audit logs with git commits and PRs.
 	_, err = db.Exec(`
 CREATE TABLE IF NOT EXISTS git_links (

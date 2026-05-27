@@ -66,6 +66,10 @@ interface DataSourceItem {
   max_open: number;
   status: string;
   created_at: string;
+  es_urls?: string;
+  es_auth_type?: string;
+  es_index_pattern?: string;
+  es_verify_certs?: boolean;
 }
 
 interface DataSourceListResponse {
@@ -97,6 +101,7 @@ const NAV_ITEMS: { key: SettingsTab; label: string; icon: typeof Database }[] =
 const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
   mysql: { label: "MySQL", cls: "bg-blue-500/20 text-blue-400" },
   mongodb: { label: "MongoDB", cls: "bg-green-500/20 text-green-400" },
+  elasticsearch: { label: "Elasticsearch", cls: "bg-orange-500/20 text-orange-400" },
 };
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
@@ -153,6 +158,12 @@ function DataSourceTab() {
     password: "",
     database: "",
     max_open: "10",
+    // ES fields
+    es_urls: "",
+    es_auth_type: "basic",
+    es_api_key: "",
+    es_index_pattern: "",
+    es_verify_certs: true,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -212,6 +223,11 @@ function DataSourceTab() {
       password: "",
       database: "",
       max_open: "10",
+      es_urls: "",
+      es_auth_type: "basic",
+      es_api_key: "",
+      es_index_pattern: "",
+      es_verify_certs: true,
     });
     setErrors({});
     setDialogOpen(true);
@@ -228,6 +244,11 @@ function DataSourceTab() {
       password: "",
       database: ds.database || "",
       max_open: String(ds.max_open || 10),
+      es_urls: ds.es_urls || "",
+      es_auth_type: ds.es_auth_type || "basic",
+      es_api_key: "",
+      es_index_pattern: ds.es_index_pattern || "",
+      es_verify_certs: ds.es_verify_certs ?? true,
     });
     setErrors({});
     setDialogOpen(true);
@@ -237,12 +258,19 @@ function DataSourceTab() {
     const errs: Record<string, string> = {};
     const n = validateName(form.name);
     if (n) errs.name = n;
-    const h = validateHost(form.host);
-    if (h) errs.host = h;
-    const p = validatePort(form.port);
-    if (p) errs.port = p;
-    if (!form.username.trim()) errs.username = "请输入用户名";
-    if (!editingId && !form.password) errs.password = "请输入密码";
+    if (form.type === "elasticsearch") {
+      if (!form.es_urls.trim()) errs.es_urls = "请输入 Elasticsearch 节点地址";
+    } else {
+      const h = validateHost(form.host);
+      if (h) errs.host = h;
+      const p = validatePort(form.port);
+      if (p) errs.port = p;
+    }
+    if (form.type !== "elasticsearch" || form.es_auth_type !== "none") {
+      if (!form.username.trim() && form.es_auth_type !== "api_key") errs.username = "请输入用户名";
+    }
+    if (!editingId && !form.password && form.type !== "elasticsearch") errs.password = "请输入密码";
+    if (!editingId && !form.password && form.type === "elasticsearch" && form.es_auth_type === "basic") errs.password = "请输入密码";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -251,7 +279,7 @@ function DataSourceTab() {
     e.preventDefault();
     if (!validate()) return;
     setSubmitting(true);
-    const body = {
+    const body: Record<string, unknown> = {
       name: form.name.trim(),
       type: form.type,
       host: form.host.trim(),
@@ -261,6 +289,17 @@ function DataSourceTab() {
       database: form.database.trim(),
       max_open: Number(form.max_open) || 10,
     };
+    if (form.type === "elasticsearch") {
+      body.es_urls = form.es_urls.trim();
+      body.es_auth_type = form.es_auth_type;
+      if (form.es_auth_type === "api_key" && form.es_api_key) {
+        body.es_api_key = form.es_api_key;
+      }
+      if (form.es_index_pattern) {
+        body.es_index_pattern = form.es_index_pattern.trim();
+      }
+      body.es_verify_certs = form.es_verify_certs;
+    }
     try {
       if (editingId) {
         await api.put<ApiResponse>(`/datasources/${editingId}`, body);
@@ -506,6 +545,7 @@ function DataSourceTab() {
                   <SelectContent>
                     <SelectItem value="mysql">MySQL</SelectItem>
                     <SelectItem value="mongodb">MongoDB</SelectItem>
+                    <SelectItem value="elasticsearch">Elasticsearch</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -601,6 +641,99 @@ function DataSourceTab() {
                 className="w-32 border-[var(--border-default)] bg-[var(--bg-elevated)]"
               />
             </div>
+
+            {/* Elasticsearch specific fields */}
+            {form.type === "elasticsearch" && (
+              <div className="space-y-3 rounded-lg border border-orange-500/20 bg-orange-500/5 p-3">
+                <div className="text-xs font-medium text-orange-400">
+                  Elasticsearch 配置
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[var(--text-secondary)]">
+                    节点地址
+                  </Label>
+                  <Input
+                    value={form.es_urls}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, es_urls: e.target.value }))
+                    }
+                    placeholder="http://localhost:9200, http://es2:9200"
+                    className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
+                  />
+                  {errors.es_urls && (
+                    <p className="text-xs text-red-400">{errors.es_urls}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[var(--text-secondary)]">
+                    认证方式
+                  </Label>
+                  <Select
+                    value={form.es_auth_type}
+                    onValueChange={(v) =>
+                      setForm((f) => ({ ...f, es_auth_type: v }))
+                    }
+                  >
+                    <SelectTrigger className="border-[var(--border-default)] bg-[var(--bg-elevated)]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="basic">Basic Auth</SelectItem>
+                      <SelectItem value="api_key">API Key</SelectItem>
+                      <SelectItem value="none">无认证</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {form.es_auth_type === "api_key" && (
+                  <div className="space-y-1.5">
+                    <Label className="text-[var(--text-secondary)]">
+                      API Key
+                    </Label>
+                    <Input
+                      type="password"
+                      value={form.es_api_key}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          es_api_key: e.target.value,
+                        }))
+                      }
+                      placeholder="API Key"
+                      className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
+                    />
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label className="text-[var(--text-secondary)]">
+                    默认索引模式
+                  </Label>
+                  <Input
+                    value={form.es_index_pattern}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        es_index_pattern: e.target.value,
+                      }))
+                    }
+                    placeholder="logs-* (可选)"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    checked={form.es_verify_certs}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        es_verify_certs: e.target.checked,
+                      }))
+                    }
+                  />
+                  验证 SSL 证书
+                </label>
+              </div>
+            )}
+
             <DialogFooter>
               <Button
                 type="button"

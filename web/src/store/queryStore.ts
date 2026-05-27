@@ -28,6 +28,9 @@ export interface QueryTab {
   aiReviewResult: AIReviewResult | null;
   aiReviewContent: string;
   aiReviewError: string | null;
+  // Elasticsearch-specific fields
+  esIndexPattern: string;
+  esQueryBody: string;
 }
 
 interface QueryStore {
@@ -74,6 +77,11 @@ interface QueryStore {
   appendAIReviewContent: (id: string, chunk: string) => void;
   setAIReviewError: (id: string, error: string | null) => void;
   clearAIReview: (id: string) => void;
+  // Elasticsearch actions
+  updateESField: (
+    id: string,
+    field: Partial<Pick<QueryTab, "esIndexPattern" | "esQueryBody">>,
+  ) => void;
 
   // Layout
   setSplitRatio: (ratio: number) => void;
@@ -103,6 +111,8 @@ function createTab(): QueryTab {
     aiReviewResult: null,
     aiReviewContent: "",
     aiReviewError: null,
+    esIndexPattern: "",
+    esQueryBody: "",
   };
 }
 
@@ -142,6 +152,8 @@ export const useQueryStore = create<QueryStore>((set) => ({
       aiReviewResult: null,
       aiReviewContent: "",
       aiReviewError: null,
+      esIndexPattern: "",
+      esQueryBody: "",
     },
   ],
   activeTabId: INITIAL_TAB_ID,
@@ -304,4 +316,11 @@ export const useQueryStore = create<QueryStore>((set) => ({
     set({ splitRatio: ratio });
   },
   setHistoryOpen: (open) => set({ historyOpen: open }),
+
+  updateESField: (id, fields) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id ? { ...t, ...fields, dirty: true } : t,
+      ),
+    })),
 }));

@@ -3,13 +3,16 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	es "github.com/elastic/go-elasticsearch/v8"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -171,6 +174,8 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 		result, err = s.executePostgreSQL(ctx, datasourceID, database, sqlContent, ds, password, pgPoolCfg, defaultRowLimit)
 	case "mongodb":
 		result, err = s.executeMongoDB(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, defaultRowLimit)
+	case "elasticsearch":
+		result, err = s.executeElasticsearch(ctx, datasourceID, ds, password, sqlContent, defaultRowLimit)
 	default:
 		return nil, ErrDatasourceType
 	}
@@ -861,4 +866,242 @@ func truncateSQL(sql string) string {
 		return sql[:100]
 	}
 	return sql
+}
+
+// esMaxSize ES 查询最大返回条数。
+const esMaxSize = 1000
+
+// esDefaultSize ES 查询默认返回条数。
+const esDefaultSize = 100
+
+// executeElasticsearch 执行 Elasticsearch _search 或 _count 查询。
+// sqlContent 为 JSON 格式: {"index": "my-index-*", "operation": "search|count", "body": {"query": {...}}}
+// operation 默认为 "search"，仅允许 "search" 和 "count" 两种操作。
+func (s *QueryService) executeElasticsearch(ctx context.Context, datasourceID int64, ds *model.DataSource, password, sqlContent string, rowLimit int) (*QueryResult, error) {
+	// 解析请求
+	var req sqlparser.ESQueryRequest
+	if err := json.Unmarshal([]byte(sqlContent), &req); err != nil {
+		return nil, fmt.Errorf("解析 Elasticsearch 查询失败: %w", err)
+	}
+
+	// 验证操作类型
+	op := strings.ToLower(strings.TrimSpace(req.Operation))
+	if op == "" {
+		op = "search"
+	}
+	if op != "search" && op != "count" {
+		return nil, fmt.Errorf("不允许的 ES 操作类型: %s，仅支持 search 和 count", op)
+	}
+
+	index := strings.TrimSpace(req.Index)
+	if index == "" {
+		// 尝试使用数据源的默认索引模式
+		index = ds.ESIndexPattern
+	}
+	if index == "" {
+		return nil, fmt.Errorf("Elasticsearch 查询必须指定 index")
+	}
+
+	// 解析 body，强制注入超时和 size 限制
+	var bodyMap map[string]interface{}
+	if len(req.Body) > 0 {
+		if err := json.Unmarshal(req.Body, &bodyMap); err != nil {
+			return nil, fmt.Errorf("解析 Elasticsearch body 失败: %w", err)
+		}
+	}
+	if bodyMap == nil {
+		bodyMap = make(map[string]interface{})
+	}
+
+	// 强制注入 timeout
+	bodyMap["timeout"] = "30s"
+
+	// 限制 size
+	if sizeVal, ok := bodyMap["size"]; ok {
+		if sizeNum, ok := toFloat64(sizeVal); ok {
+			if sizeNum > float64(esMaxSize) {
+				bodyMap["size"] = float64(esMaxSize)
+			}
+		}
+	} else {
+		bodyMap["size"] = float64(esDefaultSize)
+	}
+
+	// 获取 ES 连接
+	urls := parseESUrls(ds.ESUrls)
+	if len(urls) == 0 {
+		return nil, fmt.Errorf("Elasticsearch 数据源未配置连接地址")
+	}
+
+	// 解密 ES API Key（如果使用 API Key 认证）
+	esApiKey := ""
+	if ds.ESApiKey != "" {
+		dec, err := crypto.Decrypt(ds.ESApiKey, s.encryptionKey)
+		if err != nil {
+			return nil, fmt.Errorf("解密 ES API Key 失败: %w", err)
+		}
+		esApiKey = dec
+	}
+
+	client, err := s.connMgr.GetElasticsearch(ctx, datasourceID, urls, ds.ESAuthType, ds.Username, password, esApiKey, ds.ESVerifyCerts)
+	if err != nil {
+		return nil, fmt.Errorf("连接 Elasticsearch 失败: %w", err)
+	}
+
+	// 序列化 body
+	bodyJSON, err := json.Marshal(bodyMap)
+	if err != nil {
+		return nil, fmt.Errorf("序列化 Elasticsearch 请求失败: %w", err)
+	}
+
+	start := time.Now()
+
+	// 根据操作类型执行不同的 ES API
+	switch op {
+	case "count":
+		return s.executeESCount(ctx, client, index, bodyJSON, start)
+	default: // "search"
+		return s.executeESSearch(ctx, client, index, bodyJSON, start)
+	}
+}
+
+// executeESSearch 执行 ES _search 并转换为标准 QueryResult.
+func (s *QueryService) executeESSearch(ctx context.Context, client *es.Client, index string, bodyJSON []byte, start time.Time) (*QueryResult, error) {
+	searchResp, err := client.Search(
+		client.Search.WithContext(ctx),
+		client.Search.WithIndex(index),
+		client.Search.WithBody(strings.NewReader(string(bodyJSON))),
+	)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, ErrSQLTimeout
+		}
+		return nil, fmt.Errorf("执行 Elasticsearch _search 失败: %w", err)
+	}
+	defer searchResp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(searchResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取 Elasticsearch 响应失败: %w", err)
+	}
+
+	if searchResp.IsError() {
+		return nil, fmt.Errorf("Elasticsearch 返回错误 (%d): %s", searchResp.StatusCode, string(bodyBytes))
+	}
+
+	// 解析响应
+	var esResp struct {
+		Hits struct {
+			Total struct {
+				Value int64 `json:"value"`
+			} `json:"total"`
+			Hits []struct {
+				Index  string                 `json:"_index"`
+				ID     string                 `json:"_id"`
+				Score  *float64               `json:"_score"`
+				Source map[string]interface{} `json:"_source"`
+			} `json:"hits"`
+		} `json:"hits"`
+	}
+
+	if err := json.Unmarshal(bodyBytes, &esResp); err != nil {
+		return nil, fmt.Errorf("解析 Elasticsearch 响应失败: %w", err)
+	}
+
+	// 转换 hits 为标准 QueryResult
+	resultRows := make([]map[string]interface{}, 0, len(esResp.Hits.Hits))
+	columnSet := make(map[string]bool)
+
+	for _, hit := range esResp.Hits.Hits {
+		row := make(map[string]interface{})
+		row["_id"] = hit.ID
+		row["_index"] = hit.Index
+		if hit.Score != nil {
+			row["_score"] = *hit.Score
+		}
+		for k, v := range hit.Source {
+			row[k] = v
+		}
+		for k := range row {
+			columnSet[k] = true
+		}
+		resultRows = append(resultRows, row)
+	}
+
+	// 提取列名（保持顺序: _id, _index, _score, 其余按出现顺序）
+	columns := []string{"_id", "_index", "_score"}
+	for k := range columnSet {
+		if k != "_id" && k != "_index" && k != "_score" {
+			columns = append(columns, k)
+		}
+	}
+
+	elapsed := time.Since(start).Milliseconds()
+
+	return &QueryResult{
+		Columns:       columns,
+		Rows:          resultRows,
+		Total:         esResp.Hits.Total.Value,
+		ExecutionTime: elapsed,
+		AffectedRows:  0,
+	}, nil
+}
+
+// executeESCount 执行 ES _count 并转换为标准 QueryResult.
+func (s *QueryService) executeESCount(ctx context.Context, client *es.Client, index string, bodyJSON []byte, start time.Time) (*QueryResult, error) {
+	countResp, err := client.Count(
+		client.Count.WithContext(ctx),
+		client.Count.WithIndex(index),
+		client.Count.WithBody(strings.NewReader(string(bodyJSON))),
+	)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, ErrSQLTimeout
+		}
+		return nil, fmt.Errorf("执行 Elasticsearch _count 失败: %w", err)
+	}
+	defer countResp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(countResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取 Elasticsearch 响应失败: %w", err)
+	}
+
+	if countResp.IsError() {
+		return nil, fmt.Errorf("Elasticsearch 返回错误 (%d): %s", countResp.StatusCode, string(bodyBytes))
+	}
+
+	var countResult struct {
+		Count int64 `json:"count"`
+	}
+	if err := json.Unmarshal(bodyBytes, &countResult); err != nil {
+		return nil, fmt.Errorf("解析 Elasticsearch _count 响应失败: %w", err)
+	}
+
+	elapsed := time.Since(start).Milliseconds()
+
+	return &QueryResult{
+		Columns:       []string{"count"},
+		Rows:          []map[string]interface{}{{"count": countResult.Count}},
+		Total:         1,
+		ExecutionTime: elapsed,
+		AffectedRows:  0,
+	}, nil
+}
+
+// toFloat64 将 interface{} 转换为 float64。
+func toFloat64(v interface{}) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case json.Number:
+		f, err := n.Float64()
+		return f, err == nil
+	default:
+		return 0, false
+	}
 }

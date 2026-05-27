@@ -20,6 +20,7 @@ import {
   executeQuery,
   streamAIReview,
   buildMongoSql,
+  buildESQuerySql,
   type MongoQueryBody,
   type AIReviewResult,
 } from "@/api/query";
@@ -31,6 +32,7 @@ import {
 } from "@/hooks/useSchemaCompletion";
 import SqlEditor from "./components/SqlEditor";
 import MongoEditor from "./components/MongoEditor";
+import ElasticEditor from "./components/ElasticEditor";
 import ResultTable from "./components/ResultTable";
 import QueryTabs from "./components/QueryTabs";
 import HistoryPanel from "./components/HistoryPanel";
@@ -68,6 +70,7 @@ export default function QueryPage() {
   const setTabExecuting = useQueryStore((s) => s.setTabExecuting);
   const setHistoryOpen = useQueryStore((s) => s.setHistoryOpen);
   const updateMongoField = useQueryStore((s) => s.updateMongoField);
+  const updateESField = useQueryStore((s) => s.updateESField);
   const setAIReviewStatus = useQueryStore((s) => s.setAIReviewStatus);
   const setAIReviewResult = useQueryStore((s) => s.setAIReviewResult);
   const appendAIReviewContent = useQueryStore((s) => s.appendAIReviewContent);
@@ -90,6 +93,7 @@ export default function QueryPage() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
   const isMongo = activeTab?.datasourceType === "mongodb";
+  const isES = activeTab?.datasourceType === "elasticsearch";
 
   // Load datasources
   useEffect(() => {
@@ -218,6 +222,15 @@ export default function QueryPage() {
       const mongoSql = buildMongoQuerySql();
       if (!mongoSql) return;
       sql = mongoSql;
+    } else if (isES) {
+      if (!activeTab.esIndexPattern.trim()) {
+        toast.error("请输入 Index Pattern");
+        return;
+      }
+      sql = buildESQuerySql(
+        activeTab.esIndexPattern.trim(),
+        activeTab.esQueryBody,
+      );
     } else {
       if (!activeTab.sql.trim()) return;
       sql = activeTab.sql.trim();
@@ -263,6 +276,7 @@ export default function QueryPage() {
   }, [
     activeTab,
     isMongo,
+    isES,
     buildMongoQuerySql,
     clearAIReview,
     setAIReviewStatus,
@@ -300,20 +314,34 @@ export default function QueryPage() {
   // Handle confirmed execute (medium risk)
   const handleConfirmExecute = useCallback(() => {
     if (!activeTab) return;
-    const sql = isMongo ? buildMongoQuerySql() || "" : activeTab.sql.trim();
+    let sql: string;
+    if (isMongo) {
+      sql = buildMongoQuerySql() || "";
+    } else if (isES) {
+      sql = buildESQuerySql(activeTab.esIndexPattern.trim(), activeTab.esQueryBody);
+    } else {
+      sql = activeTab.sql.trim();
+    }
     if (sql) {
       doExecute(sql);
     }
-  }, [activeTab, isMongo, buildMongoQuerySql, doExecute]);
+  }, [activeTab, isMongo, isES, buildMongoQuerySql, doExecute]);
 
   // Handle auto-execute trigger from low-risk
   const handleAutoExecute = useCallback(() => {
     if (!activeTab) return;
-    const sql = isMongo ? buildMongoQuerySql() || "" : activeTab.sql.trim();
+    let sql: string;
+    if (isMongo) {
+      sql = buildMongoQuerySql() || "";
+    } else if (isES) {
+      sql = buildESQuerySql(activeTab.esIndexPattern.trim(), activeTab.esQueryBody);
+    } else {
+      sql = activeTab.sql.trim();
+    }
     if (sql) {
       doExecute(sql);
     }
-  }, [activeTab, isMongo, buildMongoQuerySql, doExecute]);
+  }, [activeTab, isMongo, isES, buildMongoQuerySql, doExecute]);
 
   // Handle submit ticket (high risk)
   const handleSubmitTicket = useCallback(() => {
@@ -336,7 +364,7 @@ export default function QueryPage() {
     [activeTab, clearAIReview],
   );
 
-  const currentSql = isMongo ? "" : (activeTab?.sql ?? "");
+  const currentSql = isMongo || isES ? "" : (activeTab?.sql ?? "");
 
   return (
     <div className="flex h-full flex-col">
@@ -362,7 +390,7 @@ export default function QueryPage() {
               <SelectItem key={ds.id} value={String(ds.id)}>
                 <span className="flex items-center gap-2">
                   <span
-                    className={`inline-block h-1.5 w-1.5 rounded-full ${ds.type === "mysql" ? "bg-blue-400" : "bg-green-400"}`}
+                    className={`inline-block h-1.5 w-1.5 rounded-full ${ds.type === "mysql" ? "bg-blue-400" : ds.type === "elasticsearch" ? "bg-orange-400" : "bg-green-400"}`}
                   />
                   {ds.name}
                   <span className="text-[var(--text-muted)]">({ds.type})</span>
@@ -391,6 +419,11 @@ export default function QueryPage() {
         {isMongo && (
           <span className="rounded bg-green-500/20 px-1.5 py-0.5 text-[10px] font-medium text-green-400">
             MongoDB
+          </span>
+        )}
+        {isES && (
+          <span className="rounded bg-orange-500/20 px-1.5 py-0.5 text-[10px] font-medium text-orange-400">
+            Elasticsearch
           </span>
         )}
 
@@ -457,6 +490,19 @@ export default function QueryPage() {
                     ? effectiveSchemaData.tables
                     : []
                 }
+              />
+            ) : isES ? (
+              <ElasticEditor
+                key={`es-${activeTab?.id}`}
+                indexPattern={activeTab?.esIndexPattern ?? ""}
+                queryBody={activeTab?.esQueryBody ?? ""}
+                onIndexPatternChange={(v) =>
+                  updateESField(activeTab.id, { esIndexPattern: v })
+                }
+                onQueryBodyChange={(v) =>
+                  updateESField(activeTab.id, { esQueryBody: v })
+                }
+                onExecute={handleExecute}
               />
             ) : (
               <SqlEditor

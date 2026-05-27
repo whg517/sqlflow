@@ -190,6 +190,22 @@ export function buildMongoSql(body: MongoQueryBody): string {
   return JSON.stringify(body, null, 2);
 }
 
+export interface ESQueryBody {
+  index: string;
+  body: Record<string, unknown>;
+}
+
+export function buildESQuerySql(index: string, body: string): string {
+  let parsedBody: Record<string, unknown>;
+  try {
+    parsedBody = JSON.parse(body);
+  } catch {
+    parsedBody = { match_all: {} };
+  }
+  const esBody: ESQueryBody = { index, body: parsedBody };
+  return JSON.stringify(esBody, null, 2);
+}
+
 export async function exportQuery(req: QueryExportRequest): Promise<void> {
   const token = localStorage.getItem("token");
   const headers: Record<string, string> = {

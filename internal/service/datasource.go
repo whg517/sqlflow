@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/model"
@@ -18,10 +19,10 @@ var (
 	ErrDatasourceNotFound    = errors.New("数据源不存在")
 	ErrDatasourceNameExists  = errors.New("数据源名称已存在")
 	ErrDatasourceDisabled    = errors.New("数据源已禁用")
-	ErrInvalidDatasourceType = errors.New("数据源类型必须是 mysql、postgresql 或 mongodb")
+	ErrInvalidDatasourceType = errors.New("数据源类型必须是 mysql、postgresql、mongodb 或 elasticsearch")
 )
 
-var ValidDatasourceTypes = map[string]bool{"mysql": true, "postgresql": true, "mongodb": true}
+var ValidDatasourceTypes = map[string]bool{"mysql": true, "postgresql": true, "mongodb": true, "elasticsearch": true}
 
 // DatasourceService handles datasource management logic.
 type DatasourceService struct {
@@ -39,6 +40,13 @@ func NewDatasourceService(db *sql.DB, encryptionKey string, connMgr *connpool.Ma
 func (s *DatasourceService) CreateDataSource(ctx context.Context, ds *model.DataSource) error {
 	if !ValidDatasourceTypes[ds.Type] {
 		return ErrInvalidDatasourceType
+	}
+
+	// ES security: enforce HTTPS
+	if ds.Type == "elasticsearch" {
+		if err := validateESURLs(ds.ESUrls); err != nil {
+			return err
+		}
 	}
 
 	encrypted, err := crypto.Encrypt(ds.PasswordEncrypted, s.encryptionKey)
@@ -63,11 +71,22 @@ func (s *DatasourceService) CreateDataSource(ctx context.Context, ds *model.Data
 		ds.Status = "active"
 	}
 
+	// 加密 ES API Key（如果使用 API Key 认证）
+	encryptedESApiKey := ""
+	if ds.ESApiKey != "" {
+		enc, err := crypto.Encrypt(ds.ESApiKey, s.encryptionKey)
+		if err != nil {
+			return fmt.Errorf("encrypt es_api_key: %w", err)
+		}
+		encryptedESApiKey = enc
+	}
+
 	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_api_key, es_index_pattern, es_verify_certs)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database, ds.SSLMode, ds.SchemaName,
 		ds.MaxOpen, ds.MaxIdle, ds.MaxLifetime, ds.MaxIdleTime, ds.Status,
+		ds.ESUrls, ds.ESVersion, ds.ESAuthType, encryptedESApiKey, ds.ESIndexPattern, ds.ESVerifyCerts,
 	)
 	if err != nil {
 		return fmt.Errorf("insert datasource: %w", err)
@@ -85,7 +104,7 @@ func (s *DatasourceService) CreateDataSource(ctx context.Context, ds *model.Data
 // ListDataSources returns all datasources without encrypted passwords.
 func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSource, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, type, host, port, username, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, created_at, updated_at
+		`SELECT id, name, type, host, port, username, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_index_pattern, es_verify_certs, created_at, updated_at
 		 FROM datasources ORDER BY id`,
 	)
 	if err != nil {
@@ -98,7 +117,9 @@ func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSo
 		var ds model.DataSource
 		if err := rows.Scan(&ds.ID, &ds.Name, &ds.Type, &ds.Host, &ds.Port, &ds.Username, &ds.Database,
 			&ds.SSLMode, &ds.SchemaName,
-			&ds.MaxOpen, &ds.MaxIdle, &ds.MaxLifetime, &ds.MaxIdleTime, &ds.Status, &ds.CreatedAt, &ds.UpdatedAt); err != nil {
+			&ds.MaxOpen, &ds.MaxIdle, &ds.MaxLifetime, &ds.MaxIdleTime, &ds.Status,
+			&ds.ESUrls, &ds.ESVersion, &ds.ESAuthType, &ds.ESIndexPattern, &ds.ESVerifyCerts,
+			&ds.CreatedAt, &ds.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan datasource: %w", err)
 		}
 		list = append(list, ds)
@@ -110,11 +131,13 @@ func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSo
 func (s *DatasourceService) GetDataSource(ctx context.Context, id int64) (*model.DataSource, error) {
 	ds := &model.DataSource{}
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, created_at, updated_at
+		`SELECT id, name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_api_key, es_index_pattern, es_verify_certs, created_at, updated_at
 		 FROM datasources WHERE id = ?`, id,
 	).Scan(&ds.ID, &ds.Name, &ds.Type, &ds.Host, &ds.Port, &ds.Username, &ds.PasswordEncrypted, &ds.Database,
 		&ds.SSLMode, &ds.SchemaName,
-		&ds.MaxOpen, &ds.MaxIdle, &ds.MaxLifetime, &ds.MaxIdleTime, &ds.Status, &ds.CreatedAt, &ds.UpdatedAt)
+		&ds.MaxOpen, &ds.MaxIdle, &ds.MaxLifetime, &ds.MaxIdleTime, &ds.Status,
+		&ds.ESUrls, &ds.ESVersion, &ds.ESAuthType, &ds.ESApiKey, &ds.ESIndexPattern, &ds.ESVerifyCerts,
+		&ds.CreatedAt, &ds.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDatasourceNotFound
@@ -128,6 +151,13 @@ func (s *DatasourceService) GetDataSource(ctx context.Context, id int64) (*model
 func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *model.DataSource) error {
 	if !ValidDatasourceTypes[ds.Type] {
 		return ErrInvalidDatasourceType
+	}
+
+	// ES security: enforce HTTPS
+	if ds.Type == "elasticsearch" {
+		if err := validateESURLs(ds.ESUrls); err != nil {
+			return err
+		}
 	}
 
 	// Get existing datasource for pool invalidation
@@ -148,11 +178,25 @@ func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *
 		encrypted = existing.PasswordEncrypted
 	}
 
+	// ES API Key: 如果提供了新的则加密，否则保留现有值
+	var encryptedESApiKey string
+	if ds.ESApiKey != "" {
+		enc, err := crypto.Encrypt(ds.ESApiKey, s.encryptionKey)
+		if err != nil {
+			return fmt.Errorf("encrypt es_api_key: %w", err)
+		}
+		encryptedESApiKey = enc
+	} else {
+		encryptedESApiKey = existing.ESApiKey
+	}
+
 	result, err := s.db.ExecContext(ctx,
 		`UPDATE datasources SET name=?, type=?, host=?, port=?, username=?, password_encrypted=?, database=?, sslmode=?, schema_name=?,
-		 max_open=?, max_idle=?, max_lifetime=?, max_idle_time=?, updated_at=datetime('now') WHERE id=?`,
+		 max_open=?, max_idle=?, max_lifetime=?, max_idle_time=?, es_urls=?, es_version=?, es_auth_type=?, es_api_key=?, es_index_pattern=?, es_verify_certs=?, updated_at=datetime('now') WHERE id=?`,
 		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database, ds.SSLMode, ds.SchemaName,
-		ds.MaxOpen, ds.MaxIdle, ds.MaxLifetime, ds.MaxIdleTime, id,
+		ds.MaxOpen, ds.MaxIdle, ds.MaxLifetime, ds.MaxIdleTime,
+		ds.ESUrls, ds.ESVersion, ds.ESAuthType, encryptedESApiKey, ds.ESIndexPattern, ds.ESVerifyCerts,
+		id,
 	)
 	if err != nil {
 		return fmt.Errorf("update datasource: %w", err)
@@ -178,11 +222,12 @@ func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *
 	if ds.Type == "mongodb" || existing.Type == "mongodb" {
 		s.connMgr.RemoveMongo(id)
 	}
+	if ds.Type == "elasticsearch" || existing.Type == "elasticsearch" {
+		s.connMgr.RemoveElasticsearch(id)
+	}
 
 	return nil
 }
-
-// DisableDataSource marks a datasource as disabled.
 func (s *DatasourceService) DisableDataSource(ctx context.Context, id int64) error {
 	// Get existing datasource for pool cleanup
 	existing, err := s.GetDataSource(ctx, id)
@@ -210,6 +255,9 @@ func (s *DatasourceService) DisableDataSource(ctx context.Context, id int64) err
 	}
 	if existing.Type == "mongodb" {
 		s.connMgr.RemoveMongo(id)
+	}
+	if existing.Type == "elasticsearch" {
+		s.connMgr.RemoveElasticsearch(id)
 	}
 
 	return nil
@@ -240,6 +288,20 @@ func (s *DatasourceService) TestConnection(ctx context.Context, ds *model.DataSo
 	case "mongodb":
 		uri := buildMongoURI(ds.Host, ds.Port, ds.Username, password)
 		return connpool.MongoPing(ctx, uri)
+	case "elasticsearch":
+		if err := validateESURLs(ds.ESUrls); err != nil {
+			return err
+		}
+		urls := parseESUrls(ds.ESUrls)
+		esApiKey := ""
+		if ds.ESApiKey != "" {
+			dec, err := crypto.Decrypt(ds.ESApiKey, s.encryptionKey)
+			if err != nil {
+				return fmt.Errorf("decrypt es_api_key: %w", err)
+			}
+			esApiKey = dec
+		}
+		return connpool.ElasticsearchPing(ctx, urls, ds.ESAuthType, ds.Username, password, esApiKey, ds.ESVerifyCerts)
 	default:
 		return ErrInvalidDatasourceType
 	}
@@ -568,6 +630,34 @@ func buildMongoURI(host string, port int, user, password string) string {
 		return "mongodb://" + url.QueryEscape(user) + ":" + url.QueryEscape(password) + "@" + host + ":" + strconv.Itoa(port)
 	}
 	return "mongodb://" + host + ":" + strconv.Itoa(port)
+}
+
+// parseESUrls 将逗号分隔的 ES URL 字符串解析为 []string。
+// validateESURLs checks that all ES URLs use HTTPS.
+// Returns an error if any URL uses plain HTTP (security requirement).
+func validateESURLs(raw string) error {
+	urls := parseESUrls(raw)
+	for _, u := range urls {
+		if strings.HasPrefix(u, "http://") {
+			return fmt.Errorf("Elasticsearch 连接地址必须使用 HTTPS，当前地址 %s 使用了 HTTP", u)
+		}
+	}
+	return nil
+}
+
+func parseESUrls(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	urls := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			urls = append(urls, trimmed)
+		}
+	}
+	return urls
 }
 
 // mapArrayElementType converts PostgreSQL udt_name for arrays to a readable type.

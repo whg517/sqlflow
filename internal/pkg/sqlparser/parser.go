@@ -3,6 +3,7 @@ package sqlparser
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -48,6 +49,8 @@ func ParseSQL(input string, dbType string) (*SQLParseResult, error) {
 		return parsePostgreSQLUnified(input)
 	case "mongodb", "mongo":
 		return parseMongoUnified(input)
+	case "elasticsearch", "es":
+		return parseElasticsearch(input)
 	default:
 		return nil, fmt.Errorf("unsupported database type: %s", dbType)
 	}
@@ -479,4 +482,190 @@ func isSQLKeyword(name string) bool {
 		"dual": true,
 	}
 	return keywords[name]
+}
+
+// ---------------------------------------------------------------------------
+// Elasticsearch 解析
+// ---------------------------------------------------------------------------
+
+// ESQueryRequest 前端提交的 Elasticsearch 查询请求结构。
+type ESQueryRequest struct {
+	Index     string          `json:"index"`
+	Operation string          `json:"operation"` // search | count (默认 search)
+	Body      json.RawMessage `json:"body"`
+}
+
+// esDangerousEndpoints ES 禁止访问的危险端点。
+var esDangerousEndpoints = map[string]bool{
+	"_bulk":            true,
+	"_delete_by_query": true,
+	"_update_by_query": true,
+	"_search/scroll":   true,
+	"_reindex":         true,
+	"_update":          true,
+	"_delete":          true,
+	"_mget":            true,
+	"_msearch":         true,
+	"_msearch/template": true,
+}
+
+// esAllowedOperations ES 允许的查询操作白名单。
+var esAllowedOperations = map[string]bool{
+	"search": true, // _search（默认）
+	"count":  true, // _count
+}
+
+// esAllowedBodyFields ES body 允许的顶级字段白名单。
+// 任何不在此列表中的字段将被拒绝，防止注入危险操作。
+var esAllowedBodyFields = map[string]bool{
+	// 查询
+	"query":    true,
+	"bool":     true, // 嵌套在 query 中
+	"must":     true,
+	"should":   true,
+	"filter":   true,
+	"must_not": true,
+	// 分页
+	"from": true,
+	"size": true,
+	// 排序
+	"sort": true,
+	"docvalue_fields": true,
+	// 字段选择
+	"_source":           true,
+	"stored_fields":     true,
+	// 高亮
+	"highlight": true,
+	// 聚合
+	"aggs":         true,
+	"aggregations": true,
+	// 统计
+	"track_total_hits": true,
+	"explain":          true,
+	// 超时
+	"timeout": true,
+	// 搜索后 (profile, min_score)
+	"profile":    true,
+	"min_score":  true,
+	"terminate_after": true,
+	// 预过滤
+	"pre_filter_shard_size": true,
+}
+
+// parseElasticsearch 解析 Elasticsearch 查询请求并执行安全检查。
+// 前端提交格式: {"index": "my-index-*", "body": {"query": {...}, "size": 100}}
+func parseElasticsearch(input string) (*SQLParseResult, error) {
+	result := &SQLParseResult{
+		DBType: "elasticsearch",
+	}
+
+	var req ESQueryRequest
+	if err := json.Unmarshal([]byte(input), &req); err != nil {
+		return nil, fmt.Errorf("Elasticsearch 查询格式错误，需要 JSON 格式: %w", err)
+	}
+
+	if strings.TrimSpace(req.Index) == "" {
+		return nil, fmt.Errorf("Elasticsearch 查询必须指定 index")
+	}
+
+	// 检查危险端点
+	for endpoint := range esDangerousEndpoints {
+		if strings.Contains(req.Index, endpoint) {
+			result.IsBlocked = true
+			result.BlockReason = fmt.Sprintf("禁止操作: %s", endpoint)
+			result.RiskLevel = RiskHigh
+			return result, nil
+		}
+	}
+
+	// 验证操作类型白名单
+	op := strings.ToLower(strings.TrimSpace(req.Operation))
+	if op == "" {
+		op = "search" // 默认 _search
+	}
+	if !esAllowedOperations[op] {
+		result.IsBlocked = true
+		result.BlockReason = fmt.Sprintf("不允许的操作类型: %s，仅支持: search, count", op)
+		result.RiskLevel = RiskHigh
+		return result, nil
+	}
+
+	// 解析 body，检查安全性
+	var bodyMap map[string]interface{}
+	if len(req.Body) > 0 {
+		if err := json.Unmarshal(req.Body, &bodyMap); err != nil {
+			return nil, fmt.Errorf("Elasticsearch body JSON 解析失败（请检查 JSON 格式）: %w", err)
+		}
+
+		// 检查 script 字段
+		if _, hasScript := bodyMap["script"]; hasScript {
+			result.IsBlocked = true
+			result.BlockReason = "禁止使用 script 字段"
+			result.RiskLevel = RiskHigh
+			return result, nil
+		}
+
+		// 检查嵌套 script（如 script_fields、inline）
+		if hasNestedScript(bodyMap) {
+			result.IsBlocked = true
+			result.BlockReason = "禁止使用 script 字段"
+			result.RiskLevel = RiskHigh
+			return result, nil
+		}
+
+		// 白名单校验：body 顶级字段必须在允许列表中
+		for field := range bodyMap {
+			if !esAllowedBodyFields[field] {
+				result.IsBlocked = true
+				result.BlockReason = fmt.Sprintf("不允许的查询字段: %s", field)
+				result.RiskLevel = RiskHigh
+				return result, nil
+			}
+		}
+
+		// _search/_count 查询 → OpSelect
+		result.Operation = OpSelect
+
+		// 包含 aggs → RiskMedium
+		if _, hasAggs := bodyMap["aggs"]; hasAggs {
+			result.RiskLevel = RiskMedium
+			result.Warnings = append(result.Warnings, "查询包含聚合操作，可能影响性能")
+		} else if _, hasAggregations := bodyMap["aggregations"]; hasAggregations {
+			result.RiskLevel = RiskMedium
+			result.Warnings = append(result.Warnings, "查询包含聚合操作，可能影响性能")
+		} else {
+			result.RiskLevel = RiskLow
+		}
+	} else {
+		// 无 body，视为 match_all
+		result.Operation = OpSelect
+		result.RiskLevel = RiskLow
+	}
+
+	// 提取 index pattern 作为 Tables
+	result.Tables = []string{req.Index}
+
+	return result, nil
+}
+
+// hasNestedScript 递归检查 body 中是否包含 script 相关字段。
+func hasNestedScript(m map[string]interface{}) bool {
+	for key, val := range m {
+		if key == "script" || key == "script_fields" {
+			return true
+		}
+		switch v := val.(type) {
+		case map[string]interface{}:
+			if hasNestedScript(v) {
+				return true
+			}
+		case []interface{}:
+			for _, item := range v {
+				if sub, ok := item.(map[string]interface{}); ok && hasNestedScript(sub) {
+					return true
+			}
+			}
+		}
+	}
+	return false
 }

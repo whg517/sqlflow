@@ -200,6 +200,13 @@ type DataSource struct {
 	MaxLifetime       int       `json:"max_lifetime"`
 	MaxIdleTime       int       `json:"max_idle_time"`
 	Status            string    `json:"status"`
+	// Elasticsearch 特有字段
+	ESUrls         string `json:"es_urls,omitempty"`          // ES 节点地址，逗号分隔
+	ESVersion      string `json:"es_version,omitempty"`       // ES 版本，如 "8.x"
+	ESAuthType     string `json:"es_auth_type,omitempty"`     // 认证方式: basic/api_key/none
+	ESApiKey       string `json:"-"`                           // API Key 加密存储
+	ESIndexPattern string `json:"es_index_pattern,omitempty"` // 默认索引模式
+	ESVerifyCerts  bool   `json:"es_verify_certs,omitempty"`   // 是否验证证书
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 }

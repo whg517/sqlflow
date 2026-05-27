@@ -15,12 +15,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Manager manages cached connection pools for MySQL, PostgreSQL and MongoDB datasources.
-// It reuses *sql.DB / *mongo.Client instances instead of creating new connections per query.
+// Manager manages cached connection pools for MySQL, PostgreSQL, MongoDB and Elasticsearch datasources.
+// It reuses *sql.DB / *mongo.Client / *es.TypedClient instances instead of creating new connections per query.
 type Manager struct {
-	mu       sync.RWMutex
-	sqlPools sync.Map // key: string → value: *sql.DB (MySQL + PostgreSQL)
+	mu         sync.RWMutex
+	sqlPools   sync.Map // key: string → value: *sql.DB (MySQL + PostgreSQL)
 	mongoPools sync.Map // key: string → value: *mongo.Client
+	esPools    sync.Map // key: string → value: *es.TypedClient (Elasticsearch)
 }
 
 // NewManager creates a new connection pool Manager.
@@ -114,7 +115,7 @@ func (m *Manager) InjectMongoForTest(dsID int64, uri string, client *mongo.Clien
 	m.mongoPools.Store(key, client)
 }
 
-// Close closes all cached connection pools (MySQL, PostgreSQL and MongoDB).
+// Close closes all cached connection pools (MySQL, PostgreSQL, MongoDB and Elasticsearch).
 func (m *Manager) Close() {
 	m.sqlPools.Range(func(key, value interface{}) bool {
 		_ = value.(*sql.DB).Close()
@@ -128,6 +129,12 @@ func (m *Manager) Close() {
 	m.mongoPools.Range(func(key, value interface{}) bool {
 		_ = value.(*mongo.Client).Disconnect(ctx)
 		m.mongoPools.Delete(key)
+		return true
+	})
+
+	// Elasticsearch 客户端没有显式的 Close 方法，仅清理缓存
+	m.esPools.Range(func(key, value interface{}) bool {
+		m.esPools.Delete(key)
 		return true
 	})
 }
