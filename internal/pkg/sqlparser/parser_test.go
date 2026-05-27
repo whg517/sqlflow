@@ -107,7 +107,9 @@ func TestParseSQL_CaseInsensitiveDBType(t *testing.T) {
 		{"mongodb_lower", "mongodb", true},
 		{"mongo_alias", "mongo", true},
 		{"mongodb_mixed", "MongoDB", true},
-		{"postgres_unsupported", "postgres", false},
+		{"postgres_supported", "postgres", true},
+		{"postgresql_supported", "postgresql", true},
+		{"pg_supported", "pg", true},
 		{"empty_unsupported", "", false},
 	}
 
@@ -134,7 +136,7 @@ func TestParseSQL_CaseInsensitiveDBType(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestParseSQL_UnsupportedDBType(t *testing.T) {
-	_, err := ParseSQL("SELECT 1", "postgres")
+	_, err := ParseSQL("SELECT 1", "oracle")
 	if err == nil {
 		t.Error("expected error for unsupported db type")
 	}

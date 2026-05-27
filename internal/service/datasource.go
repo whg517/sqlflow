@@ -505,7 +505,8 @@ func (s *DatasourceService) getPGColumns(ctx context.Context, ds *model.DataSour
 	}
 
 	// Map PostgreSQL data_type to simplified types for frontend display
-	query := `SELECT column_name, data_type, COALESCE(col_description(($1||'.'||$2)::regclass, ordinal_position), '') AS comment
+	// Also fetch udt_name for ARRAY types to preserve element type (e.g. "integer[]")
+	query := `SELECT column_name, data_type, udt_name, COALESCE(col_description(($1||'.'||$2)::regclass, ordinal_position), '') AS comment
 		 FROM information_schema.columns
 		 WHERE table_schema = $1 AND table_name = $2
 		 ORDER BY ordinal_position`
@@ -518,17 +519,19 @@ func (s *DatasourceService) getPGColumns(ctx context.Context, ds *model.DataSour
 	var columns []ColumnInfo
 	for rows.Next() {
 		var c ColumnInfo
-		if err := rows.Scan(&c.Name, &c.Type, &c.Comment); err != nil {
+		var udtName string
+		if err := rows.Scan(&c.Name, &c.Type, &udtName, &c.Comment); err != nil {
 			return nil, fmt.Errorf("scan column: %w", err)
 		}
-		c.Type = mapPGType(c.Type)
+		c.Type = mapPGType(c.Type, udtName)
 		columns = append(columns, c)
 	}
 	return columns, rows.Err()
 }
 
 // mapPGType normalizes PostgreSQL data_type names to user-friendly types.
-func mapPGType(pgType string) string {
+// For ARRAY types, udtName is used to preserve element type (e.g. "integer[]", "text[]").
+func mapPGType(pgType, udtName string) string {
 	switch pgType {
 	case "smallint", "integer", "bigint", "int", "int2", "int4", "int8":
 		return "integer"
@@ -551,7 +554,8 @@ func mapPGType(pgType string) string {
 	case "bytea":
 		return "binary"
 	case "ARRAY":
-		return "array"
+		// Preserve element type from udt_name (e.g. _int4 → integer[], _text → text[])
+		return mapArrayElementType(udtName)
 	default:
 		return pgType
 	}
@@ -563,4 +567,41 @@ func buildMongoURI(host string, port int, user, password string) string {
 		return "mongodb://" + url.QueryEscape(user) + ":" + url.QueryEscape(password) + "@" + host + ":" + strconv.Itoa(port)
 	}
 	return "mongodb://" + host + ":" + strconv.Itoa(port)
+}
+
+// mapArrayElementType converts PostgreSQL udt_name for arrays to a readable type.
+// PostgreSQL stores array types with a leading underscore (e.g. _int4, _text, _float8).
+func mapArrayElementType(udtName string) string {
+	if len(udtName) == 0 || udtName[0] != '_' {
+		return "array"
+	}
+	elemType := udtName[1:]
+	switch elemType {
+	case "int2":
+		return "smallint[]"
+	case "int4":
+		return "integer[]"
+	case "int8":
+		return "bigint[]"
+	case "float4":
+		return "real[]"
+	case "float8":
+		return "double precision[]"
+	case "numeric":
+		return "numeric[]"
+	case "text", "varchar", "bpchar", "char", "name":
+		return "text[]"
+	case "bool":
+		return "boolean[]"
+	case "date":
+		return "date[]"
+	case "timestamp", "timestamptz":
+		return "timestamp[]"
+	case "uuid":
+		return "uuid[]"
+	case "json", "jsonb":
+		return "json[]"
+	default:
+		return elemType + "[]"
+	}
 }

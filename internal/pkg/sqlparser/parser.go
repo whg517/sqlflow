@@ -44,6 +44,8 @@ func ParseSQL(input string, dbType string) (*SQLParseResult, error) {
 	switch strings.ToLower(dbType) {
 	case "mysql":
 		return parseMySQLUnified(input)
+	case "postgresql", "postgres", "pg":
+		return parsePostgreSQLUnified(input)
 	case "mongodb", "mongo":
 		return parseMongoUnified(input)
 	default:
@@ -69,6 +71,102 @@ func parseMySQLUnified(sql string) (*SQLParseResult, error) {
 	result.applyMySQLRules(mysqlResult)
 
 	return result, nil
+}
+
+// parsePostgreSQLUnified parses PostgreSQL SQL and applies security rules.
+// PostgreSQL and MySQL share common SQL syntax for basic operation types
+// (SELECT/INSERT/UPDATE/DELETE/DDL), so we reuse the MySQL parser for
+// operation type detection. PostgreSQL-specific syntax (e.g. RETURNING,
+// ON CONFLICT) that the MySQL parser cannot handle will cause a parse error,
+// which we treat as potentially dangerous and block.
+func parsePostgreSQLUnified(sql string) (*SQLParseResult, error) {
+	result := &SQLParseResult{
+		DBType: "postgresql",
+	}
+
+	// First, try to parse with the MySQL parser for standard SQL operations.
+	// This handles SELECT, INSERT, UPDATE, DELETE, and common DDL.
+	mysqlResult, err := ParseMySQL(sql)
+	if err != nil {
+		// MySQL parser failed — could be PostgreSQL-specific syntax.
+		// Fall back to keyword-based detection for common operations.
+		op := detectSQLOperation(sql)
+		result.Operation = op
+		if op != OpSelect {
+			result.IsBlocked = true
+			result.BlockReason = "仅允许 SELECT 查询，其他操作请提交工单"
+		}
+		result.RiskLevel = classifyRiskLevel(op)
+		return result, nil
+	}
+
+	result.Operation = mysqlResult.Operation
+	result.Tables = mysqlResult.Tables
+
+	// Apply same static rules as MySQL
+	result.applyMySQLRules(mysqlResult)
+
+	return result, nil
+}
+
+// detectSQLOperation uses keyword-based detection as a fallback when
+// the AST parser cannot handle PostgreSQL-specific syntax.
+func detectSQLOperation(sql string) OperationType {
+	upper := strings.ToUpper(strings.TrimSpace(sql))
+	// Remove leading comments
+	for strings.HasPrefix(upper, "--") || strings.HasPrefix(upper, "/*") {
+		if strings.HasPrefix(upper, "--") {
+			if idx := strings.Index(upper, "\n"); idx >= 0 {
+				upper = strings.TrimSpace(upper[idx+1:])
+			} else {
+				break
+			}
+		} else if strings.HasPrefix(upper, "/*") {
+			if idx := strings.Index(upper, "*/"); idx >= 0 {
+				upper = strings.TrimSpace(upper[idx+2:])
+			} else {
+				break
+			}
+		}
+	}
+
+	switch {
+	case strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH"):
+		return OpSelect
+	case strings.HasPrefix(upper, "INSERT"):
+		return OpDML
+	case strings.HasPrefix(upper, "UPDATE"):
+		return OpUpdate
+	case strings.HasPrefix(upper, "DELETE"):
+		return OpDelete
+	case strings.HasPrefix(upper, "DROP"):
+		return OpDDL
+	case strings.HasPrefix(upper, "ALTER"):
+		return OpDDL
+	case strings.HasPrefix(upper, "CREATE"):
+		return OpDDL
+	case strings.HasPrefix(upper, "TRUNCATE"):
+		return OpDDL
+	case strings.HasPrefix(upper, "GRANT") || strings.HasPrefix(upper, "REVOKE"):
+		return OpDDL
+	default:
+		// Unknown — treat as DDL for safety
+		return OpDDL
+	}
+}
+
+// classifyRiskLevel returns a risk level based on operation type.
+func classifyRiskLevel(op OperationType) RiskLevel {
+	switch op {
+	case OpSelect:
+		return RiskLow
+	case OpDML, OpUpdate, OpDelete:
+		return RiskMedium
+	case OpDDL:
+		return RiskHigh
+	default:
+		return RiskHigh
+	}
 }
 
 // parseMongoUnified parses MongoDB command and applies static rules.

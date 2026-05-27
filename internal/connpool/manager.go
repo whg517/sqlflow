@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -241,7 +242,7 @@ func (m *Manager) GetPostgreSQL(dsID int64, host string, port int, user, passwor
 	}
 
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s&connect_timeout=30",
-		user, password, host, port, database, sslmode)
+		url.QueryEscape(user), url.QueryEscape(password), host, port, database, sslmode)
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open postgresql: %w", err)
@@ -287,7 +288,7 @@ func PostgreSQLPing(ctx context.Context, host string, port int, user, password, 
 		sslmode = "prefer"
 	}
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s&connect_timeout=10",
-		user, password, host, port, database, sslmode)
+		url.QueryEscape(user), url.QueryEscape(password), host, port, database, sslmode)
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return fmt.Errorf("open postgresql: %w", err)
