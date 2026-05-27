@@ -15,7 +15,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, db *sql.DB, cfg *config.Config) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, db *sql.DB, cfg *config.Config) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -50,7 +50,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	maskRuleHandler := handler.NewMaskRuleHandler(maskRuleSvc)
 	aiReviewHandler := handler.NewAIReviewHandler(aiReviewSvc, dsSvc)
 	auditHandler := handler.NewAuditHandler(auditSvc)
-	exportHandler := handler.NewExportHandler(exportSvc)
+	exportHandler := handler.NewExportHandler(exportSvc, exportAsyncSvc)
 	dashboardHandler := handler.NewDashboardHandler(dashboardSvc)
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	performanceHandler := handler.NewPerformanceHandler(historySvc)
@@ -182,6 +182,10 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	// Export routes — audit export requires admin/dba; ticket export requires auth
 	adminGroup.GET("/api/export/audit", exportHandler.ExportAuditLogs)
 	authGroup.GET("/api/export/tickets", exportHandler.ExportTickets)
+	// Async export task management (authenticated users)
+	authGroup.GET("/api/export/tasks", exportHandler.ListExportTasks)
+	authGroup.GET("/api/export/tasks/:id", exportHandler.GetExportTask)
+	authGroup.GET("/api/export/tasks/:id/download", exportHandler.DownloadExportFile)
 
 	// Database backup management (admin)
 	adminGroup.POST("/api/backups", backupHandler.TriggerBackup)

@@ -2,6 +2,46 @@ package model
 
 import "time"
 
+// ExportTaskStatus represents the status of an async export task.
+type ExportTaskStatus string
+
+const (
+	ExportTaskStatusPending    ExportTaskStatus = "pending"
+	ExportTaskStatusProcessing ExportTaskStatus = "processing"
+	ExportTaskStatusCompleted  ExportTaskStatus = "completed"
+	ExportTaskStatusFailed     ExportTaskStatus = "failed"
+)
+
+// ExportTask represents an asynchronous export job.
+type ExportTask struct {
+	ID          int64            `json:"id"`
+	UserID      int64            `json:"user_id"`
+	Username    string           `json:"username"`
+	ExportType  string           `json:"export_type"` // "audit" or "ticket"
+	Status      ExportTaskStatus `json:"status"`
+	Filename    string           `json:"filename"`
+	FilePath    string           `json:"-"` // server-local file path, never exposed
+	TotalRows   int64            `json:"total_rows"`
+	FileBytes   int64            `json:"file_bytes"`
+	FiltersJSON string           `json:"filters_json"`
+	ErrorMsg    string           `json:"error_msg,omitempty"`
+	CreatedAt   time.Time        `json:"created_at"`
+	CompletedAt *time.Time       `json:"completed_at,omitempty"`
+}
+
+// ExportTaskSlim is a lightweight version returned in list APIs (no server path).
+type ExportTaskSlim struct {
+	ID          int64            `json:"id"`
+	ExportType  string           `json:"export_type"`
+	Status      ExportTaskStatus `json:"status"`
+	Filename    string           `json:"filename"`
+	TotalRows   int64            `json:"total_rows"`
+	FileBytes   int64            `json:"file_bytes"`
+	ErrorMsg    string           `json:"error_msg,omitempty"`
+	CreatedAt   time.Time        `json:"created_at"`
+	CompletedAt *time.Time       `json:"completed_at,omitempty"`
+}
+
 // User represents a user in the system.
 type User struct {
 	ID              int64     `json:"id"`

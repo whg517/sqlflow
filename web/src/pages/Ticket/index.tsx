@@ -46,7 +46,13 @@ import {
   type Ticket,
   type TicketStatus,
 } from "@/api/ticket";
-import { exportTickets } from "@/api/export";
+import {
+  exportTickets,
+  createAsyncTicketExport,
+  getExportTask,
+  downloadExportFile,
+  type ExportTask,
+} from "@/api/export";
 import TicketDetailDrawer from "./components/TicketDetailDrawer";
 
 // --- Status Tab Config ---
@@ -117,6 +123,8 @@ export default function TicketPage() {
 
   // Export state
   const [exporting, setExporting] = useState(false);
+  const [asyncExportTask, setAsyncExportTask] = useState<ExportTask | null>(null);
+  const [exportPolling, setExportPolling] = useState(false);
 
   // Open detail drawer if `id` param present in URL (from global search)
   useEffect(() => {
@@ -216,21 +224,22 @@ export default function TicketPage() {
     fetchTickets();
   }
 
-  // Export handler — server-side export with watermark
+  // Export handler — tries sync first, falls back to async for large datasets
   async function handleExport() {
     setExporting(true);
+    setAsyncExportTask(null);
+    const params = {
+      status: activeTab !== "all" ? activeTab : undefined,
+      datasource_id: datasourceFilter || undefined,
+      risk_level: riskFilter || undefined,
+      keyword: keyword || undefined,
+    };
     try {
-      const blob = await exportTickets({
-        status: activeTab !== "all" ? activeTab : undefined,
-        datasource_id: datasourceFilter || undefined,
-        risk_level: riskFilter || undefined,
-        keyword: keyword || undefined,
-      });
+      const blob = await exportTickets(params);
       if (blob.size === 0) {
         toast.info("没有可导出的数据");
         return;
       }
-      // Trigger download
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -242,10 +251,60 @@ export default function TicketPage() {
       toast.success("工单导出成功（含水印）");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "导出失败";
+      if (msg.includes("10000") || msg.includes("超过")) {
+        try {
+          toast.info("数据量较大，正在后台生成导出文件...");
+          const task = await createAsyncTicketExport(params);
+          setAsyncExportTask(task);
+          startTicketExportPolling(task.id);
+        } catch {
+          toast.error("创建异步导出任务失败");
+        }
+        return;
+      }
       toast.error(msg);
     } finally {
       setExporting(false);
     }
+  }
+
+  // Poll async export task until completed
+  function startTicketExportPolling(taskId: number) {
+    setExportPolling(true);
+    const poll = async () => {
+      try {
+        const task = await getExportTask(taskId);
+        setAsyncExportTask(task);
+        if (task.status === "completed") {
+          setExportPolling(false);
+          toast.success(`导出完成！共 ${task.total_rows} 条数据`);
+          try {
+            const blob = await downloadExportFile(taskId);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = task.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          } catch {
+            toast.error("下载导出文件失败，请稍后重试");
+          }
+          return;
+        }
+        if (task.status === "failed") {
+          setExportPolling(false);
+          toast.error(task.error_msg || "导出任务失败");
+          return;
+        }
+        setTimeout(poll, 2000);
+      } catch {
+        setExportPolling(false);
+        toast.error("查询导出状态失败");
+      }
+    };
+    setTimeout(poll, 1500);
   }
 
   const totalPages = Math.ceil(total / pageSize);
@@ -263,15 +322,44 @@ export default function TicketPage() {
             variant="outline"
             className="h-8 gap-1.5 border-[var(--border-default)] px-3 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
             onClick={handleExport}
-            disabled={exporting || loading}
+            disabled={exporting || loading || exportPolling}
           >
-            {exporting ? (
+            {exporting || exportPolling ? (
               <Loader2 size={14} className="animate-spin" />
             ) : (
               <Download size={14} />
             )}
-            {exporting ? "导出中..." : "导出 CSV"}
+            {exportPolling
+              ? "后台生成中..."
+              : exporting
+                ? "导出中..."
+                : "导出 CSV"}
           </Button>
+          {asyncExportTask && asyncExportTask.status === "completed" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 border-[var(--border-default)] px-3 text-xs text-green-600 hover:bg-[var(--bg-elevated)]"
+              onClick={async () => {
+                try {
+                  const blob = await downloadExportFile(asyncExportTask.id);
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = asyncExportTask.filename;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                } catch {
+                  toast.error("下载失败，文件可能已过期");
+                }
+              }}
+            >
+              <Download size={14} />
+              下载导出文件
+            </Button>
+          )}
           <Button
             size="sm"
             className="h-8 gap-1.5 bg-[var(--accent-primary)] px-3 text-xs text-white hover:bg-[var(--accent-hover)]"

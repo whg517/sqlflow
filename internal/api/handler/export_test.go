@@ -15,7 +15,7 @@ import (
 )
 
 // setupExportTest creates a fresh Echo, DB, AuditService, ExportService, and ExportHandler for testing.
-func setupExportTest(t *testing.T) (*echo.Echo, *service.AuditService, *service.ExportService, *ExportHandler) {
+func setupExportTest(t *testing.T) (*echo.Echo, *service.AuditService, *service.ExportService, *service.ExportAsyncService, *ExportHandler) {
 	t.Helper()
 
 	database, err := db.Open(t.TempDir() + "/test.db")
@@ -40,10 +40,12 @@ func setupExportTest(t *testing.T) (*echo.Echo, *service.AuditService, *service.
 
 	auditSvc := service.NewAuditService(database.DB, 0, 0)
 	exportSvc := service.NewExportService(database.DB, auditSvc)
-	handler := NewExportHandler(exportSvc)
+	exportAsyncSvc := service.NewExportAsyncService(database.DB, exportSvc, auditSvc, t.TempDir())
+	t.Cleanup(func() { exportAsyncSvc.Close() })
+	handler := NewExportHandler(exportSvc, exportAsyncSvc)
 
 	e := echo.New()
-	return e, auditSvc, exportSvc, handler
+	return e, auditSvc, exportSvc, exportAsyncSvc, handler
 }
 
 // setContextUser sets the user context values (simulating JWT middleware).
@@ -54,7 +56,7 @@ func setContextUser(c echo.Context, userID int64, username, role string) {
 }
 
 func TestExportHandler_ExportAuditLogs_Admin(t *testing.T) {
-	e, auditSvc, _, h := setupExportTest(t)
+	e, auditSvc, _, _, h := setupExportTest(t)
 
 	// Seed 5 audit logs
 	for i := 0; i < 5; i++ {
@@ -104,7 +106,7 @@ func TestExportHandler_ExportAuditLogs_Admin(t *testing.T) {
 }
 
 func TestExportHandler_ExportAuditLogs_DeveloperDenied(t *testing.T) {
-	e, _, _, h := setupExportTest(t)
+	e, _, _, _, h := setupExportTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export/audit", nil)
 	rec := httptest.NewRecorder()
@@ -129,7 +131,7 @@ func TestExportHandler_ExportAuditLogs_DeveloperDenied(t *testing.T) {
 }
 
 func TestExportHandler_ExportAuditLogs_ExceedsLimit(t *testing.T) {
-	e, auditSvc, _, h := setupExportTest(t)
+	e, auditSvc, _, _, h := setupExportTest(t)
 
 	// Seed more than 10000 records
 	for i := 0; i < service.ExportMaxRows+1; i++ {
@@ -150,14 +152,19 @@ func TestExportHandler_ExportAuditLogs_ExceedsLimit(t *testing.T) {
 		t.Fatalf("ExportAuditLogs: %v", err)
 	}
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", rec.Code)
+	// When rows exceed the sync limit, the handler auto-switches to async export (202)
+	if rec.Code != http.StatusAccepted {
+		t.Errorf("expected 202 (async export created), got %d; body=%s", rec.Code, rec.Body.String())
 	}
 
 	var result map[string]interface{}
 	_ = json.Unmarshal(rec.Body.Bytes(), &result)
-	if msg, ok := result["message"].(string); !ok || !strings.Contains(msg, "10000") {
-		t.Errorf("expected row limit error message, got %v", result["message"])
+	if msg, ok := result["message"].(string); !ok || !strings.Contains(msg, "后台生成") {
+		t.Errorf("expected async export message, got %v", result["message"])
+	}
+	data, ok := result["data"].(map[string]interface{})
+	if !ok || data["task_id"] == nil {
+		t.Errorf("expected task_id in response data, got %v", result["data"])
 	}
 }
 
@@ -166,7 +173,7 @@ func TestExportHandler_ExportTickets_Success(t *testing.T) {
 }
 
 func TestExportHandler_ExportTickets_DeveloperAllowed(t *testing.T) {
-	e, _, _, h := setupExportTest(t)
+	e, _, _, _, h := setupExportTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export/tickets", nil)
 	rec := httptest.NewRecorder()
@@ -191,7 +198,7 @@ func TestExportHandler_ExportTickets_DeveloperAllowed(t *testing.T) {
 }
 
 func TestExportHandler_ExportTickets_Watermark(t *testing.T) {
-	e, _, _, h := setupExportTest(t)
+	e, _, _, _, h := setupExportTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export/tickets", nil)
 	rec := httptest.NewRecorder()
@@ -214,7 +221,7 @@ func TestExportHandler_ExportTickets_Watermark(t *testing.T) {
 
 // Ensure ExportHandler doesn't leak resources
 func TestExportHandler_ContextTimeout(t *testing.T) {
-	e, _, _, h := setupExportTest(t)
+	e, _, _, _, h := setupExportTest(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
