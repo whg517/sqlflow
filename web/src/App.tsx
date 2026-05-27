@@ -11,6 +11,7 @@ import PerformancePage from "./pages/Performance";
 import TicketPage from "./pages/Ticket";
 import TicketNewPage from "./pages/TicketNew";
 import AuditPage from "./pages/Audit";
+import ReportsPage from "./pages/Reports";
 import UsersPage from "./pages/Users";
 import PermissionsPage from "./pages/Permissions";
 import SettingsPage from "./pages/Settings";
@@ -61,6 +62,14 @@ function App() {
               element={
                 <ErrorBoundary title="审计页面出现了问题">
                   <AuditPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <ErrorBoundary title="报表页面出现了问题">
+                  <ReportsPage />
                 </ErrorBoundary>
               }
             />

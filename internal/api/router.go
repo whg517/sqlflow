@@ -15,7 +15,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, db *sql.DB, cfg *config.Config) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, reportSvc *service.AuditReportService, db *sql.DB, cfg *config.Config) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -55,6 +55,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	performanceHandler := handler.NewPerformanceHandler(historySvc)
 	gitHandler := handler.NewGitHandler(gitSvc)
+	reportHandler := handler.NewAuditReportHandler(reportSvc)
 
 	// Public routes
 	e.POST("/api/auth/login", userHandler.Login)
@@ -151,6 +152,12 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	// Audit logs (admin/dba can view)
 	adminGroup.GET("/api/audit-logs", auditHandler.ListAuditLogs)
 	adminGroup.GET("/api/audit-logs/search", auditHandler.SearchAuditLogs)
+
+	// Audit reports (admin/dba can view)
+	adminGroup.GET("/api/reports/usage", reportHandler.GetUsageStats)
+	adminGroup.GET("/api/reports/errors", reportHandler.GetErrorStats)
+	adminGroup.GET("/api/reports/performance", reportHandler.GetPerformanceReport)
+	adminGroup.GET("/api/reports/tickets", reportHandler.GetTicketReport)
 
 	// Export routes — audit export requires admin/dba; ticket export requires auth
 	adminGroup.GET("/api/export/audit", exportHandler.ExportAuditLogs)

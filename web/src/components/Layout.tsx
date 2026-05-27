@@ -20,6 +20,7 @@ import {
   Sun,
   Gauge,
   Moon,
+  BarChart3,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -218,6 +219,13 @@ export default function Layout() {
             to="/performance"
             icon={Gauge}
             label="性能分析"
+            collapsed={collapsed}
+            navLinkClass={navLinkClass}
+          />
+          <NavItem
+            to="/reports"
+            icon={BarChart3}
+            label="审计报表"
             collapsed={collapsed}
             navLinkClass={navLinkClass}
           />
