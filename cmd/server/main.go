@@ -112,6 +112,11 @@ func main() {
 	)
 	log.Println("dingtalk oauth service initialized")
 
+	// Initialize git service
+	gitSvc := service.NewGitService(database.DB)
+	log.Println("git service initialized")
+	ticketSvc.SetGitService(gitSvc)
+
 	// Seed initial admin if users table is empty
 	count, err := authSvc.UserCount(context.Background())
 	if err != nil {
@@ -132,7 +137,7 @@ func main() {
 	defer backupSvc.Stop()
 
 	// Start server
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, database.DB, cfg)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, database.DB, cfg)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server

@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { GitLink } from "./git";
 
 // --- Types ---
 
@@ -31,6 +32,7 @@ export interface Ticket {
   executed_at: string | null;
   created_at: string;
   updated_at: string;
+  git_links?: GitLink[];
 }
 
 export interface TicketListParams {

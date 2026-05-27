@@ -382,5 +382,35 @@ CREATE TABLE IF NOT EXISTS comments (
 	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN sslmode TEXT DEFAULT ''`)
 	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN schema_name TEXT DEFAULT ''`)
 
+	// Git links table for associating tickets/audit logs with git commits and PRs.
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS git_links (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_type  TEXT    NOT NULL DEFAULT 'ticket',
+    entity_id    INTEGER NOT NULL DEFAULT 0,
+    link_type    TEXT    NOT NULL DEFAULT 'commit',
+    commit_hash  TEXT    NOT NULL DEFAULT '',
+    commit_msg   TEXT    NOT NULL DEFAULT '',
+    author_name  TEXT    NOT NULL DEFAULT '',
+    author_email TEXT    NOT NULL DEFAULT '',
+    pr_number    INTEGER NOT NULL DEFAULT 0,
+    pr_title     TEXT    NOT NULL DEFAULT '',
+    pr_url       TEXT    NOT NULL DEFAULT '',
+    repo_url     TEXT    NOT NULL DEFAULT '',
+    branch       TEXT    NOT NULL DEFAULT '',
+    created_by   INTEGER NOT NULL DEFAULT 0,
+    created_at   DATETIME NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate git_links: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_git_links_entity ON git_links(entity_type, entity_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate git_links index: %w", err)
+	}
+
 	return nil
 }

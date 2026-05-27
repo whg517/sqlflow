@@ -60,6 +60,7 @@ type TicketService struct {
 	db        *sql.DB
 	auditSvc  *AuditService
 	notifySvc *NotifyService
+	gitSvc    *GitService
 }
 
 // NewTicketService creates a new TicketService.
@@ -70,6 +71,11 @@ func NewTicketService(db *sql.DB, auditSvc *AuditService, notifySvc *NotifyServi
 // SetNotifyService sets the notification service (for deferred initialization).
 func (s *TicketService) SetNotifyService(notifySvc *NotifyService) {
 	s.notifySvc = notifySvc
+}
+
+// SetGitService sets the git service (for deferred initialization).
+func (s *TicketService) SetGitService(gitSvc *GitService) {
+	s.gitSvc = gitSvc
 }
 
 // scanTicket scans a single ticket row from a sql.Rows or sql.Row.
@@ -191,6 +197,9 @@ func (s *TicketService) GetTicket(ctx context.Context, id int64) (*model.Ticket,
 	}
 
 	s.populateTicketNames(ctx, t)
+	if s.gitSvc != nil {
+		s.gitSvc.PopulateGitLinks(ctx, t)
+	}
 	return t, nil
 }
 
@@ -262,6 +271,13 @@ func (s *TicketService) ListTickets(ctx context.Context, page, pageSize int, sta
 	// Now populate user names (requires additional queries)
 	for i := range tickets {
 		s.populateTicketNames(ctx, &tickets[i])
+	}
+
+	// Populate git links if service is available
+	if s.gitSvc != nil {
+		for i := range tickets {
+			s.gitSvc.PopulateGitLinks(ctx, &tickets[i])
+		}
 	}
 
 	return tickets, total, nil

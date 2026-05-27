@@ -39,6 +39,7 @@ import {
   type TicketStatus,
 } from "@/api/ticket";
 import CommentSection from "./CommentSection";
+import GitInfoSection from "@/components/GitInfoSection";
 
 interface TicketDetailDrawerProps {
   open: boolean;
@@ -337,6 +338,13 @@ export default function TicketDetailDrawer({
                     执行时间: {formatTime(ticket.executed_at)}
                   </div>
                 )}
+
+                {/* Git Links */}
+                <Separator className="bg-[var(--border-default)]" />
+                <GitInfoSection
+                  ticketId={ticket.id}
+                  readOnly={false}
+                />
 
                 {/* Comments Section */}
                 <Separator className="bg-[var(--border-default)]" />

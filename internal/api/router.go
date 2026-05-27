@@ -15,7 +15,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, db *sql.DB, cfg *config.Config) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, db *sql.DB, cfg *config.Config) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -54,6 +54,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	dashboardHandler := handler.NewDashboardHandler(dashboardSvc)
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	performanceHandler := handler.NewPerformanceHandler(historySvc)
+	gitHandler := handler.NewGitHandler(gitSvc)
 
 	// Public routes
 	e.POST("/api/auth/login", userHandler.Login)
@@ -104,6 +105,11 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.GET("/api/tickets/:id/comments", commentHandler.ListComments)
 	authGroup.POST("/api/tickets/:id/comments", commentHandler.CreateComment)
 	authGroup.DELETE("/api/comments/:id", commentHandler.DeleteComment)
+
+	// Git link routes (authenticated users)
+	authGroup.POST("/api/git-links", gitHandler.CreateGitLink)
+	authGroup.GET("/api/git-links", gitHandler.ListGitLinks)
+	authGroup.DELETE("/api/git-links/:id", gitHandler.DeleteGitLink)
 
 	// Admin-only routes
 	adminGroup := e.Group("", middleware.JWT(authSvc), middleware.Admin())

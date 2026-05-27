@@ -65,6 +65,7 @@ type Ticket struct {
 	ExecutedAt     *time.Time   `json:"executed_at,omitempty"`
 	CreatedAt      time.Time    `json:"created_at"`
 	UpdatedAt      time.Time    `json:"updated_at"`
+	GitLinks       []GitLink    `json:"git_links,omitempty"`
 }
 
 // MaskRule represents a field-level masking rule.
@@ -161,4 +162,31 @@ type DataSource struct {
 	Status            string    `json:"status"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// GitLinkType represents the type of a git link (commit or PR).
+type GitLinkType string
+
+const (
+	GitLinkTypeCommit GitLinkType = "commit"
+	GitLinkTypePR     GitLinkType = "pr"
+)
+
+// GitLink represents an association between a ticket/audit log and a git commit or PR.
+type GitLink struct {
+	ID          int64        `json:"id"`
+	EntityType  string       `json:"entity_type"` // "ticket" or "audit_log"
+	EntityID    int64        `json:"entity_id"`
+	LinkType    GitLinkType  `json:"link_type"` // "commit" or "pr"
+	CommitHash  string       `json:"commit_hash"`
+	CommitMsg   string       `json:"commit_message"`
+	AuthorName  string       `json:"author_name"`
+	AuthorEmail string       `json:"author_email,omitempty"`
+	PRNumber    int          `json:"pr_number,omitempty"`
+	PRTitle     string       `json:"pr_title,omitempty"`
+	PRURL       string       `json:"pr_url,omitempty"`
+	RepoURL     string       `json:"repo_url,omitempty"`
+	Branch      string       `json:"branch,omitempty"`
+	CreatedBy   int64        `json:"created_by"`
+	CreatedAt   time.Time    `json:"created_at"`
 }

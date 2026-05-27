@@ -50,15 +50,19 @@ import {
   actionOptions,
   type AuditLog,
 } from "@/api/audit";
-import { exportAuditLogs, type AuditExportParams } from "@/api/export";
+import { exportAuditLogs } from "@/api/export";
 import {
   getStatusLabel,
   getStatusColor,
   getTicket,
   type Ticket,
 } from "@/api/ticket";
-
-// --- Types ---
+import {
+  listGitLinks,
+  shortenHash,
+  type GitLink,
+} from "@/api/git";
+import { GitBranch, GitPullRequest, ExternalLink } from "lucide-react";
 
 interface DataSourceOption {
   id: number;
@@ -235,6 +239,78 @@ function TicketBlock({ ticketId }: { ticketId: number }) {
   );
 }
 
+// --- Git Links for Audit Log ---
+
+function GitLinksForAudit({ auditLogId }: { auditLogId: number }) {
+  const [links, setLinks] = useState<GitLink[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchLinks() {
+      setLoading(true);
+      try {
+        const res = await listGitLinks("audit_log", auditLogId);
+        if (!cancelled) setLinks(res.data ?? []);
+      } catch {
+        // silently ignore
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    fetchLinks();
+    return () => { cancelled = true; };
+  }, [auditLogId]);
+
+  if (loading) return null;
+  if (links.length === 0) return null;
+
+  return (
+    <div className="col-span-full">
+      <span className="text-xs text-[var(--text-muted)]">Git 关联</span>
+      <div className="mt-1 space-y-1.5">
+        {links.map((link) => {
+          const shortHash = shortenHash(link.commit_hash);
+          const commitURL = link.repo_url && link.commit_hash
+            ? `${link.repo_url.replace(/\/$/, "")}/commit/${link.commit_hash}`
+            : null;
+          return (
+            <div key={link.id} className="flex items-center gap-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2.5 py-1.5">
+              {link.link_type === "pr" ? (
+                <GitPullRequest size={12} className="shrink-0 text-violet-400" />
+              ) : (
+                <GitBranch size={12} className="shrink-0 text-emerald-400" />
+              )}
+              <span className="text-xs text-[var(--text-primary)]">
+                {link.link_type === "pr" && link.pr_number > 0 ? (
+                  <>
+                    PR #{link.pr_number}
+                    {link.pr_title ? `: ${link.pr_title}` : ""}
+                  </>
+                ) : (
+                  link.commit_message || shortHash
+                )}
+              </span>
+              {shortHash && (
+                <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                  {commitURL ? (
+                    <a href={commitURL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-emerald-500 hover:underline" onClick={(e) => e.stopPropagation()}>
+                      {shortHash}<ExternalLink size={9} />
+                    </a>
+                  ) : shortHash}
+                </span>
+              )}
+              {link.author_name && (
+                <span className="text-[11px] text-[var(--text-muted)]">{link.author_name}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // --- Expandable Row ---
 
 function ExpandedRow({
@@ -390,6 +466,9 @@ function ExpandedRow({
                   </div>
                 </div>
               )}
+
+              {/* Git links */}
+              <GitLinksForAudit auditLogId={log.id} />
 
               {/* AI Review result */}
               {aiReview && <AiReviewBlock review={aiReview} />}
