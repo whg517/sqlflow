@@ -563,7 +563,8 @@ func mapPGType(pgType, udtName string) string {
 
 func buildMongoURI(host string, port int, user, password string) string {
 	if user != "" && password != "" {
-		// URL-encode credentials to prevent injection via special characters
+		// URL-encode credentials to prevent injection via special characters.
+		// host is NOT encoded — it's an IP or domain, QueryEscape would break dots.
 		return "mongodb://" + url.QueryEscape(user) + ":" + url.QueryEscape(password) + "@" + host + ":" + strconv.Itoa(port)
 	}
 	return "mongodb://" + host + ":" + strconv.Itoa(port)

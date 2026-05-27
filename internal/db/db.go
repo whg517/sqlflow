@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -363,11 +362,7 @@ CREATE TABLE IF NOT EXISTS comments (
 	}
 
 	// Add scheduled_at column if it doesn't exist (migration for existing DBs)
-	_, err = db.Exec(`ALTER TABLE tickets ADD COLUMN scheduled_at DATETIME`)
-	if err != nil {
-		// Column may already exist, ignore the error
-		log.Printf("add scheduled_at column: %v", err)
-	}
+	_, _ = db.Exec(`ALTER TABLE tickets ADD COLUMN scheduled_at DATETIME`)
 
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tickets_scheduled_at ON tickets(scheduled_at)`)
 	if err != nil {

@@ -193,7 +193,7 @@ type DataSource struct {
 	Username          string    `json:"username"`
 	PasswordEncrypted string    `json:"-"`
 	Database          string    `json:"database,omitempty"`
-	SSLMode           string    `json:"sslmode,omitempty"`   // PostgreSQL SSL mode: disable, prefer, require, verify-ca, verify-full
+	SSLMode           string    `json:"sslmode,omitempty"`     // PostgreSQL SSL mode: disable, prefer, require, verify-ca, verify-full
 	SchemaName        string    `json:"schema_name,omitempty"` // PostgreSQL schema (default: public)
 	MaxOpen           int       `json:"max_open"`
 	MaxIdle           int       `json:"max_idle"`
