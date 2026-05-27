@@ -18,10 +18,10 @@ var (
 	ErrDatasourceNotFound    = errors.New("数据源不存在")
 	ErrDatasourceNameExists  = errors.New("数据源名称已存在")
 	ErrDatasourceDisabled    = errors.New("数据源已禁用")
-	ErrInvalidDatasourceType = errors.New("数据源类型必须是 mysql 或 mongodb")
+	ErrInvalidDatasourceType = errors.New("数据源类型必须是 mysql、postgresql 或 mongodb")
 )
 
-var ValidDatasourceTypes = map[string]bool{"mysql": true, "mongodb": true}
+var ValidDatasourceTypes = map[string]bool{"mysql": true, "postgresql": true, "mongodb": true}
 
 // DatasourceService handles datasource management logic.
 type DatasourceService struct {
@@ -64,9 +64,9 @@ func (s *DatasourceService) CreateDataSource(ctx context.Context, ds *model.Data
 	}
 
 	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, max_open, max_idle, max_lifetime, max_idle_time, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database, ds.SSLMode, ds.SchemaName,
 		ds.MaxOpen, ds.MaxIdle, ds.MaxLifetime, ds.MaxIdleTime, ds.Status,
 	)
 	if err != nil {
@@ -85,7 +85,7 @@ func (s *DatasourceService) CreateDataSource(ctx context.Context, ds *model.Data
 // ListDataSources returns all datasources without encrypted passwords.
 func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSource, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, type, host, port, username, database, max_open, max_idle, max_lifetime, max_idle_time, status, created_at, updated_at
+		`SELECT id, name, type, host, port, username, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, created_at, updated_at
 		 FROM datasources ORDER BY id`,
 	)
 	if err != nil {
@@ -97,6 +97,7 @@ func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSo
 	for rows.Next() {
 		var ds model.DataSource
 		if err := rows.Scan(&ds.ID, &ds.Name, &ds.Type, &ds.Host, &ds.Port, &ds.Username, &ds.Database,
+			&ds.SSLMode, &ds.SchemaName,
 			&ds.MaxOpen, &ds.MaxIdle, &ds.MaxLifetime, &ds.MaxIdleTime, &ds.Status, &ds.CreatedAt, &ds.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan datasource: %w", err)
 		}
@@ -109,9 +110,10 @@ func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSo
 func (s *DatasourceService) GetDataSource(ctx context.Context, id int64) (*model.DataSource, error) {
 	ds := &model.DataSource{}
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, name, type, host, port, username, password_encrypted, database, max_open, max_idle, max_lifetime, max_idle_time, status, created_at, updated_at
+		`SELECT id, name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, created_at, updated_at
 		 FROM datasources WHERE id = ?`, id,
 	).Scan(&ds.ID, &ds.Name, &ds.Type, &ds.Host, &ds.Port, &ds.Username, &ds.PasswordEncrypted, &ds.Database,
+		&ds.SSLMode, &ds.SchemaName,
 		&ds.MaxOpen, &ds.MaxIdle, &ds.MaxLifetime, &ds.MaxIdleTime, &ds.Status, &ds.CreatedAt, &ds.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -147,9 +149,9 @@ func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *
 	}
 
 	result, err := s.db.ExecContext(ctx,
-		`UPDATE datasources SET name=?, type=?, host=?, port=?, username=?, password_encrypted=?, database=?,
+		`UPDATE datasources SET name=?, type=?, host=?, port=?, username=?, password_encrypted=?, database=?, sslmode=?, schema_name=?,
 		 max_open=?, max_idle=?, max_lifetime=?, max_idle_time=?, updated_at=datetime('now') WHERE id=?`,
-		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database,
+		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database, ds.SSLMode, ds.SchemaName,
 		ds.MaxOpen, ds.MaxIdle, ds.MaxLifetime, ds.MaxIdleTime, id,
 	)
 	if err != nil {
@@ -163,9 +165,14 @@ func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *
 	// Invalidate cached connection pool since config may have changed
 	if ds.Type == "mysql" {
 		s.connMgr.Remove(id, ds.Host, ds.Port, ds.Database)
-		// Also remove pool for old config in case host/port/database changed
 		if existing.Host != ds.Host || existing.Port != ds.Port || existing.Database != ds.Database {
 			s.connMgr.Remove(id, existing.Host, existing.Port, existing.Database)
+		}
+	}
+	if ds.Type == "postgresql" {
+		s.connMgr.RemovePG(id, ds.Host, ds.Port, ds.Database)
+		if existing.Host != ds.Host || existing.Port != ds.Port || existing.Database != ds.Database {
+			s.connMgr.RemovePG(id, existing.Host, existing.Port, existing.Database)
 		}
 	}
 	if ds.Type == "mongodb" || existing.Type == "mongodb" {
@@ -198,6 +205,9 @@ func (s *DatasourceService) DisableDataSource(ctx context.Context, id int64) err
 	if existing.Type == "mysql" {
 		s.connMgr.Remove(id, existing.Host, existing.Port, existing.Database)
 	}
+	if existing.Type == "postgresql" {
+		s.connMgr.RemovePG(id, existing.Host, existing.Port, existing.Database)
+	}
 	if existing.Type == "mongodb" {
 		s.connMgr.RemoveMongo(id)
 	}
@@ -225,6 +235,8 @@ func (s *DatasourceService) TestConnection(ctx context.Context, ds *model.DataSo
 	switch ds.Type {
 	case "mysql":
 		return connpool.MySQLPing(ctx, ds.Host, ds.Port, ds.Username, password)
+	case "postgresql":
+		return connpool.PostgreSQLPing(ctx, ds.Host, ds.Port, ds.Username, password, ds.Database, ds.SSLMode)
 	case "mongodb":
 		uri := buildMongoURI(ds.Host, ds.Port, ds.Username, password)
 		return connpool.MongoPing(ctx, uri)
@@ -280,6 +292,8 @@ func (s *DatasourceService) GetTables(ctx context.Context, id int64) ([]string, 
 			tables = append(tables, name)
 		}
 		return tables, rows.Err()
+	case "postgresql":
+		return s.getPGTables(ctx, ds, password)
 	case "mongodb":
 		uri := buildMongoURI(ds.Host, ds.Port, ds.Username, password)
 		return s.connMgr.GetMongoDatabaseNames(ctx, id, uri)
@@ -314,6 +328,8 @@ func (s *DatasourceService) GetTableColumns(ctx context.Context, id int64, table
 	switch ds.Type {
 	case "mysql":
 		return s.getMySQLColumns(ctx, ds, password, tableName)
+	case "postgresql":
+		return s.getPGColumns(ctx, ds, password, tableName)
 	case "mongodb":
 		return s.getMongoColumns(ctx, ds, password, tableName)
 	default:
@@ -427,6 +443,118 @@ func (s *DatasourceService) GetDataSourceSafe(ctx context.Context, id int64) (*m
 	}
 	ds.PasswordEncrypted = ""
 	return ds, nil
+}
+
+// getPGTables returns table names from a PostgreSQL datasource.
+func (s *DatasourceService) getPGTables(ctx context.Context, ds *model.DataSource, password string) ([]string, error) {
+	schemaName := ds.SchemaName
+	if schemaName == "" {
+		schemaName = "public"
+	}
+	dbName := ds.Database
+	if dbName == "" {
+		dbName = "postgres"
+	}
+	poolCfg := connpool.PGPoolConfig{
+		MaxOpen:     ds.MaxOpen,
+		MaxIdle:     ds.MaxIdle,
+		MaxLifetime: ds.MaxLifetime,
+		MaxIdleTime: ds.MaxIdleTime,
+	}
+	targetDB, err := s.connMgr.GetPostgreSQL(ds.ID, ds.Host, ds.Port, ds.Username, password, dbName, ds.SSLMode, poolCfg)
+	if err != nil {
+		return nil, fmt.Errorf("connect postgresql: %w", err)
+	}
+	rows, err := targetDB.QueryContext(ctx,
+		`SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY tablename`, schemaName)
+	if err != nil {
+		return nil, fmt.Errorf("list postgresql tables: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	tables := make([]string, 0)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scan table name: %w", err)
+		}
+		tables = append(tables, name)
+	}
+	return tables, rows.Err()
+}
+
+// getPGColumns queries information_schema.columns for PostgreSQL column metadata.
+func (s *DatasourceService) getPGColumns(ctx context.Context, ds *model.DataSource, password, tableName string) ([]ColumnInfo, error) {
+	schemaName := ds.SchemaName
+	if schemaName == "" {
+		schemaName = "public"
+	}
+	dbName := ds.Database
+	if dbName == "" {
+		dbName = "postgres"
+	}
+	poolCfg := connpool.PGPoolConfig{
+		MaxOpen:     ds.MaxOpen,
+		MaxIdle:     ds.MaxIdle,
+		MaxLifetime: ds.MaxLifetime,
+		MaxIdleTime: ds.MaxIdleTime,
+	}
+	targetDB, err := s.connMgr.GetPostgreSQL(ds.ID, ds.Host, ds.Port, ds.Username, password, dbName, ds.SSLMode, poolCfg)
+	if err != nil {
+		return nil, fmt.Errorf("connect postgresql: %w", err)
+	}
+
+	// Map PostgreSQL data_type to simplified types for frontend display
+	query := `SELECT column_name, data_type, COALESCE(col_description(($1||'.'||$2)::regclass, ordinal_position), '') AS comment
+		 FROM information_schema.columns
+		 WHERE table_schema = $1 AND table_name = $2
+		 ORDER BY ordinal_position`
+	rows, err := targetDB.QueryContext(ctx, query, schemaName, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("query postgresql columns: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var columns []ColumnInfo
+	for rows.Next() {
+		var c ColumnInfo
+		if err := rows.Scan(&c.Name, &c.Type, &c.Comment); err != nil {
+			return nil, fmt.Errorf("scan column: %w", err)
+		}
+		c.Type = mapPGType(c.Type)
+		columns = append(columns, c)
+	}
+	return columns, rows.Err()
+}
+
+// mapPGType normalizes PostgreSQL data_type names to user-friendly types.
+func mapPGType(pgType string) string {
+	switch pgType {
+	case "smallint", "integer", "bigint", "int", "int2", "int4", "int8":
+		return "integer"
+	case "decimal", "numeric", "real", "double precision", "float4", "float8":
+		return "number"
+	case "character varying", "character", "text", "char", "varchar", "bpchar", "name":
+		return "string"
+	case "boolean", "bool":
+		return "boolean"
+	case "date":
+		return "date"
+	case "timestamp without time zone", "timestamp with time zone", "timestamp", "timestamptz":
+		return "timestamp"
+	case "time without time zone", "time with time zone", "time", "timetz":
+		return "time"
+	case "uuid":
+		return "uuid"
+	case "json", "jsonb":
+		return "json"
+	case "bytea":
+		return "binary"
+	case "ARRAY":
+		return "array"
+	default:
+		return pgType
+	}
 }
 
 func buildMongoURI(host string, port int, user, password string) string {

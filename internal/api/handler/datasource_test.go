@@ -120,7 +120,7 @@ func TestDatasourceHandler_CreateDatasource(t *testing.T) {
 			"invalid_type",
 			`{"name":"bad-type","type":"postgres","host":"10.0.0.1","port":5432,"username":"root","password":"secret"}`,
 			http.StatusBadRequest,
-			"数据源类型必须是 mysql 或 mongodb",
+			"数据源类型必须是 mysql、postgresql 或 mongodb",
 		},
 		{
 			"missing_host",

@@ -378,5 +378,9 @@ CREATE TABLE IF NOT EXISTS comments (
 	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN dingtalk_user_id TEXT DEFAULT ''`)
 	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN dingtalk_union_id TEXT DEFAULT ''`)
 
+	// PostgreSQL datasource support: sslmode and schema_name columns
+	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN sslmode TEXT DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN schema_name TEXT DEFAULT ''`)
+
 	return nil
 }

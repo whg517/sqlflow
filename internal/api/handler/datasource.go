@@ -28,6 +28,8 @@ type createDatasourceRequest struct {
 	Username    string `json:"username"`
 	Password    string `json:"password"`
 	Database    string `json:"database"`
+	SSLMode     string `json:"sslmode"`      // PostgreSQL: disable, prefer, require, verify-ca, verify-full
+	SchemaName  string `json:"schema_name"`  // PostgreSQL schema (default: public)
 	MaxOpen     int    `json:"max_open"`
 	MaxIdle     int    `json:"max_idle"`
 	MaxLifetime int    `json:"max_lifetime"`
@@ -42,6 +44,8 @@ type updateDatasourceRequest struct {
 	Username    string `json:"username"`
 	Password    string `json:"password"`
 	Database    string `json:"database"`
+	SSLMode     string `json:"sslmode"`      // PostgreSQL: disable, prefer, require, verify-ca, verify-full
+	SchemaName  string `json:"schema_name"`  // PostgreSQL schema (default: public)
 	MaxOpen     int    `json:"max_open"`
 	MaxIdle     int    `json:"max_idle"`
 	MaxLifetime int    `json:"max_lifetime"`
@@ -56,6 +60,8 @@ type datasourceResponse struct {
 	Port        int    `json:"port"`
 	Username    string `json:"username"`
 	Database    string `json:"database"`
+	SSLMode     string `json:"sslmode,omitempty"`     // PostgreSQL SSL mode
+	SchemaName  string `json:"schema_name,omitempty"` // PostgreSQL schema
 	MaxOpen     int    `json:"max_open"`
 	MaxIdle     int    `json:"max_idle"`
 	MaxLifetime int    `json:"max_lifetime"`
@@ -74,6 +80,8 @@ func toDatasourceResponse(ds *model.DataSource) datasourceResponse {
 		Port:        ds.Port,
 		Username:    ds.Username,
 		Database:    ds.Database,
+		SSLMode:     ds.SSLMode,
+		SchemaName:  ds.SchemaName,
 		MaxOpen:     ds.MaxOpen,
 		MaxIdle:     ds.MaxIdle,
 		MaxLifetime: ds.MaxLifetime,
@@ -83,6 +91,8 @@ func toDatasourceResponse(ds *model.DataSource) datasourceResponse {
 		UpdatedAt:   ds.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
+
+var validDatasourceTypesMsg = "数据源类型必须是 mysql、postgresql 或 mongodb"
 
 // CreateDatasource handles POST /api/datasources (admin).
 //
@@ -107,7 +117,7 @@ func (h *DatasourceHandler) CreateDatasource(c echo.Context) error {
 		return resp.BadRequest(c, "数据源名称不能为空")
 	}
 	if !service.ValidDatasourceTypes[req.Type] {
-		return resp.BadRequest(c, "数据源类型必须是 mysql 或 mongodb")
+		return resp.BadRequest(c, validDatasourceTypesMsg)
 	}
 	if req.Host == "" {
 		return resp.BadRequest(c, "主机地址不能为空")
@@ -127,6 +137,8 @@ func (h *DatasourceHandler) CreateDatasource(c echo.Context) error {
 		Username:          req.Username,
 		PasswordEncrypted: req.Password,
 		Database:          req.Database,
+		SSLMode:           req.SSLMode,
+		SchemaName:        req.SchemaName,
 		MaxOpen:           req.MaxOpen,
 		MaxIdle:           req.MaxIdle,
 		MaxLifetime:       req.MaxLifetime,
@@ -219,7 +231,7 @@ func (h *DatasourceHandler) UpdateDatasource(c echo.Context) error {
 	}
 
 	if !service.ValidDatasourceTypes[req.Type] {
-		return resp.BadRequest(c, "数据源类型必须是 mysql 或 mongodb")
+		return resp.BadRequest(c, validDatasourceTypesMsg)
 	}
 
 	ds := &model.DataSource{
@@ -230,6 +242,8 @@ func (h *DatasourceHandler) UpdateDatasource(c echo.Context) error {
 		Username:          req.Username,
 		PasswordEncrypted: req.Password, // empty = keep existing
 		Database:          req.Database,
+		SSLMode:           req.SSLMode,
+		SchemaName:        req.SchemaName,
 		MaxOpen:           req.MaxOpen,
 		MaxIdle:           req.MaxIdle,
 		MaxLifetime:       req.MaxLifetime,

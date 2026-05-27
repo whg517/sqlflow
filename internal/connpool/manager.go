@@ -9,15 +9,16 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Manager manages cached connection pools for MySQL and MongoDB datasources.
+// Manager manages cached connection pools for MySQL, PostgreSQL and MongoDB datasources.
 // It reuses *sql.DB / *mongo.Client instances instead of creating new connections per query.
 type Manager struct {
-	mu         sync.RWMutex
-	mysqlPools sync.Map // key: string → value: *sql.DB
+	mu       sync.RWMutex
+	sqlPools sync.Map // key: string → value: *sql.DB (MySQL + PostgreSQL)
 	mongoPools sync.Map // key: string → value: *mongo.Client
 }
 
@@ -45,7 +46,7 @@ func (m *Manager) GetMySQL(dsID int64, host string, port int, user, password, da
 	key := poolKey(dsID, host, port, database)
 
 	// Fast path: check cache
-	if v, ok := m.mysqlPools.Load(key); ok {
+	if v, ok := m.sqlPools.Load(key); ok {
 		return v.(*sql.DB), nil
 	}
 
@@ -54,7 +55,7 @@ func (m *Manager) GetMySQL(dsID int64, host string, port int, user, password, da
 	defer m.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if v, ok := m.mysqlPools.Load(key); ok {
+	if v, ok := m.sqlPools.Load(key); ok {
 		return v.(*sql.DB), nil
 	}
 
@@ -87,7 +88,7 @@ func (m *Manager) GetMySQL(dsID int64, host string, port int, user, password, da
 	db.SetConnMaxLifetime(time.Duration(maxLifetime) * time.Second)
 	db.SetConnMaxIdleTime(time.Duration(maxIdleTime) * time.Second)
 
-	m.mysqlPools.Store(key, db)
+	m.sqlPools.Store(key, db)
 	return db, nil
 }
 
@@ -95,7 +96,7 @@ func (m *Manager) GetMySQL(dsID int64, host string, port int, user, password, da
 // This should be called when a datasource is updated or deleted.
 func (m *Manager) Remove(dsID int64, host string, port int, database string) {
 	key := poolKey(dsID, host, port, database)
-	if v, ok := m.mysqlPools.LoadAndDelete(key); ok {
+	if v, ok := m.sqlPools.LoadAndDelete(key); ok {
 		_ = v.(*sql.DB).Close()
 	}
 }
@@ -103,7 +104,7 @@ func (m *Manager) Remove(dsID int64, host string, port int, database string) {
 // InjectMySQLForTest stores a pre-built *sql.DB in the pool for testing.
 func (m *Manager) InjectMySQLForTest(dsID int64, host string, port int, database string, db *sql.DB) {
 	key := poolKey(dsID, host, port, database)
-	m.mysqlPools.Store(key, db)
+	m.sqlPools.Store(key, db)
 }
 
 // InjectMongoForTest stores a pre-built *mongo.Client in the pool for testing.
@@ -112,11 +113,11 @@ func (m *Manager) InjectMongoForTest(dsID int64, uri string, client *mongo.Clien
 	m.mongoPools.Store(key, client)
 }
 
-// Close closes all cached connection pools (MySQL and MongoDB).
+// Close closes all cached connection pools (MySQL, PostgreSQL and MongoDB).
 func (m *Manager) Close() {
-	m.mysqlPools.Range(func(key, value interface{}) bool {
+	m.sqlPools.Range(func(key, value interface{}) bool {
 		_ = value.(*sql.DB).Close()
-		m.mysqlPools.Delete(key)
+		m.sqlPools.Delete(key)
 		return true
 	})
 
@@ -201,4 +202,106 @@ func (m *Manager) RemoveMongo(dsID int64) {
 		}
 		return true
 	})
+}
+
+// pgPoolKey generates a unique cache key for a PostgreSQL connection.
+func pgPoolKey(dsID int64, host string, port int, database string) string {
+	return fmt.Sprintf("pg:%d:%s:%d:%s", dsID, host, port, database)
+}
+
+// PGPoolConfig holds pool configuration for PostgreSQL connections.
+type PGPoolConfig struct {
+	MaxOpen     int
+	MaxIdle     int
+	MaxLifetime int // seconds
+	MaxIdleTime int // seconds
+}
+
+// GetPostgreSQL returns a cached *sql.DB for the given PostgreSQL datasource parameters,
+// creating and configuring one if it doesn't exist.
+func (m *Manager) GetPostgreSQL(dsID int64, host string, port int, user, password, database, sslmode string, cfg PGPoolConfig) (*sql.DB, error) {
+	key := pgPoolKey(dsID, host, port, database)
+
+	// Fast path: check cache
+	if v, ok := m.sqlPools.Load(key); ok {
+		return v.(*sql.DB), nil
+	}
+
+	// Slow path: create new pool
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Double-check after acquiring write lock
+	if v, ok := m.sqlPools.Load(key); ok {
+		return v.(*sql.DB), nil
+	}
+
+	if sslmode == "" {
+		sslmode = "prefer"
+	}
+
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s&connect_timeout=30",
+		user, password, host, port, database, sslmode)
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open postgresql: %w", err)
+	}
+
+	maxOpen := cfg.MaxOpen
+	if maxOpen <= 0 {
+		maxOpen = 10
+	}
+	maxIdle := cfg.MaxIdle
+	if maxIdle <= 0 {
+		maxIdle = 5
+	}
+	maxLifetime := cfg.MaxLifetime
+	if maxLifetime <= 0 {
+		maxLifetime = 3600
+	}
+	maxIdleTime := cfg.MaxIdleTime
+	if maxIdleTime <= 0 {
+		maxIdleTime = 600
+	}
+
+	db.SetMaxOpenConns(maxOpen)
+	db.SetMaxIdleConns(maxIdle)
+	db.SetConnMaxLifetime(time.Duration(maxLifetime) * time.Second)
+	db.SetConnMaxIdleTime(time.Duration(maxIdleTime) * time.Second)
+
+	m.sqlPools.Store(key, db)
+	return db, nil
+}
+
+// RemovePG removes a cached PostgreSQL connection pool for the given datasource.
+func (m *Manager) RemovePG(dsID int64, host string, port int, database string) {
+	key := pgPoolKey(dsID, host, port, database)
+	if v, ok := m.sqlPools.LoadAndDelete(key); ok {
+		_ = v.(*sql.DB).Close()
+	}
+}
+
+// PostgreSQLPing attempts to ping a PostgreSQL server to verify connectivity.
+func PostgreSQLPing(ctx context.Context, host string, port int, user, password, database, sslmode string) error {
+	if sslmode == "" {
+		sslmode = "prefer"
+	}
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s&connect_timeout=10",
+		user, password, host, port, database, sslmode)
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return fmt.Errorf("open postgresql: %w", err)
+	}
+	defer db.Close()
+
+	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	return db.PingContext(pingCtx)
+}
+
+// InjectPGForTest stores a pre-built *sql.DB in the PostgreSQL pool for testing.
+func (m *Manager) InjectPGForTest(dsID int64, host string, port int, database string, db *sql.DB) {
+	key := pgPoolKey(dsID, host, port, database)
+	m.sqlPools.Store(key, db)
 }

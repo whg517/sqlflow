@@ -155,12 +155,20 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 		MaxLifetime: ds.MaxLifetime,
 		MaxIdleTime: ds.MaxIdleTime,
 	}
+	pgPoolCfg := connpool.PGPoolConfig{
+		MaxOpen:     ds.MaxOpen,
+		MaxIdle:     ds.MaxIdle,
+		MaxLifetime: ds.MaxLifetime,
+		MaxIdleTime: ds.MaxIdleTime,
+	}
 
 	// Execute based on db type
 	var result *QueryResult
 	switch dbType {
 	case "mysql":
 		result, err = s.executeMySQL(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, poolCfg, defaultRowLimit)
+	case "postgresql":
+		result, err = s.executePostgreSQL(ctx, datasourceID, database, sqlContent, ds, password, pgPoolCfg, defaultRowLimit)
 	case "mongodb":
 		result, err = s.executeMongoDB(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, defaultRowLimit)
 	default:
@@ -221,6 +229,90 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 	})
 
 	return result, nil
+}
+
+// executePostgreSQL executes a SQL query on a PostgreSQL datasource.
+func (s *QueryService) executePostgreSQL(ctx context.Context, datasourceID int64, database, sqlContent string, ds *model.DataSource, password string, poolCfg connpool.PGPoolConfig, rowLimit int) (*QueryResult, error) {
+	dbName := database
+	if dbName == "" {
+		dbName = ds.Database
+		if dbName == "" {
+			dbName = "postgres"
+		}
+	}
+
+	start := time.Now()
+
+	targetDB, err := s.connMgr.GetPostgreSQL(datasourceID, ds.Host, ds.Port, ds.Username, password, dbName, ds.SSLMode, poolCfg)
+	if err != nil {
+		return nil, fmt.Errorf("连接PostgreSQL失败: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
+
+	rows, err := targetDB.QueryContext(ctx, sqlContent)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, ErrSQLTimeout
+		}
+		return nil, fmt.Errorf("执行查询失败: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("获取列信息失败: %w", err)
+	}
+
+	resultRows := make([]map[string]interface{}, 0, rowLimit)
+	rowCount := 0
+	for rows.Next() {
+		if rowCount >= rowLimit {
+			break
+		}
+
+		values := make([]interface{}, len(cols))
+		valuePtrs := make([]interface{}, len(cols))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, fmt.Errorf("读取数据失败: %w", err)
+		}
+
+		row := make(map[string]interface{})
+		for i, col := range cols {
+			val := values[i]
+			// PostgreSQL pgx driver returns []byte for some types; convert to string
+			switch v := val.(type) {
+			case []byte:
+				row[col] = string(v)
+			case time.Time:
+				row[col] = v.Format("2006-01-02T15:04:05Z07:00")
+			case nil:
+				row[col] = nil
+			default:
+				row[col] = v
+			}
+		}
+		resultRows = append(resultRows, row)
+		rowCount++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("遍历结果失败: %w", err)
+	}
+
+	elapsed := time.Since(start).Milliseconds()
+
+	return &QueryResult{
+		Columns:       cols,
+		Rows:          resultRows,
+		Total:         int64(len(resultRows)),
+		ExecutionTime: elapsed,
+		AffectedRows:  0,
+	}, nil
 }
 
 func (s *QueryService) executeMySQL(ctx context.Context, datasourceID int64, database, sqlContent, host string, port int, user, password string, poolCfg connpool.MySQLPoolConfig, rowLimit int) (*QueryResult, error) {
