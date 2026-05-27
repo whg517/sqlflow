@@ -22,6 +22,7 @@ import {
   Gauge,
   Moon,
   BarChart3,
+  ShieldAlert,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -227,6 +228,13 @@ export default function Layout() {
             to="/reports"
             icon={BarChart3}
             label="审计报表"
+            collapsed={collapsed}
+            navLinkClass={navLinkClass}
+          />
+          <NavItem
+            to="/permission-requests"
+            icon={ShieldAlert}
+            label="临时权限"
             collapsed={collapsed}
             navLinkClass={navLinkClass}
           />

@@ -57,6 +57,10 @@ const TokenPage = lazyPage(() => import("@/pages/TokenPage"), {
   title: "Token 管理页面出现了问题",
 });
 
+const PermRequestPage = lazyPage(() => import("@/pages/PermRequestPage"), {
+  title: "临时权限页面出现了问题",
+});
+
 // ── App ─────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -86,6 +90,7 @@ function App() {
             <Route path="/settings/mask-rules" element={<SettingsPage />} />
             <Route path="/settings/ai-config" element={<SettingsPage />} />
             <Route path="/tokens" element={<TokenPage />} />
+            <Route path="/permission-requests" element={<PermRequestPage />} />
             <Route path="/403" element={<ErrorPage code={403} />} />
             <Route path="/404" element={<ErrorPage code={404} />} />
             <Route path="*" element={<Navigate to="/" replace />} />

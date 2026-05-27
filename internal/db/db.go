@@ -445,5 +445,71 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 		return fmt.Errorf("migrate api_tokens hash index: %w", err)
 	}
 
+	// --- permission_requests ---
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS permission_requests (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    applicant_id    INTEGER NOT NULL,
+    datasource_id   INTEGER NOT NULL,
+    database        TEXT    NOT NULL,
+    table_name      TEXT    NOT NULL DEFAULT '',
+    actions         TEXT    NOT NULL DEFAULT '',
+    reason          TEXT    NOT NULL DEFAULT '',
+    status          TEXT    NOT NULL DEFAULT 'PENDING',
+    approver_id     INTEGER,
+    approve_comment TEXT    NOT NULL DEFAULT '',
+    approved_at     DATETIME,
+    expires_at      DATETIME NOT NULL DEFAULT (datetime('now', '+24 hours')),
+    revoked_at      DATETIME,
+    revoked_by      INTEGER,
+    revoke_reason   TEXT    NOT NULL DEFAULT '',
+    created_at      DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at      DATETIME NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (applicant_id) REFERENCES users(id),
+    FOREIGN KEY (approver_id) REFERENCES users(id)
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate permission_requests: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_perm_req_applicant ON permission_requests(applicant_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate perm_req applicant index: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_perm_req_status ON permission_requests(status)`)
+	if err != nil {
+		return fmt.Errorf("migrate perm_req status index: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_perm_req_ds_db ON permission_requests(datasource_id, database)`)
+	if err != nil {
+		return fmt.Errorf("migrate perm_req ds_db index: %w", err)
+	}
+
+	// temp_policies tracks temporary casbin policies with expiry
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS temp_policies (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    sub        TEXT    NOT NULL,
+    dom        TEXT    NOT NULL,
+    obj        TEXT    NOT NULL,
+    act        TEXT    NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(sub, dom, obj, act)
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate temp_policies: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_temp_policies_expiry ON temp_policies(expires_at)`)
+	if err != nil {
+		return fmt.Errorf("migrate temp_policies expiry index: %w", err)
+	}
+
 	return nil
 }
+

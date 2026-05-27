@@ -15,7 +15,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, db *sql.DB, cfg *config.Config) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, db *sql.DB, cfg *config.Config) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -57,6 +57,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	gitHandler := handler.NewGitHandler(gitSvc)
 	tokenHandler := handler.NewTokenHandler(tokenSvc)
 	reportHandler := handler.NewAuditReportHandler(reportSvc)
+	permReqHandler := handler.NewPermReqHandler(permReqSvc)
 
 	// Public routes
 	e.POST("/api/auth/login", userHandler.Login)
@@ -165,6 +166,18 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.GET("/api/reports/errors", reportHandler.GetErrorStats)
 	adminGroup.GET("/api/reports/performance", reportHandler.GetPerformanceReport)
 	adminGroup.GET("/api/reports/tickets", reportHandler.GetTicketReport)
+
+	// Permission request management
+	authGroup.POST("/api/permission-requests", permReqHandler.CreateRequest)
+	authGroup.GET("/api/permission-requests/mine", permReqHandler.MyRequests)
+	authGroup.GET("/api/permission-requests/active", permReqHandler.MyActiveRequests)
+	authGroup.GET("/api/permission-requests/:id", permReqHandler.GetRequest)
+
+	adminGroup.GET("/api/permission-requests", permReqHandler.ListRequests)
+	adminGroup.POST("/api/permission-requests/:id/approve", permReqHandler.ApproveRequest)
+	adminGroup.POST("/api/permission-requests/:id/reject", permReqHandler.RejectRequest)
+	adminGroup.POST("/api/permission-requests/:id/revoke", permReqHandler.RevokeRequest)
+	adminGroup.POST("/api/permission-requests/expire", permReqHandler.ExpireOverdue)
 
 	// Export routes — audit export requires admin/dba; ticket export requires auth
 	adminGroup.GET("/api/export/audit", exportHandler.ExportAuditLogs)

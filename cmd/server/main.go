@@ -103,6 +103,10 @@ func main() {
 	reportSvc := service.NewAuditReportService(database.DB)
 	log.Println("audit report service initialized")
 
+	// Initialize permission request service
+	permReqSvc := service.NewPermissionRequestService(database.DB, permSvc, auditSvc)
+	log.Println("permission request service initialized")
+
 	commentSvc := service.NewCommentService(database.DB)
 	log.Println("comment service initialized")
 
@@ -145,7 +149,7 @@ func main() {
 	defer backupSvc.Stop()
 
 	// Start server
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, tokenSvc, reportSvc, database.DB, cfg)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, database.DB, cfg)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server

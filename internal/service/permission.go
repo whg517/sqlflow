@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
@@ -372,6 +373,61 @@ func (s *PermissionService) GetRoles() []string {
 // Enforcer returns the underlying Casbin enforcer (for middleware use).
 func (s *PermissionService) Enforcer() *casbin.Enforcer {
 	return s.enforcer
+}
+
+// AddTemporaryPolicy adds a policy and tracks it with an expiry time for auto-cleanup.
+func (s *PermissionService) AddTemporaryPolicy(ctx context.Context, sub, dom, obj, act string, expiresAt time.Time) error {
+	added, err := s.enforcer.AddPolicy(sub, dom, obj, act)
+	if err != nil {
+		return err
+	}
+	if !added {
+		return nil // already exists
+	}
+
+	_, err = s.db.ExecContext(ctx,
+		`INSERT OR IGNORE INTO temp_policies (sub, dom, obj, act, expires_at) VALUES (?, ?, ?, ?, ?)`,
+		sub, dom, obj, act, expiresAt.Format("2006-01-02 15:04:05"),
+	)
+	return err
+}
+
+// RemoveTemporaryPolicy removes a policy and its tracking record.
+func (s *PermissionService) RemoveTemporaryPolicy(ctx context.Context, sub, dom, obj, act string) error {
+	_, err := s.enforcer.RemovePolicy(sub, dom, obj, act)
+	if err != nil {
+		return err
+	}
+	_, _ = s.db.ExecContext(ctx,
+		`DELETE FROM temp_policies WHERE sub = ? AND dom = ? AND obj = ? AND act = ?`,
+		sub, dom, obj, act,
+	)
+	return nil
+}
+
+// PurgeExpiredPolicies removes all temporary policies past their expiry.
+func (s *PermissionService) PurgeExpiredPolicies(ctx context.Context) (int64, error) {
+	now := time.Now().UTC().Format("2006-01-02 15:04:05")
+
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT sub, dom, obj, act FROM temp_policies WHERE expires_at <= ?`, now)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var count int64
+	for rows.Next() {
+		var sub, dom, obj, act string
+		if err := rows.Scan(&sub, &dom, &obj, &act); err != nil {
+			continue
+		}
+		_, _ = s.enforcer.RemovePolicy(sub, dom, obj, act)
+		count++
+	}
+
+	_, _ = s.db.ExecContext(ctx, `DELETE FROM temp_policies WHERE expires_at <= ?`, now)
+	return count, rows.Err()
 }
 
 // osReadFile reads a file from disk.

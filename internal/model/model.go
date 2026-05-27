@@ -208,3 +208,38 @@ type APIToken struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
+
+// PermissionRequestStatus represents the status of a permission request.
+type PermissionRequestStatus string
+
+const (
+	PermReqStatusPending  PermissionRequestStatus = "PENDING"
+	PermReqStatusApproved PermissionRequestStatus = "APPROVED"
+	PermReqStatusRejected PermissionRequestStatus = "REJECTED"
+	PermReqStatusExpired  PermissionRequestStatus = "EXPIRED"
+	PermReqStatusRevoked  PermissionRequestStatus = "REVOKED"
+)
+
+// PermissionRequest represents a temporary access permission request for a sensitive table.
+type PermissionRequest struct {
+	ID             int64                  `json:"id"`
+	ApplicantID    int64                  `json:"applicant_id"`
+	ApplicantName  string                 `json:"applicant_name,omitempty"`
+	ApproverID     int64                  `json:"approver_id,omitempty"`
+	ApproverName   string                 `json:"approver_name,omitempty"`
+	DatasourceID   int64                  `json:"datasource_id"`
+	DatasourceName string                 `json:"datasource_name,omitempty"`
+	Database       string                 `json:"database"`
+	TableName      string                 `json:"table_name"`
+	Actions        string                 `json:"actions"` // comma-separated: select,update,delete,ddl,export
+	Reason         string                 `json:"reason"`
+	Status         PermissionRequestStatus `json:"status"`
+	ApproveComment string                 `json:"approve_comment,omitempty"`
+	ApprovedAt     *time.Time             `json:"approved_at,omitempty"`
+	ExpiresAt      time.Time              `json:"expires_at"`
+	RevokedAt      *time.Time             `json:"revoked_at,omitempty"`
+	RevokedBy      int64                  `json:"revoked_by,omitempty"`
+	RevokeReason   string                 `json:"revoke_reason,omitempty"`
+	CreatedAt      time.Time              `json:"created_at"`
+	UpdatedAt      time.Time              `json:"updated_at"`
+}
