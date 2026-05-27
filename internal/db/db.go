@@ -382,6 +382,7 @@ CREATE TABLE IF NOT EXISTS comments (
 	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN sslmode TEXT DEFAULT ''`)
 	_, _ = db.Exec(`ALTER TABLE datasources ADD COLUMN schema_name TEXT DEFAULT ''`)
 
+<<<<<<< HEAD
 	// Git links table for associating tickets/audit logs with git commits and PRs.
 	_, err = db.Exec(`
 CREATE TABLE IF NOT EXISTS git_links (
