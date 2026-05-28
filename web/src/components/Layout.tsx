@@ -24,6 +24,7 @@ import {
   BarChart3,
   ShieldAlert,
   Code2,
+  TestTube2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -263,6 +264,15 @@ export default function Layout() {
             to="/sql-templates"
             icon={Code2}
             label="SQL 模板"
+            collapsed={collapsed}
+            navLinkClass={navLinkClass}
+          />
+
+          {/* Coverage Audit */}
+          <NavItem
+            to="/coverage"
+            icon={TestTube2}
+            label="覆盖度审计"
             collapsed={collapsed}
             navLinkClass={navLinkClass}
           />

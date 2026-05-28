@@ -65,6 +65,14 @@ const SQLTemplatePage = lazyPage(() => import("@/pages/SQLTemplatePage"), {
   title: "SQL 模板页面出现了问题",
 });
 
+const CoverageSummaryPage = lazyPage(() => import("@/pages/Coverage/CoverageSummaryPage"), {
+  title: "覆盖度审计页面出现了问题",
+});
+
+const FileDetailPage = lazyPage(() => import("@/pages/Coverage/FileDetailPage"), {
+  title: "文件覆盖度页面出现了问题",
+});
+
 // ── App ─────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -96,6 +104,9 @@ function App() {
             <Route path="/tokens" element={<TokenPage />} />
             <Route path="/permission-requests" element={<PermRequestPage />} />
             <Route path="/sql-templates" element={<SQLTemplatePage />} />
+            <Route path="/coverage" element={<CoverageSummaryPage />} />
+            <Route path="/coverage/summary" element={<CoverageSummaryPage />} />
+            <Route path="/coverage/modules/:modulePath" element={<FileDetailPage />} />
             <Route path="/403" element={<ErrorPage code={403} />} />
             <Route path="/404" element={<ErrorPage code={404} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
