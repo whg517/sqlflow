@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/resp"
 	"github.com/whg517/sqlflow/internal/service"
 )
@@ -35,7 +34,7 @@ type renderTemplateRequest struct {
 
 // CreateTemplate handles POST /api/sql-templates.
 func (h *SQLTemplateHandler) CreateTemplate(c echo.Context) error {
-	userID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	var req createOrUpdateTemplateRequest
 	if err := c.Bind(&req); err != nil {
@@ -92,7 +91,7 @@ func (h *SQLTemplateHandler) GetTemplate(c echo.Context) error {
 
 // ListTemplates handles GET /api/sql-templates.
 func (h *SQLTemplateHandler) ListTemplates(c echo.Context) error {
-	userID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	category := c.QueryParam("category")
 	page, _ := strconv.Atoi(c.QueryParam("page"))
@@ -114,7 +113,7 @@ func (h *SQLTemplateHandler) ListTemplates(c echo.Context) error {
 
 // UpdateTemplate handles PUT /api/sql-templates/:id.
 func (h *SQLTemplateHandler) UpdateTemplate(c echo.Context) error {
-	userID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resp.BadRequest(c, "无效的模板 ID")
@@ -160,7 +159,7 @@ func (h *SQLTemplateHandler) UpdateTemplate(c echo.Context) error {
 
 // DeleteTemplate handles DELETE /api/sql-templates/:id.
 func (h *SQLTemplateHandler) DeleteTemplate(c echo.Context) error {
-	userID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resp.BadRequest(c, "无效的模板 ID")

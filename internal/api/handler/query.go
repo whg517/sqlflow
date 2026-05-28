@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/resp"
 	"github.com/whg517/sqlflow/internal/service"
@@ -67,9 +66,9 @@ func (h *QueryHandler) ExecuteQuery(c echo.Context) error {
 		return resp.BadRequest(c, "SQL不能为空")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	username := c.Get(middleware.ContextKeyUsername).(string)
-	role := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	username := getContextUsername(c)
+	role := getContextRole(c)
 
 	result, err := h.querySvc.ExecuteQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, "")
 	if err != nil {
@@ -107,8 +106,8 @@ func (h *QueryHandler) ExplainQuery(c echo.Context) error {
 		return resp.BadRequest(c, "SQL不能为空")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	role := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	role := getContextRole(c)
 
 	result, err := h.querySvc.ExplainQuery(c.Request().Context(), userID, role, req.DatasourceID, req.Database, req.SQL)
 	if err != nil {
@@ -144,7 +143,7 @@ func (h *QueryHandler) ExplainQuery(c echo.Context) error {
 // @Failure 500 {object} resp.ErrorResponse "获取查询历史失败"
 // @Router /query/history [get]
 func (h *QueryHandler) ListHistory(c echo.Context) error {
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
@@ -181,7 +180,7 @@ func (h *QueryHandler) ListHistory(c echo.Context) error {
 // @Failure 400 {object} resp.ErrorResponse "无效的ID"
 // @Router /query/history/{id} [delete]
 func (h *QueryHandler) DeleteHistory(c echo.Context) error {
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -207,7 +206,7 @@ func (h *QueryHandler) DeleteHistory(c echo.Context) error {
 // @Failure 500 {object} resp.ErrorResponse "清空查询历史失败"
 // @Router /query/history [delete]
 func (h *QueryHandler) ClearHistory(c echo.Context) error {
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	if err := h.historySvc.ClearHistory(c.Request().Context(), userID); err != nil {
 		return resp.InternalError(c, "清空查询历史失败")
@@ -252,9 +251,9 @@ func (h *QueryHandler) ExportQuery(c echo.Context) error {
 		return resp.BadRequest(c, "导出格式仅支持 csv 或 json")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	username := c.Get(middleware.ContextKeyUsername).(string)
-	role := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	username := getContextUsername(c)
+	role := getContextRole(c)
 
 	result, err := h.querySvc.ExportQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, "")
 	if err != nil {

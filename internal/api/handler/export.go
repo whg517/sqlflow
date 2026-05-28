@@ -11,7 +11,6 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/resp"
 	"github.com/whg517/sqlflow/internal/service"
 )
@@ -41,9 +40,9 @@ type exportAuditRequest struct {
 // For small datasets (< threshold), returns CSV synchronously.
 // For large datasets or when ?async=1, creates an async task and returns the task ID.
 func (h *ExportHandler) ExportAuditLogs(c echo.Context) error {
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	username := c.Get(middleware.ContextKeyUsername).(string)
-	role := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	username := getContextUsername(c)
+	role := getContextRole(c)
 
 	var req exportAuditRequest
 	if err := c.Bind(&req); err != nil {
@@ -96,9 +95,9 @@ type exportTicketRequest struct {
 // For small datasets (< threshold), returns CSV synchronously.
 // For large datasets or when ?async=1, creates an async task and returns the task ID.
 func (h *ExportHandler) ExportTickets(c echo.Context) error {
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	username := c.Get(middleware.ContextKeyUsername).(string)
-	role := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	username := getContextUsername(c)
+	role := getContextRole(c)
 
 	var req exportTicketRequest
 	if err := c.Bind(&req); err != nil {
@@ -171,7 +170,7 @@ func (h *ExportHandler) createAsyncExport(c echo.Context, userID int64, username
 
 // GetExportTask handles GET /api/export/tasks/:id.
 func (h *ExportHandler) GetExportTask(c echo.Context) error {
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -198,7 +197,7 @@ func (h *ExportHandler) GetExportTask(c echo.Context) error {
 
 // ListExportTasks handles GET /api/export/tasks.
 func (h *ExportHandler) ListExportTasks(c echo.Context) error {
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	tasks, err := h.exportAsyncSvc.ListTasks(c.Request().Context(), userID)
 	if err != nil {
@@ -215,7 +214,7 @@ func (h *ExportHandler) ListExportTasks(c echo.Context) error {
 
 // DownloadExportFile handles GET /api/export/tasks/:id/download.
 func (h *ExportHandler) DownloadExportFile(c echo.Context) error {
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/resp"
 	"github.com/whg517/sqlflow/internal/service"
 )
@@ -57,7 +56,7 @@ func (h *TicketHandler) CreateTicket(c echo.Context) error {
 		return resp.BadRequest(c, "SQL内容不能为空")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	ticket, err := h.ticketSvc.CreateTicket(
 		c.Request().Context(), userID, req.DatasourceID, req.Database, req.SQL,
@@ -138,8 +137,8 @@ func (h *TicketHandler) ListTickets(c echo.Context) error {
 		pageSize = 50
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	role := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	role := getContextRole(c)
 
 	tickets, total, err := h.ticketSvc.ListTickets(
 		c.Request().Context(), page, pageSize,
@@ -189,8 +188,8 @@ func (h *TicketHandler) ApproveTicket(c echo.Context) error {
 		return resp.BadRequest(c, "请求格式错误")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	role := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	role := getContextRole(c)
 
 	ticket, err := h.ticketSvc.ApproveTicket(c.Request().Context(), id, userID, role, req.Comment)
 	if err != nil {
@@ -244,8 +243,8 @@ func (h *TicketHandler) RejectTicket(c echo.Context) error {
 		return resp.BadRequest(c, "驳回原因不能为空")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	role := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	role := getContextRole(c)
 
 	ticket, err := h.ticketSvc.RejectTicket(c.Request().Context(), id, userID, role, req.Reason)
 	if err != nil {
@@ -301,8 +300,8 @@ func (h *TicketHandler) CancelTicket(c echo.Context) error {
 		return resp.BadRequest(c, "取消原因不能为空")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	role := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	role := getContextRole(c)
 
 	ticket, err := h.ticketSvc.CancelTicket(c.Request().Context(), id, userID, role, req.Reason)
 	if err != nil {
@@ -343,9 +342,9 @@ func (h *TicketHandler) ExecuteTicket(c echo.Context) error {
 		return resp.BadRequest(c, "无效的工单ID")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	role := c.Get(middleware.ContextKeyRole).(string)
-	username := c.Get(middleware.ContextKeyUsername).(string)
+	userID := getContextUserID(c)
+	role := getContextRole(c)
+	username := getContextUsername(c)
 
 	ticket, err := h.ticketSvc.ExecuteTicket(c.Request().Context(), id, userID, role, username)
 	if err != nil {
@@ -404,8 +403,8 @@ func (h *TicketHandler) ScheduleTicket(c echo.Context) error {
 		return resp.BadRequest(c, "定时执行时间格式错误，请使用 RFC3339 格式 (如: 2026-05-23T10:00:00+08:00)")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	role := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	role := getContextRole(c)
 
 	ticket, err := h.ticketSvc.ScheduleTicket(c.Request().Context(), id, userID, role, scheduledAt)
 	if err != nil {
@@ -448,8 +447,8 @@ func (h *TicketHandler) CancelSchedule(c echo.Context) error {
 		return resp.BadRequest(c, "无效的工单ID")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	role := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	role := getContextRole(c)
 
 	ticket, err := h.ticketSvc.CancelSchedule(c.Request().Context(), id, userID, role)
 	if err != nil {

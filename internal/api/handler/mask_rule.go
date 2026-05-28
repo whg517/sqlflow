@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/resp"
 	"github.com/whg517/sqlflow/internal/service"
 )
@@ -64,7 +63,7 @@ func (h *MaskRuleHandler) CreateMaskRule(c echo.Context) error {
 		return resp.BadRequest(c, "脱敏类型不能为空")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	rule, err := h.maskRuleSvc.CreateMaskRule(
 		c.Request().Context(), userID, req.DatasourceID, req.Database, req.TableName, req.Field,
@@ -195,7 +194,7 @@ func (h *MaskRuleHandler) UpdateMaskRule(c echo.Context) error {
 		return resp.BadRequest(c, "请求格式错误")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	rule, err := h.maskRuleSvc.UpdateMaskRule(
 		c.Request().Context(), userID, id, req.TableName, req.Field, req.MaskType,
@@ -236,7 +235,7 @@ func (h *MaskRuleHandler) DeleteMaskRule(c echo.Context) error {
 		return resp.BadRequest(c, "无效的规则ID")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	if err := h.maskRuleSvc.DeleteMaskRule(c.Request().Context(), userID, id); err != nil {
 		switch err {
@@ -289,7 +288,7 @@ func (h *MaskRuleHandler) CreateSensitiveTable(c echo.Context) error {
 		req.SensitivityLevel = "medium"
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	st, err := h.maskRuleSvc.CreateSensitiveTable(
 		c.Request().Context(), userID, req.DatasourceID, req.Database, req.TableName, req.SensitivityLevel,
@@ -368,7 +367,7 @@ func (h *MaskRuleHandler) DeleteSensitiveTable(c echo.Context) error {
 		return resp.BadRequest(c, "无效的记录ID")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	if err := h.maskRuleSvc.DeleteSensitiveTable(c.Request().Context(), userID, id); err != nil {
 		switch err {

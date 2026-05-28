@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/resp"
 	"github.com/whg517/sqlflow/internal/service"
 )
@@ -81,7 +80,7 @@ func (h *CommentHandler) CreateComment(c echo.Context) error {
 		return resp.BadRequest(c, "评论内容不能为空")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	comment, err := h.commentSvc.CreateComment(c.Request().Context(), orderID, userID, req.Content, req.ParentID)
 	if err != nil {
@@ -120,8 +119,8 @@ func (h *CommentHandler) DeleteComment(c echo.Context) error {
 		return resp.BadRequest(c, "无效的评论ID")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	userRole := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	userRole := getContextRole(c)
 
 	err = h.commentSvc.DeleteComment(c.Request().Context(), commentID, userID, userRole)
 	if err != nil {

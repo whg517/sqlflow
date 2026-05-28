@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/resp"
 	"github.com/whg517/sqlflow/internal/service"
 )
@@ -33,7 +32,7 @@ type createPermReqRequest struct {
 
 // CreateRequest creates a new permission request.
 func (h *PermReqHandler) CreateRequest(c echo.Context) error {
-	userID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	var req createPermReqRequest
 	if err := c.Bind(&req); err != nil {
@@ -94,7 +93,7 @@ func (h *PermReqHandler) ListRequests(c echo.Context) error {
 
 // MyRequests returns the current user's permission requests.
 func (h *PermReqHandler) MyRequests(c echo.Context) error {
-	userID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	requests, total, err := h.svc.ListRequests(c.Request().Context(), 1, 100,
 		"", strconv.FormatInt(userID, 10))
@@ -110,7 +109,7 @@ func (h *PermReqHandler) MyRequests(c echo.Context) error {
 
 // MyActiveRequests returns current user's active permissions.
 func (h *PermReqHandler) MyActiveRequests(c echo.Context) error {
-	userID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	requests, _, err := h.svc.MyActiveRequests(c.Request().Context(), userID)
 	if err != nil {
@@ -144,7 +143,7 @@ type approveRejectReq struct {
 
 // ApproveRequest approves a permission request (admin/dba).
 func (h *PermReqHandler) ApproveRequest(c echo.Context) error {
-	approverID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	approverID := getContextUserID(c)
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resp.BadRequest(c, "无效的 ID")
@@ -169,7 +168,7 @@ func (h *PermReqHandler) ApproveRequest(c echo.Context) error {
 
 // RejectRequest rejects a permission request (admin/dba).
 func (h *PermReqHandler) RejectRequest(c echo.Context) error {
-	approverID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	approverID := getContextUserID(c)
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resp.BadRequest(c, "无效的 ID")
@@ -198,7 +197,7 @@ type revokeReq struct {
 
 // RevokeRequest revokes an approved permission (admin/dba).
 func (h *PermReqHandler) RevokeRequest(c echo.Context) error {
-	revokerID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	revokerID := getContextUserID(c)
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resp.BadRequest(c, "无效的 ID")

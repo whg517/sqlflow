@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
 	"github.com/whg517/sqlflow/internal/service"
 )
@@ -58,9 +57,9 @@ func (h *AIReviewHandler) ReviewStream(c echo.Context) error {
 		return echo.NewHTTPError(400, "SQL不能为空")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
-	username := c.Get(middleware.ContextKeyUsername).(string)
-	role := c.Get(middleware.ContextKeyRole).(string)
+	userID := getContextUserID(c)
+	username := getContextUsername(c)
+	role := getContextRole(c)
 
 	// Get datasource to determine db type
 	ds, err := h.dsSvc.GetDataSource(c.Request().Context(), req.DatasourceID)

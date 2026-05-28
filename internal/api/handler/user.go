@@ -8,7 +8,6 @@ import (
 	"unicode"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/resp"
 	"github.com/whg517/sqlflow/internal/service"
 )
@@ -169,7 +168,7 @@ func (h *UserHandler) Refresh(c echo.Context) error {
 // @Failure 401 {object} resp.ErrorResponse "未认证"
 // @Router /auth/me [get]
 func (h *UserHandler) Me(c echo.Context) error {
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	user, err := h.authSvc.GetUserByID(c.Request().Context(), userID)
 	if err != nil {
@@ -198,7 +197,7 @@ func (h *UserHandler) Me(c echo.Context) error {
 // @Failure 401 {object} resp.ErrorResponse "旧密码错误"
 // @Router /auth/password [put]
 func (h *UserHandler) ChangePassword(c echo.Context) error {
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	var req changePasswordRequest
 	if err := c.Bind(&req); err != nil {
@@ -402,7 +401,7 @@ func (h *UserHandler) GetUser(c echo.Context) error {
 // @Failure 404 {object} resp.ErrorResponse "用户不存在"
 // @Router /users/{id} [put]
 func (h *UserHandler) UpdateUser(c echo.Context) error {
-	currentUserID := c.Get(middleware.ContextKeyUserID).(int64)
+	currentUserID := getContextUserID(c)
 
 	id, err := parseUserID(c)
 	if err != nil {
@@ -458,7 +457,7 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 // @Failure 404 {object} resp.ErrorResponse "用户不存在"
 // @Router /users/{id} [delete]
 func (h *UserHandler) DeleteUser(c echo.Context) error {
-	currentUserID := c.Get(middleware.ContextKeyUserID).(int64)
+	currentUserID := getContextUserID(c)
 
 	id, err := parseUserID(c)
 	if err != nil {

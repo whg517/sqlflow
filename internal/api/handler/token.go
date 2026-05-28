@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/resp"
 	"github.com/whg517/sqlflow/internal/service"
 )
@@ -31,7 +30,7 @@ type createTokenRequest struct {
 
 // CreateToken generates a new API token.
 func (h *TokenHandler) CreateToken(c echo.Context) error {
-	userID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	var req createTokenRequest
 	if err := c.Bind(&req); err != nil {
@@ -86,7 +85,7 @@ func (h *TokenHandler) CreateToken(c echo.Context) error {
 
 // ListMyTokens returns tokens for the authenticated user.
 func (h *TokenHandler) ListMyTokens(c echo.Context) error {
-	userID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	tokens, err := h.tokenSvc.ListTokens(c.Request().Context(), userID)
 	if err != nil {
@@ -117,7 +116,7 @@ func (h *TokenHandler) ListAllTokens(c echo.Context) error {
 
 // RevokeMyToken revokes a token owned by the authenticated user.
 func (h *TokenHandler) RevokeMyToken(c echo.Context) error {
-	userID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 	tokenID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resp.BadRequest(c, "无效的 Token ID")
@@ -152,7 +151,7 @@ func (h *TokenHandler) RevokeAnyToken(c echo.Context) error {
 
 // GetTokenStats returns token usage statistics.
 func (h *TokenHandler) GetTokenStats(c echo.Context) error {
-	userID, _ := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	totalCount, activeCount, totalUsage, err := h.tokenSvc.GetTokenStats(c.Request().Context(), userID)
 	if err != nil {

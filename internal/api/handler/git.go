@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/api/middleware"
 	"github.com/whg517/sqlflow/internal/resp"
 	"github.com/whg517/sqlflow/internal/service"
 )
@@ -67,7 +66,7 @@ func (h *GitHandler) CreateGitLink(c echo.Context) error {
 		return resp.BadRequest(c, "commit_hash 和 pr_number 不能同时为空")
 	}
 
-	userID := c.Get(middleware.ContextKeyUserID).(int64)
+	userID := getContextUserID(c)
 
 	input := service.CreateGitLinkInput{
 		EntityType:  req.EntityType,
