@@ -226,6 +226,9 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	// Ticket SLA status query (authenticated users)
 	authGroup.GET("/api/tickets/sla-status", slaHandler.GetTicketSLAStatuses)
 
+	// Coverage audit system (SF-QA0025) — MUST-1: nil pgDB guard inside RegisterCoverageRoutes
+	handler.RegisterCoverageRoutes(e, middleware.Auth(authSvc, tokenSvc), middleware.Admin(), nil)
+
 	// Frontend SPA (must be after API routes)
 	serveFrontend(e)
 
