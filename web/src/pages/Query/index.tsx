@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { Clock } from "lucide-react";
+import { Clock, Link2 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -41,6 +41,8 @@ import ResizableSplit from "./components/ResizableSplit";
 import AIReviewCard from "./components/AIReviewCard";
 import TicketSubmitSheet from "./components/TicketSubmitSheet";
 import ExplainPanel from "./components/ExplainPanel";
+import ShareButton from "./components/ShareButton";
+import ShareListPanel from "./components/ShareListPanel";
 
 // --- Types ---
 
@@ -84,6 +86,7 @@ export default function QueryPage() {
   const [explainResult, setExplainResult] = useState<ExplainResult | null>(null);
   const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
+  const [shareListOpen, setShareListOpen] = useState(false);
 
   const { fetchTables, fetchColumns, clearDatasourceCache } =
     useSchemaCompletion();
@@ -520,6 +523,28 @@ export default function QueryPage() {
           }
           bottom={
             <div className="flex h-full flex-col">
+              <div className="flex items-center justify-between border-b border-[var(--border-default)] px-2 py-1">
+                <div className="flex items-center gap-1">
+                  {activeTab?.result && activeTab.result.rows.length > 0 && (
+                    <ShareButton
+                      columns={activeTab.result.columns}
+                      rows={activeTab.result.rows}
+                      sqlSummary={currentSql.trim().substring(0, 200)}
+                    />
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 text-[10px]"
+                    onClick={() => setShareListOpen((v) => !v)}
+                  >
+                    <Link2 size={10} />
+                    我的共享
+                  </Button>
+                </div>
+              </div>
               <div className="flex-1 overflow-hidden">
                 <ResultTable result={activeTab?.result ?? null} />
               </div>
@@ -571,6 +596,24 @@ export default function QueryPage() {
               loading={explaining}
               error={explainError}
             />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Share list panel */}
+      <Sheet open={shareListOpen} onOpenChange={setShareListOpen}>
+        <SheetContent
+          side="right"
+          className="w-[500px] sm:max-w-[500px] border-[var(--border-default)] bg-[var(--bg-surface)]"
+        >
+          <SheetHeader>
+            <SheetTitle className="text-[var(--text-primary)] flex items-center gap-2">
+              <Link2 size={16} />
+              我的共享链接
+            </SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 overflow-auto">
+            <ShareListPanel />
           </div>
         </SheetContent>
       </Sheet>

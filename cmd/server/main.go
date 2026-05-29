@@ -146,6 +146,10 @@ func main() {
 	templateSvc := service.NewSQLTemplateService(database.DB)
 	log.Println("sql template service initialized")
 
+	// Initialize share service (SF-FEAT0038)
+	shareSvc := service.NewShareService(database.DB)
+	log.Println("share service initialized")
+
 	// Seed initial admin if users table is empty
 	count, err := authSvc.UserCount(context.Background())
 	if err != nil {
@@ -166,7 +170,7 @@ func main() {
 	defer backupSvc.Stop()
 
 	// Start server
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, database.DB, cfg)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, database.DB, cfg)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server

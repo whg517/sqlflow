@@ -638,6 +638,43 @@ CREATE TABLE IF NOT EXISTS sql_templates (
 		return fmt.Errorf("migrate sql_templates category index: %w", err)
 	}
 
+	// --- shared_results (SF-FEAT0038: query result sharing) ---
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS shared_results (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL,
+    username        TEXT    NOT NULL DEFAULT '',
+    token           TEXT    NOT NULL UNIQUE,
+    columns_json    TEXT    NOT NULL DEFAULT '[]',
+    rows_json       TEXT    NOT NULL DEFAULT '[]',
+    row_count       INTEGER NOT NULL DEFAULT 0,
+    expires_at      DATETIME NOT NULL,
+    password_hash   TEXT    NOT NULL DEFAULT '',
+    sql_summary     TEXT    NOT NULL DEFAULT '',
+    datasource_name TEXT    NOT NULL DEFAULT '',
+    revoked         INTEGER NOT NULL DEFAULT 0,
+    revoked_at      DATETIME,
+    created_at      DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+	`)
+	if err != nil {
+		return fmt.Errorf("migrate shared_results: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_results_token ON shared_results(token)`)
+	if err != nil {
+		return fmt.Errorf("migrate shared_results token index: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_shared_results_user ON shared_results(user_id)`)
+	if err != nil {
+		return fmt.Errorf("migrate shared_results user index: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_shared_results_expires ON shared_results(expires_at)`)
+	if err != nil {
+		return fmt.Errorf("migrate shared_results expires index: %w", err)
+	}
+
 	return nil
 }
-

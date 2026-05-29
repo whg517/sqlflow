@@ -69,6 +69,10 @@ const CoverageSummaryPage = lazyPage(() => import("@/pages/Coverage/CoverageSumm
   title: "覆盖度审计页面出现了问题",
 });
 
+const SharedResultPage = lazyPage(() => import("@/pages/SharedResultPage"), {
+  title: "共享结果页面出现了问题",
+});
+
 const FileDetailPage = lazyPage(() => import("@/pages/Coverage/FileDetailPage"), {
   title: "文件覆盖度页面出现了问题",
 });
@@ -81,6 +85,7 @@ function App() {
       <TooltipProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/s/:token" element={<SharedResultPage />} />
           <Route
             element={
               <AuthGuard>

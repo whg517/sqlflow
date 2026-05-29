@@ -15,7 +15,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, db *sql.DB, cfg *config.Config) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, shareSvc *service.ShareService, db *sql.DB, cfg *config.Config) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -60,6 +60,8 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	permReqHandler := handler.NewPermReqHandler(permReqSvc)
 	sqlTemplateHandler := handler.NewSQLTemplateHandler(templateSvc)
 
+	shareHandler := handler.NewShareHandler(shareSvc)
+
 	// Public routes
 	e.POST("/api/auth/login", userHandler.Login)
 	e.POST("/api/auth/refresh", userHandler.Refresh)
@@ -69,6 +71,10 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	e.GET("/api/v1/auth/dingtalk/login", dingTalkHandler.Login)
 	e.GET("/api/v1/auth/dingtalk/callback", dingTalkHandler.Callback)
 	e.GET("/api/v1/auth/dingtalk/enabled", dingTalkHandler.Enabled)
+
+	// Shared result public access (no auth required)
+	e.GET("/s/:token", shareHandler.GetShare)
+	e.POST("/s/:token/verify", shareHandler.VerifySharePassword)
 
 	// Authenticated routes (supports both JWT and API Token)
 	authGroup := e.Group("", middleware.Auth(authSvc, tokenSvc))
@@ -88,6 +94,11 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.GET("/api/query/history", queryHandler.ListHistory)
 	authGroup.DELETE("/api/query/history/:id", queryHandler.DeleteHistory)
 	authGroup.DELETE("/api/query/history", queryHandler.ClearHistory)
+
+	// Shared query results (authenticated users)
+	authGroup.POST("/api/query/share", shareHandler.CreateShare)
+	authGroup.GET("/api/query/share", shareHandler.ListMyShares)
+	authGroup.DELETE("/api/query/share/:id", shareHandler.RevokeShare)
 
 	// Performance analysis (authenticated users)
 	authGroup.GET("/api/query/performance/slow", performanceHandler.ListSlowQueries)
