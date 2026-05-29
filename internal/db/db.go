@@ -76,7 +76,7 @@ func MigrateDB(conn *sql.DB) error {
 	}
 
 	// --- shared_results (SF-FEAT0038: query result sharing) ---
-	_, err = db.Exec(`
+	_, err = conn.Exec(`
 CREATE TABLE IF NOT EXISTS shared_results (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id         INTEGER NOT NULL,
@@ -98,17 +98,17 @@ CREATE TABLE IF NOT EXISTS shared_results (
 		return fmt.Errorf("migrate shared_results: %w", err)
 	}
 
-	_, err = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_results_token ON shared_results(token)`)
+	_, err = conn.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_results_token ON shared_results(token)`)
 	if err != nil {
 		return fmt.Errorf("migrate shared_results token index: %w", err)
 	}
 
-	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_shared_results_user ON shared_results(user_id)`)
+	_, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_shared_results_user ON shared_results(user_id)`)
 	if err != nil {
 		return fmt.Errorf("migrate shared_results user index: %w", err)
 	}
 
-	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_shared_results_expires ON shared_results(expires_at)`)
+	_, err = conn.Exec(`CREATE INDEX IF NOT EXISTS idx_shared_results_expires ON shared_results(expires_at)`)
 	if err != nil {
 		return fmt.Errorf("migrate shared_results expires index: %w", err)
 	}

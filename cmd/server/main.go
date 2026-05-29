@@ -150,6 +150,10 @@ func main() {
 	shareSvc := service.NewShareService(database.DB)
 	log.Println("share service initialized")
 
+	// Initialize Web Vitals service (SF-ENG0033)
+	vitalsSvc := service.NewWebVitalsService(database.DB)
+	log.Println("web vitals service initialized")
+
 	// Seed initial admin if users table is empty
 	count, err := authSvc.UserCount(context.Background())
 	if err != nil {
@@ -170,7 +174,7 @@ func main() {
 	defer backupSvc.Stop()
 
 	// Start server
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, database.DB, cfg)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, database.DB, cfg)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server

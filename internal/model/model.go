@@ -363,3 +363,15 @@ type SharedResultPublic struct {
 	HasPassword    bool                     `json:"has_password"`
 	CreatedAt      string                   `json:"created_at"`
 }
+
+// WebVital represents a Core Web Vitals metric record.
+type WebVital struct {
+	ID             int64     `json:"id"`
+	MetricName     string    `json:"metric_name"`
+	Value          float64   `json:"value"`
+	Rating         string    `json:"rating"` // good, needs-improvement, poor
+	Path           string    `json:"path"`
+	NavigationType string    `json:"navigation_type,omitempty"`
+	UserAgent      string    `json:"user_agent,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+}
