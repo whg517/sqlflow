@@ -118,6 +118,23 @@ type Ticket struct {
 	GitLinks       []GitLink    `json:"git_links,omitempty"`
 }
 
+// TicketRevision represents a historical snapshot of a ticket at a given revision.
+type TicketRevision struct {
+	ID             int64        `json:"id"`
+	TicketID       int64        `json:"ticket_id"`
+	Revision       int          `json:"revision"`
+	SQLContent     string       `json:"sql_content"`
+	SQLSummary     string       `json:"sql_summary"`
+	ChangeReason   string       `json:"change_reason"`
+	RiskLevel      string       `json:"risk_level"`
+	AIReviewResult string       `json:"ai_review_result,omitempty"`
+	ReviewerID     int64        `json:"reviewer_id"`
+	ReviewerName   string       `json:"reviewer_name,omitempty"`
+	ReviewComment  string       `json:"review_comment,omitempty"`
+	Status         TicketStatus `json:"status"`
+	CreatedAt      time.Time    `json:"created_at"`
+}
+
 // MaskRule represents a field-level masking rule.
 type MaskRule struct {
 	ID             int64     `json:"id"`

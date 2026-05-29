@@ -1032,9 +1032,8 @@ func TestIntegration_StateMachineCompleteness(t *testing.T) {
 	})
 
 	t.Run("terminal_states_no_transitions", func(t *testing.T) {
-		terminals := []model.TicketStatus{
+	terminals := []model.TicketStatus{
 			model.TicketStatusDone,
-			model.TicketStatusRejected,
 			model.TicketStatusCancelled,
 		}
 		allStatuses := []model.TicketStatus{

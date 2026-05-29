@@ -42,6 +42,8 @@ var (
 	ErrTicketNotSchedulable = errors.New("当前状态不可设置定时执行")
 	// ErrTicketNotScheduled indicates the ticket is not scheduled.
 	ErrTicketNotScheduled = errors.New("工单未设置定时执行")
+	// ErrTicketNotResubmittable indicates the ticket is not in REJECTED status.
+	ErrTicketNotResubmittable = errors.New("只有被驳回的工单可以重提")
 )
 
 // validTransitions defines the allowed state transitions for the ticket state machine.
@@ -52,7 +54,7 @@ var validTransitions = map[model.TicketStatus][]model.TicketStatus{
 	model.TicketStatusApproved:        {model.TicketStatusExecuting, model.TicketStatusScheduled, model.TicketStatusCancelled},
 	model.TicketStatusScheduled:       {model.TicketStatusExecuting, model.TicketStatusCancelled},
 	model.TicketStatusExecuting:       {model.TicketStatusDone},
-	model.TicketStatusRejected:        {},
+	model.TicketStatusRejected:        {model.TicketStatusSubmitted},
 	model.TicketStatusDone:            {},
 	model.TicketStatusCancelled:       {},
 }
@@ -101,6 +103,7 @@ func scanTicket(scanner interface {
 		&t.Status, &t.RiskLevel, &t.AIReviewResult,
 		&t.SQLType, &t.AffectedTables,
 		&t.ReviewerID, &t.ReviewComment, &scheduledAt, &executedAt,
+		&t.Revision,
 		&t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
@@ -212,7 +215,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, dat
 // GetTicket retrieves a ticket by ID with populated user names.
 func (s *TicketService) GetTicket(ctx context.Context, id int64) (*model.Ticket, error) {
 	t, err := scanTicket(s.db.QueryRowContext(ctx,
-		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, sql_type, affected_tables, reviewer_id, review_comment, scheduled_at, executed_at, created_at, updated_at
+		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, sql_type, affected_tables, reviewer_id, review_comment, scheduled_at, executed_at, revision, created_at, updated_at
 		 FROM tickets WHERE id = ?`, id,
 	))
 	if err != nil {
@@ -268,7 +271,7 @@ func (s *TicketService) ListTickets(ctx context.Context, page, pageSize int, sta
 
 	// Query page
 	querySQL := fmt.Sprintf(
-		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, sql_type, affected_tables, reviewer_id, review_comment, scheduled_at, executed_at, created_at, updated_at
+		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, sql_type, affected_tables, reviewer_id, review_comment, scheduled_at, executed_at, revision, created_at, updated_at
 		 FROM tickets %s ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		whereClause,
 	)

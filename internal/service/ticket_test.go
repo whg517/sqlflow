@@ -587,6 +587,7 @@ func TestStateMachine(t *testing.T) {
 			{model.TicketStatusApproved, model.TicketStatusExecuting},
 			{model.TicketStatusApproved, model.TicketStatusCancelled},
 			{model.TicketStatusExecuting, model.TicketStatusDone},
+			{model.TicketStatusRejected, model.TicketStatusSubmitted},
 		}
 
 		for _, tt := range valid {
@@ -626,7 +627,6 @@ func TestStateMachine(t *testing.T) {
 	t.Run("terminal states have no outgoing transitions", func(t *testing.T) {
 		terminals := []model.TicketStatus{
 			model.TicketStatusDone,
-			model.TicketStatusRejected,
 			model.TicketStatusCancelled,
 		}
 		for _, terminal := range terminals {
