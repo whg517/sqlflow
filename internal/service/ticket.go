@@ -204,7 +204,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, dat
 	}
 	s.populateTicketNames(ctx, t)
 
-	// Send DingTalk notification for ticket creation
+	// Send notification for ticket creation
 	if s.notifySvc != nil {
 		s.notifySvc.NotifyTicketCreated(t)
 	}
@@ -347,7 +347,7 @@ func (s *TicketService) ApproveTicket(ctx context.Context, ticketID, reviewerID 
 	t.UpdatedAt = now
 	s.populateTicketNames(ctx, t)
 
-	// Send DingTalk notification for approval
+	// Send notification for approval
 	if s.notifySvc != nil {
 		s.notifySvc.NotifyTicketApproved(t)
 	}
@@ -403,7 +403,7 @@ func (s *TicketService) RejectTicket(ctx context.Context, ticketID, reviewerID i
 	t.UpdatedAt = now
 	s.populateTicketNames(ctx, t)
 
-	// Send DingTalk notification for rejection
+	// Send notification for rejection
 	if s.notifySvc != nil {
 		s.notifySvc.NotifyTicketRejected(t)
 	}
@@ -509,7 +509,7 @@ func (s *TicketService) ExecuteTicket(ctx context.Context, ticketID, operatorID 
 	t.UpdatedAt = now
 	s.populateTicketNames(ctx, t)
 
-	// Send DingTalk notification for execution
+	// Send notification for execution
 	if s.notifySvc != nil {
 		s.notifySvc.NotifyTicketExecuted(t)
 	}

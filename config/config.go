@@ -16,8 +16,9 @@ type Config struct {
 	Admin           AdminConfig    `mapstructure:"admin"`
 	DB              DBConfig       `mapstructure:"db"`
 	AI              AIConfig       `mapstructure:"ai"`
-	DingTalk        DingTalkConfig `mapstructure:"dingtalk"`
+	Notify          NotifyConfig   `mapstructure:"notify"`
 	Feishu          FeishuConfig   `mapstructure:"feishu"`
+	OIDC            OIDCConfig     `mapstructure:"oidc"`
 	Backup          BackupConfig   `mapstructure:"backup"`
 	Metrics         MetricsConfig  `mapstructure:"metrics"`
 	QueryHistoryMax int            `mapstructure:"query_history_max"`
@@ -63,11 +64,10 @@ type AIConfig struct {
 	Timeout  time.Duration `mapstructure:"timeout"`
 }
 
-// DingTalkConfig holds DingTalk notification configuration.
-type DingTalkConfig struct {
-	WebhookURL string              `mapstructure:"webhook_url"`
-	Secret     string              `mapstructure:"secret"`
-	OAuth      DingTalkOAuthConfig `mapstructure:"oauth"`
+// NotifyConfig holds webhook notification configuration.
+type NotifyConfig struct {
+	WebhookURL string `mapstructure:"webhook_url"`
+	Secret     string `mapstructure:"secret"`
 }
 
 // FeishuConfig holds Feishu webhook notification configuration.
@@ -75,12 +75,22 @@ type FeishuConfig struct {
 	WebhookURL string `mapstructure:"webhook_url"`
 }
 
-// DingTalkOAuthConfig holds DingTalk OAuth2 configuration for login.
-type DingTalkOAuthConfig struct {
-	AppKey      string `mapstructure:"app_key"`
-	AppSecret   string `mapstructure:"app_secret"`
-	RedirectURL string `mapstructure:"redirect_url"`
-	Enabled     bool   `mapstructure:"enabled"`
+
+
+// OIDCConfig holds OpenID Connect configuration.
+type OIDCConfig struct {
+	Providers []OIDCProviderConfig `mapstructure:"providers"`
+}
+
+// OIDCProviderConfig holds a single OIDC IdP configuration.
+type OIDCProviderConfig struct {
+	Name         string `mapstructure:"name"`
+	Issuer       string `mapstructure:"issuer"`
+	ClientID     string `mapstructure:"client_id"`
+	ClientSecret string `mapstructure:"client_secret"`
+	RedirectURL  string `mapstructure:"redirect_url"`
+	Scopes       string `mapstructure:"scopes"`
+	Enabled      bool   `mapstructure:"enabled"`
 }
 
 // MetricsConfig holds Prometheus metrics configuration.
@@ -137,8 +147,8 @@ func Load(configPath string) (*Config, error) {
 	if v := os.Getenv("SQLFLOW_ADMIN_PASSWORD"); v != "" {
 		cfg.Admin.Password = v
 	}
-	if v := os.Getenv("SQLFLOW_DINGTALK_SECRET"); v != "" {
-		cfg.DingTalk.Secret = v
+	if v := os.Getenv("SQLFLOW_NOTIFY_SECRET"); v != "" {
+		cfg.Notify.Secret = v
 	}
 
 	if v := os.Getenv("SQLFLOW_FEISHU_WEBHOOK_URL"); v != "" {

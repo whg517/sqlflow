@@ -52,7 +52,7 @@ func extractNotifyData(t *testing.T, rec *httptest.ResponseRecorder) map[string]
 func TestNotifyHandler_GetSettings(t *testing.T) {
 	e, _, _, h := setupNotifyTest(t)
 
-	t.Run("returns_both_dingtalk_and_ai_config", func(t *testing.T) {
+	t.Run("returns_both_webhook_and_ai_config", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -67,16 +67,16 @@ func TestNotifyHandler_GetSettings(t *testing.T) {
 
 		data := extractNotifyData(t, rec)
 
-		// Should contain "dingtalk" and "ai" sections
-		if _, ok := data["dingtalk"]; !ok {
-			t.Error("missing 'dingtalk' in response data")
+		// Should contain "webhook" and "ai" sections
+		if _, ok := data["webhook"]; !ok {
+			t.Error("missing 'webhook' in response data")
 		}
 		if _, ok := data["ai"]; !ok {
 			t.Error("missing 'ai' in response data")
 		}
 	})
 
-	t.Run("dingtalk_disabled_by_default", func(t *testing.T) {
+	t.Run("webhook_disabled_by_default", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -86,9 +86,9 @@ func TestNotifyHandler_GetSettings(t *testing.T) {
 		}
 
 		data := extractNotifyData(t, rec)
-		dingtalk, ok := data["dingtalk"].(map[string]interface{})
+		dingtalk, ok := data["webhook"].(map[string]interface{})
 		if !ok {
-			t.Fatal("dingtalk is not an object")
+			t.Fatal("webhook is not an object")
 		}
 		if enabled, _ := dingtalk["enabled"].(bool); enabled {
 			t.Error("dingtalk should be disabled by default (empty webhook)")
@@ -122,7 +122,7 @@ func TestNotifyHandler_UpdateNotifyConfig(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		body := `{"webhook_url":"https://oapi.dingtalk.com/robot/send?access_token=test","secret":"mysecret"}`
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/dingtalk", strings.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/notify/webhook", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -152,7 +152,7 @@ func TestNotifyHandler_UpdateNotifyConfig(t *testing.T) {
 	t.Run("enables_notification", func(t *testing.T) {
 		// First update with a webhook URL
 		body := `{"webhook_url":"https://example.com/webhook","secret":"secret123"}`
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/dingtalk", strings.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/notify/webhook", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -174,7 +174,7 @@ func TestNotifyHandler_UpdateNotifyConfig(t *testing.T) {
 
 		// Then clear
 		body := `{"webhook_url":"","secret":""}`
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/dingtalk", strings.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/notify/webhook", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -190,7 +190,7 @@ func TestNotifyHandler_UpdateNotifyConfig(t *testing.T) {
 	})
 
 	t.Run("invalid_json", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/dingtalk", strings.NewReader(`{bad json}`))
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/notify/webhook", strings.NewReader(`{bad json}`))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -205,7 +205,7 @@ func TestNotifyHandler_UpdateNotifyConfig(t *testing.T) {
 	})
 
 	t.Run("empty_body", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/dingtalk", strings.NewReader(``))
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/notify/webhook", strings.NewReader(``))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -229,7 +229,7 @@ func TestNotifyHandler_TestNotify(t *testing.T) {
 		notifySvc.UpdateConfig("https://example.com/webhook", "secret")
 
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodPost, "/api/settings/dingtalk/test", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/settings/notify/webhook/test", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 
@@ -252,7 +252,7 @@ func TestNotifyHandler_TestNotify(t *testing.T) {
 		_, _, _, h := setupNotifyTest(t)
 
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodPost, "/api/settings/dingtalk/test", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/settings/notify/webhook/test", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 
@@ -269,7 +269,7 @@ func TestNotifyHandler_TestNotify(t *testing.T) {
 		_, _, _, h := setupNotifyTest(t)
 
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodPost, "/api/settings/dingtalk/test", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/settings/notify/webhook/test", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 
@@ -283,8 +283,8 @@ func TestNotifyHandler_TestNotify(t *testing.T) {
 
 		result := decodeNotifyResponse(t, rec)
 		msg, _ := result["message"].(string)
-		if msg != "钉钉通知未启用，请先配置 Webhook URL" {
-			t.Errorf("message = %q, want %q", msg, "钉钉通知未启用，请先配置 Webhook URL")
+		if msg != "Webhook 通知未启用，请先配置 Webhook URL" {
+			t.Errorf("message = %q, want %q", msg, "Webhook 通知未启用，请先配置 Webhook URL")
 		}
 	})
 
@@ -295,7 +295,7 @@ func TestNotifyHandler_TestNotify(t *testing.T) {
 
 		// Enable via handler
 		body := `{"webhook_url":"https://oapi.dingtalk.com/robot/send?access_token=abc","secret":"s"}`
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/dingtalk", strings.NewReader(body))
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/notify/webhook", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -305,7 +305,7 @@ func TestNotifyHandler_TestNotify(t *testing.T) {
 		}
 
 		// Now test notify
-		req2 := httptest.NewRequest(http.MethodPost, "/api/settings/dingtalk/test", nil)
+		req2 := httptest.NewRequest(http.MethodPost, "/api/settings/notify/webhook/test", nil)
 		rec2 := httptest.NewRecorder()
 		c2 := e.NewContext(req2, rec2)
 
@@ -506,12 +506,12 @@ func TestNotifyHandler_GetSettings_AfterUpdates(t *testing.T) {
 
 	// Update DingTalk config
 	dtBody := `{"webhook_url":"https://oapi.dingtalk.com/robot/send?access_token=xyz","secret":"mylongsecret"}`
-	dtReq := httptest.NewRequest(http.MethodPut, "/api/settings/dingtalk", strings.NewReader(dtBody))
+	dtReq := httptest.NewRequest(http.MethodPut, "/api/settings/notify/webhook", strings.NewReader(dtBody))
 	dtReq.Header.Set("Content-Type", "application/json")
 	dtRec := httptest.NewRecorder()
 	dtCtx := e.NewContext(dtReq, dtRec)
 	if err := h.UpdateNotifyConfig(dtCtx); err != nil {
-		t.Fatalf("update dingtalk: %v", err)
+		t.Fatalf("update webhook: %v", err)
 	}
 
 	// Update AI config
@@ -540,9 +540,9 @@ func TestNotifyHandler_GetSettings_AfterUpdates(t *testing.T) {
 	data := extractNotifyData(t, getRec)
 
 	// Verify DingTalk config updated
-	dingtalk, ok := data["dingtalk"].(map[string]interface{})
+	dingtalk, ok := data["webhook"].(map[string]interface{})
 	if !ok {
-		t.Fatal("dingtalk is not an object")
+		t.Fatal("webhook is not an object")
 	}
 	if enabled, _ := dingtalk["enabled"].(bool); !enabled {
 		t.Error("dingtalk should be enabled after update")

@@ -15,7 +15,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, shareSvc *service.ShareService, vitalsSvc *service.WebVitalsService, snapshotSvc *service.SnapshotService, approvalEngine *service.ApprovalEngine, db *sql.DB, cfg *config.Config) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, oidcSvc *service.OIDCService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, shareSvc *service.ShareService, vitalsSvc *service.WebVitalsService, snapshotSvc *service.SnapshotService, approvalEngine *service.ApprovalEngine, db *sql.DB, cfg *config.Config) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -68,11 +68,11 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	e.POST("/api/auth/login", userHandler.Login)
 	e.POST("/api/auth/refresh", userHandler.Refresh)
 
-	// DingTalk OAuth (public)
-	dingTalkHandler := handler.NewDingTalkHandler(dingOAuthSvc)
-	e.GET("/api/v1/auth/dingtalk/login", dingTalkHandler.Login)
-	e.GET("/api/v1/auth/dingtalk/callback", dingTalkHandler.Callback)
-	e.GET("/api/v1/auth/dingtalk/enabled", dingTalkHandler.Enabled)
+	// OIDC (public)
+	oidcHandler := handler.NewOIDCHandler(oidcSvc)
+	e.GET("/api/auth/oidc/:provider", oidcHandler.Login)
+	e.GET("/api/auth/oidc/:provider/callback", oidcHandler.Callback)
+	e.GET("/api/auth/providers", oidcHandler.Providers)
 
 	// Shared result public access (no auth required)
 	e.GET("/s/:token", shareHandler.GetShare)
@@ -233,8 +233,8 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	// Notification & Settings (admin)
 	notifyHandler := handler.NewNotifyHandler(notifySvc, aiReviewSvc)
 	adminGroup.GET("/api/settings", notifyHandler.GetSettings)
-	adminGroup.PUT("/api/settings/dingtalk", notifyHandler.UpdateNotifyConfig)
-	adminGroup.POST("/api/settings/dingtalk/test", notifyHandler.TestNotify)
+	adminGroup.PUT("/api/settings/notify/webhook", notifyHandler.UpdateNotifyConfig)
+	adminGroup.POST("/api/settings/notify/webhook/test", notifyHandler.TestNotify)
 	adminGroup.PUT("/api/settings/ai", notifyHandler.UpdateAIConfig)
 	adminGroup.PUT("/api/settings/feishu", notifyHandler.UpdateFeishuConfig)
 	adminGroup.POST("/api/settings/feishu/test", notifyHandler.TestFeishuNotify)

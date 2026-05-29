@@ -48,8 +48,8 @@ type User struct {
 	Username        string    `json:"username"`
 	PasswordHash    string    `json:"-"`
 	Role            string    `json:"role"`
-	DingTalkUserID  string    `json:"dingtalk_user_id,omitempty"`
-	DingTalkUnionID string    `json:"dingtalk_union_id,omitempty"`
+	OIDCSubject     string    `json:"oidc_subject,omitempty"`
+	OIDCProvider    string    `json:"oidc_provider,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
@@ -401,7 +401,6 @@ type WebVital struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
-
 // ApprovalPolicy represents a configurable approval strategy.
 type ApprovalPolicy struct {
 	ID                 int64     `json:"id"`
@@ -433,4 +432,17 @@ type ApprovalRecord struct {
 	AutoApproved  bool      `json:"auto_approved"`
 	AutoReason    string    `json:"auto_reason,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
+}
+
+// OIDCProvider represents an OpenID Connect identity provider configuration.
+type OIDCProvider struct {
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Issuer       string    `json:"issuer"`
+	ClientID     string    `json:"client_id"`
+	ClientSecret string    `json:"-"`
+	Scopes       string    `json:"scopes"`
+	Enabled      bool      `json:"enabled"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }

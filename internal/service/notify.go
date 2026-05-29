@@ -19,11 +19,11 @@ import (
 	"github.com/whg517/sqlflow/internal/model"
 )
 
-// NotifyService handles DingTalk and Feishu notification logic.
+// NotifyService handles webhook (DingTalk-compatible) and Feishu notification logic.
 type NotifyService struct {
-	webhookURL    string // DingTalk
-	secret        string // DingTalk
-	enabled       bool   // DingTalk
+	webhookURL    string // webhook
+	secret        string // webhook secret
+	enabled       bool // webhook enabled
 	feishuURL     string // Feishu webhook
 	feishuEnabled bool   // Feishu
 	client        *http.Client

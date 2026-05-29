@@ -33,9 +33,9 @@ func NewNotifyHandler(notifySvc *service.NotifyService, aiReviewSvc *service.AIR
 // @Router /settings [get]
 func (h *NotifyHandler) GetSettings(c echo.Context) error {
 	result := map[string]interface{}{
-		"dingtalk": h.notifySvc.GetConfig(),
-		"feishu":   h.notifySvc.GetFeishuConfig(),
-		"ai":       h.aiReviewSvc.GetConfig(),
+		"webhook": h.notifySvc.GetConfig(),
+		"feishu":  h.notifySvc.GetFeishuConfig(),
+		"ai":      h.aiReviewSvc.GetConfig(),
 	}
 	return resp.OK(c, result)
 }
@@ -45,18 +45,18 @@ type updateNotifyConfigRequest struct {
 	Secret     string `json:"secret"`
 }
 
-// UpdateNotifyConfig handles PUT /api/settings/dingtalk — updates DingTalk config.
+// UpdateNotifyConfig handles PUT /api/settings/notify/webhook — updates webhook notification config.
 //
-// @Summary 更新钉钉通知配置
-// @Description 管理员更新钉钉Webhook配置
+// @Summary 更新 Webhook 通知配置
+// @Description 管理员更新 Webhook 通知配置
 // @Tags 设置
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body updateNotifyConfigRequest true "钉钉配置请求"
+// @Param body body updateNotifyConfigRequest true "Webhook 配置请求"
 // @Success 200 {object} resp.SuccessResponse "更新成功"
 // @Failure 400 {object} resp.ErrorResponse "请求格式错误"
-// @Router /settings/dingtalk [put]
+// @Router /settings/notify/webhook [put]
 func (h *NotifyHandler) UpdateNotifyConfig(c echo.Context) error {
 	var req updateNotifyConfigRequest
 	if err := c.Bind(&req); err != nil {
@@ -67,19 +67,19 @@ func (h *NotifyHandler) UpdateNotifyConfig(c echo.Context) error {
 	return resp.OK(c, h.notifySvc.GetConfig())
 }
 
-// TestNotify handles POST /api/settings/dingtalk/test — sends a test notification.
+// TestNotify handles POST /api/settings/notify/webhook/test — sends a test notification.
 //
-// @Summary 测试钉钉通知
-// @Description 管理员发送一条测试钉钉通知消息
+// @Summary 测试 Webhook 通知
+// @Description 管理员发送一条测试通知消息
 // @Tags 设置
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} resp.SuccessResponse "测试消息已发送"
-// @Failure 400 {object} resp.ErrorResponse "钉钉通知未启用"
-// @Router /settings/dingtalk/test [post]
+// @Failure 400 {object} resp.ErrorResponse "通知未启用"
+// @Router /settings/notify/webhook/test [post]
 func (h *NotifyHandler) TestNotify(c echo.Context) error {
 	if !h.notifySvc.IsEnabled() {
-		return resp.BadRequest(c, "钉钉通知未启用，请先配置 Webhook URL")
+		return resp.BadRequest(c, "Webhook 通知未启用，请先配置 Webhook URL")
 	}
 
 	h.notifySvc.SendTestMessage()

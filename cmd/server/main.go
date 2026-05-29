@@ -86,7 +86,7 @@ func main() {
 	defer scheduler.Stop()
 	log.Println("ticket scheduler started")
 
-	notifySvc := service.NewNotifyService(cfg.DingTalk.WebhookURL, cfg.DingTalk.Secret)
+	notifySvc := service.NewNotifyService(cfg.Notify.WebhookURL, cfg.Notify.Secret)
 	notifySvc.SetFeishuWebhook(cfg.Feishu.WebhookURL)
 	log.Println("notify service initialized")
 	ticketSvc.SetNotifyService(notifySvc)
@@ -115,15 +115,26 @@ func main() {
 	commentSvc := service.NewCommentService(database.DB)
 	log.Println("comment service initialized")
 
-	// Initialize DingTalk OAuth service
-	dingOAuthSvc := service.NewDingTalkOAuthService(
-		database.DB, authSvc,
-		cfg.DingTalk.OAuth.AppKey,
-		cfg.DingTalk.OAuth.AppSecret,
-		cfg.DingTalk.OAuth.RedirectURL,
-		cfg.DingTalk.OAuth.Enabled,
-	)
-	log.Println("dingtalk oauth service initialized")
+	// Initialize OIDC service
+	oidcSvc := service.NewOIDCService(database.DB, authSvc)
+	if len(cfg.OIDC.Providers) > 0 {
+		configProviders := make([]service.ConfigOIDCProvider, 0, len(cfg.OIDC.Providers))
+		for _, p := range cfg.OIDC.Providers {
+			configProviders = append(configProviders, service.ConfigOIDCProvider{
+				Name:         p.Name,
+				Issuer:       p.Issuer,
+				ClientID:     p.ClientID,
+				ClientSecret: p.ClientSecret,
+				RedirectURL:  p.RedirectURL,
+				Scopes:       p.Scopes,
+				Enabled:      p.Enabled,
+			})
+		}
+		if err := oidcSvc.LoadConfigProviders(context.Background(), configProviders); err != nil {
+			log.Printf("warn: failed to load OIDC providers from config: %v", err)
+		}
+	}
+	log.Println("oidc service initialized")
 
 	// Initialize git service
 	gitSvc := service.NewGitService(database.DB)
@@ -182,7 +193,7 @@ func main() {
 	approvalEngine := service.NewApprovalEngine(database.DB)
 	_ = approvalEngine.EnsureDefaultPolicy(context.Background())
 
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, snapshotSvc, approvalEngine, database.DB, cfg)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, oidcSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, snapshotSvc, approvalEngine, database.DB, cfg)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server
