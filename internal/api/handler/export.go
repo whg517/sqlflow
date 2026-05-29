@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/resp"
@@ -37,11 +38,10 @@ type exportAuditRequest struct {
 }
 
 // ExportAuditLogs handles GET /api/export/audit.
-// For small datasets (< threshold), returns CSV synchronously.
-// For large datasets or when ?async=1, creates an async task and returns the task ID.
+// Streams CSV for small datasets, creates async task for large datasets.
 // ExportAuditLogs godoc
 // @Summary 导出审计日志
-// @Description 管理员/DBA导出审计日志为CSV
+// @Description 管理员/DBA导出审计日志为CSV（流式）
 // @Tags 导出
 // @Produce text/csv
 // @Security BearerAuth
@@ -51,7 +51,6 @@ type exportAuditRequest struct {
 // @Failure 400 {object} resp.ErrorResponse "参数错误"
 // @Failure 403 {object} resp.ErrorResponse "无权限"
 // @Router /export/audit [get]
-
 func (h *ExportHandler) ExportAuditLogs(c echo.Context) error {
 	userID := getContextUserID(c)
 	username := getContextUsername(c)
@@ -77,10 +76,9 @@ func (h *ExportHandler) ExportAuditLogs(c echo.Context) error {
 		return h.createAsyncExport(c, userID, username, role, "audit", filters)
 	}
 
-	// Try synchronous export first
-	result, err := h.exportSvc.ExportAuditLogs(c.Request().Context(), userID, username, role, filters)
+	// Validate: check permission + row count
+	total, err := h.exportSvc.ValidateExport(c.Request().Context(), role, service.ExportTypeAudit, filters)
 	if err != nil {
-		// If exceeds the sync limit, auto-switch to async
 		if err == service.ErrExportExceedsLimit {
 			return h.createAsyncExport(c, userID, username, role, "audit", filters)
 		}
@@ -88,12 +86,13 @@ func (h *ExportHandler) ExportAuditLogs(c echo.Context) error {
 		case service.ErrExportNoPermission:
 			return resp.Forbidden(c, "没有导出权限，仅管理员和DBA可以导出审计日志")
 		default:
-			log.Printf("ExportAuditLogs failed: %v", err)
+			log.Printf("ValidateExport audit failed: %v", err)
 			return resp.InternalError(c, "导出审计日志失败")
 		}
 	}
 
-	return writeCSVResponse(c, result)
+	// Stream CSV response
+	return h.streamAuditCSVResponse(c, userID, username, filters, total)
 }
 
 type exportTicketRequest struct {
@@ -105,21 +104,18 @@ type exportTicketRequest struct {
 }
 
 // ExportTickets handles GET /api/export/tickets.
-// For small datasets (< threshold), returns CSV synchronously.
-// For large datasets or when ?async=1, creates an async task and returns the task ID.
+// Streams CSV for small datasets, creates async task for large datasets.
 // ExportTickets godoc
 // @Summary 导出工单
-// @Description 认证用户导出工单为CSV
+// @Description 认证用户导出工单为CSV（流式）
 // @Tags 导出
 // @Produce text/csv
 // @Security BearerAuth
-// @Param start_date query string false "开始日期"
-// @Param end_date query string false "结束日期"
 // @Param status query string false "工单状态"
+// @Param risk_level query string false "风险等级"
 // @Success 200 {file} file "CSV文件"
 // @Failure 400 {object} resp.ErrorResponse "参数错误"
 // @Router /export/tickets [get]
-
 func (h *ExportHandler) ExportTickets(c echo.Context) error {
 	userID := getContextUserID(c)
 	username := getContextUsername(c)
@@ -143,7 +139,8 @@ func (h *ExportHandler) ExportTickets(c echo.Context) error {
 		return h.createAsyncExport(c, userID, username, role, "ticket", filters)
 	}
 
-	result, err := h.exportSvc.ExportTickets(c.Request().Context(), userID, username, role, filters)
+	// Validate: check permission + row count
+	total, err := h.exportSvc.ValidateExport(c.Request().Context(), role, service.ExportTypeTicket, filters)
 	if err != nil {
 		if err == service.ErrExportExceedsLimit {
 			return h.createAsyncExport(c, userID, username, role, "ticket", filters)
@@ -152,12 +149,73 @@ func (h *ExportHandler) ExportTickets(c echo.Context) error {
 		case service.ErrExportNoPermission:
 			return resp.Forbidden(c, "没有导出权限")
 		default:
-			log.Printf("ExportTickets failed: %v", err)
+			log.Printf("ValidateExport ticket failed: %v", err)
 			return resp.InternalError(c, "导出工单失败")
 		}
 	}
 
-	return writeCSVResponse(c, result)
+	// Stream CSV response
+	return h.streamTicketCSVResponse(c, userID, username, filters, total)
+}
+
+// streamAuditCSVResponse writes streaming CSV response for audit logs.
+func (h *ExportHandler) streamAuditCSVResponse(c echo.Context, userID int64, username string, filters service.AuditExportFilters, total int64) error {
+	filename := fmt.Sprintf("audit_logs_%s.csv", time.Now().Format("2006-01-02"))
+	setStreamingCSVHeaders(c, filename, total)
+
+	// Write BOM
+	c.Response().Write([]byte{0xEF, 0xBB, 0xBF})
+
+	written, err := h.exportSvc.StreamExportAuditLogs(c.Request().Context(), c.Response(), username, filters)
+	if err != nil {
+		log.Printf("StreamExportAuditLogs error after %d rows: %v", written, err)
+		return nil // headers already sent
+	}
+
+	// Write watermark
+	fmt.Fprintf(c.Response(), "\n# 导出水印: 导出人=%s | 导出时间=%s | 仅限内部使用\n",
+		username,
+		time.Now().Format("2006-01-02 15:04:05 MST"),
+	)
+
+	// Record audit log
+	h.exportSvc.WriteAuditExportLog(c.Request().Context(), userID, written)
+
+	return nil
+}
+
+// streamTicketCSVResponse writes streaming CSV response for tickets.
+func (h *ExportHandler) streamTicketCSVResponse(c echo.Context, userID int64, username string, filters service.TicketExportFilters, total int64) error {
+	filename := fmt.Sprintf("tickets_%s.csv", time.Now().Format("2006-01-02"))
+	setStreamingCSVHeaders(c, filename, total)
+
+	c.Response().Write([]byte{0xEF, 0xBB, 0xBF})
+
+	written, err := h.exportSvc.StreamExportTickets(c.Request().Context(), c.Response(), username, filters)
+	if err != nil {
+		log.Printf("StreamExportTickets error after %d rows: %v", written, err)
+		return nil
+	}
+
+	fmt.Fprintf(c.Response(), "\n# 导出水印: 导出人=%s | 导出时间=%s | 仅限内部使用\n",
+		username,
+		time.Now().Format("2006-01-02 15:04:05 MST"),
+	)
+
+	h.exportSvc.WriteTicketExportLog(c.Request().Context(), userID, written)
+
+	return nil
+}
+
+// setStreamingCSVHeaders sets the HTTP headers for a streaming CSV download.
+func setStreamingCSVHeaders(c echo.Context, filename string, totalRows int64) {
+	safeFilename := filepath.Base(filename)
+	c.Response().Header().Set(echo.HeaderContentType, "text/csv; charset=utf-8")
+	c.Response().Header().Set(echo.HeaderContentDisposition,
+		fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, safeFilename, url.PathEscape(safeFilename)))
+	c.Response().Header().Set("X-Export-Rows", fmt.Sprintf("%d", totalRows))
+	c.Response().Header().Set("X-Export-Timestamp", time.Now().UTC().Format(http.TimeFormat))
+	c.Response().WriteHeader(http.StatusOK)
 }
 
 // createAsyncExport creates an async export task and returns 202 with task info.
@@ -205,7 +263,6 @@ func (h *ExportHandler) createAsyncExport(c echo.Context, userID int64, username
 // @Success 200 {object} resp.SuccessResponse "成功"
 // @Failure 404 {object} resp.ErrorResponse "任务不存在"
 // @Router /export/tasks/{id} [get]
-
 func (h *ExportHandler) GetExportTask(c echo.Context) error {
 	userID := getContextUserID(c)
 
@@ -241,7 +298,6 @@ func (h *ExportHandler) GetExportTask(c echo.Context) error {
 // @Security BearerAuth
 // @Success 200 {object} resp.SuccessResponse "成功"
 // @Router /export/tasks [get]
-
 func (h *ExportHandler) ListExportTasks(c echo.Context) error {
 	userID := getContextUserID(c)
 
@@ -269,7 +325,6 @@ func (h *ExportHandler) ListExportTasks(c echo.Context) error {
 // @Success 200 {file} file "导出文件"
 // @Failure 404 {object} resp.ErrorResponse "文件不存在"
 // @Router /export/tasks/{id}/download [get]
-
 func (h *ExportHandler) DownloadExportFile(c echo.Context) error {
 	userID := getContextUserID(c)
 
@@ -308,6 +363,7 @@ func (h *ExportHandler) DownloadExportFile(c echo.Context) error {
 }
 
 // writeCSVResponse writes the CSV export result as a file download response.
+// Deprecated: used only for backward-compatible in-memory exports.
 func writeCSVResponse(c echo.Context, result *service.ExportResult) error {
 	safeFilename := filepath.Base(result.Filename)
 

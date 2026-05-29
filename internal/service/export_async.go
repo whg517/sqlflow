@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
-	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -216,31 +215,22 @@ func (s *ExportAsyncService) executeExport(task *model.ExportTask, username, rol
 	}
 	defer f.Close()
 
-	var totalRows int64
-
 	// Write BOM header
 	_, _ = f.Write([]byte{0xEF, 0xBB, 0xBF})
 
-	// Use streaming CSV writer
-	w := csv.NewWriter(f)
+	var totalRows int64
 
 	switch ExportType(task.ExportType) {
 	case ExportTypeAudit:
 		var filters AuditExportFilters
 		_ = json.Unmarshal([]byte(task.FiltersJSON), &filters)
-		totalRows, err = s.streamAuditCSV(ctx, w, username, role, filters)
+		totalRows, err = s.exportSvc.StreamExportAuditLogs(ctx, f, username, filters)
 	case ExportTypeTicket:
 		var filters TicketExportFilters
 		_ = json.Unmarshal([]byte(task.FiltersJSON), &filters)
-		totalRows, err = s.streamTicketCSV(ctx, w, username, role, filters)
+		totalRows, err = s.exportSvc.StreamExportTickets(ctx, f, username, filters)
 	default:
 		err = ErrExportTypeInvalid
-	}
-
-	// Flush remaining data
-	w.Flush()
-	if wErr := w.Error(); wErr != nil && err == nil {
-		err = wErr
 	}
 
 	if err != nil {
@@ -267,234 +257,6 @@ func (s *ExportAsyncService) executeExport(task *model.ExportTask, username, rol
 
 	now := time.Now()
 	s.updateTaskStatus(task.ID, model.ExportTaskStatusCompleted, "", totalRows, fileSize, &now)
-}
-
-// streamAuditCSV streams audit logs directly to the CSV writer without buffering all rows.
-func (s *ExportAsyncService) streamAuditCSV(ctx context.Context, w *csv.Writer, username, role string, filters AuditExportFilters) (int64, error) {
-	var filterClauses []FilterClause
-	if filters.UserID != "" {
-		filterClauses = append(filterClauses, FilterClause{Condition: "a.user_id = ?", Args: []interface{}{filters.UserID}})
-	}
-	if filters.Action != "" {
-		filterClauses = append(filterClauses, FilterClause{Condition: "a.action = ?", Args: []interface{}{filters.Action}})
-	}
-	if filters.DatasourceID != "" {
-		filterClauses = append(filterClauses, FilterClause{Condition: "a.datasource_id = ?", Args: []interface{}{filters.DatasourceID}})
-	}
-	if filters.Start != "" {
-		filterClauses = append(filterClauses, FilterClause{Condition: "a.created_at >= ?", Args: []interface{}{filters.Start}})
-	}
-	if filters.End != "" {
-		filterClauses = append(filterClauses, FilterClause{Condition: "a.created_at <= ?", Args: []interface{}{filters.End}})
-	}
-	if filters.Keyword != "" {
-		keywordLike := "%" + escapeLike(filters.Keyword) + "%"
-		filterClauses = append(filterClauses, FilterClause{
-			Condition: "(a.sql_content LIKE ? ESCAPE '\\' OR a.sql_summary LIKE ? ESCAPE '\\' OR u.username LIKE ? ESCAPE '\\' OR a.action LIKE ? ESCAPE '\\' OR a.error_message LIKE ? ESCAPE '\\' OR a.database LIKE ? ESCAPE '\\' OR a.ip_address LIKE ? ESCAPE '\\')",
-			Args:      []interface{}{keywordLike, keywordLike, keywordLike, keywordLike, keywordLike, keywordLike, keywordLike},
-		})
-	}
-
-	whereClause, args := BuildWhereClause(filterClauses)
-
-	// Get total count
-	countTable := "audit_logs a"
-	if filters.Keyword != "" {
-		countTable = "audit_logs a LEFT JOIN users u ON a.user_id = u.id"
-	}
-	countSQL := PaginatedCountSQL(countTable, whereClause)
-
-	var total int64
-	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
-		return 0, fmt.Errorf("统计审计日志失败: %w", err)
-	}
-
-	// Write header
-	_ = w.Write([]string{
-		"ID", "时间", "用户", "操作", "数据源ID", "数据库",
-		"SQL内容", "SQL摘要", "返回行数", "影响行数", "耗时(ms)",
-		"错误信息", "脱敏字段", "IP地址", "AI评审", "工单ID",
-	})
-
-	querySQL := fmt.Sprintf(
-		`SELECT a.id, a.user_id, a.action, a.datasource_id, a.database, a.sql_content, a.sql_summary,
-		        a.result_rows, a.affected_rows, a.execution_time_ms, a.error_message,
-		        a.desensitized_fields, a.ip_address, a.ai_review_result, a.ticket_id, a.created_at,
-		        COALESCE(u.username, '') AS username
-		 FROM audit_logs a
-		 LEFT JOIN users u ON a.user_id = u.id
-		 %s ORDER BY a.created_at DESC`,
-		whereClause,
-	)
-
-	rows, err := s.db.QueryContext(ctx, querySQL, args...)
-	if err != nil {
-		return 0, fmt.Errorf("查询审计日志失败: %w", err)
-	}
-	defer rows.Close()
-
-	var written int64
-	for rows.Next() {
-		var a auditCSVRow
-		if err := rows.Scan(
-			&a.ID, &a.UserID, &a.Action, &a.DatasourceID, &a.Database,
-			&a.SQLContent, &a.SQLSummary,
-			&a.ResultRows, &a.AffectedRows, &a.ExecutionTimeMs,
-			&a.ErrorMessage, &a.DesensitizedFields, &a.IPAddress,
-			&a.AIReviewResult, &a.TicketID, &a.CreatedAt,
-			&a.Username,
-		); err != nil {
-			continue
-		}
-
-		createdAtStr := ""
-		if !a.CreatedAt.IsZero() {
-			createdAtStr = a.CreatedAt.Format("2006-01-02 15:04:05")
-		}
-
-		_ = w.Write([]string{
-			fmt.Sprintf("%d", a.ID),
-			createdAtStr,
-			a.Username,
-			a.Action,
-			fmt.Sprintf("%d", a.DatasourceID),
-			a.Database,
-			a.SQLContent,
-			a.SQLSummary,
-			fmt.Sprintf("%d", a.ResultRows),
-			fmt.Sprintf("%d", a.AffectedRows),
-			fmt.Sprintf("%d", a.ExecutionTimeMs),
-			a.ErrorMessage,
-			a.DesensitizedFields,
-			a.IPAddress,
-			a.AIReviewResult,
-			fmt.Sprintf("%d", a.TicketID),
-		})
-		written++
-
-		// Flush every 1000 rows to keep memory bounded
-		if written%1000 == 0 {
-			w.Flush()
-		}
-	}
-
-	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("iterate audit rows: %w", err)
-	}
-
-	return total, nil
-}
-
-// streamTicketCSV streams tickets directly to the CSV writer.
-func (s *ExportAsyncService) streamTicketCSV(ctx context.Context, w *csv.Writer, username, role string, filters TicketExportFilters) (int64, error) {
-	var filterClauses []FilterClause
-	if filters.Status != "" {
-		filterClauses = append(filterClauses, FilterClause{Condition: "status = ?", Args: []interface{}{filters.Status}})
-	}
-	if filters.DatasourceID != "" {
-		filterClauses = append(filterClauses, FilterClause{Condition: "datasource_id = ?", Args: []interface{}{filters.DatasourceID}})
-	}
-	if filters.RiskLevel != "" {
-		filterClauses = append(filterClauses, FilterClause{Condition: "risk_level = ?", Args: []interface{}{filters.RiskLevel}})
-	}
-	if filters.Keyword != "" {
-		like := "%" + escapeLike(filters.Keyword) + "%"
-		filterClauses = append(filterClauses, FilterClause{Condition: "(sql_content LIKE ? OR change_reason LIKE ? OR sql_summary LIKE ?)", Args: []interface{}{like, like, like}})
-	}
-
-	whereClause, args := BuildWhereClause(filterClauses)
-
-	var total int64
-	countSQL := PaginatedCountSQL("tickets", whereClause)
-	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
-		return 0, fmt.Errorf("统计工单失败: %w", err)
-	}
-
-	// Write header
-	_ = w.Write([]string{
-		"ID", "提交人", "提交人ID", "数据源ID", "数据库",
-		"SQL内容", "SQL摘要", "数据库类型", "变更原因",
-		"状态", "风险等级", "审批人", "审批意见",
-		"定时执行时间", "实际执行时间", "创建时间", "更新时间",
-	})
-
-	querySQL := fmt.Sprintf(
-		`SELECT t.id, t.submitter_id, COALESCE(su.username, '') AS submitter_name,
-		        t.datasource_id, t.database, t.sql_content, t.sql_summary,
-		        t.db_type, t.change_reason, t.status, t.risk_level,
-		        t.reviewer_id, COALESCE(rev.username, '') AS reviewer_name,
-		        t.review_comment, t.scheduled_at, t.executed_at,
-		        t.created_at, t.updated_at
-		 FROM tickets t
-		 LEFT JOIN users su ON t.submitter_id = su.id
-		 LEFT JOIN users rev ON t.reviewer_id = rev.id
-		 %s ORDER BY t.created_at DESC`,
-		whereClause,
-	)
-
-	rows, err := s.db.QueryContext(ctx, querySQL, args...)
-	if err != nil {
-		return 0, fmt.Errorf("查询工单失败: %w", err)
-	}
-	defer rows.Close()
-
-	var written int64
-	for rows.Next() {
-		var t ticketCSVRow
-		if err := rows.Scan(
-			&t.ID, &t.SubmitterID, &t.SubmitterName,
-			&t.DatasourceID, &t.Database,
-			&t.SQLContent, &t.SQLSummary,
-			&t.DBType, &t.ChangeReason,
-			&t.Status, &t.RiskLevel,
-			&t.ReviewerID, &t.ReviewerName,
-			&t.ReviewComment,
-			&t.ScheduledAt, &t.ExecutedAt,
-			&t.CreatedAt, &t.UpdatedAt,
-		); err != nil {
-			continue
-		}
-
-		scheduledAtStr := ""
-		if t.ScheduledAt.Valid {
-			scheduledAtStr = t.ScheduledAt.Time.Format("2006-01-02 15:04:05")
-		}
-		executedAtStr := ""
-		if t.ExecutedAt.Valid {
-			executedAtStr = t.ExecutedAt.Time.Format("2006-01-02 15:04:05")
-		}
-
-		_ = w.Write([]string{
-			fmt.Sprintf("%d", t.ID),
-			t.SubmitterName,
-			fmt.Sprintf("%d", t.SubmitterID),
-			fmt.Sprintf("%d", t.DatasourceID),
-			t.Database,
-			t.SQLContent,
-			t.SQLSummary,
-			t.DBType,
-			t.ChangeReason,
-			t.Status,
-			t.RiskLevel,
-			t.ReviewerName,
-			t.ReviewComment,
-			scheduledAtStr,
-			executedAtStr,
-			t.CreatedAt.Format("2006-01-02 15:04:05"),
-			t.UpdatedAt.Format("2006-01-02 15:04:05"),
-		})
-		written++
-
-		if written%1000 == 0 {
-			w.Flush()
-		}
-	}
-
-	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("iterate ticket rows: %w", err)
-	}
-
-	return total, nil
 }
 
 // updateTaskStatus updates the task status in both DB and in-memory cache.

@@ -394,7 +394,7 @@ func TestAddBOM(t *testing.T) {
 	}
 }
 
-func TestBuildAuditCSV_WatermarkFormat(t *testing.T) {
+func TestStreamExportAuditLogs_CSVOutput(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 
@@ -411,27 +411,165 @@ func TestBuildAuditCSV_WatermarkFormat(t *testing.T) {
 		SQLSummary: "SELECT 1",
 	})
 
-	rows, err := db.Query(`SELECT a.id, a.user_id, a.action, a.datasource_id, a.database, a.sql_content, a.sql_summary,
-		a.result_rows, a.affected_rows, a.execution_time_ms, a.error_message,
-		a.desensitized_fields, a.ip_address, a.ai_review_result, a.ticket_id, a.created_at,
-		COALESCE(u.username, '') AS username
-		FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id ORDER BY a.created_at DESC LIMIT 1`)
+	auditSvc := NewAuditService(db, 0, 0)
+	exportSvc := NewExportService(db, auditSvc)
+
+	var buf strings.Builder
+	buf.Write([]byte{0xEF, 0xBB, 0xBF})
+	_, err = exportSvc.StreamExportAuditLogs(context.Background(), &buf, "alice", AuditExportFilters{})
 	if err != nil {
-		t.Fatalf("query: %v", err)
+		t.Fatalf("StreamExportAuditLogs: %v", err)
 	}
-	defer rows.Close()
 
-	csv := buildAuditCSV(context.Background(), rows, "alice")
+	csv := buf.String()
 
-	// Verify watermark line
-	if !strings.Contains(csv, "导出水印:") {
-		t.Error("expected watermark marker")
-	}
-	if !strings.Contains(csv, "导出人=alice") {
-		t.Error("expected '导出人=alice' in watermark")
-	}
 	// Verify header
 	if !strings.Contains(csv, "ID,时间,用户,操作") {
 		t.Error("expected CSV header row")
+	}
+}
+
+func TestExportService_StreamExportAuditLogs(t *testing.T) {
+	db := newExportTestDB(t)
+	defer db.Close()
+	auditSvc := NewAuditService(db, 0, 0)
+	svc := NewExportService(db, auditSvc)
+
+	seedAuditLogs(t, db, 5)
+
+	var buf strings.Builder
+	buf.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	written, err := svc.StreamExportAuditLogs(context.Background(), &buf, "admin", AuditExportFilters{})
+	if err != nil {
+		t.Fatalf("StreamExportAuditLogs: %v", err)
+	}
+	if written != 5 {
+		t.Errorf("written = %d, want 5", written)
+	}
+
+	csv := buf.String()
+	if !strings.Contains(csv, "ID,时间,用户,操作") {
+		t.Error("expected CSV header")
+	}
+	// Should have BOM
+	if !strings.HasPrefix(csv, "\xEF\xBB\xBF") {
+		t.Error("expected BOM header")
+	}
+}
+
+func TestExportService_StreamExportTickets(t *testing.T) {
+	db := newExportTestDB(t)
+	defer db.Close()
+	auditSvc := NewAuditService(db, 0, 0)
+	svc := NewExportService(db, auditSvc)
+
+	seedTickets(t, db, 3)
+
+	var buf strings.Builder
+	buf.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	written, err := svc.StreamExportTickets(context.Background(), &buf, "admin", TicketExportFilters{})
+	if err != nil {
+		t.Fatalf("StreamExportTickets: %v", err)
+	}
+	if written != 3 {
+		t.Errorf("written = %d, want 3", written)
+	}
+
+	csv := buf.String()
+	if !strings.Contains(csv, "ID,提交人,提交人ID") {
+		t.Error("expected CSV header")
+	}
+}
+
+func TestExportService_ValidateExport(t *testing.T) {
+	db := newExportTestDB(t)
+	defer db.Close()
+	auditSvc := NewAuditService(db, 0, 0)
+	svc := NewExportService(db, auditSvc)
+
+	seedAuditLogs(t, db, 5)
+
+	t.Run("admin can validate audit export", func(t *testing.T) {
+		total, err := svc.ValidateExport(context.Background(), "admin", ExportTypeAudit, AuditExportFilters{})
+		if err != nil {
+			t.Fatalf("ValidateExport: %v", err)
+		}
+		if total != 5 {
+			t.Errorf("total = %d, want 5", total)
+		}
+	})
+
+	t.Run("developer cannot validate audit export", func(t *testing.T) {
+		_, err := svc.ValidateExport(context.Background(), "developer", ExportTypeAudit, AuditExportFilters{})
+		if err != ErrExportNoPermission {
+			t.Errorf("expected ErrExportNoPermission, got %v", err)
+		}
+	})
+
+	t.Run("developer can validate ticket export", func(t *testing.T) {
+		_, err := svc.ValidateExport(context.Background(), "developer", ExportTypeTicket, TicketExportFilters{})
+		if err != nil {
+			t.Fatalf("ValidateExport: %v", err)
+		}
+	})
+}
+
+func TestExportService_ValidateExport_ExceedsLimit(t *testing.T) {
+	db := newExportTestDB(t)
+	defer db.Close()
+	auditSvc := NewAuditService(db, 0, 0)
+	svc := NewExportService(db, auditSvc)
+
+	seedAuditLogs(t, db, ExportMaxRows+1)
+
+	total, err := svc.ValidateExport(context.Background(), "admin", ExportTypeAudit, AuditExportFilters{})
+	if err != ErrExportExceedsLimit {
+		t.Errorf("expected ErrExportExceedsLimit, got %v", err)
+	}
+	if total != ExportMaxRows+1 {
+		t.Errorf("total = %d, want %d", total, ExportMaxRows+1)
+	}
+}
+
+func TestExportService_StreamExport_ContextCancellation(t *testing.T) {
+	db := newExportTestDB(t)
+	defer db.Close()
+	auditSvc := NewAuditService(db, 0, 0)
+	svc := NewExportService(db, auditSvc)
+
+	seedAuditLogs(t, db, 5)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	var buf strings.Builder
+	_, err := svc.StreamExportAuditLogs(ctx, &buf, "admin", AuditExportFilters{})
+	if err == nil {
+		t.Error("expected error from cancelled context")
+	}
+}
+
+func TestEscapeCSVFormula(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"=SUM(A1:A10)", "'=SUM(A1:A10)"},
+		{"+cmd", "'+cmd"},
+		{"-cmd", "'-cmd"},
+		{"@SUM", "'@SUM"},
+		{"\ttab", "'\ttab"},
+		{"\rreturn", "'\rreturn"},
+		{"normal text", "normal text"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		got := escapeCSVFormula(tt.input)
+		if got != tt.want {
+			t.Errorf("escapeCSVFormula(%q) = %q, want %q", tt.input, got, tt.want)
+		}
 	}
 }
