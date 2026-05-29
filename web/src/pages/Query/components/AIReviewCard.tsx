@@ -277,7 +277,7 @@ function ActionButtons({
           <div className="flex-1" />
           <Button
             size="sm"
-            className="h-7 gap-1 bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700"
+            className="h-7 gap-1 bg-[var(--success)] px-3 text-xs text-white hover:bg-[var(--success)]/80"
             onClick={onAutoExecute}
           >
             立即执行
@@ -337,7 +337,7 @@ function ActionButtons({
           </Button>
           <Button
             size="sm"
-            className="h-7 gap-1 bg-red-600 px-3 text-xs text-white hover:bg-red-700"
+            className="h-7 gap-1 bg-[var(--danger)] px-3 text-xs text-white hover:bg-[var(--danger)]/80"
             onClick={onSubmitTicket}
           >
             提交工单

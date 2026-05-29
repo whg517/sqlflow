@@ -561,7 +561,7 @@ function ResultTableInner({
                           {/* Shadow border for last frozen column */}
                           {isLastFrozen && frozenCount > 0 && (
                             <div
-                              className="absolute right-0 top-0 bottom-0 w-[2px] bg-black/10"
+                              className="absolute right-0 top-0 bottom-0 w-[2px] bg-[var(--border-default)]"
                               style={{ zIndex: 1 }}
                             />
                           )}
@@ -709,7 +709,7 @@ function ResultTableInner({
                           >
                             {isLastFrozen && frozenCount > 0 && (
                               <div
-                                className="absolute right-0 top-0 bottom-0 w-[2px] bg-black/10"
+                                className="absolute right-0 top-0 bottom-0 w-[2px] bg-[var(--border-default)]"
                                 style={{ zIndex: 1 }}
                               />
                             )}
@@ -762,7 +762,7 @@ function ResultTableInner({
                         {/* Shadow border for last frozen column */}
                         {isLastFrozen && frozenCount > 0 && (
                           <div
-                            className="absolute right-0 top-0 bottom-0 w-[2px] bg-black/10"
+                            className="absolute right-0 top-0 bottom-0 w-[2px] bg-[var(--border-default)]"
                             style={{ zIndex: 1 }}
                           />
                         )}
@@ -881,7 +881,7 @@ function ResultTableInner({
                         >
                           {isLastFrozen && frozenCount > 0 && (
                             <div
-                              className="absolute right-0 top-0 bottom-0 w-[2px] bg-black/10"
+                              className="absolute right-0 top-0 bottom-0 w-[2px] bg-[var(--border-default)]"
                               style={{ zIndex: 1 }}
                             />
                           )}

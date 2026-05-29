@@ -364,7 +364,7 @@ export default function TicketDetailDrawer({
                 {canApprove && (
                   <Button
                     size="sm"
-                    className="h-8 gap-1.5 bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700"
+                    className="h-8 gap-1.5 bg-[var(--success)] px-3 text-xs text-white hover:bg-[var(--success)]/80"
                     onClick={() => setApproveOpen(true)}
                     disabled={actionLoading}
                   >

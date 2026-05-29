@@ -782,7 +782,7 @@ function DataSourceTab() {
             <AlertDialogAction
               onClick={handleDelete}
               disabled={deleting}
-              className="bg-red-600 text-white hover:bg-red-700"
+              className="bg-[var(--danger)] text-white hover:bg-[var(--danger)]/80"
             >
               {deleting ? "禁用中..." : "确认禁用"}
             </AlertDialogAction>

@@ -451,7 +451,7 @@ function TicketTab({ days }: { days: number }) {
           { label: "已审批", count: stats?.approved_count ?? 0, color: "text-emerald-400", bg: "bg-emerald-500/10" },
           { label: "已完成", count: stats?.done_count ?? 0, color: "text-blue-400", bg: "bg-blue-500/10" },
           { label: "已拒绝", count: stats?.rejected_count ?? 0, color: "text-red-400", bg: "bg-red-500/10" },
-          { label: "已取消", count: stats?.cancelled_count ?? 0, color: "text-gray-400", bg: "bg-gray-500/10" },
+          { label: "已取消", count: stats?.cancelled_count ?? 0, color: "text-[var(--text-tertiary)]", bg: "bg-[var(--text-tertiary)]/10" },
           { label: "待审批", count: stats?.pending_count ?? 0, color: "text-amber-400", bg: "bg-amber-500/10" },
         ].map((item) => (
           <Card key={item.label}>
@@ -499,7 +499,7 @@ function TicketTab({ days }: { days: number }) {
               return (
                 <div key={r.risk_level} className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <Badge className={`${riskColor[r.risk_level] || "bg-gray-500/20 text-gray-400"} border-0`}>
+                    <Badge className={`${riskColor[r.risk_level] || "bg-[var(--text-tertiary)]/15 text-[var(--text-tertiary)]"} border-0`}>
                       {riskLabel[r.risk_level] || r.risk_level}
                     </Badge>
                     <span className="text-xs text-[var(--text-secondary)]">{formatNumber(r.count)} ({formatPercent(pct)})</span>

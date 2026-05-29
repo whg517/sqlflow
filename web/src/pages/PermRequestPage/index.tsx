@@ -53,7 +53,7 @@ import { api } from "@/api/client";
 // --- Status Badge ---
 
 function StatusBadge({ status }: { status: string }) {
-  const info = STATUS_MAP[status] || { label: status, color: "text-gray-400", bg: "bg-gray-500/10" };
+  const info = STATUS_MAP[status] || { label: status, color: "text-[var(--text-tertiary)]", bg: "bg-[var(--text-tertiary)]/10" };
   return (
     <Badge variant="outline" className={`${info.bg} ${info.color} border-0`}>
       {info.label}

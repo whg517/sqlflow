@@ -676,7 +676,7 @@ function UserManagementTab() {
             <AlertDialogAction
               onClick={handleDelete}
               disabled={deleteLoading}
-              className="bg-red-600 text-white hover:bg-red-700"
+              className="bg-[var(--danger)] text-white hover:bg-[var(--danger)]/80"
             >
               {deleteLoading ? "删除中..." : "确认删除"}
             </AlertDialogAction>

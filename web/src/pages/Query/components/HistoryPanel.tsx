@@ -202,7 +202,7 @@ export default function HistoryPanel() {
             <AlertDialogAction
               onClick={handleClear}
               disabled={clearing}
-              className="bg-red-600 text-white hover:bg-red-700"
+              className="bg-[var(--danger)] text-white hover:bg-[var(--danger)]/80"
             >
               {clearing ? "清空中..." : "确认清空"}
             </AlertDialogAction>
