@@ -25,6 +25,7 @@ import {
   ShieldAlert,
   Code2,
   TestTube2,
+  GitBranch,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -49,6 +50,7 @@ import { api } from "@/api/client";
 const settingsSubItems = [
   { to: "/settings/datasource", label: "数据源管理", icon: Server },
   { to: "/settings/mask-rules", label: "脱敏规则", icon: EyeOff },
+  { to: "/settings/approval-policies", label: "审批策略", icon: GitBranch },
   { to: "/settings/ai-config", label: "AI 配置", icon: Bot },
 ];
 

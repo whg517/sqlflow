@@ -77,6 +77,10 @@ const FileDetailPage = lazyPage(() => import("@/pages/Coverage/FileDetailPage"),
   title: "文件覆盖度页面出现了问题",
 });
 
+const ApprovalPoliciesPage = lazyPage(() => import("@/pages/ApprovalPolicies"), {
+  title: "审批策略页面出现了问题",
+});
+
 // ── App ─────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -109,6 +113,7 @@ function App() {
             <Route path="/tokens" element={<TokenPage />} />
             <Route path="/permission-requests" element={<PermRequestPage />} />
             <Route path="/sql-templates" element={<SQLTemplatePage />} />
+            <Route path="/settings/approval-policies" element={<ApprovalPoliciesPage />} />
             <Route path="/coverage" element={<CoverageSummaryPage />} />
             <Route path="/coverage/summary" element={<CoverageSummaryPage />} />
             <Route path="/coverage/modules/:modulePath" element={<FileDetailPage />} />

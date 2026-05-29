@@ -24,6 +24,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   getTicket,
   approveTicket,
   rejectTicket,
@@ -40,6 +45,8 @@ import {
 } from "@/api/ticket";
 import CommentSection from "./CommentSection";
 import GitInfoSection from "@/components/GitInfoSection";
+import { ApprovalStepper, ApprovalTimeline, ResubmitForm } from "@/components/approval";
+import { useApprovalFlow } from "@/hooks/useApprovalFlow";
 
 interface TicketDetailDrawerProps {
   open: boolean;
@@ -76,6 +83,12 @@ export default function TicketDetailDrawer({
 
   // Execute confirm
   const [execOpen, setExecOpen] = useState(false);
+
+  // Approval timeline collapsed
+  const [timelineOpen, setTimelineOpen] = useState(true);
+
+  // Approval flow hook
+  const approval = useApprovalFlow(open ? ticketId : null);
 
   useEffect(() => {
     if (open && ticketId) {
@@ -239,6 +252,37 @@ export default function TicketDetailDrawer({
 
                 <Separator className="bg-[var(--border-default)]" />
 
+                {/* Approval Stepper */}
+                {approval.flow && (
+                  <ApprovalStepper
+                    flow={approval.flow}
+                    currentUserId={userId}
+                  />
+                )}
+
+                {/* Resubmit Form (REJECTED + isSubmitter) */}
+                {(status === "REJECTED") && isSubmitter && ticket && (
+                  <ResubmitForm
+                    originalSql={ticket.sql_content}
+                    rejectionComment={
+                      approval.history.length > 0
+                        ? [...approval.history]
+                            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                            .find((h) => h.action === "REJECTED")?.comment ?? null
+                        : ticket.review_comment
+                    }
+                    originalChangeReason={ticket.change_reason || ""}
+                    riskLevel={ticket.risk_level || ""}
+                    revision={approval.flow?.revision ?? 1}
+                    onResubmit={approval.resubmit}
+                    loading={approval.loading}
+                    onSuccess={() => {
+                      onActionComplete();
+                      if (ticketId) getTicket(ticketId).then((res) => setTicket(res.data));
+                    }}
+                  />
+                )}
+
                 {/* SQL Content */}
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
@@ -306,29 +350,28 @@ export default function TicketDetailDrawer({
                   </div>
                 )}
 
-                {/* Review Record */}
-                {ticket.reviewer_id > 0 && (
+                {/* Approval Timeline (collapsible) */}
+                {(approval.history.length > 0 || approval.historyLoading) && (
                   <>
                     <Separator className="bg-[var(--border-default)]" />
-                    <div>
-                      <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
-                        审批记录
-                      </label>
-                      <div className="space-y-1 text-xs text-[var(--text-muted)]">
-                        <p>
-                          {ticket.status === "APPROVED" ||
-                          ticket.status === "DONE" ||
-                          ticket.status === "EXECUTING"
-                            ? `${formatTime(ticket.updated_at)} ${ticket.reviewer_name || `用户#${ticket.reviewer_id}`} 审批通过`
-                            : `${formatTime(ticket.updated_at)} ${ticket.reviewer_name || `用户#${ticket.reviewer_id}`} 已拒绝`}
-                        </p>
-                        {ticket.review_comment && (
-                          <p className="pl-3 text-[var(--text-secondary)]">
-                            "{ticket.review_comment}"
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                    <Collapsible open={timelineOpen} onOpenChange={setTimelineOpen}>
+                      <CollapsibleTrigger asChild>
+                        <button className="flex items-center gap-2 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+                          审批历史
+                          {approval.history.length > 0 && (
+                            <span className="rounded bg-[var(--bg-elevated)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)]">
+                              {approval.history.length}
+                            </span>
+                          )}
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-3">
+                        <ApprovalTimeline
+                          entries={approval.history}
+                          loading={approval.historyLoading}
+                        />
+                      </CollapsibleContent>
+                    </Collapsible>
                   </>
                 )}
 
