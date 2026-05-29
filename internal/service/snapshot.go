@@ -11,14 +11,21 @@ import (
 	"github.com/whg517/sqlflow/internal/model"
 )
 
+// QueryExecutor is an interface for executing SQL queries.
+// Used to decouple SnapshotService from QueryService.
+type QueryExecutor interface {
+	ExecuteQuery(ctx context.Context, userID int64, username, role string, datasourceID int64, database, sqlContent, dbType string) (*QueryResult, error)
+}
+
 // SnapshotService handles query snapshot CRUD and comparison.
 type SnapshotService struct {
-	db *sql.DB
+	db   *sql.DB
+	exec QueryExecutor
 }
 
 // NewSnapshotService creates a new SnapshotService.
-func NewSnapshotService(db *sql.DB) *SnapshotService {
-	return &SnapshotService{db: db}
+func NewSnapshotService(db *sql.DB, exec QueryExecutor) *SnapshotService {
+	return &SnapshotService{db: db, exec: exec}
 }
 
 var (
@@ -26,29 +33,100 @@ var (
 	ErrSnapshotForbidden  = errors.New("无权访问此快照")
 	ErrSchemaMismatch     = errors.New("两个快照的列结构不一致")
 	ErrSameSnapshot       = errors.New("不能对比同一个快照")
+	ErrHistoryNotFound    = errors.New("查询历史记录不存在")
 )
 
-// CreateSnapshot saves a query result as a snapshot.
-func (s *SnapshotService) CreateSnapshot(ctx context.Context, userID int64, label string, columns, rows json.RawMessage, rowCount int) (*model.QuerySnapshot, error) {
+// queryHistoryRow represents a row from query_history table.
+type queryHistoryRow struct {
+	ID           int64
+	UserID       int64
+	DatasourceID int64
+	Database     string
+	SQLContent   string
+	SQLSummary   string
+	DBType       string
+}
+
+// CreateSnapshotFromHistory creates a snapshot by re-executing a query from history.
+func (s *SnapshotService) CreateSnapshotFromHistory(ctx context.Context, userID int64, username, role string, queryHistoryID int64) (*model.QuerySnapshot, error) {
+	// 1. Fetch query history record
+	history, err := s.getQueryHistory(ctx, queryHistoryID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Re-execute the SQL
+	result, err := s.exec.ExecuteQuery(ctx, userID, username, role, history.DatasourceID, history.Database, history.SQLContent, history.DBType)
+	if err != nil {
+		return nil, fmt.Errorf("重新执行查询失败: %w", err)
+	}
+
+	// 3. Convert QueryResult columns/rows to JSON
+	columnsJSON, err := json.Marshal(result.Columns)
+	if err != nil {
+		return nil, fmt.Errorf("序列化列信息失败: %w", err)
+	}
+
+	// Convert []map[string]interface{} rows to [][]interface{} for storage
+	rowArrays := make([][]interface{}, len(result.Rows))
+	for i, rowMap := range result.Rows {
+		row := make([]interface{}, len(result.Columns))
+		for j, col := range result.Columns {
+			row[j] = rowMap[col]
+		}
+		rowArrays[i] = row
+	}
+
+	rowsJSON, err := json.Marshal(rowArrays)
+	if err != nil {
+		return nil, fmt.Errorf("序列化行数据失败: %w", err)
+	}
+
+	// 4. Save snapshot
 	now := time.Now().Format("2006-01-02 15:04:05")
-	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO query_snapshots (user_id, label, columns, rows, row_count, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		userID, label, string(columns), string(rows), rowCount, now,
+	dbResult, err := s.db.ExecContext(ctx,
+		`INSERT INTO query_snapshots (user_id, query_history_id, label, columns, rows, row_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		userID, queryHistoryID, "", string(columnsJSON), string(rowsJSON), len(result.Rows), now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("创建快照失败: %w", err)
 	}
 
-	id, _ := result.LastInsertId()
+	id, _ := dbResult.LastInsertId()
 	return &model.QuerySnapshot{
-		ID:        id,
-		UserID:    userID,
-		Label:     label,
-		Columns:   columns,
-		Rows:      rows,
-		RowCount:  rowCount,
-		CreatedAt: now,
+		ID:             id,
+		UserID:         userID,
+		QueryHistoryID: queryHistoryID,
+		Columns:        json.RawMessage(columnsJSON),
+		Rows:           json.RawMessage(rowsJSON),
+		RowCount:       len(result.Rows),
+		CreatedAt:      now,
+		SQLContent:     history.SQLContent,
+		SQLSummary:     history.SQLSummary,
+		Database:       history.Database,
 	}, nil
+}
+
+// getQueryHistory fetches a query history record and verifies ownership.
+func (s *SnapshotService) getQueryHistory(ctx context.Context, id, userID int64) (*queryHistoryRow, error) {
+	h := &queryHistoryRow{}
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, user_id, datasource_id, database, sql_content, sql_summary, db_type FROM query_history WHERE id = ?`,
+		id,
+	).Scan(&h.ID, &h.UserID, &h.DatasourceID, &h.Database, &h.SQLContent, &h.SQLSummary, &h.DBType)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrHistoryNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("查询历史记录失败: %w", err)
+	}
+
+	if h.UserID != userID {
+		return nil, ErrSnapshotForbidden
+	}
+
+	return h, nil
 }
 
 // GetSnapshot returns a single snapshot by ID (must belong to userID).
@@ -57,9 +135,9 @@ func (s *SnapshotService) GetSnapshot(ctx context.Context, id, userID int64) (*m
 	var columns, rows string
 
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, user_id, label, columns, rows, row_count, created_at FROM query_snapshots WHERE id = ?`,
+		`SELECT id, user_id, query_history_id, columns, rows, row_count, created_at FROM query_snapshots WHERE id = ?`,
 		id,
-	).Scan(&snap.ID, &snap.UserID, &snap.Label, &columns, &rows, &snap.RowCount, &snap.CreatedAt)
+	).Scan(&snap.ID, &snap.UserID, &snap.QueryHistoryID, &columns, &rows, &snap.RowCount, &snap.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, ErrSnapshotNotFound
@@ -74,6 +152,15 @@ func (s *SnapshotService) GetSnapshot(ctx context.Context, id, userID int64) (*m
 
 	snap.Columns = json.RawMessage(columns)
 	snap.Rows = json.RawMessage(rows)
+
+	// Join query_history info for display
+	if snap.QueryHistoryID > 0 {
+		_ = s.db.QueryRowContext(ctx,
+			`SELECT sql_content, COALESCE(sql_summary, ''), database FROM query_history WHERE id = ?`,
+			snap.QueryHistoryID,
+		).Scan(&snap.SQLContent, &snap.SQLSummary, &snap.Database)
+	}
+
 	return snap, nil
 }
 
@@ -94,7 +181,7 @@ func (s *SnapshotService) ListSnapshots(ctx context.Context, userID int64, page,
 
 	offset := (page - 1) * pageSize
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, user_id, label, columns, rows, row_count, created_at FROM query_snapshots WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		`SELECT id, user_id, query_history_id, columns, rows, row_count, created_at FROM query_snapshots WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		userID, pageSize, offset,
 	)
 	if err != nil {
@@ -106,7 +193,7 @@ func (s *SnapshotService) ListSnapshots(ctx context.Context, userID int64, page,
 	for rows.Next() {
 		snap := &model.QuerySnapshot{}
 		var columns, rowsData string
-		if err := rows.Scan(&snap.ID, &snap.UserID, &snap.Label, &columns, &rowsData, &snap.RowCount, &snap.CreatedAt); err != nil {
+		if err := rows.Scan(&snap.ID, &snap.UserID, &snap.QueryHistoryID, &columns, &rowsData, &snap.RowCount, &snap.CreatedAt); err != nil {
 			return nil, 0, err
 		}
 		snap.Columns = json.RawMessage(columns)
@@ -119,7 +206,6 @@ func (s *SnapshotService) ListSnapshots(ctx context.Context, userID int64, page,
 
 // DeleteSnapshot deletes a snapshot (must belong to userID).
 func (s *SnapshotService) DeleteSnapshot(ctx context.Context, id, userID int64) error {
-	// Verify ownership
 	snap, err := s.GetSnapshot(ctx, id, userID)
 	if err != nil {
 		return err
@@ -138,20 +224,20 @@ func (s *SnapshotService) DeleteSnapshot(ctx context.Context, id, userID int64) 
 
 // DiffRow represents a single row diff result.
 type DiffRow struct {
-	Type         string                 `json:"type"`          // "added" | "removed" | "modified" | "unchanged"
-	RowIndex     int                    `json:"rowIndex"`
-	Left         map[string]interface{} `json:"left,omitempty"`
-	Right        map[string]interface{} `json:"right,omitempty"`
-	ChangedFields []string              `json:"changedFields,omitempty"`
+	Type          string                 `json:"type"`
+	RowIndex      int                    `json:"rowIndex"`
+	Left          map[string]interface{} `json:"left,omitempty"`
+	Right         map[string]interface{} `json:"right,omitempty"`
+	ChangedFields []string               `json:"changedFields,omitempty"`
 }
 
 // CompareResult represents the full diff result.
 type CompareResult struct {
-	Columns   []string  `json:"columns"`
-	TotalLeft int       `json:"totalLeft"`
-	TotalRight int      `json:"totalRight"`
-	DiffRows  []DiffRow `json:"diffRows"`
-	Summary   struct {
+	Columns    []string  `json:"columns"`
+	TotalLeft  int       `json:"totalLeft"`
+	TotalRight int       `json:"totalRight"`
+	DiffRows   []DiffRow `json:"diffRows"`
+	Summary    struct {
 		Added     int `json:"added"`
 		Removed   int `json:"removed"`
 		Modified  int `json:"modified"`
@@ -175,7 +261,6 @@ func (s *SnapshotService) CompareSnapshots(ctx context.Context, snapshotAID, sna
 		return nil, err
 	}
 
-	// Parse columns
 	var colsA, colsB []string
 	if err := json.Unmarshal(snapA.Columns, &colsA); err != nil {
 		return nil, fmt.Errorf("解析快照A列信息失败: %w", err)
@@ -184,12 +269,10 @@ func (s *SnapshotService) CompareSnapshots(ctx context.Context, snapshotAID, sna
 		return nil, fmt.Errorf("解析快照B列信息失败: %w", err)
 	}
 
-	// Schema check
 	if !columnsEqual(colsA, colsB) {
 		return nil, ErrSchemaMismatch
 	}
 
-	// Parse rows
 	var rowsA, rowsB [][]interface{}
 	if err := json.Unmarshal(snapA.Rows, &rowsA); err != nil {
 		return nil, fmt.Errorf("解析快照A行数据失败: %w", err)
@@ -210,59 +293,52 @@ func compareRows(columns []string, rowsA, rowsB [][]interface{}) *CompareResult 
 		DiffRows:   make([]DiffRow, 0),
 	}
 
-	// Build hash maps for fast lookup
-	mapA := make(map[string]int) // hash -> index in rowsA
+	mapA := make(map[string]int)
 	for i, row := range rowsA {
 		h := rowHash(row)
 		mapA[h] = i
 	}
 
-	mapB := make(map[string]int) // hash -> index in rowsB
+	mapB := make(map[string]int)
 	for i, row := range rowsB {
 		h := rowHash(row)
 		mapB[h] = i
 	}
 
-	// Track processed rows to avoid duplicates
 	processedA := make(map[int]bool)
 	processedB := make(map[int]bool)
 
-	// First pass: find rows in A and check if they exist in B
+	// First pass: find unchanged rows (exact hash match)
 	for i, row := range rowsA {
 		h := rowHash(row)
-		rowMap := rowToMap(columns, row)
-
-		if j, exists := mapB[h]; exists {
-			// Exact match found in B — unchanged
-			if !processedB[j] {
-				result.DiffRows = append(result.DiffRows, DiffRow{
-					Type:     "unchanged",
-					RowIndex: i,
-					Left:     rowMap,
-					Right:    rowMap,
-				})
-				result.Summary.Unchanged++
-				processedB[j] = true
-				processedA[i] = true
-			}
+		if j, exists := mapB[h]; exists && !processedB[j] {
+			rowMap := rowToMap(columns, row)
+			result.DiffRows = append(result.DiffRows, DiffRow{
+				Type:     "unchanged",
+				RowIndex: i,
+				Left:     rowMap,
+				Right:    rowMap,
+			})
+			result.Summary.Unchanged++
+			processedB[j] = true
+			processedA[i] = true
 		}
 	}
 
-	// Second pass: find modified and remaining removed/added
+	// Second pass: find modified and removed rows
 	for i, row := range rowsA {
 		if processedA[i] {
 			continue
 		}
 
 		rowMapA := rowToMap(columns, row)
-		// Try to find a "close" match in B by first column (primary key heuristic)
 		matched := false
 		for j, rowB := range rowsB {
 			if processedB[j] {
 				continue
 			}
-			// If first column matches, consider it a modification
-			if len(row) > 0 && len(rowB) > 0 && fmt.Sprintf("%v", row[0]) == fmt.Sprintf("%v", rowB[0]) {
+			// Match by first column (primary key heuristic)
+			if len(row) > 0 && len(rowB) > 0 && valueEqual(row[0], rowB[0]) {
 				rowMapB := rowToMap(columns, rowB)
 				changedFields := findChangedFields(rowMapA, rowMapB)
 				result.DiffRows = append(result.DiffRows, DiffRow{
@@ -280,7 +356,6 @@ func compareRows(columns []string, rowsA, rowsB [][]interface{}) *CompareResult 
 		}
 
 		if !matched {
-			// Removed — exists in A but not in B
 			result.DiffRows = append(result.DiffRows, DiffRow{
 				Type:     "removed",
 				RowIndex: i,
@@ -290,7 +365,7 @@ func compareRows(columns []string, rowsA, rowsB [][]interface{}) *CompareResult 
 		}
 	}
 
-	// Third pass: find added rows (in B but not matched)
+	// Third pass: find added rows
 	for j, row := range rowsB {
 		if processedB[j] {
 			continue
@@ -306,10 +381,20 @@ func compareRows(columns []string, rowsA, rowsB [][]interface{}) *CompareResult 
 	return result
 }
 
-// rowHash returns a deterministic hash for a row.
+// rowHash returns a deterministic string for a row using JSON encoding.
 func rowHash(row []interface{}) string {
 	b, _ := json.Marshal(row)
 	return string(b)
+}
+
+// valueEqual compares two values using JSON encoding for type-safe comparison.
+func valueEqual(a, b interface{}) bool {
+	aj, errA := json.Marshal(a)
+	bj, errB := json.Marshal(b)
+	if errA != nil || errB != nil {
+		return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+	}
+	return string(aj) == string(bj)
 }
 
 // rowToMap converts a row array + column names to a map.
@@ -328,7 +413,7 @@ func findChangedFields(a, b map[string]interface{}) []string {
 	var changed []string
 	for k := range a {
 		if bv, ok := b[k]; ok {
-			if fmt.Sprintf("%v", a[k]) != fmt.Sprintf("%v", bv) {
+			if !valueEqual(a[k], bv) {
 				changed = append(changed, k)
 			}
 		}

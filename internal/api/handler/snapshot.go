@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"log"
 	"strconv"
 
@@ -22,23 +21,22 @@ func NewSnapshotHandler(snapshotSvc *service.SnapshotService) *SnapshotHandler {
 }
 
 type createSnapshotRequest struct {
-	Label    string          `json:"label"`
-	Columns  json.RawMessage `json:"columns"`
-	Rows     json.RawMessage `json:"rows"`
-	RowCount int             `json:"row_count"`
+	QueryHistoryID int64 `json:"query_history_id"`
 }
 
 // CreateSnapshot handles POST /api/query/snapshots.
 //
 // @Summary 保存查询快照
-// @Description 将查询结果保存为快照，用于后续对比
+// @Description 根据查询历史ID重新执行SQL并保存结果为快照，用于后续对比
 // @Tags 快照
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body createSnapshotRequest true "快照数据"
+// @Param body body createSnapshotRequest true "查询历史ID"
 // @Success 200 {object} resp.SuccessResponse "保存成功"
 // @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Failure 404 {object} resp.ErrorResponse "查询历史不存在"
 // @Router /query/snapshots [post]
 func (h *SnapshotHandler) CreateSnapshot(c echo.Context) error {
 	var req createSnapshotRequest
@@ -46,19 +44,25 @@ func (h *SnapshotHandler) CreateSnapshot(c echo.Context) error {
 		return resp.BadRequest(c, "请求格式错误")
 	}
 
-	if len(req.Columns) == 0 {
-		return resp.BadRequest(c, "columns 不能为空")
-	}
-	if len(req.Rows) == 0 {
-		return resp.BadRequest(c, "rows 不能为空")
+	if req.QueryHistoryID == 0 {
+		return resp.BadRequest(c, "query_history_id 不能为空")
 	}
 
 	userID := getContextUserID(c)
+	username := getContextUsername(c)
+	role := getContextRole(c)
 
-	snapshot, err := h.snapshotSvc.CreateSnapshot(c.Request().Context(), userID, req.Label, req.Columns, req.Rows, req.RowCount)
+	snapshot, err := h.snapshotSvc.CreateSnapshotFromHistory(c.Request().Context(), userID, username, role, req.QueryHistoryID)
 	if err != nil {
-		log.Printf("CreateSnapshot failed: %v", err)
-		return resp.InternalError(c, "保存快照失败")
+		switch err {
+		case service.ErrHistoryNotFound:
+			return resp.NotFound(c, err.Error())
+		case service.ErrSnapshotForbidden:
+			return resp.Forbidden(c, err.Error())
+		default:
+			log.Printf("CreateSnapshot failed: %v", err)
+			return resp.InternalError(c, "保存快照失败")
+		}
 	}
 
 	return resp.OK(c, snapshot)
@@ -66,7 +70,7 @@ func (h *SnapshotHandler) CreateSnapshot(c echo.Context) error {
 
 // ListSnapshots handles GET /api/query/snapshots.
 //
-// @Snapshot 快照列表
+// @Summary 快照列表
 // @Description 获取当前用户的查询快照列表
 // @Tags 快照
 // @Produce json

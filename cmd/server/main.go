@@ -148,7 +148,7 @@ func main() {
 	log.Println("sql template service initialized")
 
 	// Initialize snapshot service (SF-FEAT0041)
-	snapshotSvc := service.NewSnapshotService(database.DB)
+	snapshotSvc := service.NewSnapshotService(database.DB, querySvc)
 	log.Println("snapshot service initialized")
 
 	// Initialize share service (SF-FEAT0038)
