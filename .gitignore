@@ -52,6 +52,20 @@ certs/
 state/
 .claude/
 
+# OpenClaw
+.openclaw/
+
+# Git worktree
+.worktree/
+
+# Agent persona (workspace only)
+AGENTS.md
+SOUL.md
+IDENTITY.md
+USER.md
+TOOLS.md
+HEARTBEAT.md
+
 # Backups
 *.bak
 
