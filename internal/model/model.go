@@ -97,7 +97,8 @@ type Ticket struct {
 	DBType         string       `json:"db_type"`
 	ChangeReason   string       `json:"change_reason"`
 	Status         TicketStatus `json:"status"`
-	RiskLevel      string       `json:"risk_level"`
+	AffectedTables  string       `json:"affected_tables"`
+	RiskLevel       string       `json:"risk_level"`
 	AIReviewResult string       `json:"ai_review_result,omitempty"`
 	ReviewerID        int64        `json:"reviewer_id"`
 	ReviewerName      string       `json:"reviewer_name,omitempty"`

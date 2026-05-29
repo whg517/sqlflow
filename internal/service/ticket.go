@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -98,6 +99,7 @@ func scanTicket(scanner interface {
 		&t.ID, &t.SubmitterID, &t.DatasourceID, &t.Database,
 		&t.SQLContent, &t.SQLSummary, &t.DBType, &t.ChangeReason,
 		&t.Status, &t.RiskLevel, &t.AIReviewResult,
+		&t.SQLType, &t.AffectedTables,
 		&t.ReviewerID, &t.ReviewComment, &scheduledAt, &executedAt,
 		&t.CreatedAt, &t.UpdatedAt,
 	)
@@ -147,12 +149,25 @@ func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, dat
 		dbType = "mysql"
 	}
 
+	// Auto-parse SQL and evaluate risk
+	analyzer := NewSQLAnalyzer()
+	analysis := analyzer.Analyze(sqlContent)
+
+	tablesJSON := affectedTablesToJSON(analysis.AffectedTables)
+
+	// Auto-evaluate risk level if not provided
+	if riskLevel == "" {
+		evaluator := NewRiskEvaluator()
+		eval := evaluator.Evaluate(analysis)
+		riskLevel = eval.Level
+	}
+
 	now := time.Now()
 	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, sql_type, affected_tables, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		submitterID, datasourceID, database, sqlContent, summary, dbType, changeReason,
-		model.TicketStatusSubmitted, riskLevel, aiReviewResult, now, now,
+		model.TicketStatusSubmitted, riskLevel, aiReviewResult, analysis.SQLType, tablesJSON, now, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("创建工单失败: %w", err)
@@ -179,6 +194,8 @@ func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, dat
 		Status:         model.TicketStatusSubmitted,
 		RiskLevel:      riskLevel,
 		AIReviewResult: aiReviewResult,
+		SQLType:        analysis.SQLType,
+		AffectedTables: tablesJSON,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
@@ -195,7 +212,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, dat
 // GetTicket retrieves a ticket by ID with populated user names.
 func (s *TicketService) GetTicket(ctx context.Context, id int64) (*model.Ticket, error) {
 	t, err := scanTicket(s.db.QueryRowContext(ctx,
-		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, reviewer_id, review_comment, scheduled_at, executed_at, created_at, updated_at
+		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, sql_type, affected_tables, reviewer_id, review_comment, scheduled_at, executed_at, created_at, updated_at
 		 FROM tickets WHERE id = ?`, id,
 	))
 	if err != nil {
@@ -251,7 +268,7 @@ func (s *TicketService) ListTickets(ctx context.Context, page, pageSize int, sta
 
 	// Query page
 	querySQL := fmt.Sprintf(
-		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, reviewer_id, review_comment, scheduled_at, executed_at, created_at, updated_at
+		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, sql_type, affected_tables, reviewer_id, review_comment, scheduled_at, executed_at, created_at, updated_at
 		 FROM tickets %s ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		whereClause,
 	)
@@ -692,4 +709,16 @@ func (s *TicketService) BatchReject(ctx context.Context, ticketIDs []int64, revi
 	}
 
 	return resp, nil
+}
+
+// affectedTablesToJSON converts a string slice to JSON array string.
+func affectedTablesToJSON(tables []string) string {
+	if len(tables) == 0 {
+		return "[]"
+	}
+	b, err := json.Marshal(tables)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
 }
