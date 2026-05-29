@@ -1,7 +1,8 @@
 "use no memo";
 
 import { useState, useMemo } from "react";
-import { AlertTriangle, Loader2, Table2, FileText } from "lucide-react";
+import { AlertTriangle, Loader2, Table2, FileText, GitBranch } from "lucide-react";
+import ExplainTreeView from "./ExplainTreeView";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -222,7 +223,7 @@ interface ExplainPanelProps {
 
 // --- Main Component ---
 
-type ViewMode = "structured" | "text";
+type ViewMode = "structured" | "tree" | "text";
 
 export default function ExplainPanel({
   plan,
@@ -273,6 +274,15 @@ export default function ExplainPanel({
           结构化
         </Button>
         <Button
+          variant={viewMode === "tree" ? "secondary" : "ghost"}
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          onClick={() => setViewMode("tree")}
+        >
+          <GitBranch size={12} />
+          树形
+        </Button>
+        <Button
           variant={viewMode === "text" ? "secondary" : "ghost"}
           size="sm"
           className="h-7 gap-1 text-xs"
@@ -286,6 +296,8 @@ export default function ExplainPanel({
       {/* Content */}
       {viewMode === "structured" ? (
         <StructuredView plan={plan} />
+      ) : viewMode === "tree" ? (
+        <ExplainTreeView plan={plan} />
       ) : (
         <pre className="overflow-x-auto rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 font-mono text-xs text-[var(--text-primary)]">
           {formatted}
