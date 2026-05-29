@@ -920,3 +920,160 @@ func TestSetNotifyService(t *testing.T) {
 	svc.SetNotifyService(nil)
 	// Should not panic
 }
+
+// ---------------------------------------------------------------------------
+// Batch operations tests
+// ---------------------------------------------------------------------------
+
+func TestBatchApprove(t *testing.T) {
+	testDB := setupTicketTestDB(t)
+	svc := NewTicketService(testDB, nil, nil)
+
+	devID := seedTestUser(t, testDB, "batchdev", "developer")
+	dbaID := seedTestUser(t, testDB, "batchdba", "dba")
+	dsID := seedTestDatasource(t, testDB, "batchds")
+
+	t.Run("successful batch approve", func(t *testing.T) {
+		t1 := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
+		t2 := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
+		t3 := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
+
+		result, err := svc.BatchApprove(context.Background(), []int64{t1.ID, t2.ID, t3.ID}, dbaID, "dba", "batch approved")
+		if err != nil {
+			t.Fatalf("BatchApprove() error: %v", err)
+		}
+
+		if result.Total != 3 {
+			t.Errorf("Total = %d, want 3", result.Total)
+		}
+		if result.Succeeded != 3 {
+			t.Errorf("Succeeded = %d, want 3", result.Succeeded)
+		}
+		if result.Failed != 0 {
+			t.Errorf("Failed = %d, want 0", result.Failed)
+		}
+	})
+
+	t.Run("partial failure with wrong status", func(t *testing.T) {
+		pending := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
+		approved := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusApproved)
+		pending2 := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
+
+		result, err := svc.BatchApprove(context.Background(), []int64{pending.ID, approved.ID, pending2.ID}, dbaID, "dba", "batch")
+		if err != nil {
+			t.Fatalf("BatchApprove() error: %v", err)
+		}
+
+		if result.Total != 3 {
+			t.Errorf("Total = %d, want 3", result.Total)
+		}
+		if result.Succeeded != 2 {
+			t.Errorf("Succeeded = %d, want 2", result.Succeeded)
+		}
+		if result.Failed != 1 {
+			t.Errorf("Failed = %d, want 1", result.Failed)
+		}
+
+		// Find the failed one
+		for _, r := range result.Results {
+			if r.TicketID == approved.ID {
+				if r.Success {
+					t.Error("approved ticket should have failed")
+				}
+				if r.Error == "" {
+					t.Error("expected error message for failed ticket")
+				}
+			}
+		}
+	})
+
+	t.Run("developer cannot batch approve", func(t *testing.T) {
+		_, err := svc.BatchApprove(context.Background(), []int64{1, 2}, devID, "developer", "nope")
+		if err != ErrNoPermission {
+			t.Errorf("BatchApprove() error = %v, want ErrNoPermission", err)
+		}
+	})
+
+	t.Run("nonexistent ticket returns error", func(t *testing.T) {
+		pending := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
+
+		result, err := svc.BatchApprove(context.Background(), []int64{pending.ID, 99999}, dbaID, "dba", "ok")
+		if err != nil {
+			t.Fatalf("BatchApprove() error: %v", err)
+		}
+
+		if result.Succeeded != 1 {
+			t.Errorf("Succeeded = %d, want 1", result.Succeeded)
+		}
+		if result.Failed != 1 {
+			t.Errorf("Failed = %d, want 1", result.Failed)
+		}
+	})
+}
+
+func TestBatchReject(t *testing.T) {
+	testDB := setupTicketTestDB(t)
+	svc := NewTicketService(testDB, nil, nil)
+
+	devID := seedTestUser(t, testDB, "batchdev2", "developer")
+	dbaID := seedTestUser(t, testDB, "batchdba2", "dba")
+	dsID := seedTestDatasource(t, testDB, "batchds2")
+
+	t.Run("successful batch reject", func(t *testing.T) {
+		t1 := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
+		t2 := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
+
+		result, err := svc.BatchReject(context.Background(), []int64{t1.ID, t2.ID}, dbaID, "dba", "不符合规范")
+		if err != nil {
+			t.Fatalf("BatchReject() error: %v", err)
+		}
+
+		if result.Total != 2 {
+			t.Errorf("Total = %d, want 2", result.Total)
+		}
+		if result.Succeeded != 2 {
+			t.Errorf("Succeeded = %d, want 2", result.Succeeded)
+		}
+		if result.Failed != 0 {
+			t.Errorf("Failed = %d, want 0", result.Failed)
+		}
+	})
+
+	t.Run("empty reason returns error", func(t *testing.T) {
+		_, err := svc.BatchReject(context.Background(), []int64{1, 2}, dbaID, "dba", "")
+		if err != ErrRejectReasonRequired {
+			t.Errorf("BatchReject() error = %v, want ErrRejectReasonRequired", err)
+		}
+	})
+
+	t.Run("whitespace-only reason returns error", func(t *testing.T) {
+		_, err := svc.BatchReject(context.Background(), []int64{1, 2}, dbaID, "dba", "   ")
+		if err != ErrRejectReasonRequired {
+			t.Errorf("BatchReject() error = %v, want ErrRejectReasonRequired", err)
+		}
+	})
+
+	t.Run("developer cannot batch reject", func(t *testing.T) {
+		_, err := svc.BatchReject(context.Background(), []int64{1, 2}, devID, "developer", "nope")
+		if err != ErrNoPermission {
+			t.Errorf("BatchReject() error = %v, want ErrNoPermission", err)
+		}
+	})
+
+	t.Run("partial failure with wrong status", func(t *testing.T) {
+		pending := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
+		rejected := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusRejected)
+
+		result, err := svc.BatchReject(context.Background(), []int64{pending.ID, rejected.ID}, dbaID, "dba", "批量驳回")
+		if err != nil {
+			t.Fatalf("BatchReject() error: %v", err)
+		}
+
+		if result.Succeeded != 1 {
+			t.Errorf("Succeeded = %d, want 1", result.Succeeded)
+		}
+		if result.Failed != 1 {
+			t.Errorf("Failed = %d, want 1", result.Failed)
+		}
+	})
+}

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -466,4 +467,109 @@ func (h *TicketHandler) CancelSchedule(c echo.Context) error {
 	}
 
 	return resp.OK(c, ticket)
+}
+
+// ---------------------------------------------------------------------------
+// Batch operations
+// ---------------------------------------------------------------------------
+
+const maxBatchSize = 50
+
+type batchTicketRequest struct {
+	TicketIDs []int64 `json:"ticket_ids"`
+	Reason    string  `json:"reason"`
+}
+
+// BatchApprove handles POST /api/tickets/batch-approve.
+//
+// @Summary 批量通过工单
+// @Description 管理员/DBA批量通过多条工单
+// @Tags 工单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body batchTicketRequest true "批量审批请求"
+// @Success 200 {object} resp.SuccessResponse "批量审批结果"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Router /tickets/batch-approve [post]
+func (h *TicketHandler) BatchApprove(c echo.Context) error {
+	var req batchTicketRequest
+	if err := c.Bind(&req); err != nil {
+		return resp.BadRequest(c, "请求格式错误")
+	}
+
+	if len(req.TicketIDs) == 0 {
+		return resp.BadRequest(c, "请选择至少一条工单")
+	}
+
+	if len(req.TicketIDs) > maxBatchSize {
+		return resp.BadRequest(c, fmt.Sprintf("单次最多处理 %d 条工单", maxBatchSize))
+	}
+
+	userID := getContextUserID(c)
+	role := getContextRole(c)
+
+	result, err := h.ticketSvc.BatchApprove(c.Request().Context(), req.TicketIDs, userID, role, req.Reason)
+	if err != nil {
+		switch err {
+		case service.ErrNoPermission:
+			return resp.Forbidden(c, err.Error())
+		default:
+			log.Printf("BatchApprove failed: %v", err)
+			return resp.InternalError(c, "批量审批失败")
+		}
+	}
+
+	return resp.OK(c, result)
+}
+
+// BatchReject handles POST /api/tickets/batch-reject.
+//
+// @Summary 批量驳回工单
+// @Description 管理员/DBA批量驳回多条工单
+// @Tags 工单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body batchTicketRequest true "批量驳回请求"
+// @Success 200 {object} resp.SuccessResponse "批量驳回结果"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误或驳回原因为空"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Router /tickets/batch-reject [post]
+func (h *TicketHandler) BatchReject(c echo.Context) error {
+	var req batchTicketRequest
+	if err := c.Bind(&req); err != nil {
+		return resp.BadRequest(c, "请求格式错误")
+	}
+
+	if len(req.TicketIDs) == 0 {
+		return resp.BadRequest(c, "请选择至少一条工单")
+	}
+
+	if len(req.TicketIDs) > maxBatchSize {
+		return resp.BadRequest(c, fmt.Sprintf("单次最多处理 %d 条工单", maxBatchSize))
+	}
+
+	if req.Reason == "" {
+		return resp.BadRequest(c, "批量驳回必须填写原因")
+	}
+
+	userID := getContextUserID(c)
+	role := getContextRole(c)
+
+	result, err := h.ticketSvc.BatchReject(c.Request().Context(), req.TicketIDs, userID, role, req.Reason)
+	if err != nil {
+		switch err {
+		case service.ErrNoPermission:
+			return resp.Forbidden(c, err.Error())
+		case service.ErrRejectReasonRequired:
+			return resp.BadRequest(c, err.Error())
+		default:
+			log.Printf("BatchReject failed: %v", err)
+			return resp.InternalError(c, "批量驳回失败")
+		}
+	}
+
+	return resp.OK(c, result)
 }

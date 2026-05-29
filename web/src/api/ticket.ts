@@ -136,6 +136,42 @@ export async function executeTicket(id: number): Promise<TicketActionResponse> {
   return api.post<TicketActionResponse>(`/tickets/${id}/execute`, {});
 }
 
+// --- Batch Operations ---
+
+export interface BatchActionRequest {
+  ticket_ids: number[];
+  reason?: string;
+}
+
+export interface BatchActionResult {
+  ticket_id: number;
+  success: boolean;
+  error?: string;
+}
+
+export interface BatchActionResponse {
+  code: number;
+  message: string;
+  data: {
+    total: number;
+    succeeded: number;
+    failed: number;
+    results: BatchActionResult[];
+  };
+}
+
+export async function batchApproveTickets(
+  req: BatchActionRequest,
+): Promise<BatchActionResponse> {
+  return api.post<BatchActionResponse>("/tickets/batch-approve", req);
+}
+
+export async function batchRejectTickets(
+  req: BatchActionRequest,
+): Promise<BatchActionResponse> {
+  return api.post<BatchActionResponse>("/tickets/batch-reject", req);
+}
+
 // --- Helpers ---
 
 const statusLabelMap: Record<TicketStatus, string> = {

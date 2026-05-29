@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus,
@@ -9,11 +9,14 @@ import {
   Download,
   Loader2,
   Clock,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -35,6 +38,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { api } from "@/api/client";
 import {
   listTickets,
@@ -44,6 +57,8 @@ import {
   getRiskColor,
   getRiskDot,
   formatTime,
+  batchApproveTickets,
+  batchRejectTickets,
   type Ticket,
   type TicketStatus,
 } from "@/api/ticket";
@@ -138,6 +153,19 @@ export default function TicketPage() {
   // SLA status
   const [slaStatuses, setSlaStatuses] = useState<Record<number, SLATicketStatus>>({});
 
+  // Batch selection
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [batchDialogOpen, setBatchDialogOpen] = useState<false | "approve" | "reject">(false);
+  const [batchReason, setBatchReason] = useState("");
+  const [batchLoading, setBatchLoading] = useState(false);
+
+  // Only PENDING_APPROVAL tickets can be selected for batch operations (approvers only)
+  const isApprover = user.role === "admin" || user.role === "dba";
+  const selectableIds = useMemo(
+    () => tickets.filter((t) => t.status === "PENDING_APPROVAL").map((t) => t.id),
+    [tickets],
+  );
+
   // Open detail drawer if `id` param present in URL (from global search)
   useEffect(() => {
     const idParam = searchParams.get("id");
@@ -187,6 +215,7 @@ export default function TicketPage() {
       });
       setTickets(res.data ?? []);
       setTotal(res.total);
+      setSelectedIds(new Set());
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "获取工单列表失败");
     } finally {
@@ -252,6 +281,59 @@ export default function TicketPage() {
   // Action complete -> refresh list
   function handleActionComplete() {
     fetchTickets();
+  }
+
+  // --- Batch selection handlers ---
+  function toggleSelect(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === selectableIds.length && selectableIds.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(selectableIds));
+    }
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  async function handleBatchAction() {
+    if (selectedIds.size === 0 || !batchDialogOpen) return;
+    if (selectedIds.size > 50) {
+      toast.error("单次批量操作最多 50 条");
+      return;
+    }
+    setBatchLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const fn = batchDialogOpen === "approve" ? batchApproveTickets : batchRejectTickets;
+      const res = await fn({ ticket_ids: ids, reason: batchReason || undefined });
+      if (res.data.failed > 0) {
+        toast.warning(
+          `${batchDialogOpen === "approve" ? "批量通过" : "批量拒绝"}完成：${res.data.succeeded} 成功，${res.data.failed} 失败`,
+        );
+      } else {
+        toast.success(
+          `${batchDialogOpen === "approve" ? "批量通过" : "批量拒绝"}成功，共 ${res.data.succeeded} 条`,
+        );
+      }
+      setBatchDialogOpen(false);
+      setBatchReason("");
+      setSelectedIds(new Set());
+      fetchTickets();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "批量操作失败");
+    } finally {
+      setBatchLoading(false);
+    }
   }
 
   // Export handler — tries sync first, falls back to async for large datasets
@@ -549,6 +631,15 @@ export default function TicketPage() {
           <Table>
             <TableHeader>
               <TableRow className="border-[var(--border-default)] bg-[var(--bg-surface)] hover:bg-[var(--bg-surface)]">
+                {isApprover && (
+                  <TableHead className="w-10 px-3">
+                    <Checkbox
+                      checked={selectableIds.length > 0 && selectedIds.size === selectableIds.length}
+                      onCheckedChange={toggleSelectAll}
+                      disabled={selectableIds.length === 0}
+                    />
+                  </TableHead>
+                )}
                 <TableHead className="w-16 text-xs text-[var(--text-secondary)]">
                   ID
                 </TableHead>
@@ -573,12 +664,24 @@ export default function TicketPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tickets.map((t) => (
+              {tickets.map((t) => {
+                const selectable = t.status === "PENDING_APPROVAL" && isApprover;
+                const selected = selectedIds.has(t.id);
+                return (
                 <TableRow
                   key={t.id}
-                  className="cursor-pointer border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)]"
+                  className={`cursor-pointer border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)] ${selected ? "bg-[var(--accent-muted)]" : ""}`}
                   onClick={() => handleRowClick(t.id)}
                 >
+                  {isApprover && (
+                    <TableCell className="w-10 px-3" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selected}
+                        onCheckedChange={() => toggleSelect(t.id)}
+                        disabled={!selectable}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="text-xs font-medium text-[var(--accent-primary)]">
                     #{t.id}
                   </TableCell>
@@ -656,7 +759,8 @@ export default function TicketPage() {
                     {formatTime(t.created_at)}
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         )}
@@ -693,6 +797,39 @@ export default function TicketPage() {
           </div>
         </div>
       )}
+      {/* Batch action bar */}
+      {isApprover && selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 border-t border-[var(--border-default)] bg-[var(--bg-elevated)] px-5 py-2">
+          <span className="text-xs text-[var(--text-secondary)]">
+            已选 <span className="font-medium text-[var(--accent-primary)]">{selectedIds.size}</span> 条
+          </span>
+          <Button
+            size="sm"
+            className="h-7 gap-1 bg-[var(--success)] px-3 text-xs text-white hover:bg-[var(--success)]/80"
+            onClick={() => setBatchDialogOpen("approve")}
+          >
+            <CheckCircle2 size={14} />
+            批量通过
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="h-7 gap-1 px-3 text-xs"
+            onClick={() => setBatchDialogOpen("reject")}
+          >
+            <XCircle size={14} />
+            批量拒绝
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-[var(--text-muted)]"
+            onClick={clearSelection}
+          >
+            取消选择
+          </Button>
+        </div>
+      )}
       </div>{/* end card container */}
 
       {/* Detail Drawer */}
@@ -704,6 +841,45 @@ export default function TicketPage() {
         userId={user.id}
         onActionComplete={handleActionComplete}
       />
+
+      {/* Batch confirm dialog */}
+      <AlertDialog open={batchDialogOpen !== false} onOpenChange={(open) => { if (!open) { setBatchDialogOpen(false); setBatchReason(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {batchDialogOpen === "approve" ? "批量通过" : "批量拒绝"}确认
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              确认要{batchDialogOpen === "approve" ? "通过" : "拒绝"}
+              <span className="font-semibold text-[var(--text-primary)]"> {selectedIds.size} </span>
+              条工单吗？{batchDialogOpen === "reject" && "请填写拒绝理由。"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div>
+            <label className="text-xs text-[var(--text-secondary)] mb-1 block">
+              {batchDialogOpen === "approve" ? "审批意见（可选）" : "拒绝理由"}
+            </label>
+            <textarea
+              className="w-full rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/30 resize-none"
+              rows={3}
+              value={batchReason}
+              onChange={(e) => setBatchReason(e.target.value)}
+              placeholder={batchDialogOpen === "approve" ? "可选填写审批意见..." : "请填写拒绝理由..."}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={batchLoading}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBatchAction}
+              disabled={batchLoading || (batchDialogOpen === "reject" && !batchReason.trim())}
+              className={batchDialogOpen === "approve" ? "bg-[var(--success)] hover:bg-[var(--success)]/80" : undefined}
+            >
+              {batchLoading && <Loader2 size={14} className="animate-spin" />}
+              确认{batchDialogOpen === "approve" ? "通过" : "拒绝"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

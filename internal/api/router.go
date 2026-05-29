@@ -112,6 +112,8 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.POST("/api/tickets", ticketHandler.CreateTicket)
 	authGroup.GET("/api/tickets", ticketHandler.ListTickets)
 	authGroup.GET("/api/tickets/:id", ticketHandler.GetTicket)
+	authGroup.POST("/api/tickets/batch-approve", ticketHandler.BatchApprove)
+	authGroup.POST("/api/tickets/batch-reject", ticketHandler.BatchReject)
 	authGroup.POST("/api/tickets/:id/approve", ticketHandler.ApproveTicket)
 	authGroup.POST("/api/tickets/:id/reject", ticketHandler.RejectTicket)
 	authGroup.POST("/api/tickets/:id/cancel", ticketHandler.CancelTicket)

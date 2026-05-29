@@ -604,3 +604,92 @@ func CanTransition(from, to model.TicketStatus) bool {
 	}
 	return false
 }
+
+// ---------------------------------------------------------------------------
+// Batch operations
+// ---------------------------------------------------------------------------
+
+// BatchResult represents the result of a single ticket operation in a batch.
+type BatchResult struct {
+	TicketID int64  `json:"ticket_id"`
+	Success  bool   `json:"success"`
+	Error    string `json:"error,omitempty"`
+}
+
+// BatchResponse represents the overall result of a batch operation.
+type BatchResponse struct {
+	Total     int           `json:"total"`
+	Succeeded int           `json:"succeeded"`
+	Failed    int           `json:"failed"`
+	Results   []BatchResult `json:"results"`
+}
+
+// BatchApprove approves multiple tickets. Each ticket is processed independently;
+// partial failures do not roll back successful operations.
+func (s *TicketService) BatchApprove(ctx context.Context, ticketIDs []int64, reviewerID int64, reviewerRole, comment string) (*BatchResponse, error) {
+	if reviewerRole != "admin" && reviewerRole != "dba" {
+		return nil, ErrNoPermission
+	}
+
+	resp := &BatchResponse{
+		Total:   len(ticketIDs),
+		Results: make([]BatchResult, 0, len(ticketIDs)),
+	}
+
+	for _, id := range ticketIDs {
+		_, err := s.ApproveTicket(ctx, id, reviewerID, reviewerRole, comment)
+		if err != nil {
+			resp.Failed++
+			resp.Results = append(resp.Results, BatchResult{
+				TicketID: id,
+				Success:  false,
+				Error:    err.Error(),
+			})
+		} else {
+			resp.Succeeded++
+			resp.Results = append(resp.Results, BatchResult{
+				TicketID: id,
+				Success:  true,
+			})
+		}
+	}
+
+	return resp, nil
+}
+
+// BatchReject rejects multiple tickets. Each ticket is processed independently;
+// partial failures do not roll back successful operations.
+func (s *TicketService) BatchReject(ctx context.Context, ticketIDs []int64, reviewerID int64, reviewerRole, reason string) (*BatchResponse, error) {
+	if reviewerRole != "admin" && reviewerRole != "dba" {
+		return nil, ErrNoPermission
+	}
+
+	if strings.TrimSpace(reason) == "" {
+		return nil, ErrRejectReasonRequired
+	}
+
+	resp := &BatchResponse{
+		Total:   len(ticketIDs),
+		Results: make([]BatchResult, 0, len(ticketIDs)),
+	}
+
+	for _, id := range ticketIDs {
+		_, err := s.RejectTicket(ctx, id, reviewerID, reviewerRole, reason)
+		if err != nil {
+			resp.Failed++
+			resp.Results = append(resp.Results, BatchResult{
+				TicketID: id,
+				Success:  false,
+				Error:    err.Error(),
+			})
+		} else {
+			resp.Succeeded++
+			resp.Results = append(resp.Results, BatchResult{
+				TicketID: id,
+				Success:  true,
+			})
+		}
+	}
+
+	return resp, nil
+}
