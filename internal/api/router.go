@@ -15,7 +15,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, shareSvc *service.ShareService, vitalsSvc *service.WebVitalsService, snapshotSvc *service.SnapshotService, db *sql.DB, cfg *config.Config) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, dingOAuthSvc *service.DingTalkOAuthService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, shareSvc *service.ShareService, vitalsSvc *service.WebVitalsService, snapshotSvc *service.SnapshotService, approvalEngine *service.ApprovalEngine, db *sql.DB, cfg *config.Config) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -47,6 +47,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	permHandler := handler.NewPermissionHandler(permSvc)
 	queryHandler := handler.NewQueryHandler(querySvc, historySvc)
 	ticketHandler := handler.NewTicketHandler(ticketSvc)
+	approvalHandler := handler.NewApprovalHandler(approvalEngine)
 	maskRuleHandler := handler.NewMaskRuleHandler(maskRuleSvc)
 	aiReviewHandler := handler.NewAIReviewHandler(aiReviewSvc, dsSvc)
 	auditHandler := handler.NewAuditHandler(auditSvc)
@@ -248,6 +249,17 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.POST("/api/settings/sla", slaHandler.CreateSLAConfig)
 	adminGroup.PUT("/api/settings/sla/:id", slaHandler.UpdateSLAConfig)
 	adminGroup.DELETE("/api/settings/sla/:id", slaHandler.DeleteSLAConfig)
+
+	// Approval policy routes (admin)
+	adminGroup.POST("/api/approval/policies", approvalHandler.CreatePolicy)
+	adminGroup.GET("/api/approval/policies", approvalHandler.ListPolicies)
+	adminGroup.GET("/api/approval/policies/:id", approvalHandler.GetPolicy)
+	adminGroup.PUT("/api/approval/policies/:id", approvalHandler.UpdatePolicy)
+	adminGroup.DELETE("/api/approval/policies/:id", approvalHandler.DeletePolicy)
+
+	// Approval action routes (auth)
+	authGroup.POST("/api/tickets/:id/engine-approve", approvalHandler.ProcessApproval)
+	authGroup.GET("/api/tickets/:id/approval-history", approvalHandler.GetApprovalHistory)
 	adminGroup.GET("/api/sla-notifications", slaHandler.ListSLANotifications)
 
 	// Ticket SLA status query (authenticated users)

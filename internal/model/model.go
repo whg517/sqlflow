@@ -91,16 +91,23 @@ type Ticket struct {
 	SubmitterName  string       `json:"submitter_name,omitempty"`
 	DatasourceID   int64        `json:"datasource_id"`
 	Database       string       `json:"database"`
-	SQLContent     string       `json:"sql_content"`
-	SQLSummary     string       `json:"sql_summary"`
+	SQLContent        string       `json:"sql_content"`
+	SQLSummary        string       `json:"sql_summary"`
+	SQLType           string       `json:"sql_type"` // populated by sql_analyzer
 	DBType         string       `json:"db_type"`
 	ChangeReason   string       `json:"change_reason"`
 	Status         TicketStatus `json:"status"`
 	RiskLevel      string       `json:"risk_level"`
 	AIReviewResult string       `json:"ai_review_result,omitempty"`
-	ReviewerID     int64        `json:"reviewer_id"`
-	ReviewerName   string       `json:"reviewer_name,omitempty"`
-	ReviewComment  string       `json:"review_comment,omitempty"`
+	ReviewerID        int64        `json:"reviewer_id"`
+	ReviewerName      string       `json:"reviewer_name,omitempty"`
+	ReviewComment     string       `json:"review_comment,omitempty"`
+	Revision          int          `json:"revision"`
+	CurrentStage      int          `json:"current_stage"`
+	TotalStages       int          `json:"total_stages"`
+	AutoApproved      bool         `json:"auto_approved"`
+	AutoApproveReason string       `json:"auto_approve_reason,omitempty"`
+	PolicyID          int64        `json:"policy_id"`
 	ScheduledAt    *time.Time   `json:"scheduled_at,omitempty"`
 	ExecutedAt     *time.Time   `json:"executed_at,omitempty"`
 	SLADeadline    *time.Time   `json:"sla_deadline,omitempty"`
@@ -374,4 +381,38 @@ type WebVital struct {
 	NavigationType string    `json:"navigation_type,omitempty"`
 	UserAgent      string    `json:"user_agent,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
+}
+
+
+// ApprovalPolicy represents a configurable approval strategy.
+type ApprovalPolicy struct {
+	ID                 int64     `json:"id"`
+	Name               string    `json:"name"`
+	Description        string    `json:"description,omitempty"`
+	Enabled            bool      `json:"enabled"`
+	Priority           int       `json:"priority"`
+	Conditions         string    `json:"conditions"`         // JSON
+	ApprovalChain      string    `json:"approval_chain"`     // JSON
+	AutoApproveEnabled bool      `json:"auto_approve_enabled"`
+	AutoApproveReason  string    `json:"auto_approve_reason,omitempty"`
+	IsDefault          bool      `json:"is_default"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+// ApprovalRecord represents a single approval action on a ticket.
+type ApprovalRecord struct {
+	ID            int64     `json:"id"`
+	TicketID      int64     `json:"ticket_id"`
+	PolicyID      int64     `json:"policy_id"`
+	Stage         int       `json:"stage"`
+	TotalStages   int       `json:"total_stages"`
+	ApproverRole  string    `json:"approver_role"`
+	ApproverID    int64     `json:"approver_id"`
+	ApproverName  string    `json:"approver_name,omitempty"`
+	Action        string    `json:"action"` // approved, rejected, auto_approved
+	Comment       string    `json:"comment,omitempty"`
+	AutoApproved  bool      `json:"auto_approved"`
+	AutoReason    string    `json:"auto_reason,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 }
