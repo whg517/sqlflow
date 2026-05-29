@@ -12,8 +12,16 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/e2e/**', '**/e2e-real/**', '**/dist/**'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      exclude: ['node_modules/', 'src/test/', 'e2e/', 'e2e-real/'],
+      reporter: ['text', 'json', 'html', 'lcov', 'clover'],
+      exclude: [
+        'node_modules/',
+        'src/test/',
+        'e2e/',
+        'e2e-real/',
+        '**/*.d.ts',
+        '**/*.config.*',
+        'src/vite-env.d.ts',
+      ],
     },
   },
   resolve: {
