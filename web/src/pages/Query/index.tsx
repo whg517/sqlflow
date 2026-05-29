@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { Clock, Link2 } from "lucide-react";
+import { Clock, Link2, GitCompare } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -43,6 +43,7 @@ import TicketSubmitSheet from "./components/TicketSubmitSheet";
 import ExplainPanel from "./components/ExplainPanel";
 import ShareButton from "./components/ShareButton";
 import ShareListPanel from "./components/ShareListPanel";
+import SnapshotSelector from "./components/SnapshotSelector";
 
 // --- Types ---
 
@@ -87,6 +88,7 @@ export default function QueryPage() {
   const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
   const [shareListOpen, setShareListOpen] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(false);
 
   const { fetchTables, fetchColumns, clearDatasourceCache } =
     useSchemaCompletion();
@@ -538,6 +540,15 @@ export default function QueryPage() {
                     variant="ghost"
                     size="sm"
                     className="h-6 gap-1 text-[10px]"
+                    onClick={() => setDiffOpen(true)}
+                  >
+                    <GitCompare size={10} />
+                    对比
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 text-[10px]"
                     onClick={() => setShareListOpen((v) => !v)}
                   >
                     <Link2 size={10} />
@@ -617,6 +628,9 @@ export default function QueryPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Diff dialog */}
+      <SnapshotSelector open={diffOpen} onClose={() => setDiffOpen(false)} />
     </div>
   );
 }

@@ -147,6 +147,10 @@ func main() {
 	templateSvc := service.NewSQLTemplateService(database.DB)
 	log.Println("sql template service initialized")
 
+	// Initialize snapshot service (SF-FEAT0041)
+	snapshotSvc := service.NewSnapshotService(database.DB)
+	log.Println("snapshot service initialized")
+
 	// Initialize share service (SF-FEAT0038)
 	shareSvc := service.NewShareService(database.DB)
 	log.Println("share service initialized")
@@ -175,7 +179,7 @@ func main() {
 	defer backupSvc.Stop()
 
 	// Start server
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, database.DB, cfg)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, dingOAuthSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, snapshotSvc, database.DB, cfg)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server
