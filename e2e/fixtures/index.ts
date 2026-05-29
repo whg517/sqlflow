@@ -1,19 +1,18 @@
 /**
- * fixtures/index.ts — Unified test entry point
+ * fixtures/index.ts — Unified test entry point (SF-QA0027)
  *
  * All test files import from here:
  *   import { test } from '../fixtures'
  *
- * Automatically selects mock or real test base based on PLAYWRIGHT_PROJECT env var.
- * Mock tests use route-mocked auth + API responses.
- * Real tests use real backend login + API calls.
+ * Default project is 'real' (real backend).
+ * Set PLAYWRIGHT_PROJECT=mock for legacy route-mocked tests.
  */
 import { test as realTest } from './auth.fixture'
 import { test as mockTest } from './mock-auth.fixture'
 
-const project = process.env.PLAYWRIGHT_PROJECT ?? 'mock'
+const project = process.env.PLAYWRIGHT_PROJECT ?? 'real'
 
-export const test = project === 'real' ? realTest : mockTest
+export const test = project === 'mock' ? mockTest : realTest
 
 // Re-export expect for convenience
 export { expect } from '@playwright/test'

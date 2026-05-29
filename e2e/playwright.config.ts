@@ -3,27 +3,34 @@ import { defineConfig, devices } from '@playwright/test'
 /**
  * SQLFlow E2E Test Configuration
  *
+ * SF-QA0027: Unified real-backend E2E tests.
+ *
  * Projects:
- *   - mock: route-mocked API tests (no backend needed, uses Go embed serve on 8080)
- *   - real: real backend API tests (requires docker-compose stack)
+ *   - real:   All E2E tests against the real backend (docker-compose.test.yml stack)
+ *   - mock:   Legacy UI-only tests using route mocks (retained for pure frontend interaction tests)
+ *
+ * Environment:
+ *   E2E_BASE_URL  — backend URL (default http://localhost:8080)
+ *   E2E_USERNAME  — admin username (default e2e-admin)
+ *   E2E_PASSWORD  — admin password (default e2e-test-pass-123)
  *
  * Run:
- *   npx playwright test --project=mock    # Mock E2E
- *   npx playwright test --project=real    # Real E2E
- *   npx playwright test                   # All projects
+ *   npm run test:e2e           # Real E2E (default)
+ *   npm run test:e2e:mock      # Legacy mock tests
+ *   npm run test:e2e:all       # All projects
  */
 export default defineConfig({
   testDir: './tests',
 
-  // Timeouts
-  timeout: 30_000,
+  // Timeouts — real backend tests need more time
+  timeout: 45_000,
   expect: { timeout: 10_000 },
 
-  // Retry on CI
+  // Retry on CI only
   retries: process.env.CI ? 2 : 0,
   forbidOnly: !!process.env.CI,
 
-  // Serial execution — E2E tests have shared state
+  // Serial execution — E2E tests share database state
   workers: 1,
   fullyParallel: false,
 
@@ -47,11 +54,11 @@ export default defineConfig({
   globalSetup: require.resolve('./globalSetup'),
   globalTeardown: require.resolve('./globalTeardown'),
 
-  // Projects: mock and real separated by directory
+  // Projects
   projects: [
     {
-      name: 'mock',
-      testDir: './tests/mock',
+      name: 'real',
+      testDir: './tests/real',
       testMatch: '**/*.spec.ts',
       use: {
         ...devices['Desktop Chrome'],
@@ -59,8 +66,8 @@ export default defineConfig({
       },
     },
     {
-      name: 'real',
-      testDir: './tests/real',
+      name: 'mock',
+      testDir: './tests/mock',
       testMatch: '**/*.spec.ts',
       use: {
         ...devices['Desktop Chrome'],

@@ -4,7 +4,7 @@
 
 .PHONY: help build dev test lint fmt clean verify \
         docker-up docker-down docker-build \
-        merge-cleanup
+        merge-cleanup e2e-setup e2e-test e2e-teardown e2e-all
 
 ##@ Build
 
@@ -65,6 +65,20 @@ fmt: ## Format all code (go fmt + goimports + prettier)
 
 verify: ## Full CI check (lint + build + test)
 verify: lint build test
+
+##@ E2E Tests (SF-QA0027)
+
+e2e-setup: ## Start E2E test environment (docker-compose.test.yml)
+	docker compose --env-file .env.test -f docker-compose.test.yml up -d --build --wait
+
+e2e-test: ## Run real E2E tests against test environment
+	cd e2e && npm run test:e2e
+
+e2e-teardown: ## Stop E2E test environment
+	docker compose --env-file .env.test -f docker-compose.test.yml down -v
+
+e2e-all: ## Full E2E: setup + test + teardown (teardown always runs)
+	$(MAKE) e2e-setup && $(MAKE) e2e-test; $(MAKE) e2e-teardown
 
 ##@ Docker
 

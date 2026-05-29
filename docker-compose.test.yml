@@ -1,0 +1,73 @@
+# docker-compose.test.yml — E2E test environment
+# =============================================
+# Usage:
+#   docker compose --env-file .env.test -f docker-compose.test.yml up -d --build --wait
+#   npm run test:e2e
+#   docker compose --env-file .env.test -f docker-compose.test.yml down -v
+#
+# Services:
+#   - sqlflow-e2e: SQLFlow backend (Go + embedded React SPA)
+#   - mysql-test: MySQL 8.0 for query execution tests
+
+services:
+  sqlflow-e2e:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: e2e-test
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    container_name: sqlflow-e2e
+    ports:
+      - "${SQLFLOW_SERVER_PORT:-8080}:8080"
+    environment:
+      - SQLFLOW_SERVER_PORT=8080
+      - SQLFLOW_JWT_SECRET=${SQLFLOW_JWT_SECRET}
+      - SQLFLOW_JWT_EXPIRY=${SQLFLOW_JWT_EXPIRY:-24h}
+      - SQLFLOW_ADMIN_USERNAME=${SQLFLOW_ADMIN_USERNAME}
+      - SQLFLOW_ADMIN_PASSWORD=${SQLFLOW_ADMIN_PASSWORD}
+      - SQLFLOW_DB_PATH=${SQLFLOW_DB_PATH:-/app/data/sqlflow-e2e.db}
+      - SQLFLOW_ENCRYPTION_KEY=${SQLFLOW_ENCRYPTION_KEY}
+      - SQLFLOW_AI_PROVIDER=${SQLFLOW_AI_PROVIDER:-openai}
+      - SQLFLOW_AI_MODEL=${SQLFLOW_AI_MODEL:-gpt-4}
+      - SQLFLOW_AI_API_KEY=${SQLFLOW_AI_API_KEY:-}
+      - SQLFLOW_AI_BASE_URL=${SQLFLOW_AI_BASE_URL:-https://api.openai.com/v1}
+      - SQLFLOW_DINGTALK_WEBHOOK_URL=${SQLFLOW_DINGTALK_WEBHOOK_URL:-}
+      - SQLFLOW_DINGTALK_SECRET=${SQLFLOW_DINGTALK_SECRET:-}
+      - SQLFLOW_SERVER_TLS_ENABLE=false
+      - SQLFLOW_METRICS_ENABLED=false
+    volumes:
+      - sqlflow-e2e-data:/app/data
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  mysql-test:
+    image: mysql:8.0
+    container_name: mysql-e2e-test
+    ports:
+      - "13306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-testdb}
+    volumes:
+      - mysql-e2e-data:/var/lib/mysql
+      - ./e2e/seed/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  sqlflow-e2e-data:
+  mysql-e2e-data:

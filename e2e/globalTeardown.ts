@@ -7,8 +7,8 @@
 async function globalTeardown() {
   const project = process.env.PLAYWRIGHT_PROJECT
 
-  // Skip teardown for mock-only runs
   if (project === 'mock') {
+    console.log('[globalTeardown] Skipping teardown for mock project')
     return
   }
 
@@ -17,7 +17,6 @@ async function globalTeardown() {
   const password = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
 
   try {
-    // Login to get a token
     const loginResp = await fetch(`${baseURL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -29,47 +28,56 @@ async function globalTeardown() {
       return
     }
 
-    const loginBody = await loginResp.json()
+    const loginBody: { code: number; data?: { token?: string } } = await loginResp.json()
     if (loginBody.code !== 0 || !loginBody.data?.token) {
       console.log('[globalTeardown] No token returned, skipping cleanup')
       return
     }
 
     const token = loginBody.data.token
-    const headers = {
+    const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     }
 
+    // Helper: best-effort fetch
+    async function cleanupFetch(url: string, method = 'GET') {
+      try { await fetch(url, { method, headers }) } catch (e) { console.log(`[globalTeardown] cleanup error: ${e}`) }
+    }
+
     // Clean up e2e-prefixed datasources
-    const dsResp = await fetch(`${baseURL}/api/datasources`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-
-    if (dsResp.ok) {
-      const dsBody = await dsResp.json()
-      const datasources = dsBody.data ?? []
-
-      for (const ds of datasources) {
-        if (
-          typeof ds.name === 'string' &&
-          (ds.name.startsWith('e2e-') || ds.name.includes('e2e-test'))
-        ) {
-          try {
-            await fetch(`${baseURL}/api/datasources/${ds.id}`, {
-              method: 'DELETE',
-              headers,
-            })
-          } catch {
-            // best-effort
+    try {
+      const dsResp = await fetch(`${baseURL}/api/datasources`, { headers: { Authorization: `Bearer ${token}` } })
+      if (dsResp.ok) {
+        const dsBody: { data: Array<{ id: number; name: string }> } = await dsResp.json()
+        for (const ds of dsBody.data ?? []) {
+          if (ds.name.startsWith('e2e-') || ds.name.includes('e2e-test')) {
+            await cleanupFetch(`${baseURL}/api/datasources/${ds.id}`, 'DELETE')
           }
         }
       }
+    } catch (e) {
+      console.log(`[globalTeardown] Datasource cleanup error: ${e}`)
+    }
+
+    // Clean up e2e-prefixed users
+    try {
+      const usersResp = await fetch(`${baseURL}/api/users`, { headers: { Authorization: `Bearer ${token}` } })
+      if (usersResp.ok) {
+        const usersBody: { data: { users: Array<{ id: number; username: string }> } } = await usersResp.json()
+        for (const user of usersBody.data?.users ?? []) {
+          if (user.username.startsWith('e2e_')) {
+            await cleanupFetch(`${baseURL}/api/users/${user.id}`, 'DELETE')
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`[globalTeardown] User cleanup error: ${e}`)
     }
 
     console.log('[globalTeardown] Cleanup complete')
   } catch (err) {
-    console.log(`[globalTeardown] Cleanup error: ${err}`)
+    console.log(`[globalTeardown] Error: ${err}`)
   }
 }
 
