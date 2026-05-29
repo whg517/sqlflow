@@ -223,6 +223,8 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.PUT("/api/settings/dingtalk", notifyHandler.UpdateNotifyConfig)
 	adminGroup.POST("/api/settings/dingtalk/test", notifyHandler.TestNotify)
 	adminGroup.PUT("/api/settings/ai", notifyHandler.UpdateAIConfig)
+	adminGroup.PUT("/api/settings/feishu", notifyHandler.UpdateFeishuConfig)
+	adminGroup.POST("/api/settings/feishu/test", notifyHandler.TestFeishuNotify)
 
 	// API Token admin management
 	adminGroup.GET("/api/admin/tokens", tokenHandler.ListAllTokens)

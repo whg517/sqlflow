@@ -19,13 +19,15 @@ import (
 	"github.com/whg517/sqlflow/internal/model"
 )
 
-// NotifyService handles DingTalk notification logic.
+// NotifyService handles DingTalk and Feishu notification logic.
 type NotifyService struct {
-	webhookURL string
-	secret     string
-	enabled    bool
-	client     *http.Client
-	mu         sync.RWMutex
+	webhookURL    string // DingTalk
+	secret        string // DingTalk
+	enabled       bool   // DingTalk
+	feishuURL     string // Feishu webhook
+	feishuEnabled bool   // Feishu
+	client        *http.Client
+	mu            sync.RWMutex
 }
 
 // NewNotifyService creates a new NotifyService.
@@ -37,6 +39,39 @@ func NewNotifyService(webhookURL, secret string) *NotifyService {
 		enabled:    enabled,
 		client:     &http.Client{Timeout: 5 * time.Second},
 	}
+}
+
+// SetFeishuWebhook sets the Feishu webhook URL.
+func (s *NotifyService) SetFeishuWebhook(u string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.feishuURL = u
+	s.feishuEnabled = u != ""
+}
+
+// IsFeishuEnabled returns whether Feishu notification is enabled.
+func (s *NotifyService) IsFeishuEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.feishuEnabled
+}
+
+// GetFeishuConfig returns the current Feishu configuration.
+func (s *NotifyService) GetFeishuConfig() map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return map[string]interface{}{
+		"webhook_url": s.feishuURL,
+		"enabled":     s.feishuEnabled,
+	}
+}
+
+// UpdateFeishuConfig updates the Feishu webhook configuration.
+func (s *NotifyService) UpdateFeishuConfig(webhookURL string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.feishuURL = webhookURL
+	s.feishuEnabled = webhookURL != ""
 }
 
 // UpdateConfig updates the DingTalk configuration at runtime.
@@ -76,69 +111,102 @@ func (s *NotifyService) IsEnabled() bool {
 
 // NotifyTicketCreated sends a notification when a ticket is created.
 func (s *NotifyService) NotifyTicketCreated(t *model.Ticket) {
-	if !s.isEnabled() {
-		return
+	if s.isEnabled() {
+		title := "📋 工单提交通知"
+		text := fmt.Sprintf(
+			"**工单 #%d 已提交**\n\n"+
+				"- **提交人**: %s\n"+
+				"- **数据源ID**: %d\n"+
+				"- **数据库**: %s\n"+
+				"- **SQL摘要**: %s\n"+
+				"- **风险等级**: %s\n"+
+				"- **提交时间**: %s",
+			t.ID, t.SubmitterName, t.DatasourceID, t.Database,
+			t.SQLSummary, riskLabel(t.RiskLevel),
+			t.CreatedAt.Format("2006-01-02 15:04:05"),
+		)
+		go s.sendMarkdown(title, text)
 	}
 
-	title := "📋 工单提交通知"
-	text := fmt.Sprintf(
-		"**工单 #%d 已提交**\n\n"+
-			"- **提交人**: %s\n"+
-			"- **数据源ID**: %d\n"+
-			"- **数据库**: %s\n"+
-			"- **SQL摘要**: %s\n"+
-			"- **风险等级**: %s\n"+
-			"- **提交时间**: %s",
-		t.ID, t.SubmitterName, t.DatasourceID, t.Database,
-		t.SQLSummary, riskLabel(t.RiskLevel),
-		t.CreatedAt.Format("2006-01-02 15:04:05"),
-	)
-
-	go s.sendMarkdown(title, text)
+	if s.isFeishuEnabled() {
+		go s.sendFeishuCard(
+			"📋 工单提交通知",
+			fmt.Sprintf("**工单 #%d 已提交**", t.ID),
+			[]feishuCardElement{
+				feishuCardField("提交人", t.SubmitterName),
+				feishuCardField("数据库", t.Database),
+				feishuCardField("SQL摘要", t.SQLSummary),
+				feishuCardField("风险等级", riskLabel(t.RiskLevel)),
+				feishuCardField("提交时间", t.CreatedAt.Format("2006-01-02 15:04:05")),
+			},
+		)
+	}
 }
 
 // NotifyTicketApproved sends a notification when a ticket is approved.
 func (s *NotifyService) NotifyTicketApproved(t *model.Ticket) {
-	if !s.isEnabled() {
-		return
+	if s.isEnabled() {
+		title := "✅ 工单审批通过通知"
+		text := fmt.Sprintf(
+			"**工单 #%d 已审批通过**\n\n"+
+				"- **提交人**: %s\n"+
+				"- **审批人**: %s\n"+
+				"- **SQL摘要**: %s\n"+
+				"- **风险等级**: %s\n"+
+				"- **审批时间**: %s",
+			t.ID, t.SubmitterName, t.ReviewerName,
+			t.SQLSummary, riskLabel(t.RiskLevel),
+			t.UpdatedAt.Format("2006-01-02 15:04:05"),
+		)
+		go s.sendMarkdown(title, text)
 	}
 
-	title := "✅ 工单审批通过通知"
-	text := fmt.Sprintf(
-		"**工单 #%d 已审批通过**\n\n"+
-			"- **提交人**: %s\n"+
-			"- **审批人**: %s\n"+
-			"- **SQL摘要**: %s\n"+
-			"- **风险等级**: %s\n"+
-			"- **审批时间**: %s",
-		t.ID, t.SubmitterName, t.ReviewerName,
-		t.SQLSummary, riskLabel(t.RiskLevel),
-		t.UpdatedAt.Format("2006-01-02 15:04:05"),
-	)
-
-	go s.sendMarkdown(title, text)
+	if s.isFeishuEnabled() {
+		go s.sendFeishuCard(
+			"✅ 工单审批通过通知",
+			fmt.Sprintf("**工单 #%d 已审批通过**", t.ID),
+			[]feishuCardElement{
+				feishuCardField("提交人", t.SubmitterName),
+				feishuCardField("审批人", t.ReviewerName),
+				feishuCardField("SQL摘要", t.SQLSummary),
+				feishuCardField("风险等级", riskLabel(t.RiskLevel)),
+				feishuCardField("审批时间", t.UpdatedAt.Format("2006-01-02 15:04:05")),
+			},
+		)
+	}
 }
 
 // NotifyTicketRejected sends a notification when a ticket is rejected.
 func (s *NotifyService) NotifyTicketRejected(t *model.Ticket) {
-	if !s.isEnabled() {
-		return
+	if s.isEnabled() {
+		title := "❌ 工单驳回通知"
+		text := fmt.Sprintf(
+			"**工单 #%d 已驳回**\n\n"+
+				"- **提交人**: %s\n"+
+				"- **审批人**: %s\n"+
+				"- **SQL摘要**: %s\n"+
+				"- **驳回原因**: %s\n"+
+				"- **驳回时间**: %s",
+			t.ID, t.SubmitterName, t.ReviewerName,
+			t.SQLSummary, t.ReviewComment,
+			t.UpdatedAt.Format("2006-01-02 15:04:05"),
+		)
+		go s.sendMarkdown(title, text)
 	}
 
-	title := "❌ 工单驳回通知"
-	text := fmt.Sprintf(
-		"**工单 #%d 已驳回**\n\n"+
-			"- **提交人**: %s\n"+
-			"- **审批人**: %s\n"+
-			"- **SQL摘要**: %s\n"+
-			"- **驳回原因**: %s\n"+
-			"- **驳回时间**: %s",
-		t.ID, t.SubmitterName, t.ReviewerName,
-		t.SQLSummary, t.ReviewComment,
-		t.UpdatedAt.Format("2006-01-02 15:04:05"),
-	)
-
-	go s.sendMarkdown(title, text)
+	if s.isFeishuEnabled() {
+		go s.sendFeishuCard(
+			"❌ 工单驳回通知",
+			fmt.Sprintf("**工单 #%d 已驳回**", t.ID),
+			[]feishuCardElement{
+				feishuCardField("提交人", t.SubmitterName),
+				feishuCardField("审批人", t.ReviewerName),
+				feishuCardField("SQL摘要", t.SQLSummary),
+				feishuCardField("驳回原因", t.ReviewComment),
+				feishuCardField("驳回时间", t.UpdatedAt.Format("2006-01-02 15:04:05")),
+			},
+		)
+	}
 }
 
 // NotifyTicketScheduled sends a notification when a ticket is scheduled for execution.
@@ -448,4 +516,161 @@ func riskLabel(level string) string {
 		}
 		return level
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Feishu Webhook API
+// ---------------------------------------------------------------------------
+
+// feishuCardElement represents a single element in a Feishu Interactive Card.
+type feishuCardElement struct {
+	Tag  string `json:"tag"`
+	Text *struct {
+		Tag     string `json:"tag"`
+		Content string `json:"content"`
+	} `json:"text,omitempty"`
+}
+
+// feishuRequest is the request body for Feishu webhook.
+type feishuRequest struct {
+	MsgType string `json:"msg_type"`
+	Card    struct {
+		Header   *feishuCardHeader   `json:"header,omitempty"`
+		Elements []feishuCardElement `json:"elements"`
+	} `json:"card"`
+}
+
+type feishuCardHeader struct {
+	Title *struct {
+		Tag     string `json:"tag"`
+		Content string `json:"content"`
+	} `json:"title"`
+	Template string `json:"template,omitempty"`
+}
+
+// feishuCardField creates a card element with a key-value field.
+func feishuCardField(label, value string) feishuCardElement {
+	return feishuCardElement{
+		Tag: "div",
+		Text: &struct {
+			Tag     string `json:"tag"`
+			Content string `json:"content"`
+		}{
+			Tag:     "lark_md",
+			Content: fmt.Sprintf("**%s**: %s", label, value),
+		},
+	}
+}
+
+// isFeishuEnabled is a thread-safe check for whether Feishu notifications are enabled.
+func (s *NotifyService) isFeishuEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.feishuEnabled
+}
+
+// sendFeishuCard sends an Interactive Card message to Feishu webhook.
+func (s *NotifyService) sendFeishuCard(title, summary string, elements []feishuCardElement) {
+	s.mu.RLock()
+	webhookURL := s.feishuURL
+	s.mu.RUnlock()
+
+	if webhookURL == "" {
+		return
+	}
+
+	// Prepend summary element
+	allElements := append([]feishuCardElement{{
+		Tag: "div",
+		Text: &struct {
+			Tag     string `json:"tag"`
+			Content string `json:"content"`
+		}{
+			Tag:     "lark_md",
+			Content: summary,
+		},
+	}}, elements...)
+
+	reqBody := feishuRequest{
+		MsgType: "interactive",
+	}
+	reqBody.Card.Header = &feishuCardHeader{
+		Title: &struct {
+			Tag     string `json:"tag"`
+			Content string `json:"content"`
+		}{
+			Tag:     "plain_text",
+			Content: title,
+		},
+	}
+	reqBody.Card.Elements = allElements
+
+	s.doSendFeishu(webhookURL, reqBody)
+}
+
+// doSendFeishu sends the request to Feishu webhook with retry (3 attempts, exponential backoff).
+func (s *NotifyService) doSendFeishu(webhookURL string, reqBody feishuRequest) {
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		log.Printf("feishu: marshal request: %v", err)
+		return
+	}
+
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(attempt*attempt) * time.Second
+			log.Printf("feishu: retry %d/%d after %v", attempt+1, maxRetries, backoff)
+			time.Sleep(backoff)
+		}
+
+		httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, webhookURL, bytes.NewReader(body))
+		if err != nil {
+			log.Printf("feishu: create request: %v", err)
+			return
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		resp, err := s.client.Do(httpReq)
+		if err != nil {
+			log.Printf("feishu: send request (attempt %d): %v", attempt+1, err)
+			continue // retry on network error
+		}
+
+		respBody, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK {
+			// Check Feishu-specific error code
+			var feishuResp struct {
+				Code int    `json:"code"`
+				Msg  string `json:"msg"`
+			}
+			if err := json.Unmarshal(respBody, &feishuResp); err == nil && feishuResp.Code != 0 {
+				log.Printf("feishu: api error: code=%d msg=%s", feishuResp.Code, feishuResp.Msg)
+				return // API-level error, no retry
+			}
+			return // success
+		}
+
+		log.Printf("feishu: unexpected status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	log.Printf("feishu: failed after %d retries", maxRetries)
+}
+
+// SendFeishuTestMessage sends a test message to verify the Feishu configuration.
+func (s *NotifyService) SendFeishuTestMessage() {
+	if !s.isFeishuEnabled() {
+		return
+	}
+
+	go s.sendFeishuCard(
+		"🔔 SQLFlow 测试通知",
+		"**SQLFlow 飞书通知测试**",
+		[]feishuCardElement{
+			feishuCardField("发送时间", time.Now().Format("2006-01-02 15:04:05")),
+			feishuCardField("状态", "配置成功"),
+		},
+	)
 }

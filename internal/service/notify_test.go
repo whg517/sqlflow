@@ -383,3 +383,294 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
+
+// ---------------------------------------------------------------------------
+// Feishu notification tests
+// ---------------------------------------------------------------------------
+
+func TestNotifyService_FeishuBasic(t *testing.T) {
+	t.Run("disabled when webhook empty", func(t *testing.T) {
+		svc := NewNotifyService("", "")
+		if svc.IsFeishuEnabled() {
+			t.Error("expected Feishu disabled when no URL set")
+		}
+	})
+
+	t.Run("enabled after setting webhook", func(t *testing.T) {
+		svc := NewNotifyService("", "")
+		svc.SetFeishuWebhook("https://open.feishu.cn/open-apis/bot/v2/hook/test")
+		if !svc.IsFeishuEnabled() {
+			t.Error("expected Feishu enabled after setting webhook")
+		}
+	})
+
+	t.Run("config returns webhook info", func(t *testing.T) {
+		svc := NewNotifyService("", "")
+		svc.SetFeishuWebhook("https://example.com/feishu")
+		cfg := svc.GetFeishuConfig()
+		if cfg["webhook_url"] != "https://example.com/feishu" {
+			t.Errorf("webhook_url = %v, want https://example.com/feishu", cfg["webhook_url"])
+		}
+		if cfg["enabled"] != true {
+			t.Error("expected enabled=true")
+		}
+	})
+
+	t.Run("disabled after clearing webhook", func(t *testing.T) {
+		svc := NewNotifyService("", "")
+		svc.SetFeishuWebhook("https://example.com/feishu")
+		svc.SetFeishuWebhook("")
+		if svc.IsFeishuEnabled() {
+			t.Error("expected Feishu disabled after clearing webhook")
+		}
+	})
+}
+
+func TestNotifyService_FeishuSendsWebhook(t *testing.T) {
+	var mu sync.Mutex
+	var receivedBodies []map[string]interface{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+			mu.Lock()
+			receivedBodies = append(receivedBodies, body)
+			mu.Unlock()
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"code":0,"msg":"ok"}`))
+	}))
+	defer server.Close()
+
+	svc := NewNotifyService("", "")
+	svc.SetFeishuWebhook(server.URL)
+
+	t.Run("ticket created sends feishu card", func(t *testing.T) {
+		mu.Lock()
+		receivedBodies = nil
+		mu.Unlock()
+
+		ticket := &model.Ticket{
+			ID:            100,
+			SubmitterName: "alice",
+			DatasourceID:  1,
+			Database:      "mydb",
+			SQLSummary:    "ALTER TABLE users ADD COLUMN phone VARCHAR(20)",
+			RiskLevel:     "medium",
+			CreatedAt:     time.Now(),
+		}
+		svc.NotifyTicketCreated(ticket)
+
+		time.Sleep(300 * time.Millisecond)
+
+		mu.Lock()
+		if len(receivedBodies) == 0 {
+			t.Fatal("expected feishu webhook to be called")
+		}
+		body := receivedBodies[0]
+		mu.Unlock()
+
+		if body["msg_type"] != "interactive" {
+			t.Errorf("msg_type = %v, want interactive", body["msg_type"])
+		}
+		card, ok := body["card"].(map[string]interface{})
+		if !ok {
+			t.Fatal("card is not a map")
+		}
+		header, ok := card["header"].(map[string]interface{})
+		if !ok {
+			t.Fatal("header is not a map")
+		}
+		title, ok := header["title"].(map[string]interface{})
+		if !ok {
+			t.Fatal("title is not a map")
+		}
+		if title["content"] != "📋 工单提交通知" {
+			t.Errorf("title content = %v", title["content"])
+		}
+	})
+
+	t.Run("ticket approved sends feishu card", func(t *testing.T) {
+		mu.Lock()
+		receivedBodies = nil
+		mu.Unlock()
+
+		ticket := &model.Ticket{
+			ID:            200,
+			SubmitterName: "alice",
+			ReviewerName:  "bob",
+			SQLSummary:    "SELECT 1",
+			RiskLevel:     "low",
+			UpdatedAt:     time.Now(),
+		}
+		svc.NotifyTicketApproved(ticket)
+
+		time.Sleep(300 * time.Millisecond)
+
+		mu.Lock()
+		if len(receivedBodies) == 0 {
+			t.Fatal("expected feishu webhook to be called for approval")
+		}
+		mu.Unlock()
+	})
+
+	t.Run("ticket rejected sends feishu card", func(t *testing.T) {
+		mu.Lock()
+		receivedBodies = nil
+		mu.Unlock()
+
+		ticket := &model.Ticket{
+			ID:            300,
+			SubmitterName: "alice",
+			ReviewerName:  "bob",
+			SQLSummary:    "DELETE FROM users",
+			ReviewComment: "不允许全表删除",
+			RiskLevel:     "high",
+			UpdatedAt:     time.Now(),
+		}
+		svc.NotifyTicketRejected(ticket)
+
+		time.Sleep(300 * time.Millisecond)
+
+		mu.Lock()
+		if len(receivedBodies) == 0 {
+			t.Fatal("expected feishu webhook to be called for rejection")
+		}
+		mu.Unlock()
+	})
+}
+
+func TestNotifyService_FeishuRetryOnError(t *testing.T) {
+	var mu sync.Mutex
+	attemptCount := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		attemptCount++
+		count := attemptCount
+		mu.Unlock()
+
+		// First two attempts fail, third succeeds
+		if count <= 2 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"code":0,"msg":"ok"}`))
+	}))
+	defer server.Close()
+
+	svc := NewNotifyService("", "")
+	svc.SetFeishuWebhook(server.URL)
+
+	ticket := &model.Ticket{
+		ID:            1,
+		SubmitterName: "test",
+		DatasourceID:  1,
+		Database:      "testdb",
+		SQLSummary:    "SELECT 1",
+		RiskLevel:     "low",
+		CreatedAt:     time.Now(),
+	}
+	svc.NotifyTicketCreated(ticket)
+
+	time.Sleep(7 * time.Second) // wait for retries with exponential backoff (1s + 4s)
+
+	mu.Lock()
+	if attemptCount != 3 {
+		t.Errorf("expected 3 attempts, got %d", attemptCount)
+	}
+	mu.Unlock()
+}
+
+func TestNotifyService_FeishuDisabledNoop(t *testing.T) {
+	svc := NewNotifyService("", "")
+	// Feishu not configured — should not panic
+	ticket := &model.Ticket{
+		ID:            1,
+		SubmitterName: "test",
+		DatasourceID:  1,
+		Database:      "testdb",
+		SQLSummary:    "SELECT 1",
+		RiskLevel:     "low",
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+	svc.NotifyTicketCreated(ticket)
+	svc.NotifyTicketApproved(ticket)
+	svc.NotifyTicketRejected(ticket)
+}
+
+func TestNotifyService_FeishuTestMessage(t *testing.T) {
+	var mu sync.Mutex
+	var received bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		received = true
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"code":0,"msg":"ok"}`))
+	}))
+	defer server.Close()
+
+	svc := NewNotifyService("", "")
+	svc.SetFeishuWebhook(server.URL)
+
+	svc.SendFeishuTestMessage()
+	time.Sleep(300 * time.Millisecond)
+
+	mu.Lock()
+	if !received {
+		t.Error("expected feishu test message to be sent")
+	}
+	mu.Unlock()
+}
+
+func TestNotifyService_BothChannelsSimultaneously(t *testing.T) {
+	var mu sync.Mutex
+	var dingtalkCalled, feishuCalled bool
+
+	dingtalkServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		dingtalkCalled = true
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
+	}))
+	defer dingtalkServer.Close()
+
+	feishuServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		feishuCalled = true
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"code":0,"msg":"ok"}`))
+	}))
+	defer feishuServer.Close()
+
+	svc := NewNotifyService(dingtalkServer.URL, "")
+	svc.SetFeishuWebhook(feishuServer.URL)
+
+	ticket := &model.Ticket{
+		ID:            1,
+		SubmitterName: "test",
+		DatasourceID:  1,
+		Database:      "testdb",
+		SQLSummary:    "SELECT 1",
+		RiskLevel:     "low",
+		CreatedAt:     time.Now(),
+	}
+	svc.NotifyTicketCreated(ticket)
+
+	time.Sleep(300 * time.Millisecond)
+
+	mu.Lock()
+	if !dingtalkCalled {
+		t.Error("expected DingTalk to be called")
+	}
+	if !feishuCalled {
+		t.Error("expected Feishu to be called")
+	}
+	mu.Unlock()
+}

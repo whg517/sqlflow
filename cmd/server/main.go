@@ -87,6 +87,7 @@ func main() {
 	log.Println("ticket scheduler started")
 
 	notifySvc := service.NewNotifyService(cfg.DingTalk.WebhookURL, cfg.DingTalk.Secret)
+	notifySvc.SetFeishuWebhook(cfg.Feishu.WebhookURL)
 	log.Println("notify service initialized")
 	ticketSvc.SetNotifyService(notifySvc)
 

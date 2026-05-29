@@ -17,6 +17,7 @@ type Config struct {
 	DB              DBConfig       `mapstructure:"db"`
 	AI              AIConfig       `mapstructure:"ai"`
 	DingTalk        DingTalkConfig `mapstructure:"dingtalk"`
+	Feishu          FeishuConfig   `mapstructure:"feishu"`
 	Backup          BackupConfig   `mapstructure:"backup"`
 	Metrics         MetricsConfig  `mapstructure:"metrics"`
 	QueryHistoryMax int            `mapstructure:"query_history_max"`
@@ -67,6 +68,11 @@ type DingTalkConfig struct {
 	WebhookURL string              `mapstructure:"webhook_url"`
 	Secret     string              `mapstructure:"secret"`
 	OAuth      DingTalkOAuthConfig `mapstructure:"oauth"`
+}
+
+// FeishuConfig holds Feishu webhook notification configuration.
+type FeishuConfig struct {
+	WebhookURL string `mapstructure:"webhook_url"`
 }
 
 // DingTalkOAuthConfig holds DingTalk OAuth2 configuration for login.
@@ -133,6 +139,10 @@ func Load(configPath string) (*Config, error) {
 	}
 	if v := os.Getenv("SQLFLOW_DINGTALK_SECRET"); v != "" {
 		cfg.DingTalk.Secret = v
+	}
+
+	if v := os.Getenv("SQLFLOW_FEISHU_WEBHOOK_URL"); v != "" {
+		cfg.Feishu.WebhookURL = v
 	}
 
 	// Set defaults
