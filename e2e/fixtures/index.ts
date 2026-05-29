@@ -1,18 +1,23 @@
 /**
- * fixtures/index.ts — Unified test entry point (SF-QA0027)
+ * fixtures/index.ts — Unified real test fixture (SF-QA0028)
  *
  * All test files import from here:
- *   import { test } from '../fixtures'
+ *   import { test, expect } from '../fixtures'
  *
- * Default project is 'real' (real backend).
- * Set PLAYWRIGHT_PROJECT=mock for legacy route-mocked tests.
+ * Every test runs against the real backend. No mock support.
  */
-import { test as realTest } from './auth.fixture'
-import { test as mockTest } from './mock-auth.fixture'
+import { test as base, expect, type Page } from '@playwright/test'
+import { loginViaUI, loginViaApi } from '../support/real-test-helpers'
 
-const project = process.env.PLAYWRIGHT_PROJECT ?? 'real'
+type AuthenticatedFixture = {
+  authenticatedPage: Page
+}
 
-export const test = project === 'mock' ? mockTest : realTest
+export const test = base.extend<AuthenticatedFixture>({
+  authenticatedPage: async ({ page }, use) => {
+    await loginViaUI(page)
+    await use(page)
+  },
+})
 
-// Re-export expect for convenience
-export { expect } from '@playwright/test'
+export { expect, loginViaUI, loginViaApi }

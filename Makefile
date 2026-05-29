@@ -74,7 +74,7 @@ verify: lint build test
 e2e-setup: ## Start E2E test environment (docker-compose.test.yml)
 	docker compose --env-file .env.test -f docker-compose.test.yml up -d --build --wait
 
-e2e-test: ## Run real E2E tests against test environment
+e2e-test: ## Run E2E tests against test environment (unified real mode)
 	cd e2e && npm run test:e2e
 
 e2e-teardown: ## Stop E2E test environment

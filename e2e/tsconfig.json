@@ -17,6 +17,7 @@
     "fixtures/**/*.ts",
     "support/**/*.ts",
     "globalSetup.ts",
-    "globalTeardown.ts"
+    "globalTeardown.ts",
+    "playwright.config.ts"
   ]
 }

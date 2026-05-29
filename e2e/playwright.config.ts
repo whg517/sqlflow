@@ -1,13 +1,9 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig } from '@playwright/test'
 
 /**
- * SQLFlow E2E Test Configuration
  *
- * SF-QA0027: Unified real-backend E2E tests.
- *
- * Projects:
- *   - real:   All E2E tests against the real backend (docker-compose.test.yml stack)
- *   - mock:   Legacy UI-only tests using route mocks (retained for pure frontend interaction tests)
+ * All tests run against the real backend (docker-compose.test.yml).
+ * No mock/route interception.
  *
  * Environment:
  *   E2E_BASE_URL  — backend URL (default http://localhost:8080)
@@ -15,14 +11,13 @@ import { defineConfig, devices } from '@playwright/test'
  *   E2E_PASSWORD  — admin password (default e2e-test-pass-123)
  *
  * Run:
- *   npm run test:e2e           # Real E2E (default)
- *   npm run test:e2e:mock      # Legacy mock tests
- *   npm run test:e2e:all       # All projects
+ *   npm run test:e2e    # All E2E tests
+ *   npx playwright test  # Same
  */
 export default defineConfig({
   testDir: './tests',
 
-  // Timeouts — real backend tests need more time
+  // Timeouts — real backend tests need generous timeouts
   timeout: 45_000,
   expect: { timeout: 10_000 },
 
@@ -53,26 +48,4 @@ export default defineConfig({
   // Global setup/teardown
   globalSetup: require.resolve('./globalSetup'),
   globalTeardown: require.resolve('./globalTeardown'),
-
-  // Projects
-  projects: [
-    {
-      name: 'real',
-      testDir: './tests/real',
-      testMatch: '**/*.spec.ts',
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:8080',
-      },
-    },
-    {
-      name: 'mock',
-      testDir: './tests/mock',
-      testMatch: '**/*.spec.ts',
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:8080',
-      },
-    },
-  ],
 })
