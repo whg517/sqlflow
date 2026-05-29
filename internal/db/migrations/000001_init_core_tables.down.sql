@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS casbin_rule;
+DROP TABLE IF EXISTS datasources;
+DROP TABLE IF EXISTS users;

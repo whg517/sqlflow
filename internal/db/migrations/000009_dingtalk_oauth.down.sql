@@ -1,0 +1,3 @@
+-- SQLite does not support DROP COLUMN before 3.35.0.
+-- For safety, this is a no-op down migration.
+-- If a clean rollback is needed, recreate the table without these columns.
