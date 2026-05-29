@@ -44,7 +44,7 @@ type verifyPasswordRequest struct {
 // @Produce json
 // @Security BearerAuth
 // @Param body body createShareRequest true "共享请求"
-// @Success 200 {object} resp.SuccessResponse{data=service.SharedResult} "创建成功"
+// @Success 200 {object} resp.SuccessResponse "创建成功"
 // @Failure 400 {object} resp.ErrorResponse "请求格式错误"
 // @Router /query/share [post]
 func (h *ShareHandler) CreateShare(c echo.Context) error {

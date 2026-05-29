@@ -1062,6 +1062,154 @@
                 }
             }
         },
+        "/git-links": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定实体的Git关联列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Git"
+                ],
+                "summary": "获取Git关联列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "实体类型 (ticket/audit_log)",
+                        "name": "entity_type",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "实体ID",
+                        "name": "entity_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "查询失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "关联一个Git commit或PR到工单/审计日志",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Git"
+                ],
+                "summary": "创建Git关联",
+                "parameters": [
+                    {
+                        "description": "创建Git关联请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.createGitLinkRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "创建成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求格式错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "创建失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/git-links/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "删除指定Git关联记录",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Git"
+                ],
+                "summary": "删除Git关联",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Git关联ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "记录不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "删除失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/mask-rules": {
             "get": {
                 "security": [
@@ -1315,6 +1463,52 @@
                     },
                     "404": {
                         "description": "规则不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/metrics/web-vitals": {
+            "post": {
+                "description": "接收前端上报的 LCP/INP/CLS 性能指标（公开端点，rate limit 保护）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "性能指标"
+                ],
+                "summary": "上报 Core Web Vitals 指标",
+                "parameters": [
+                    {
+                        "description": "指标数据",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.webVitalPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "上报成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求格式错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "请求过于频繁",
                         "schema": {
                             "$ref": "#/definitions/resp.ErrorResponse"
                         }
@@ -1749,6 +1943,104 @@
                 }
             }
         },
+        "/query/performance/slow": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取超过指定阈值的慢查询列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "性能分析"
+                ],
+                "summary": "慢查询列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1000,
+                        "description": "慢查询阈值(ms)",
+                        "name": "threshold",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "数据源ID",
+                        "name": "datasource_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "开始日期",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束日期",
+                        "name": "end_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/query/performance/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定天数的查询性能统计数据",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "性能分析"
+                ],
+                "summary": "性能统计",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 7,
+                        "description": "统计天数",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/query/review": {
             "post": {
                 "security": [
@@ -1793,6 +2085,274 @@
                     },
                     "500": {
                         "description": "AI评审启动失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/query/share": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取当前用户创建的所有共享链接",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "共享"
+                ],
+                "summary": "获取我的共享链接列表",
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "将查询结果创建为临时共享链接",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "共享"
+                ],
+                "summary": "创建查询结果共享链接",
+                "parameters": [
+                    {
+                        "description": "共享请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.createShareRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "创建成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求格式错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/query/share/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "撤销指定的共享链接",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "共享"
+                ],
+                "summary": "撤销共享链接",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "共享记录ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "撤销成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "无效的ID",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/errors": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取审计日志错误分析数据（错误率、错误类型分布等）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "报表"
+                ],
+                "summary": "错误分析报表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 7,
+                        "description": "统计天数",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "查询失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/performance": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取审计日志性能指标（平均耗时、P95、每日趋势等）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "报表"
+                ],
+                "summary": "性能趋势报表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 7,
+                        "description": "统计天数",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "查询失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/tickets": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取工单流程统计数据（各状态数量、平均审批时间、风险分布等）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "报表"
+                ],
+                "summary": "工单统计报表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 7,
+                        "description": "统计天数",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "查询失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/usage": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取审计日志使用统计数据（操作总量、活跃用户、Top用户等）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "报表"
+                ],
+                "summary": "使用统计报表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 7,
+                        "description": "统计天数",
+                        "name": "days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "查询失败",
                         "schema": {
                             "$ref": "#/definitions/resp.ErrorResponse"
                         }
@@ -1876,6 +2436,106 @@
                     },
                     "500": {
                         "description": "获取角色策略失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/s/{token}": {
+            "get": {
+                "description": "通过 token 获取共享的查询结果（无需认证）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "共享"
+                ],
+                "summary": "获取共享查询结果",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "共享 token",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/resp.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.SharedResultPublic"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "链接不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "410": {
+                        "description": "链接已过期",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/s/{token}/verify": {
+            "post": {
+                "description": "验证共享链接的访问密码",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "共享"
+                ],
+                "summary": "验证共享链接密码",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "共享 token",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "密码验证请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.verifyPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "验证成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "密码错误",
                         "schema": {
                             "$ref": "#/definitions/resp.ErrorResponse"
                         }
@@ -3252,6 +3912,25 @@
                 "database": {
                     "type": "string"
                 },
+                "es_api_key": {
+                    "type": "string"
+                },
+                "es_auth_type": {
+                    "type": "string"
+                },
+                "es_index_pattern": {
+                    "type": "string"
+                },
+                "es_urls": {
+                    "description": "Elasticsearch 特有字段",
+                    "type": "string"
+                },
+                "es_verify_certs": {
+                    "type": "boolean"
+                },
+                "es_version": {
+                    "type": "string"
+                },
                 "host": {
                     "type": "string"
                 },
@@ -3276,10 +3955,61 @@
                 "port": {
                     "type": "integer"
                 },
+                "schema_name": {
+                    "description": "PostgreSQL schema (default: public)",
+                    "type": "string"
+                },
+                "sslmode": {
+                    "description": "PostgreSQL: disable, prefer, require, verify-ca, verify-full",
+                    "type": "string"
+                },
                 "type": {
                     "type": "string"
                 },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.createGitLinkRequest": {
+            "type": "object",
+            "properties": {
+                "author_email": {
+                    "type": "string"
+                },
+                "author_name": {
+                    "type": "string"
+                },
+                "branch": {
+                    "type": "string"
+                },
+                "commit_hash": {
+                    "type": "string"
+                },
+                "commit_message": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "integer"
+                },
+                "entity_type": {
+                    "description": "\"ticket\" or \"audit_log\"",
+                    "type": "string"
+                },
+                "link_type": {
+                    "description": "\"commit\" or \"pr\"",
+                    "type": "string"
+                },
+                "pr_number": {
+                    "type": "integer"
+                },
+                "pr_title": {
+                    "type": "string"
+                },
+                "pr_url": {
+                    "type": "string"
+                },
+                "repo_url": {
                     "type": "string"
                 }
             }
@@ -3323,6 +4053,37 @@
                     "type": "string"
                 },
                 "table_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.createShareRequest": {
+            "type": "object",
+            "properties": {
+                "columns": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "datasource_name": {
+                    "type": "string"
+                },
+                "expires_in_hours": {
+                    "description": "default 24, max 168",
+                    "type": "integer"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                    }
+                },
+                "sql_summary": {
                     "type": "string"
                 }
             }
@@ -3376,6 +4137,22 @@
                 "database": {
                     "type": "string"
                 },
+                "es_auth_type": {
+                    "type": "string"
+                },
+                "es_index_pattern": {
+                    "type": "string"
+                },
+                "es_urls": {
+                    "description": "Elasticsearch 特有字段",
+                    "type": "string"
+                },
+                "es_verify_certs": {
+                    "type": "boolean"
+                },
+                "es_version": {
+                    "type": "string"
+                },
                 "host": {
                     "type": "string"
                 },
@@ -3399,6 +4176,14 @@
                 },
                 "port": {
                     "type": "integer"
+                },
+                "schema_name": {
+                    "description": "PostgreSQL schema",
+                    "type": "string"
+                },
+                "sslmode": {
+                    "description": "PostgreSQL SSL mode",
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"
@@ -3550,6 +4335,25 @@
                 "database": {
                     "type": "string"
                 },
+                "es_api_key": {
+                    "type": "string"
+                },
+                "es_auth_type": {
+                    "type": "string"
+                },
+                "es_index_pattern": {
+                    "type": "string"
+                },
+                "es_urls": {
+                    "description": "Elasticsearch 特有字段",
+                    "type": "string"
+                },
+                "es_verify_certs": {
+                    "type": "boolean"
+                },
+                "es_version": {
+                    "type": "string"
+                },
                 "host": {
                     "type": "string"
                 },
@@ -3573,6 +4377,14 @@
                 },
                 "port": {
                     "type": "integer"
+                },
+                "schema_name": {
+                    "description": "PostgreSQL schema (default: public)",
+                    "type": "string"
+                },
+                "sslmode": {
+                    "description": "PostgreSQL: disable, prefer, require, verify-ca, verify-full",
+                    "type": "string"
                 },
                 "type": {
                     "type": "string"
@@ -3662,6 +4474,73 @@
                     "type": "string"
                 },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.verifyPasswordRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.webVitalPayload": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "navigationType": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "rating": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "model.SharedResultPublic": {
+            "type": "object",
+            "properties": {
+                "columns": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "datasource_name": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "has_password": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "row_count": {
+                    "type": "integer"
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                    }
+                },
+                "sql_summary": {
                     "type": "string"
                 }
             }

@@ -33,6 +33,15 @@ type HealthResponse struct {
 	DB      string `json:"db"`
 }
 
+// Health godoc
+// @Summary 健康检查
+// @Description 返回服务健康状态和数据库连通性
+// @Tags 健康
+// @Produce json
+// @Success 200 {object} HealthResponse "健康"
+// @Failure 503 {object} HealthResponse "不健康"
+// @Router /health [get]
+
 // Health returns the health status of the service.
 func (h *HealthHandler) Health(c echo.Context) error {
 	dbStatus := "ok"
@@ -54,6 +63,13 @@ func (h *HealthHandler) Health(c echo.Context) error {
 }
 
 // Metrics exposes Prometheus metrics via the promhttp handler adapter.
+// Metrics godoc
+// @Summary Prometheus 指标
+// @Description 返回 Prometheus 格式的指标数据
+// @Tags 健康
+// @Produce plain
+// @Router /metrics [get]
+
 func (h *HealthHandler) Metrics(c echo.Context) error {
 	// Import promhttp lazily to avoid build tag issues
 	// The actual handler is registered directly in the router.

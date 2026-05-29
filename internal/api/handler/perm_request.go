@@ -31,6 +31,18 @@ type createPermReqRequest struct {
 }
 
 // CreateRequest creates a new permission request.
+// CreateRequest godoc
+// @Summary 创建权限申请
+// @Description 认证用户申请数据源访问权限
+// @Tags 权限申请
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "权限申请信息"
+// @Success 201 {object} resp.SuccessResponse "申请成功"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Router /permission-requests [post]
+
 func (h *PermReqHandler) CreateRequest(c echo.Context) error {
 	userID := getContextUserID(c)
 
@@ -72,6 +84,18 @@ func (h *PermReqHandler) CreateRequest(c echo.Context) error {
 }
 
 // ListRequests returns permission requests (admin view, with filters).
+// ListRequests godoc
+// @Summary 权限申请列表（管理员）
+// @Description 管理员获取所有权限申请列表
+// @Tags 权限申请
+// @Produce json
+// @Security BearerAuth
+// @Param status query string false "状态筛选"
+// @Param page query int false "页码"
+// @Param page_size query int false "每页条数"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /permission-requests [get]
+
 func (h *PermReqHandler) ListRequests(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
@@ -92,6 +116,15 @@ func (h *PermReqHandler) ListRequests(c echo.Context) error {
 }
 
 // MyRequests returns the current user's permission requests.
+// MyRequests godoc
+// @Summary 我的权限申请
+// @Description 获取当前用户的权限申请列表
+// @Tags 权限申请
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /permission-requests/mine [get]
+
 func (h *PermReqHandler) MyRequests(c echo.Context) error {
 	userID := getContextUserID(c)
 
@@ -108,6 +141,15 @@ func (h *PermReqHandler) MyRequests(c echo.Context) error {
 }
 
 // MyActiveRequests returns current user's active permissions.
+// MyActiveRequests godoc
+// @Summary 我的活跃权限
+// @Description 获取当前用户仍有效的权限列表
+// @Tags 权限申请
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /permission-requests/active [get]
+
 func (h *PermReqHandler) MyActiveRequests(c echo.Context) error {
 	userID := getContextUserID(c)
 
@@ -120,6 +162,17 @@ func (h *PermReqHandler) MyActiveRequests(c echo.Context) error {
 }
 
 // GetRequest returns a single permission request.
+// GetRequest godoc
+// @Summary 获取权限申请详情
+// @Description 获取指定权限申请的详细信息
+// @Tags 权限申请
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "申请ID"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Failure 404 {object} resp.ErrorResponse "申请不存在"
+// @Router /permission-requests/{id} [get]
+
 func (h *PermReqHandler) GetRequest(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -142,6 +195,20 @@ type approveRejectReq struct {
 }
 
 // ApproveRequest approves a permission request (admin/dba).
+// ApproveRequest godoc
+// @Summary 审批通过权限申请
+// @Description 管理员审批通过权限申请
+// @Tags 权限申请
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "申请ID"
+// @Param body body object true "审批信息"
+// @Success 200 {object} resp.SuccessResponse "审批成功"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Router /permission-requests/{id}/approve [post]
+
 func (h *PermReqHandler) ApproveRequest(c echo.Context) error {
 	approverID := getContextUserID(c)
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -167,6 +234,20 @@ func (h *PermReqHandler) ApproveRequest(c echo.Context) error {
 }
 
 // RejectRequest rejects a permission request (admin/dba).
+// RejectRequest godoc
+// @Summary 驳回权限申请
+// @Description 管理员驳回权限申请
+// @Tags 权限申请
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "申请ID"
+// @Param body body object true "驳回信息"
+// @Success 200 {object} resp.SuccessResponse "驳回成功"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Router /permission-requests/{id}/reject [post]
+
 func (h *PermReqHandler) RejectRequest(c echo.Context) error {
 	approverID := getContextUserID(c)
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -196,6 +277,19 @@ type revokeReq struct {
 }
 
 // RevokeRequest revokes an approved permission (admin/dba).
+// RevokeRequest godoc
+// @Summary 撤销权限
+// @Description 管理员撤销已批准的权限
+// @Tags 权限申请
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "申请ID"
+// @Param body body object true "撤销原因"
+// @Success 200 {object} resp.SuccessResponse "撤销成功"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Router /permission-requests/{id}/revoke [post]
+
 func (h *PermReqHandler) RevokeRequest(c echo.Context) error {
 	revokerID := getContextUserID(c)
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -221,6 +315,15 @@ func (h *PermReqHandler) RevokeRequest(c echo.Context) error {
 }
 
 // ExpireOverdue triggers manual expiry cleanup (admin).
+// ExpireOverdue godoc
+// @Summary 过期逾期权限
+// @Description 管理员手动触发逾期权限过期
+// @Tags 权限申请
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse "处理成功"
+// @Router /permission-requests/expire [post]
+
 func (h *PermReqHandler) ExpireOverdue(c echo.Context) error {
 	count, err := h.svc.ExpireOverdue(c.Request().Context())
 	if err != nil {

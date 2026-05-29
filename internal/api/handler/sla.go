@@ -20,6 +20,15 @@ func NewSLAHandler(slaSvc *service.SLAService) *SLAHandler {
 }
 
 // ListSLAConfigs handles GET /api/settings/sla.
+// ListSLAConfigs godoc
+// @Summary SLA配置列表
+// @Description 管理员获取所有SLA配置
+// @Tags SLA
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /settings/sla [get]
+
 func (h *SLAHandler) ListSLAConfigs(c echo.Context) error {
 	configs, err := h.slaSvc.ListConfigs(c.Request().Context())
 	if err != nil {
@@ -38,6 +47,18 @@ type createSLAConfigRequest struct {
 }
 
 // CreateSLAConfig handles POST /api/settings/sla.
+// CreateSLAConfig godoc
+// @Summary 创建SLA配置
+// @Description 管理员为指定优先级创建SLA超时配置
+// @Tags SLA
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "SLA配置"
+// @Success 201 {object} resp.SuccessResponse "创建成功"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Router /settings/sla [post]
+
 func (h *SLAHandler) CreateSLAConfig(c echo.Context) error {
 	var req createSLAConfigRequest
 	if err := c.Bind(&req); err != nil {
@@ -66,6 +87,20 @@ func (h *SLAHandler) CreateSLAConfig(c echo.Context) error {
 }
 
 // UpdateSLAConfig handles PUT /api/settings/sla/:id.
+// UpdateSLAConfig godoc
+// @Summary 更新SLA配置
+// @Description 管理员更新指定SLA配置
+// @Tags SLA
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "配置ID"
+// @Param body body object true "SLA配置"
+// @Success 200 {object} resp.SuccessResponse "更新成功"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Failure 404 {object} resp.ErrorResponse "配置不存在"
+// @Router /settings/sla/{id} [put]
+
 func (h *SLAHandler) UpdateSLAConfig(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -92,6 +127,17 @@ func (h *SLAHandler) UpdateSLAConfig(c echo.Context) error {
 }
 
 // DeleteSLAConfig handles DELETE /api/settings/sla/:id.
+// DeleteSLAConfig godoc
+// @Summary 删除SLA配置
+// @Description 管理员删除指定SLA配置
+// @Tags SLA
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "配置ID"
+// @Success 200 {object} resp.SuccessResponse "删除成功"
+// @Failure 404 {object} resp.ErrorResponse "配置不存在"
+// @Router /settings/sla/{id} [delete]
+
 func (h *SLAHandler) DeleteSLAConfig(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -105,6 +151,16 @@ func (h *SLAHandler) DeleteSLAConfig(c echo.Context) error {
 }
 
 // GetTicketSLAStatuses handles GET /api/tickets/sla-status?ticket_ids=1,2,3.
+// GetTicketSLAStatuses godoc
+// @Summary 工单SLA状态
+// @Description 获取指定工单的SLA状态
+// @Tags SLA
+// @Produce json
+// @Security BearerAuth
+// @Param ids query string true "工单ID列表（逗号分隔）"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /tickets/sla-status [get]
+
 func (h *SLAHandler) GetTicketSLAStatuses(c echo.Context) error {
 	idsStr := c.QueryParam("ticket_ids")
 	if idsStr == "" {
@@ -132,6 +188,17 @@ func (h *SLAHandler) GetTicketSLAStatuses(c echo.Context) error {
 }
 
 // ListSLANotifications handles GET /api/sla-notifications.
+// ListSLANotifications godoc
+// @Summary SLA通知记录
+// @Description 管理员获取SLA通知记录列表
+// @Tags SLA
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码"
+// @Param page_size query int false "每页条数"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /sla-notifications [get]
+
 func (h *SLAHandler) ListSLANotifications(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))

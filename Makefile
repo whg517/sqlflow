@@ -4,7 +4,7 @@
 
 .PHONY: help build dev test lint fmt clean verify \
         docker-up docker-down docker-build \
-        merge-cleanup e2e-setup e2e-test e2e-teardown e2e-all
+        merge-cleanup e2e-setup e2e-test e2e-teardown e2e-all docs
 
 ##@ Build
 
@@ -62,6 +62,9 @@ web-lint: ## Run ESLint
 fmt: ## Format all code (go fmt + goimports + prettier)
 	golangci-lint fmt ./...
 	cd web && npx prettier --write "src/**/*.{ts,tsx}"
+
+docs: ## Generate Swagger API documentation
+	$(shell go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs/
 
 verify: ## Full CI check (lint + build + test)
 verify: lint build test

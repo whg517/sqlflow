@@ -29,6 +29,18 @@ type createTokenRequest struct {
 }
 
 // CreateToken generates a new API token.
+// CreateToken godoc
+// @Summary 创建API令牌
+// @Description 认证用户创建新的API访问令牌
+// @Tags API令牌
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "令牌配置"
+// @Success 201 {object} resp.SuccessResponse "创建成功"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Router /tokens [post]
+
 func (h *TokenHandler) CreateToken(c echo.Context) error {
 	userID := getContextUserID(c)
 
@@ -84,6 +96,15 @@ func (h *TokenHandler) CreateToken(c echo.Context) error {
 }
 
 // ListMyTokens returns tokens for the authenticated user.
+// ListMyTokens godoc
+// @Summary 我的令牌列表
+// @Description 获取当前用户的API令牌列表
+// @Tags API令牌
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /tokens [get]
+
 func (h *TokenHandler) ListMyTokens(c echo.Context) error {
 	userID := getContextUserID(c)
 
@@ -96,6 +117,15 @@ func (h *TokenHandler) ListMyTokens(c echo.Context) error {
 }
 
 // ListAllTokens returns all tokens (admin only).
+// ListAllTokens godoc
+// @Summary 所有令牌列表（管理员）
+// @Description 管理员获取所有用户的API令牌列表
+// @Tags API令牌
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /admin/tokens [get]
+
 func (h *TokenHandler) ListAllTokens(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
@@ -115,6 +145,17 @@ func (h *TokenHandler) ListAllTokens(c echo.Context) error {
 }
 
 // RevokeMyToken revokes a token owned by the authenticated user.
+// RevokeMyToken godoc
+// @Summary 撤销我的令牌
+// @Description 撤销当前用户自己的API令牌
+// @Tags API令牌
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "令牌ID"
+// @Success 200 {object} resp.SuccessResponse "撤销成功"
+// @Failure 404 {object} resp.ErrorResponse "令牌不存在"
+// @Router /tokens/{id} [delete]
+
 func (h *TokenHandler) RevokeMyToken(c echo.Context) error {
 	userID := getContextUserID(c)
 	tokenID, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -133,6 +174,17 @@ func (h *TokenHandler) RevokeMyToken(c echo.Context) error {
 }
 
 // RevokeAnyToken revokes any token (admin only).
+// RevokeAnyToken godoc
+// @Summary 撤销任意令牌（管理员）
+// @Description 管理员撤销任意用户的API令牌
+// @Tags API令牌
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "令牌ID"
+// @Success 200 {object} resp.SuccessResponse "撤销成功"
+// @Failure 404 {object} resp.ErrorResponse "令牌不存在"
+// @Router /admin/tokens/{id} [delete]
+
 func (h *TokenHandler) RevokeAnyToken(c echo.Context) error {
 	tokenID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -150,6 +202,15 @@ func (h *TokenHandler) RevokeAnyToken(c echo.Context) error {
 }
 
 // GetTokenStats returns token usage statistics.
+// GetTokenStats godoc
+// @Summary 令牌使用统计
+// @Description 获取当前用户API令牌的使用统计
+// @Tags API令牌
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /tokens/stats [get]
+
 func (h *TokenHandler) GetTokenStats(c echo.Context) error {
 	userID := getContextUserID(c)
 

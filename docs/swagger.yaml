@@ -39,6 +39,19 @@ definitions:
     properties:
       database:
         type: string
+      es_api_key:
+        type: string
+      es_auth_type:
+        type: string
+      es_index_pattern:
+        type: string
+      es_urls:
+        description: Elasticsearch 特有字段
+        type: string
+      es_verify_certs:
+        type: boolean
+      es_version:
+        type: string
       host:
         type: string
       max_idle:
@@ -55,9 +68,44 @@ definitions:
         type: string
       port:
         type: integer
+      schema_name:
+        description: 'PostgreSQL schema (default: public)'
+        type: string
+      sslmode:
+        description: 'PostgreSQL: disable, prefer, require, verify-ca, verify-full'
+        type: string
       type:
         type: string
       username:
+        type: string
+    type: object
+  handler.createGitLinkRequest:
+    properties:
+      author_email:
+        type: string
+      author_name:
+        type: string
+      branch:
+        type: string
+      commit_hash:
+        type: string
+      commit_message:
+        type: string
+      entity_id:
+        type: integer
+      entity_type:
+        description: '"ticket" or "audit_log"'
+        type: string
+      link_type:
+        description: '"commit" or "pr"'
+        type: string
+      pr_number:
+        type: integer
+      pr_title:
+        type: string
+      pr_url:
+        type: string
+      repo_url:
         type: string
     type: object
   handler.createMaskRuleRequest:
@@ -86,6 +134,27 @@ definitions:
       sensitivity_level:
         type: string
       table_name:
+        type: string
+    type: object
+  handler.createShareRequest:
+    properties:
+      columns:
+        items:
+          type: string
+        type: array
+      datasource_name:
+        type: string
+      expires_in_hours:
+        description: default 24, max 168
+        type: integer
+      password:
+        type: string
+      rows:
+        items:
+          additionalProperties: true
+          type: object
+        type: array
+      sql_summary:
         type: string
     type: object
   handler.createTicketRequest:
@@ -120,6 +189,17 @@ definitions:
         type: string
       database:
         type: string
+      es_auth_type:
+        type: string
+      es_index_pattern:
+        type: string
+      es_urls:
+        description: Elasticsearch 特有字段
+        type: string
+      es_verify_certs:
+        type: boolean
+      es_version:
+        type: string
       host:
         type: string
       id:
@@ -136,6 +216,12 @@ definitions:
         type: string
       port:
         type: integer
+      schema_name:
+        description: PostgreSQL schema
+        type: string
+      sslmode:
+        description: PostgreSQL SSL mode
+        type: string
       status:
         type: string
       type:
@@ -233,6 +319,19 @@ definitions:
     properties:
       database:
         type: string
+      es_api_key:
+        type: string
+      es_auth_type:
+        type: string
+      es_index_pattern:
+        type: string
+      es_urls:
+        description: Elasticsearch 特有字段
+        type: string
+      es_verify_certs:
+        type: boolean
+      es_version:
+        type: string
       host:
         type: string
       max_idle:
@@ -249,6 +348,12 @@ definitions:
         type: string
       port:
         type: integer
+      schema_name:
+        description: 'PostgreSQL schema (default: public)'
+        type: string
+      sslmode:
+        description: 'PostgreSQL: disable, prefer, require, verify-ca, verify-full'
+        type: string
       type:
         type: string
       username:
@@ -306,6 +411,50 @@ definitions:
       role:
         type: string
       username:
+        type: string
+    type: object
+  handler.verifyPasswordRequest:
+    properties:
+      password:
+        type: string
+    type: object
+  handler.webVitalPayload:
+    properties:
+      name:
+        type: string
+      navigationType:
+        type: string
+      path:
+        type: string
+      rating:
+        type: string
+      value:
+        type: number
+    type: object
+  model.SharedResultPublic:
+    properties:
+      columns:
+        items:
+          type: string
+        type: array
+      created_at:
+        type: string
+      datasource_name:
+        type: string
+      expires_at:
+        type: string
+      has_password:
+        type: boolean
+      id:
+        type: integer
+      row_count:
+        type: integer
+      rows:
+        items:
+          additionalProperties: true
+          type: object
+        type: array
+      sql_summary:
         type: string
     type: object
   resp.ErrorResponse:
@@ -1053,6 +1202,100 @@ paths:
       summary: 测试数据源连接
       tags:
       - 数据源
+  /git-links:
+    get:
+      description: 获取指定实体的Git关联列表
+      parameters:
+      - description: 实体类型 (ticket/audit_log)
+        in: query
+        name: entity_type
+        required: true
+        type: string
+      - description: 实体ID
+        in: query
+        name: entity_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+        "500":
+          description: 查询失败
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取Git关联列表
+      tags:
+      - Git
+    post:
+      consumes:
+      - application/json
+      description: 关联一个Git commit或PR到工单/审计日志
+      parameters:
+      - description: 创建Git关联请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.createGitLinkRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 创建成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+        "400":
+          description: 请求格式错误
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+        "500":
+          description: 创建失败
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 创建Git关联
+      tags:
+      - Git
+  /git-links/{id}:
+    delete:
+      description: 删除指定Git关联记录
+      parameters:
+      - description: Git关联ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+        "404":
+          description: 记录不存在
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+        "500":
+          description: 删除失败
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 删除Git关联
+      tags:
+      - Git
   /mask-rules:
     get:
       description: 管理员获取脱敏规则列表，支持分页和筛选
@@ -1219,6 +1462,36 @@ paths:
       summary: 更新脱敏规则
       tags:
       - 脱敏规则
+  /metrics/web-vitals:
+    post:
+      consumes:
+      - application/json
+      description: 接收前端上报的 LCP/INP/CLS 性能指标（公开端点，rate limit 保护）
+      parameters:
+      - description: 指标数据
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.webVitalPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 上报成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+        "400":
+          description: 请求格式错误
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+        "429":
+          description: 请求过于频繁
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+      summary: 上报 Core Web Vitals 指标
+      tags:
+      - 性能指标
   /policies:
     get:
       description: 管理员获取权限策略列表
@@ -1486,6 +1759,68 @@ paths:
       summary: 删除查询历史
       tags:
       - 查询
+  /query/performance/slow:
+    get:
+      description: 获取超过指定阈值的慢查询列表
+      parameters:
+      - default: 1000
+        description: 慢查询阈值(ms)
+        in: query
+        name: threshold
+        type: integer
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 数据源ID
+        in: query
+        name: datasource_id
+        type: integer
+      - description: 开始日期
+        in: query
+        name: start_date
+        type: string
+      - description: 结束日期
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: 慢查询列表
+      tags:
+      - 性能分析
+  /query/performance/stats:
+    get:
+      description: 获取指定天数的查询性能统计数据
+      parameters:
+      - default: 7
+        description: 统计天数
+        in: query
+        name: days
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: 性能统计
+      tags:
+      - 性能分析
   /query/review:
     post:
       consumes:
@@ -1518,6 +1853,173 @@ paths:
       summary: AI审核SQL
       tags:
       - 查询
+  /query/share:
+    get:
+      description: 获取当前用户创建的所有共享链接
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: 获取我的共享链接列表
+      tags:
+      - 共享
+    post:
+      consumes:
+      - application/json
+      description: 将查询结果创建为临时共享链接
+      parameters:
+      - description: 共享请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.createShareRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 创建成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+        "400":
+          description: 请求格式错误
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 创建查询结果共享链接
+      tags:
+      - 共享
+  /query/share/{id}:
+    delete:
+      description: 撤销指定的共享链接
+      parameters:
+      - description: 共享记录ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 撤销成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+        "400":
+          description: 无效的ID
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 撤销共享链接
+      tags:
+      - 共享
+  /reports/errors:
+    get:
+      description: 获取审计日志错误分析数据（错误率、错误类型分布等）
+      parameters:
+      - default: 7
+        description: 统计天数
+        in: query
+        name: days
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+        "500":
+          description: 查询失败
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 错误分析报表
+      tags:
+      - 报表
+  /reports/performance:
+    get:
+      description: 获取审计日志性能指标（平均耗时、P95、每日趋势等）
+      parameters:
+      - default: 7
+        description: 统计天数
+        in: query
+        name: days
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+        "500":
+          description: 查询失败
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 性能趋势报表
+      tags:
+      - 报表
+  /reports/tickets:
+    get:
+      description: 获取工单流程统计数据（各状态数量、平均审批时间、风险分布等）
+      parameters:
+      - default: 7
+        description: 统计天数
+        in: query
+        name: days
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+        "500":
+          description: 查询失败
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 工单统计报表
+      tags:
+      - 报表
+  /reports/usage:
+    get:
+      description: 获取审计日志使用统计数据（操作总量、活跃用户、Top用户等）
+      parameters:
+      - default: 7
+        description: 统计天数
+        in: query
+        name: days
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+        "500":
+          description: 查询失败
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 使用统计报表
+      tags:
+      - 报表
   /roles:
     get:
       description: 管理员获取所有角色列表
@@ -1567,6 +2069,69 @@ paths:
       summary: 获取角色详情
       tags:
       - 权限
+  /s/{token}:
+    get:
+      description: 通过 token 获取共享的查询结果（无需认证）
+      parameters:
+      - description: 共享 token
+        in: path
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/resp.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.SharedResultPublic'
+              type: object
+        "404":
+          description: 链接不存在
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+        "410":
+          description: 链接已过期
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+      summary: 获取共享查询结果
+      tags:
+      - 共享
+  /s/{token}/verify:
+    post:
+      consumes:
+      - application/json
+      description: 验证共享链接的访问密码
+      parameters:
+      - description: 共享 token
+        in: path
+        name: token
+        required: true
+        type: string
+      - description: 密码验证请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.verifyPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 验证成功
+          schema:
+            $ref: '#/definitions/resp.SuccessResponse'
+        "401":
+          description: 密码错误
+          schema:
+            $ref: '#/definitions/resp.ErrorResponse'
+      summary: 验证共享链接密码
+      tags:
+      - 共享
   /sensitive-tables:
     get:
       description: 管理员获取敏感表列表，支持分页和筛选

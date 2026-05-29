@@ -21,6 +21,20 @@ func NewPerformanceHandler(historySvc *service.QueryHistoryService) *Performance
 }
 
 // ListSlowQueries handles GET /api/query/performance/slow.
+//
+// @Summary 慢查询列表
+// @Description 获取超过指定阈值的慢查询列表
+// @Tags 性能分析
+// @Produce json
+// @Security BearerAuth
+// @Param threshold query int false "慢查询阈值(ms)" default(1000)
+// @Param page query int false "页码"
+// @Param page_size query int false "每页条数"
+// @Param datasource_id query int false "数据源ID"
+// @Param start_date query string false "开始日期"
+// @Param end_date query string false "结束日期"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /query/performance/slow [get]
 func (h *PerformanceHandler) ListSlowQueries(c echo.Context) error {
 	threshold, _ := strconv.ParseInt(c.QueryParam("threshold"), 10, 64)
 	if threshold <= 0 {
@@ -55,6 +69,15 @@ func (h *PerformanceHandler) ListSlowQueries(c echo.Context) error {
 }
 
 // GetPerformanceStats handles GET /api/query/performance/stats.
+//
+// @Summary 性能统计
+// @Description 获取指定天数的查询性能统计数据
+// @Tags 性能分析
+// @Produce json
+// @Security BearerAuth
+// @Param days query int false "统计天数" default(7)
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /query/performance/stats [get]
 func (h *PerformanceHandler) GetPerformanceStats(c echo.Context) error {
 	days, _ := strconv.Atoi(c.QueryParam("days"))
 	if days <= 0 {

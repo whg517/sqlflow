@@ -39,6 +39,19 @@ type exportAuditRequest struct {
 // ExportAuditLogs handles GET /api/export/audit.
 // For small datasets (< threshold), returns CSV synchronously.
 // For large datasets or when ?async=1, creates an async task and returns the task ID.
+// ExportAuditLogs godoc
+// @Summary 导出审计日志
+// @Description 管理员/DBA导出审计日志为CSV
+// @Tags 导出
+// @Produce text/csv
+// @Security BearerAuth
+// @Param start_date query string false "开始日期"
+// @Param end_date query string false "结束日期"
+// @Success 200 {file} file "CSV文件"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Router /export/audit [get]
+
 func (h *ExportHandler) ExportAuditLogs(c echo.Context) error {
 	userID := getContextUserID(c)
 	username := getContextUsername(c)
@@ -94,6 +107,19 @@ type exportTicketRequest struct {
 // ExportTickets handles GET /api/export/tickets.
 // For small datasets (< threshold), returns CSV synchronously.
 // For large datasets or when ?async=1, creates an async task and returns the task ID.
+// ExportTickets godoc
+// @Summary 导出工单
+// @Description 认证用户导出工单为CSV
+// @Tags 导出
+// @Produce text/csv
+// @Security BearerAuth
+// @Param start_date query string false "开始日期"
+// @Param end_date query string false "结束日期"
+// @Param status query string false "工单状态"
+// @Success 200 {file} file "CSV文件"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Router /export/tickets [get]
+
 func (h *ExportHandler) ExportTickets(c echo.Context) error {
 	userID := getContextUserID(c)
 	username := getContextUsername(c)
@@ -169,6 +195,17 @@ func (h *ExportHandler) createAsyncExport(c echo.Context, userID int64, username
 }
 
 // GetExportTask handles GET /api/export/tasks/:id.
+// GetExportTask godoc
+// @Summary 获取导出任务详情
+// @Description 获取指定导出任务的状态和详情
+// @Tags 导出
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "任务ID"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Failure 404 {object} resp.ErrorResponse "任务不存在"
+// @Router /export/tasks/{id} [get]
+
 func (h *ExportHandler) GetExportTask(c echo.Context) error {
 	userID := getContextUserID(c)
 
@@ -196,6 +233,15 @@ func (h *ExportHandler) GetExportTask(c echo.Context) error {
 }
 
 // ListExportTasks handles GET /api/export/tasks.
+// ListExportTasks godoc
+// @Summary 导出任务列表
+// @Description 获取当前用户的异步导出任务列表
+// @Tags 导出
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /export/tasks [get]
+
 func (h *ExportHandler) ListExportTasks(c echo.Context) error {
 	userID := getContextUserID(c)
 
@@ -213,6 +259,17 @@ func (h *ExportHandler) ListExportTasks(c echo.Context) error {
 }
 
 // DownloadExportFile handles GET /api/export/tasks/:id/download.
+// DownloadExportFile godoc
+// @Summary 下载导出文件
+// @Description 下载指定导出任务生成的文件
+// @Tags 导出
+// @Produce application/octet-stream
+// @Security BearerAuth
+// @Param id path int true "任务ID"
+// @Success 200 {file} file "导出文件"
+// @Failure 404 {object} resp.ErrorResponse "文件不存在"
+// @Router /export/tasks/{id}/download [get]
+
 func (h *ExportHandler) DownloadExportFile(c echo.Context) error {
 	userID := getContextUserID(c)
 

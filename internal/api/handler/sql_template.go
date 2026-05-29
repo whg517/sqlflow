@@ -33,6 +33,19 @@ type renderTemplateRequest struct {
 }
 
 // CreateTemplate handles POST /api/sql-templates.
+// CreateTemplate godoc
+// @Summary 创建SQL模板
+// @Description 认证用户创建SQL查询模板
+// @Tags SQL模板
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "模板信息"
+// @Success 201 {object} resp.SuccessResponse "创建成功"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Failure 409 {object} resp.ErrorResponse "模板名称已存在"
+// @Router /sql-templates [post]
+
 func (h *SQLTemplateHandler) CreateTemplate(c echo.Context) error {
 	userID := getContextUserID(c)
 
@@ -72,6 +85,17 @@ func (h *SQLTemplateHandler) CreateTemplate(c echo.Context) error {
 }
 
 // GetTemplate handles GET /api/sql-templates/:id.
+// GetTemplate godoc
+// @Summary 获取SQL模板
+// @Description 获取指定SQL模板详情
+// @Tags SQL模板
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "模板ID"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Failure 404 {object} resp.ErrorResponse "模板不存在"
+// @Router /sql-templates/{id} [get]
+
 func (h *SQLTemplateHandler) GetTemplate(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -90,6 +114,17 @@ func (h *SQLTemplateHandler) GetTemplate(c echo.Context) error {
 }
 
 // ListTemplates handles GET /api/sql-templates.
+// ListTemplates godoc
+// @Summary SQL模板列表
+// @Description 获取SQL模板列表（支持筛选）
+// @Tags SQL模板
+// @Produce json
+// @Security BearerAuth
+// @Param category query string false "分类筛选"
+// @Param db_type query string false "数据库类型筛选"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /sql-templates [get]
+
 func (h *SQLTemplateHandler) ListTemplates(c echo.Context) error {
 	userID := getContextUserID(c)
 
@@ -112,6 +147,20 @@ func (h *SQLTemplateHandler) ListTemplates(c echo.Context) error {
 }
 
 // UpdateTemplate handles PUT /api/sql-templates/:id.
+// UpdateTemplate godoc
+// @Summary 更新SQL模板
+// @Description 更新指定SQL模板
+// @Tags SQL模板
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "模板ID"
+// @Param body body object true "模板信息"
+// @Success 200 {object} resp.SuccessResponse "更新成功"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Failure 404 {object} resp.ErrorResponse "模板不存在"
+// @Router /sql-templates/{id} [put]
+
 func (h *SQLTemplateHandler) UpdateTemplate(c echo.Context) error {
 	userID := getContextUserID(c)
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -158,6 +207,17 @@ func (h *SQLTemplateHandler) UpdateTemplate(c echo.Context) error {
 }
 
 // DeleteTemplate handles DELETE /api/sql-templates/:id.
+// DeleteTemplate godoc
+// @Summary 删除SQL模板
+// @Description 删除指定SQL模板
+// @Tags SQL模板
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "模板ID"
+// @Success 200 {object} resp.SuccessResponse "删除成功"
+// @Failure 404 {object} resp.ErrorResponse "模板不存在"
+// @Router /sql-templates/{id} [delete]
+
 func (h *SQLTemplateHandler) DeleteTemplate(c echo.Context) error {
 	userID := getContextUserID(c)
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -177,6 +237,20 @@ func (h *SQLTemplateHandler) DeleteTemplate(c echo.Context) error {
 }
 
 // RenderTemplate handles POST /api/sql-templates/:id/render.
+// RenderTemplate godoc
+// @Summary 渲染SQL模板
+// @Description 用参数渲染SQL模板，返回完整SQL
+// @Tags SQL模板
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "模板ID"
+// @Param body body object true "模板参数"
+// @Success 200 {object} resp.SuccessResponse "渲染成功"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Failure 404 {object} resp.ErrorResponse "模板不存在"
+// @Router /sql-templates/{id}/render [post]
+
 func (h *SQLTemplateHandler) RenderTemplate(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {

@@ -31,6 +31,13 @@ type dingtalkCallbackResponse struct {
 }
 
 // Login handles GET /api/v1/auth/dingtalk/login — returns the authorization URL.
+// Login godoc
+// @Summary 钉钉登录跳转
+// @Description 跳转到钉钉OAuth2授权页面
+// @Tags 认证
+// @Success 302 "重定向到钉钉"
+// @Router /v1/auth/dingtalk/login [get]
+
 func (h *DingTalkHandler) Login(c echo.Context) error {
 	authURL, state, err := h.dingSvc.AuthURL()
 	if err != nil {
@@ -47,6 +54,17 @@ func (h *DingTalkHandler) Login(c echo.Context) error {
 }
 
 // Callback handles GET /api/v1/auth/dingtalk/callback — processes the OAuth callback.
+// Callback godoc
+// @Summary 钉钉OAuth回调
+// @Description 处理钉钉OAuth2授权回调并登录
+// @Tags 认证
+// @Param code query string true "授权码"
+// @Param state query string true "状态参数"
+// @Success 200 {object} resp.SuccessResponse "登录成功"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Failure 401 {object} resp.ErrorResponse "认证失败"
+// @Router /v1/auth/dingtalk/callback [get]
+
 func (h *DingTalkHandler) Callback(c echo.Context) error {
 	code := c.QueryParam("code")
 	if code == "" {
@@ -75,6 +93,14 @@ func (h *DingTalkHandler) Callback(c echo.Context) error {
 }
 
 // Enabled returns whether DingTalk OAuth is configured.
+// Enabled godoc
+// @Summary 钉钉登录是否启用
+// @Description 返回钉钉OAuth2登录是否启用
+// @Tags 认证
+// @Produce json
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Router /v1/auth/dingtalk/enabled [get]
+
 func (h *DingTalkHandler) Enabled(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]bool{"enabled": h.dingSvc.Enabled()})
 }
