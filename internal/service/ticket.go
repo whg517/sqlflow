@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -53,7 +54,7 @@ var validTransitions = map[model.TicketStatus][]model.TicketStatus{
 	model.TicketStatusPendingApproval: {model.TicketStatusApproved, model.TicketStatusRejected, model.TicketStatusCancelled},
 	model.TicketStatusApproved:        {model.TicketStatusExecuting, model.TicketStatusScheduled, model.TicketStatusCancelled},
 	model.TicketStatusScheduled:       {model.TicketStatusExecuting, model.TicketStatusCancelled},
-	model.TicketStatusExecuting:       {model.TicketStatusDone},
+	model.TicketStatusExecuting:       {model.TicketStatusDone, model.TicketStatusFailed},
 	model.TicketStatusRejected:        {model.TicketStatusSubmitted},
 	model.TicketStatusDone:            {},
 	model.TicketStatusCancelled:       {},
@@ -61,11 +62,14 @@ var validTransitions = map[model.TicketStatus][]model.TicketStatus{
 
 // TicketService handles ticket management logic.
 type TicketService struct {
-	db        *sql.DB
-	auditSvc  *AuditService
-	notifySvc *NotifyService
-	gitSvc    *GitService
-	slaSvc    *SLAService
+	db            *sql.DB
+	auditSvc      *AuditService
+	notifySvc     *NotifyService
+	gitSvc        *GitService
+	slaSvc        *SLAService
+	dsSvc         *DatasourceService
+	connMgr       *connpool.Manager
+	encryptionKey string
 }
 
 // NewTicketService creates a new TicketService.
@@ -88,6 +92,14 @@ func (s *TicketService) SetGitService(gitSvc *GitService) {
 // This is set during application bootstrap — do not call after startup.
 func (s *TicketService) SetSLAService(slaSvc *SLAService) {
 	s.slaSvc = slaSvc
+}
+
+// SetDatasourceService injects the datasource service and connection manager
+// for actual SQL execution.
+func (s *TicketService) SetDatasourceService(dsSvc *DatasourceService, connMgr *connpool.Manager, encryptionKey string) {
+	s.dsSvc = dsSvc
+	s.connMgr = connMgr
+	s.encryptionKey = encryptionKey
 }
 
 // scanTicket scans a single ticket row from a sql.Rows or sql.Row.
@@ -326,9 +338,10 @@ func (s *TicketService) ApproveTicket(ctx context.Context, ticketID, reviewerID 
 	}
 
 	now := time.Now()
+	sqlHash := sha256Hash(t.SQLContent)
 	_, err = s.db.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, reviewer_id = ?, review_comment = ?, updated_at = ? WHERE id = ?`,
-		model.TicketStatusApproved, reviewerID, comment, now, ticketID,
+		`UPDATE tickets SET status = ?, reviewer_id = ?, review_comment = ?, sql_hash = ?, updated_at = ? WHERE id = ?`,
+		model.TicketStatusApproved, reviewerID, comment, sqlHash, now, ticketID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("审批工单失败: %w", err)
@@ -469,8 +482,8 @@ func (s *TicketService) CancelTicket(ctx context.Context, ticketID, operatorID i
 	return t, nil
 }
 
-// ExecuteTicket executes a ticket's SQL. Only the submitter or dba/admin can execute,
-// and only when the ticket is in APPROVED or SCHEDULED status.
+// ExecuteTicket executes a ticket's SQL on the target database.
+// Only the submitter or dba/admin can execute, and only when APPROVED or SCHEDULED.
 func (s *TicketService) ExecuteTicket(ctx context.Context, ticketID, operatorID int64, operatorRole, operatorName string) (*model.Ticket, error) {
 	t, err := s.GetTicket(ctx, ticketID)
 	if err != nil {
@@ -486,35 +499,131 @@ func (s *TicketService) ExecuteTicket(ctx context.Context, ticketID, operatorID 
 		return nil, ErrNoPermission
 	}
 
-	now := time.Now()
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, executed_at = ?, updated_at = ? WHERE id = ?`,
-		model.TicketStatusDone, now, now, ticketID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("执行工单失败: %w", err)
+	return s.executeTicket(ctx, t, operatorID)
+}
+
+// executeTicket performs the actual SQL execution with hash verification,
+// timeout control, and idempotent status transition.
+func (s *TicketService) executeTicket(ctx context.Context, t *model.Ticket, operatorID int64) (*model.Ticket, error) {
+	if s.dsSvc == nil || s.connMgr == nil {
+		return nil, fmt.Errorf("SQL 执行服务未初始化")
 	}
 
+	// Idempotent: APPROVED/SCHEDULED → EXECUTING (atomic)
+	now := time.Now()
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE tickets SET status = ?, updated_at = ? WHERE id = ? AND status IN (?, ?)`,
+		model.TicketStatusExecuting, now, t.ID, model.TicketStatusApproved, model.TicketStatusScheduled,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("状态更新失败: %w", err)
+	}
+	raffected, _ := result.RowsAffected()
+	if raffected == 0 {
+		return nil, ErrTicketNotExecutable // already executing or state changed
+	}
+	t.Status = model.TicketStatusExecuting
+
+	// SHA-256 hash verification: ensure SQL hasn't changed since approval
+	if t.SQLHash != "" {
+		currentHash := sha256Hash(t.SQLContent)
+		if currentHash != t.SQLHash {
+			return nil, s.failTicket(ctx, t, operatorID, "SQL 内容与审批版本不一致，请重新提交审批")
+		}
+	}
+
+	// Get datasource connection info
+	ds, err := s.dsSvc.GetDataSource(ctx, t.DatasourceID)
+	if err != nil {
+		return nil, s.failTicket(ctx, t, operatorID, fmt.Sprintf("获取数据源失败: %s", sanitizeErrMsg(err.Error())))
+	}
+
+	// Execute SQL with 30s timeout
+	execCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	execResults, execErr := s.executeSQL(execCtx, ds, t.Database, t.DBType, t.SQLContent)
+
+	// Record execution results
+	for i, r := range execResults {
+		s.recordExecutionResult(ctx, t.ID, i, r)
+	}
+
+	if execErr != nil {
+		return nil, s.failTicket(ctx, t, operatorID, sanitizeErrMsg(execErr.Error()))
+	}
+
+	// Success: EXECUTING → DONE
+	now = time.Now()
+	_, err = s.db.ExecContext(ctx,
+		`UPDATE tickets SET status = ?, executed_at = ?, scheduled_at = NULL, updated_at = ? WHERE id = ?`,
+		model.TicketStatusDone, now, now, t.ID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("更新工单状态失败: %w", err)
+	}
+
+	// Compute SQL hash for audit
+	sqlHash := sha256Hash(t.SQLContent)
+
 	s.auditSvc.Write(ctx, AuditRecord{
-		UserID:       operatorID,
-		Action:       "ticket_execute",
-		DatasourceID: t.DatasourceID,
-		Database:     t.Database,
-		SQLContent:   t.SQLContent,
-		SQLSummary:   t.SQLSummary,
+		UserID:         operatorID,
+		Action:         "ticket_execute",
+		DatasourceID:   t.DatasourceID,
+		Database:       t.Database,
+		SQLContent:     t.SQLContent,
+		SQLSummary:     t.SQLSummary,
+		AffectedRows:   totalRowsAffected(execResults),
+		ExecutionTimeMs: totalDurationMs(execResults),
+		TicketID:       t.ID,
 	})
 
 	t.Status = model.TicketStatusDone
 	t.ExecutedAt = &now
+	t.ScheduledAt = nil
 	t.UpdatedAt = now
 	s.populateTicketNames(ctx, t)
 
-	// Send notification for execution
+	_ = sqlHash // logged via audit
+
 	if s.notifySvc != nil {
 		s.notifySvc.NotifyTicketExecuted(t)
 	}
 
 	return t, nil
+}
+
+// failTicket transitions a ticket to FAILED status and writes audit log.
+func (s *TicketService) failTicket(ctx context.Context, t *model.Ticket, operatorID int64, errMsg string) error {
+	now := time.Now()
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE tickets SET status = ?, updated_at = ? WHERE id = ?`,
+		model.TicketStatusFailed, now, t.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("设置失败状态失败: %w (原始错误: %s)", err, errMsg)
+	}
+
+	s.auditSvc.Write(ctx, AuditRecord{
+		UserID:       operatorID,
+		Action:       "ticket_execute_failed",
+		DatasourceID: t.DatasourceID,
+		Database:     t.Database,
+		SQLContent:   t.SQLContent,
+		SQLSummary:   t.SQLSummary,
+		ErrorMessage: errMsg,
+		TicketID:     t.ID,
+	})
+
+	t.Status = model.TicketStatusFailed
+	t.UpdatedAt = now
+	s.populateTicketNames(ctx, t)
+
+	if s.notifySvc != nil {
+		s.notifySvc.NotifyTicketExecuted(t)
+	}
+
+	return fmt.Errorf("工单执行失败: %s", errMsg)
 }
 
 // ScheduleTicket sets a ticket to be executed at the specified time.

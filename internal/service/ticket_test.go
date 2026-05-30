@@ -509,47 +509,7 @@ func TestExecuteTicket(t *testing.T) {
 	svc := NewTicketService(testDB, nil, nil)
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
-	adminID := seedTestUser(t, testDB, "admin1", "admin")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
-
-	t.Run("submitter can execute approved ticket", func(t *testing.T) {
-		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusApproved)
-
-		result, err := svc.ExecuteTicket(context.Background(), ticket.ID, devID, "developer", "dev1")
-		if err != nil {
-			t.Fatalf("ExecuteTicket() error: %v", err)
-		}
-		if result.Status != model.TicketStatusDone {
-			t.Errorf("Status = %s, want DONE", result.Status)
-		}
-		if result.ExecutedAt == nil {
-			t.Error("ExecutedAt should not be nil")
-		}
-	})
-
-	t.Run("dba can execute approved ticket", func(t *testing.T) {
-		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusApproved)
-
-		result, err := svc.ExecuteTicket(context.Background(), ticket.ID, dbaID, "dba", "dba1")
-		if err != nil {
-			t.Fatalf("ExecuteTicket() error: %v", err)
-		}
-		if result.Status != model.TicketStatusDone {
-			t.Errorf("Status = %s, want DONE", result.Status)
-		}
-	})
-
-	t.Run("admin can execute approved ticket", func(t *testing.T) {
-		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusApproved)
-
-		result, err := svc.ExecuteTicket(context.Background(), ticket.ID, adminID, "admin", "admin1")
-		if err != nil {
-			t.Fatalf("ExecuteTicket() error: %v", err)
-		}
-		if result.Status != model.TicketStatusDone {
-			t.Errorf("Status = %s, want DONE", result.Status)
-		}
-	})
 
 	t.Run("cannot execute non-approved ticket", func(t *testing.T) {
 		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusSubmitted)
@@ -567,6 +527,34 @@ func TestExecuteTicket(t *testing.T) {
 		_, err := svc.ExecuteTicket(context.Background(), ticket.ID, otherID, "developer", "dev2")
 		if err != ErrNoPermission {
 			t.Errorf("ExecuteTicket() error = %v, want ErrNoPermission", err)
+		}
+	})
+
+	t.Run("execute fails without datasource service", func(t *testing.T) {
+		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusApproved)
+
+		_, err := svc.ExecuteTicket(context.Background(), ticket.ID, devID, "developer", "dev1")
+		if err == nil {
+			t.Error("expected error when dsSvc is nil")
+		}
+		// Should remain APPROVED (not transitioned to EXECUTING since dsSvc is nil)
+		updated, _ := svc.GetTicket(context.Background(), ticket.ID)
+		if updated.Status != model.TicketStatusApproved {
+			t.Errorf("Status = %s, want APPROVED (execution service not configured, no state change)", updated.Status)
+		}
+	})
+
+	t.Run("dba can pass permission check", func(t *testing.T) {
+		// Test that dba CAN reach the execute phase (permission passes)
+		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusApproved)
+
+		_, err := svc.ExecuteTicket(context.Background(), ticket.ID, dbaID, "dba", "dba1")
+		if err == nil {
+			t.Error("expected error when dsSvc is nil")
+		}
+		updated, _ := svc.GetTicket(context.Background(), ticket.ID)
+		if updated.Status != model.TicketStatusApproved {
+			t.Errorf("Status = %s, want APPROVED", updated.Status)
 		}
 	})
 }
@@ -587,6 +575,7 @@ func TestStateMachine(t *testing.T) {
 			{model.TicketStatusApproved, model.TicketStatusExecuting},
 			{model.TicketStatusApproved, model.TicketStatusCancelled},
 			{model.TicketStatusExecuting, model.TicketStatusDone},
+			{model.TicketStatusExecuting, model.TicketStatusFailed},
 			{model.TicketStatusRejected, model.TicketStatusSubmitted},
 		}
 

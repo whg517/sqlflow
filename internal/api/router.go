@@ -129,6 +129,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.POST("/api/tickets/:id/schedule", ticketHandler.ScheduleTicket)
 	authGroup.POST("/api/tickets/:id/cancel-schedule", ticketHandler.CancelSchedule)
 	authGroup.POST("/api/tickets/:id/execute", ticketHandler.ExecuteTicket)
+	authGroup.GET("/api/tickets/:id/execution-results", ticketHandler.GetExecutionResults)
 	authGroup.PUT("/api/tickets/:id/resubmit", ticketHandler.ResubmitTicket)
 	authGroup.GET("/api/tickets/:id/revisions", ticketHandler.ListRevisions)
 

@@ -90,6 +90,7 @@ func main() {
 	notifySvc.SetFeishuWebhook(cfg.Feishu.WebhookURL)
 	log.Println("notify service initialized")
 	ticketSvc.SetNotifyService(notifySvc)
+	ticketSvc.SetDatasourceService(dsSvc, connMgr, cfg.EncryptionKey)
 
 	maskRuleSvc := service.NewMaskRuleService(database.DB, permSvc, auditSvc)
 	log.Println("mask rule service initialized")

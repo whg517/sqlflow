@@ -80,6 +80,7 @@ const (
 	TicketStatusScheduled       TicketStatus = "SCHEDULED"
 	TicketStatusExecuting       TicketStatus = "EXECUTING"
 	TicketStatusDone            TicketStatus = "DONE"
+	TicketStatusFailed          TicketStatus = "FAILED"
 	TicketStatusRejected        TicketStatus = "REJECTED"
 	TicketStatusCancelled       TicketStatus = "CANCELLED"
 )
@@ -103,6 +104,7 @@ type Ticket struct {
 	ReviewerID        int64        `json:"reviewer_id"`
 	ReviewerName      string       `json:"reviewer_name,omitempty"`
 	ReviewComment     string       `json:"review_comment,omitempty"`
+	SQLHash           string       `json:"sql_hash,omitempty"`
 	Revision          int          `json:"revision"`
 	CurrentStage      int          `json:"current_stage"`
 	TotalStages       int          `json:"total_stages"`
@@ -445,4 +447,17 @@ type OIDCProvider struct {
 	Enabled      bool      `json:"enabled"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// ExecutionResult represents the result of executing a single SQL statement within a ticket.
+type ExecutionResult struct {
+	ID             int64     `json:"id"`
+	TicketID      int64     `json:"ticket_id"`
+	StatementIndex int      `json:"statement_index"`
+	SQL            string    `json:"sql"`
+	Status         string    `json:"status"` // "success" or "error"
+	RowsAffected   int64     `json:"rows_affected"`
+	Error          string    `json:"error,omitempty"`
+	DurationMs     int64     `json:"duration_ms"`
+	CreatedAt      time.Time `json:"created_at"`
 }

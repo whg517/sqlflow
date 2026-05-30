@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"sync"
 	"time"
@@ -108,50 +107,31 @@ func (s *Scheduler) executeDueTickets(ctx context.Context) error {
 }
 
 // executeScheduledTicket performs the actual execution of a scheduled ticket.
-// It sets status to EXECUTING first, then DONE.
+// It sets status to EXECUTING first, executes SQL, then DONE/FAILED.
 func (s *Scheduler) executeScheduledTicket(ctx context.Context, t *model.Ticket) error {
+	// Idempotent: SCHEDULED → EXECUTING (atomic)
 	now := time.Now()
-
-	// Transition to EXECUTING
-	_, err := s.ticketSvc.db.ExecContext(ctx,
+	result, err := s.ticketSvc.db.ExecContext(ctx,
 		`UPDATE tickets SET status = ?, updated_at = ? WHERE id = ? AND status = ?`,
 		model.TicketStatusExecuting, now, t.ID, model.TicketStatusScheduled,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			// Ticket was already cancelled or executed by someone else
-			return nil
-		}
 		return err
 	}
-
-	// Write audit log
-	s.ticketSvc.auditSvc.Write(ctx, AuditRecord{
-		UserID:       0,
-		Action:       "ticket_schedule_execute",
-		DatasourceID: t.DatasourceID,
-		Database:     t.Database,
-		SQLContent:   t.SQLContent,
-		SQLSummary:   t.SQLSummary,
-	})
-
-	// Transition to DONE (clear scheduled_at)
-	_, err = s.ticketSvc.db.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, executed_at = ?, scheduled_at = NULL, updated_at = ? WHERE id = ?`,
-		model.TicketStatusDone, now, now, t.ID,
-	)
-	if err != nil {
-		return err
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		// Ticket was already cancelled or executed by someone else
+		return nil
 	}
+	t.Status = model.TicketStatusExecuting
 
-	// Send notification
-	if s.ticketSvc.notifySvc != nil {
-		t.Status = model.TicketStatusDone
-		t.ExecutedAt = &now
-		t.ScheduledAt = nil
-		t.UpdatedAt = now
-		s.ticketSvc.populateTicketNames(ctx, t)
-		s.ticketSvc.notifySvc.NotifyTicketExecuted(t)
+	// Execute the actual SQL
+	_, execErr := s.ticketSvc.executeTicket(ctx, t, 0) // operatorID=0 for system execution
+
+	if execErr != nil {
+		log.Printf("scheduler: ticket #%d execution failed: %v", t.ID, execErr)
+		// executeTicket already sets FAILED status on error
+		return execErr
 	}
 
 	return nil

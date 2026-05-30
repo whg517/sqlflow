@@ -573,3 +573,42 @@ func (h *TicketHandler) BatchReject(c echo.Context) error {
 
 	return resp.OK(c, result)
 }
+
+// GetExecutionResults handles GET /api/tickets/:id/execution-results.
+//
+// @Summary 获取工单执行结果
+// @Description 获取工单SQL执行的详细结果
+// @Tags 工单
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "工单ID"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的工单ID"
+// @Failure 404 {object} resp.ErrorResponse "工单不存在"
+// @Router /tickets/{id}/execution-results [get]
+func (h *TicketHandler) GetExecutionResults(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return resp.BadRequest(c, "无效的工单ID")
+	}
+
+	// Verify ticket exists
+	_, err = h.ticketSvc.GetTicket(c.Request().Context(), id)
+	if err != nil {
+		switch err {
+		case service.ErrTicketNotFound:
+			return resp.NotFound(c, err.Error())
+		default:
+			log.Printf("GetExecutionResults: GetTicket failed: %v", err)
+			return resp.InternalError(c, "获取工单失败")
+		}
+	}
+
+	results, err := h.ticketSvc.GetExecutionResults(c.Request().Context(), id)
+	if err != nil {
+		log.Printf("GetExecutionResults failed: %v", err)
+		return resp.InternalError(c, "获取执行结果失败")
+	}
+
+	return resp.OK(c, results)
+}

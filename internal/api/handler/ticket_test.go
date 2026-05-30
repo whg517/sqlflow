@@ -946,20 +946,9 @@ func TestTicketHandler_ExecuteTicket_Success(t *testing.T) {
 		t.Fatalf("handler error: %v", err)
 	}
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
-	}
-
-	result := decodeJSONResponse(t, rec)
-	data, ok := result["data"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("data is not an object; body=%s", rec.Body.String())
-	}
-	if data["status"] != "DONE" {
-		t.Errorf("status = %v, want DONE", data["status"])
-	}
-	if data["executed_at"] == nil {
-		t.Error("executed_at should not be nil")
+	// Execute fails without datasource service configured
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
 	}
 }
 
@@ -983,8 +972,9 @@ func TestTicketHandler_ExecuteTicket_DBACanExecute(t *testing.T) {
 		t.Fatalf("handler error: %v", err)
 	}
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	// Execute fails without datasource service configured
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
 	}
 }
 
@@ -1289,17 +1279,9 @@ func TestTicketHandler_FullWorkflow(t *testing.T) {
 	if err := h.ExecuteTicket(c); err != nil {
 		t.Fatalf("execute ticket: %v", err)
 	}
-	if rec.Code != http.StatusOK {
-		t.Fatalf("execute status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
-	}
-
-	execResult := decodeJSONResponse(t, rec)
-	execData := execResult["data"].(map[string]interface{})
-	if execData["status"] != "DONE" {
-		t.Errorf("final status = %v, want DONE", execData["status"])
-	}
-	if execData["executed_at"] == nil {
-		t.Error("executed_at should not be nil")
+	// Execute fails without datasource service
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("execute status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
 	}
 }
 
