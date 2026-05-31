@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/spf13/viper"
@@ -75,8 +74,6 @@ type FeishuConfig struct {
 	WebhookURL string `mapstructure:"webhook_url"`
 }
 
-
-
 // OIDCConfig holds OpenID Connect configuration.
 type OIDCConfig struct {
 	Providers []OIDCProviderConfig `mapstructure:"providers"`
@@ -108,6 +105,52 @@ type BackupConfig struct {
 	Compress bool          `mapstructure:"compress"`
 }
 
+// envBindings maps viper config keys to their SQLFLOW_ prefixed environment variables.
+// Viper's AutomaticEnv with prefix "SQLFLOW" replaces "." with "_" and uppercases,
+// so "server.port" → "SQLFLOW_SERVER_PORT" works automatically for top-level and
+// one-level-nested keys. For deeper nesting or explicit aliases, we use BindEnv.
+var envBindings = map[string]string{
+	// Server
+	"server.port":                    "SQLFLOW_SERVER_PORT",
+	"server.tls.enable":             "SQLFLOW_TLS_ENABLE",
+	"server.tls.cert_file":          "SQLFLOW_TLS_CERT_FILE",
+	"server.tls.key_file":           "SQLFLOW_TLS_KEY_FILE",
+	"server.tls.redirect_http":      "SQLFLOW_TLS_REDIRECT_HTTP",
+	"server.tls.http_port":          "SQLFLOW_TLS_HTTP_PORT",
+	// JWT
+	"jwt.secret":         "SQLFLOW_JWT_SECRET",
+	"jwt.expiry":         "SQLFLOW_JWT_EXPIRY",
+	"jwt.refresh_expiry": "SQLFLOW_JWT_REFRESH_EXPIRY",
+	// Admin
+	"admin.username": "SQLFLOW_ADMIN_USERNAME",
+	"admin.password": "SQLFLOW_ADMIN_PASSWORD",
+	// DB
+	"db.path": "SQLFLOW_DB_PATH",
+	// AI
+	"ai.provider": "SQLFLOW_AI_PROVIDER",
+	"ai.model":    "SQLFLOW_AI_MODEL",
+	"ai.api_key":  "SQLFLOW_AI_API_KEY",
+	"ai.base_url": "SQLFLOW_AI_BASE_URL",
+	"ai.timeout":  "SQLFLOW_AI_TIMEOUT",
+	// Notify
+	"notify.webhook_url": "SQLFLOW_NOTIFY_WEBHOOK_URL",
+	"notify.secret":      "SQLFLOW_NOTIFY_SECRET",
+	// Feishu
+	"feishu.webhook_url": "SQLFLOW_FEISHU_WEBHOOK_URL",
+	// Backup
+	"backup.enabled":  "SQLFLOW_BACKUP_ENABLED",
+	"backup.dir":      "SQLFLOW_BACKUP_DIR",
+	"backup.interval": "SQLFLOW_BACKUP_INTERVAL",
+	"backup.keep":     "SQLFLOW_BACKUP_KEEP",
+	"backup.compress": "SQLFLOW_BACKUP_COMPRESS",
+	// Metrics
+	"metrics.enabled": "SQLFLOW_METRICS_ENABLED",
+	"metrics.port":    "SQLFLOW_METRICS_PORT",
+	// Top-level
+	"query_history_max": "SQLFLOW_QUERY_HISTORY_MAX",
+	"encryption_key":    "SQLFLOW_ENCRYPTION_KEY",
+}
+
 func Load(configPath string) (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -119,9 +162,19 @@ func Load(configPath string) (*Config, error) {
 		viper.AddConfigPath("./config")
 	}
 
-	// Environment variable overrides
+	// Enable environment variable support with SQLFLOW_ prefix.
+	// Viper will automatically look for SQLFLOW_<KEY> for each config key,
+	// replacing "." with "_" and uppercasing.
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("SQLFLOW")
+
+	// Bind explicit env aliases for clarity and discoverability.
+	// This also handles any keys where the automatic mapping might not match.
+	for key, envVar := range envBindings {
+		if err := viper.BindEnv(key, envVar); err != nil {
+			return nil, fmt.Errorf("bind env %s: %w", envVar, err)
+		}
+	}
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w (hint: copy config/config.example.yaml to config/config.yaml and fill in values)", err)
@@ -133,34 +186,12 @@ func Load(configPath string) (*Config, error) {
 		return nil, err
 	}
 
-	// --- Env var overrides for secrets (highest priority) ---
-	// These environment variables take precedence over config.yaml values.
-	if v := os.Getenv("SQLFLOW_JWT_SECRET"); v != "" {
-		cfg.JWT.Secret = v
-	}
-	if v := os.Getenv("SQLFLOW_ENCRYPTION_KEY"); v != "" {
-		cfg.EncryptionKey = v
-	}
-	if v := os.Getenv("SQLFLOW_AI_API_KEY"); v != "" {
-		cfg.AI.APIKey = v
-	}
-	if v := os.Getenv("SQLFLOW_ADMIN_PASSWORD"); v != "" {
-		cfg.Admin.Password = v
-	}
-	if v := os.Getenv("SQLFLOW_NOTIFY_SECRET"); v != "" {
-		cfg.Notify.Secret = v
-	}
-
-	if v := os.Getenv("SQLFLOW_FEISHU_WEBHOOK_URL"); v != "" {
-		cfg.Feishu.WebhookURL = v
-	}
-
 	// Set defaults
 	if cfg.Server.Port == 0 {
 		cfg.Server.Port = 8080
 	}
 	if cfg.JWT.Secret == "" {
-		return nil, fmt.Errorf("jwt.secret is required and must not be empty (hint: set a random string of 16+ characters in config.yaml)")
+		return nil, fmt.Errorf("jwt.secret is required and must not be empty (hint: set SQLFLOW_JWT_SECRET env var or configure in config.yaml)")
 	}
 	if len(cfg.JWT.Secret) < 16 {
 		return nil, fmt.Errorf("jwt.secret is too short (%d bytes), must be at least 16 bytes for security", len(cfg.JWT.Secret))
@@ -168,7 +199,6 @@ func Load(configPath string) (*Config, error) {
 	if cfg.JWT.Expiry == 0 {
 		cfg.JWT.Expiry = 15 * time.Minute
 	}
-	// Refresh token expiry defaults to 7 days
 	if cfg.JWT.RefreshExpiry == 0 {
 		cfg.JWT.RefreshExpiry = 7 * 24 * time.Hour
 	}
@@ -179,7 +209,7 @@ func Load(configPath string) (*Config, error) {
 		cfg.QueryHistoryMax = 200
 	}
 	if cfg.EncryptionKey == "" {
-		return nil, fmt.Errorf("encryption_key is required and must not be empty (hint: generate one with `openssl rand -hex 16` and set it in config.yaml)")
+		return nil, fmt.Errorf("encryption_key is required and must not be empty (hint: set SQLFLOW_ENCRYPTION_KEY env var or generate one with `openssl rand -hex 16`)")
 	}
 	if err := crypto.ValidateKey(cfg.EncryptionKey); err != nil {
 		return nil, fmt.Errorf("invalid encryption_key: %w (must be 16, 24, or 32 bytes for AES-128/192/256)", err)
@@ -199,7 +229,7 @@ func Load(configPath string) (*Config, error) {
 
 	// Admin password validation
 	if cfg.Admin.Password == "" {
-		return nil, fmt.Errorf("admin.password is required and must not be empty (hint: set a strong password in config.yaml)")
+		return nil, fmt.Errorf("admin.password is required and must not be empty (hint: set SQLFLOW_ADMIN_PASSWORD env var or configure in config.yaml)")
 	}
 	if len(cfg.Admin.Password) < 8 {
 		return nil, fmt.Errorf("admin.password is too short (%d bytes), must be at least 8 characters for security", len(cfg.Admin.Password))
@@ -217,13 +247,13 @@ func Load(configPath string) (*Config, error) {
 	// TLS validation
 	if cfg.Server.TLS.Enable {
 		if cfg.Server.TLS.CertFile == "" {
-			return nil, fmt.Errorf("server.tls.cert_file is required when TLS is enabled")
+			return nil, fmt.Errorf("server.tls.cert_file is required when TLS is enabled (hint: set SQLFLOW_TLS_CERT_FILE)")
 		}
 		if cfg.Server.TLS.KeyFile == "" {
-			return nil, fmt.Errorf("server.tls.key_file is required when TLS is enabled")
+			return nil, fmt.Errorf("server.tls.key_file is required when TLS is enabled (hint: set SQLFLOW_TLS_KEY_FILE)")
 		}
 		if cfg.Server.TLS.RedirectHTTP && cfg.Server.TLS.HTTPPort == 0 {
-			cfg.Server.TLS.HTTPPort = 80 // default HTTP redirect port
+			cfg.Server.TLS.HTTPPort = 80
 		}
 		if cfg.Server.TLS.HTTPPort == cfg.Server.Port {
 			return nil, fmt.Errorf("server.tls.http_port (%d) must differ from server.port (%d)", cfg.Server.TLS.HTTPPort, cfg.Server.Port)
@@ -246,9 +276,6 @@ func Load(configPath string) (*Config, error) {
 	}
 
 	// Metrics defaults
-	if !cfg.Metrics.Enabled && os.Getenv("SQLFLOW_METRICS_ENABLED") == "true" {
-		cfg.Metrics.Enabled = true
-	}
 	if cfg.Metrics.Port == 0 {
 		cfg.Metrics.Port = 9090
 	}
