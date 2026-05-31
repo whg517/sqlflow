@@ -39,6 +39,14 @@ vi.mock("@/api/audit", () => ({
   actionOptions: ["SELECT", "UPDATE", "DELETE", "DDL", "EXPORT"],
 }));
 
+const mockExportAuditLogs = vi.fn();
+const mockCreateAsyncAuditExport = vi.fn();
+vi.mock("@/api/export", () => ({
+  exportAuditLogs: (...args: unknown[]) => mockExportAuditLogs(...args),
+  createAsyncAuditExport: (...args: unknown[]) =>
+    mockCreateAsyncAuditExport(...args),
+}));
+
 const mockListTickets = vi.fn();
 vi.mock("@/api/ticket", () => ({
   listTickets: (...args: unknown[]) => mockListTickets(...args),
@@ -366,16 +374,19 @@ describe("AuditPage", () => {
   // --- Export CSV ---
 
   describe("export CSV", () => {
-    it("calls listAuditLogs with page_size 10000 on export click", async () => {
+    it("calls exportAuditLogs on export click", async () => {
+      mockExportAuditLogs.mockResolvedValueOnce(
+        new Blob(["id,user,action\n1,admin,SELECT"], {
+          type: "text/csv",
+        }),
+      );
       renderAuditPage();
       await waitFor(() => screen.getByText("导出 CSV"));
 
       await userEvent.click(screen.getByText("导出 CSV"));
 
       await waitFor(() => {
-        expect(mockListAuditLogs).toHaveBeenCalledWith(
-          expect.objectContaining({ page_size: 10000 }),
-        );
+        expect(mockExportAuditLogs).toHaveBeenCalled();
       });
     });
   });

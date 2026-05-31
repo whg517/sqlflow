@@ -48,6 +48,21 @@ vi.mock("@/api/ticket", () => ({
   formatTime: () => "05-24 10:00",
 }));
 
+// Mock Approval API
+const mockGetApprovalHistory = vi.fn();
+vi.mock("@/api/approval", () => ({
+  getApprovalHistory: (...args: unknown[]) => mockGetApprovalHistory(...args),
+}));
+
+// Mock ApprovalStepper
+vi.mock("@/pages/Ticket/components/ApprovalStepper", () => ({
+  default: ({ currentStage, totalStages, records }: { currentStage: number; totalStages: number; records: unknown[] }) => (
+    <div data-testid="approval-stepper">
+      Stage {currentStage}/{totalStages} ({records.length} records)
+    </div>
+  ),
+}));
+
 // Mock CommentSection
 vi.mock("@/pages/Ticket/components/CommentSection", () => ({
   default: ({ orderId }: { orderId: number }) => (
@@ -238,6 +253,7 @@ describe("TicketDetailDrawer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetTicket.mockResolvedValue({ data: { ...baseTicket } });
+    mockGetApprovalHistory.mockResolvedValue([]);
   });
 
   // --- Rendering ---
@@ -366,33 +382,44 @@ describe("TicketDetailDrawer", () => {
   // --- Review record ---
 
   describe("review record", () => {
-    it("shows review record when reviewer_id > 0", async () => {
+    it("shows approval stepper when ticket has stages", async () => {
+      mockGetApprovalHistory.mockResolvedValue([
+        {
+          id: 1,
+          ticket_id: 1,
+          stage: 1,
+          approver_role: "DBA",
+          status: "approved",
+          comment: "LGTM",
+          created_at: "2026-05-24T10:00:00Z",
+          updated_at: "2026-05-24T10:00:00Z",
+        },
+      ]);
       mockGetTicket.mockResolvedValue({
         data: {
           ...baseTicket,
           status: "APPROVED",
-          reviewer_id: 5,
-          reviewer_name: "reviewer",
-          review_comment: "LGTM",
+          total_stages: 1,
+          current_stage: 1,
+          auto_approved: false,
         },
       });
 
       renderDrawer();
       await waitFor(() => {
-        expect(screen.getByText("审批记录")).toBeInTheDocument();
-        expect(screen.getByText(/reviewer 审批通过/)).toBeInTheDocument();
-        expect(screen.getByText(/"LGTM"/)).toBeInTheDocument();
+        expect(screen.getByText("ALTER TABLE users ADD COLUMN age INT")).toBeInTheDocument();
       });
+      expect(screen.getByTestId("approval-stepper")).toBeInTheDocument();
     });
 
-    it("hides review record when reviewer_id is 0", async () => {
+    it("hides approval stepper when ticket has no stages", async () => {
       renderDrawer();
       await waitFor(() => {
         expect(
           screen.getByText("ALTER TABLE users ADD COLUMN age INT"),
         ).toBeInTheDocument();
       });
-      expect(screen.queryByText("审批记录")).not.toBeInTheDocument();
+      // baseTicket has no total_stages, so ApprovalStepper should not render
     });
   });
 
