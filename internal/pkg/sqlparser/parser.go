@@ -76,38 +76,42 @@ func parseMySQLUnified(sql string) (*SQLParseResult, error) {
 	return result, nil
 }
 
-// parsePostgreSQLUnified parses PostgreSQL SQL and applies security rules.
-// PostgreSQL and MySQL share common SQL syntax for basic operation types
-// (SELECT/INSERT/UPDATE/DELETE/DDL), so we reuse the MySQL parser for
-// operation type detection. PostgreSQL-specific syntax (e.g. RETURNING,
-// ON CONFLICT) that the MySQL parser cannot handle will cause a parse error,
-// which we treat as potentially dangerous and block.
+// parsePostgreSQLUnified parses PostgreSQL SQL using the native PG parser (pg_query_go).
+// If the PG parser fails (e.g. edge-case syntax), falls back to keyword-based detection
+// with UNKNOWN type — never blocks execution. The caller decides how to handle UNKNOWN.
 func parsePostgreSQLUnified(sql string) (*SQLParseResult, error) {
 	result := &SQLParseResult{
 		DBType: "postgresql",
 	}
 
-	// First, try to parse with the MySQL parser for standard SQL operations.
-	// This handles SELECT, INSERT, UPDATE, DELETE, and common DDL.
-	mysqlResult, err := ParseMySQL(sql)
-	if err != nil {
-		// MySQL parser failed — could be PostgreSQL-specific syntax.
-		// Fall back to keyword-based detection for common operations.
-		op := detectSQLOperation(sql)
-		result.Operation = op
-		if op != OpSelect {
-			result.IsBlocked = true
-			result.BlockReason = "仅允许 SELECT 查询，其他操作请提交工单"
-		}
-		result.RiskLevel = classifyRiskLevel(op)
+	// Try native PG AST parser first
+	pgResult, err := ParsePostgreSQL(sql)
+	if err == nil {
+		result.Operation = pgResult.Operation
+		result.Tables = pgResult.Tables
+		result.applyPostgreSQLRules(pgResult)
 		return result, nil
 	}
 
-	result.Operation = mysqlResult.Operation
-	result.Tables = mysqlResult.Tables
+	// PG parser failed — fall back to keyword-based detection.
+	// Unlike the old behavior, we do NOT block unknown operations.
+	// The caller (ticket executor, query service) decides based on context.
+	//
+	// But empty/whitespace SQL is invalid regardless of parser.
+	sql = strings.TrimSpace(sql)
+	if sql == "" {
+		return nil, fmt.Errorf("empty SQL statement")
+	}
+	op := detectSQLOperation(sql)
+	result.Operation = op
+	result.RiskLevel = classifyRiskLevel(op)
 
-	// Apply same static rules as MySQL
-	result.applyMySQLRules(mysqlResult)
+	// Extract tables using regex fallback
+	result.Tables = extractTablesRegex(sql)
+
+	// Emit a warning so the caller knows parsing degraded
+	result.Warnings = append(result.Warnings,
+		fmt.Sprintf("PostgreSQL AST 解析失败，降级为关键词检测: %v", err))
 
 	return result, nil
 }
@@ -257,6 +261,94 @@ func (r *SQLParseResult) applyMySQLRules(mr *MySQLParseResult) {
 			r.RiskLevel = RiskMedium
 		}
 	}
+}
+
+// applyPostgreSQLRules applies static risk rules for PostgreSQL.
+// Same logic as MySQL rules but uses the PostgreSQL-specific parse result.
+func (r *SQLParseResult) applyPostgreSQLRules(pr *PostgreSQLParseResult) {
+	// Rule: DROP DATABASE → direct block
+	if pr.IsDropDatabase {
+		r.IsBlocked = true
+		r.BlockReason = "DROP DATABASE is not allowed"
+		r.RiskLevel = RiskHigh
+		return
+	}
+	if pr.IsDropTable {
+		r.IsBlocked = true
+		r.BlockReason = "DROP TABLE is not allowed"
+		r.RiskLevel = RiskHigh
+		return
+	}
+	if pr.IsTruncate {
+		r.IsBlocked = true
+		r.BlockReason = "TRUNCATE is not allowed"
+		r.RiskLevel = RiskHigh
+		return
+	}
+
+	// Rule: DELETE/UPDATE without WHERE → high risk
+	if (pr.Operation == OpUpdate || pr.Operation == OpDelete) && !pr.HasWhere {
+		r.RiskLevel = RiskHigh
+		r.IsBlocked = true
+		r.BlockReason = fmt.Sprintf("%s without WHERE clause is not allowed", strings.ToUpper(string(pr.Operation)))
+		return
+	}
+
+	// Rule: SELECT without LIMIT → warning
+	if pr.Operation == OpSelect && !pr.HasLimit {
+		r.Warnings = append(r.Warnings, "query without LIMIT may return large result set")
+	}
+
+	// Default risk levels
+	if r.RiskLevel == "" {
+		switch pr.Operation {
+		case OpSelect:
+			r.RiskLevel = RiskLow
+		case OpDDL:
+			r.RiskLevel = RiskMedium
+		case OpDML, OpUpdate, OpDelete:
+			r.RiskLevel = RiskMedium
+		default:
+			r.RiskLevel = RiskMedium
+		}
+	}
+}
+
+// extractTablesRegex extracts table names using regex patterns as a fallback
+// when AST parsing fails.
+func extractTablesRegex(sql string) []string {
+	upper := strings.ToUpper(strings.TrimSpace(sql))
+	var tables []string
+
+	// Simple patterns for common SQL forms:
+	// FROM <table>, JOIN <table>, INTO <table>, TABLE <table>, UPDATE <table>
+	patterns := []struct {
+		prefix string
+		skip   int // words to skip after prefix (0 = immediate)
+	}{
+		{"FROM", 0},
+		{"JOIN", 0},
+		{"INTO", 0},
+		{"UPDATE", 0},
+		{"TABLE", 0},
+	}
+
+	words := strings.Fields(upper)
+	for i, w := range words {
+		// Clean up punctuation
+		w = strings.TrimRight(w, ",;)")
+		for _, pat := range patterns {
+			if w == pat.prefix && i+1 < len(words) {
+				name := strings.TrimRight(words[i+1], ",;)")
+				name = strings.TrimSpace(name)
+				if name != "" && !isSQLKeyword(strings.ToLower(name)) && !strings.HasPrefix(name, "(") {
+					tables = appendIfAbsent(tables, strings.ToLower(name))
+				}
+			}
+		}
+	}
+
+	return tables
 }
 
 // applyMongoRules applies static risk rules for MongoDB.

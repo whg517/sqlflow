@@ -12,6 +12,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/labstack/echo/v4 v4.15.2
+	github.com/pganalyze/pg_query_go/v6 v6.2.2
 	github.com/pingcap/parser v3.1.2+incompatible
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/viper v1.21.0
