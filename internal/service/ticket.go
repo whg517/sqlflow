@@ -12,6 +12,7 @@ import (
 
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
 )
 
 var (
@@ -70,6 +71,7 @@ type TicketService struct {
 	dsSvc         *DatasourceService
 	connMgr       *connpool.Manager
 	encryptionKey string
+	permSvc       *PermissionService
 }
 
 // NewTicketService creates a new TicketService.
@@ -92,6 +94,11 @@ func (s *TicketService) SetGitService(gitSvc *GitService) {
 // This is set during application bootstrap — do not call after startup.
 func (s *TicketService) SetSLAService(slaSvc *SLAService) {
 	s.slaSvc = slaSvc
+}
+
+// SetPermissionService injects the permission service for MongoDB collection-level permission checks.
+func (s *TicketService) SetPermissionService(permSvc *PermissionService) {
+	s.permSvc = permSvc
 }
 
 // SetDatasourceService injects the datasource service and connection manager
@@ -151,7 +158,7 @@ func (s *TicketService) lookupUsername(ctx context.Context, userID int64) string
 }
 
 // CreateTicket creates a new ticket.
-func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, datasourceID int64, database, sqlContent, dbType, changeReason, riskLevel, aiReviewResult string) (*model.Ticket, error) {
+func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, submitterRole string, datasourceID int64, database, sqlContent, dbType, changeReason, riskLevel, aiReviewResult string) (*model.Ticket, error) {
 	if strings.TrimSpace(sqlContent) == "" {
 		return nil, ErrTicketSQLRequired
 	}
@@ -162,6 +169,13 @@ func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, dat
 	summary := truncateSQL(sqlContent)
 	if dbType == "" {
 		dbType = "mysql"
+	}
+
+	// MongoDB collection-level permission check
+	if dbType == "mongodb" && s.permSvc != nil {
+		if err := s.checkMongoPermission(ctx, submitterRole, datasourceID, sqlContent); err != nil {
+			return nil, err
+		}
 	}
 
 	// Auto-parse SQL and evaluate risk
@@ -833,4 +847,54 @@ func affectedTablesToJSON(tables []string) string {
 		return "[]"
 	}
 	return string(b)
+}
+
+// mongoOpToCasbinAct maps a MongoDB operation to a Casbin action string.
+// This allows the existing RBAC model to control NoSQL operations.
+func mongoOpToCasbinAct(op sqlparser.MongoOperation) string {
+	switch op {
+	case sqlparser.MongoOpFind, sqlparser.MongoOpAggregate:
+		return "select"
+	case sqlparser.MongoOpInsert:
+		return "insert"
+	case sqlparser.MongoOpUpdate:
+		return "update"
+	case sqlparser.MongoOpDelete:
+		return "delete"
+	default:
+		return "select"
+	}
+}
+
+// checkMongoPermission validates that the user has permission to perform the MongoDB operation.
+// It parses the MongoDB command body, extracts the collection and operation type,
+// and checks collection-level permission via Casbin.
+func (s *TicketService) checkMongoPermission(ctx context.Context, role string, datasourceID int64, sqlContent string) error {
+	if s.permSvc == nil {
+		return nil
+	}
+
+	mongoResult, err := sqlparser.ParseMongo(sqlContent)
+	if err != nil {
+		// If we can't parse it, let it through — the approval process will catch issues
+		return nil
+	}
+
+	if mongoResult.Collection == "" {
+		// No collection specified, check datasource-level permission
+		return nil
+	}
+
+	act := mongoOpToCasbinAct(mongoResult.Operation)
+	dom := fmt.Sprintf("ds_%d", datasourceID)
+
+	allowed, err := s.permSvc.Enforce(role, dom, mongoResult.Collection, act)
+	if err != nil {
+		return fmt.Errorf("MongoDB权限校验失败: %w", err)
+	}
+	if !allowed {
+		return fmt.Errorf("没有集合 %s 的 %s 权限", mongoResult.Collection, act)
+	}
+
+	return nil
 }

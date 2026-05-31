@@ -91,6 +91,7 @@ func main() {
 	log.Println("notify service initialized")
 	ticketSvc.SetNotifyService(notifySvc)
 	ticketSvc.SetDatasourceService(dsSvc, connMgr, cfg.EncryptionKey)
+	ticketSvc.SetPermissionService(permSvc)
 
 	maskRuleSvc := service.NewMaskRuleService(database, permSvc, auditSvc)
 	log.Println("mask rule service initialized")

@@ -58,9 +58,10 @@ func (h *TicketHandler) CreateTicket(c echo.Context) error {
 	}
 
 	userID := getContextUserID(c)
+	role := getContextRole(c)
 
 	ticket, err := h.ticketSvc.CreateTicket(
-		c.Request().Context(), userID, req.DatasourceID, req.Database, req.SQL,
+		c.Request().Context(), userID, role, req.DatasourceID, req.Database, req.SQL,
 		req.DBType, req.ChangeReason, req.RiskLevel, req.AIReviewResult,
 	)
 	if err != nil {

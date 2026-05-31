@@ -139,7 +139,7 @@ func TestCreateTicket(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ticket, err := svc.CreateTicket(context.Background(),
-				tt.submitterID, tt.datasourceID, tt.database,
+				tt.submitterID, "developer", tt.datasourceID, tt.database,
 				tt.sqlContent, tt.dbType, tt.changeReason,
 				tt.riskLevel, tt.aiReview,
 			)
@@ -184,7 +184,7 @@ func TestGetTicket(t *testing.T) {
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
 	// Create a ticket first
-	created, err := svc.CreateTicket(context.Background(), userID, dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
+	created, err := svc.CreateTicket(context.Background(), userID, "developer", dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
 	if err != nil {
 		t.Fatalf("CreateTicket() error: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestListTickets(t *testing.T) {
 
 	// Create multiple tickets
 	for i := 0; i < 5; i++ {
-		_, err := svc.CreateTicket(context.Background(), userID, dsID, "mydb",
+		_, err := svc.CreateTicket(context.Background(), userID, "developer", dsID, "mydb",
 			fmt.Sprintf("ALTER TABLE t%d ADD c INT", i), "mysql",
 			fmt.Sprintf("reason %d", i), "low", "")
 		if err != nil {
@@ -442,7 +442,7 @@ func TestCancelTicket(t *testing.T) {
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
 	t.Run("submitter can cancel submitted", func(t *testing.T) {
-		ticket, _ := svc.CreateTicket(context.Background(), devID, dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
+		ticket, _ := svc.CreateTicket(context.Background(), devID, "developer", dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
 
 		result, err := svc.CancelTicket(context.Background(), ticket.ID, devID, "developer", "changed my mind")
 		if err != nil {
@@ -454,7 +454,7 @@ func TestCancelTicket(t *testing.T) {
 	})
 
 	t.Run("dba can cancel", func(t *testing.T) {
-		ticket, _ := svc.CreateTicket(context.Background(), devID, dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
+		ticket, _ := svc.CreateTicket(context.Background(), devID, "developer", dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
 
 		result, err := svc.CancelTicket(context.Background(), ticket.ID, dbaID, "dba", "not needed")
 		if err != nil {
@@ -466,7 +466,7 @@ func TestCancelTicket(t *testing.T) {
 	})
 
 	t.Run("cancel without reason fails", func(t *testing.T) {
-		ticket, _ := svc.CreateTicket(context.Background(), devID, dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
+		ticket, _ := svc.CreateTicket(context.Background(), devID, "developer", dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
 
 		_, err := svc.CancelTicket(context.Background(), ticket.ID, devID, "developer", "")
 		if err != ErrCancelReasonRequired {
@@ -475,7 +475,7 @@ func TestCancelTicket(t *testing.T) {
 	})
 
 	t.Run("other user cannot cancel", func(t *testing.T) {
-		ticket, _ := svc.CreateTicket(context.Background(), devID, dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
+		ticket, _ := svc.CreateTicket(context.Background(), devID, "developer", dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
 
 		otherID := seedTestUser(t, testDB, "dev2", "developer")
 		_, err := svc.CancelTicket(context.Background(), ticket.ID, otherID, "developer", "cancel it")
@@ -635,7 +635,7 @@ func TestFullWorkflow(t *testing.T) {
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
 	// Step 1: Create ticket
-	ticket, err := svc.CreateTicket(context.Background(), devID, dsID, "mydb",
+	ticket, err := svc.CreateTicket(context.Background(), devID, "developer", dsID, "mydb",
 		"ALTER TABLE users ADD COLUMN phone VARCHAR(20)",
 		"mysql", "add phone column", "medium", `{"risk":"medium"}`)
 	if err != nil {
@@ -680,7 +680,7 @@ func TestRejectWorkflow(t *testing.T) {
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
-	ticket, _ := svc.CreateTicket(context.Background(), devID, dsID, "mydb",
+	ticket, _ := svc.CreateTicket(context.Background(), devID, "developer", dsID, "mydb",
 		"DELETE FROM users", "mysql", "cleanup", "high", `{"risk":"high"}`)
 
 	setTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
@@ -700,7 +700,7 @@ func TestCancelWorkflow(t *testing.T) {
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
-	ticket, _ := svc.CreateTicket(context.Background(), devID, dsID, "mydb",
+	ticket, _ := svc.CreateTicket(context.Background(), devID, "developer", dsID, "mydb",
 		"UPDATE users SET name = 'test'", "mysql", "fix data", "high", "")
 
 	ticket, err := svc.CancelTicket(context.Background(), ticket.ID, devID, "developer", "no longer needed")
@@ -721,7 +721,7 @@ func TestAuditLogWritten(t *testing.T) {
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
 	// Create a ticket - this should write an audit log
-	_, err := svc.CreateTicket(context.Background(), devID, dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
+	_, err := svc.CreateTicket(context.Background(), devID, "developer", dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
 	if err != nil {
 		t.Fatalf("CreateTicket() error: %v", err)
 	}
@@ -742,7 +742,7 @@ func TestAuditLogWritten(t *testing.T) {
 // Helper: create a ticket and set its status directly in the DB for testing.
 func createTicketAtStatus(t *testing.T, testDB *sql.DB, svc *TicketService, userID, dsID int64, status model.TicketStatus) *model.Ticket {
 	t.Helper()
-	ticket, err := svc.CreateTicket(context.Background(), userID, dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test reason", "medium", "")
+	ticket, err := svc.CreateTicket(context.Background(), userID, "developer", dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test reason", "medium", "")
 	if err != nil {
 		t.Fatalf("CreateTicket() error: %v", err)
 	}

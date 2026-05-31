@@ -120,7 +120,7 @@ func TestListRevisions(t *testing.T) {
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
 	t.Run("no revisions for new ticket", func(t *testing.T) {
-		ticket, _ := svc.CreateTicket(context.Background(), devID, dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
+		ticket, _ := svc.CreateTicket(context.Background(), devID, "developer", dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
 
 		revisions, err := svc.ListRevisions(context.Background(), ticket.ID)
 		if err != nil {

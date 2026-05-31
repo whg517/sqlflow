@@ -2,6 +2,7 @@ p, admin, *, *, *
 p, dba, *, *, select
 p, dba, *, *, update
 p, dba, *, *, delete
+p, dba, *, *, insert
 p, dba, *, *, ddl
 p, dba, *, *, export
 p, dba, *, *, desensitize:bypass
