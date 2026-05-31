@@ -3,7 +3,7 @@
 # ==============================================================================
 
 .PHONY: help build dev test lint fmt clean verify \
-        docker-up docker-down docker-build \
+        docker-up docker-down docker-build docker-up-dev docker-down-dev docker-build-dev \
         merge-cleanup e2e-setup e2e-test e2e-teardown e2e-all docs
 
 ##@ Build
@@ -85,14 +85,32 @@ e2e-all: ## Full E2E: setup + test + teardown (teardown always runs)
 
 ##@ Docker
 
-docker-up: ## Start application stack
-	docker compose up -d
+docker-up: ## Start production stack
+	docker compose up -d --wait
 
-docker-down: ## Stop application stack
+docker-down: ## Stop production stack
 	docker compose down
 
-docker-build: ## Build application images
+docker-build: ## Build production images
 	docker compose build
+
+docker-build-dev: ## Build dev images
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml build
+
+docker-up-dev: ## Start dev stack (with debug ports, no resource limits)
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --wait
+
+docker-down-dev: ## Stop dev stack
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+
+docker-logs: ## Tail application logs
+	docker compose logs -f sqlflow
+
+docker-logs-mysql: ## Tail MySQL logs
+	docker compose logs -f mysql
+
+docker-ps: ## Show running containers
+	docker compose ps
 
 ##@ Maintenance
 

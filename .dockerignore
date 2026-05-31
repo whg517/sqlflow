@@ -36,7 +36,6 @@ web/.webpack/
 state/
 .env
 .env.local
-config.yaml
 
 # Docs & meta
 docs/

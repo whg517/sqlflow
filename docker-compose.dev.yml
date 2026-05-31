@@ -1,0 +1,79 @@
+# docker-compose.dev.yml — Development environment override
+# =============================================
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Differences from production (docker-compose.yml):
+#   - Builds with dev-friendly settings (VERSION=dev)
+#   - Exposes Go delve debug port (2345) for remote debugging
+#   - Vite dev server port (5173) for live frontend HMR
+#   - Relaxed health check intervals for faster iteration
+#   - Dev-friendly defaults for JWT expiry, metrics, etc.
+#   - Source code mount support (uncomment for live reload)
+#
+# Note: Docker Compose override merges config; resource limits from
+# docker-compose.yml are preserved (compose cannot clear top-level keys).
+
+services:
+  sqlflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: dev
+        BUILD_TIME: ""
+    image: sqlflow:dev
+    container_name: sqlflow-dev
+    # Dev: expose debug and frontend dev server ports
+    ports:
+      - "${SQLFLOW_SERVER_PORT:-8080}:8080"
+      - "${SQLFLOW_METRICS_PORT:-9090}:9090"
+      - "${SQLFLOW_DEBUG_PORT:-2345}:2345"    # Go delve remote debugging
+      - "${SQLFLOW_VITE_PORT:-5173}:5173"     # Vite dev server (frontend HMR)
+    volumes:
+      - sqlflow-data:/app/data
+      # Dev: mount source code for live reload (optional)
+      # - ./cmd:/app/cmd:ro
+      # - ./internal:/app/internal:ro
+      # - ./config:/app/config:ro
+      # - ./web:/app/web
+    environment:
+      SQLFLOW_SERVER_PORT: "8080"
+      SQLFLOW_JWT_SECRET: ${SQLFLOW_JWT_SECRET:-dev-jwt-secret-not-for-production}
+      SQLFLOW_JWT_EXPIRY: ${SQLFLOW_JWT_EXPIRY:-720h}   # 30 days for dev convenience
+      SQLFLOW_ADMIN_USERNAME: ${SQLFLOW_ADMIN_USERNAME:-admin}
+      SQLFLOW_ADMIN_PASSWORD: ${SQLFLOW_ADMIN_PASSWORD:-admin123}
+      SQLFLOW_DB_PATH: /app/data/sqlflow.db
+      SQLFLOW_ENCRYPTION_KEY: ${SQLFLOW_ENCRYPTION_KEY:-dev-encryption-key-32b}
+      SQLFLOW_AI_PROVIDER: ${SQLFLOW_AI_PROVIDER:-openai}
+      SQLFLOW_AI_MODEL: ${SQLFLOW_AI_MODEL:-gpt-4}
+      SQLFLOW_AI_API_KEY: ${SQLFLOW_AI_API_KEY:-}
+      SQLFLOW_AI_BASE_URL: ${SQLFLOW_AI_BASE_URL:-https://api.openai.com/v1}
+      SQLFLOW_DINGTALK_WEBHOOK_URL: ""
+      SQLFLOW_DINGTALK_SECRET: ""
+      SQLFLOW_SERVER_TLS_ENABLE: "false"
+      SQLFLOW_METRICS_ENABLED: "true"     # Enable metrics in dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  mysql:
+    container_name: sqlflow-dev-mysql
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev-mysql-root-password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-sqlflow}
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-dev-mysql-root-password}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped

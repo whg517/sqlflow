@@ -1,7 +1,26 @@
 # ============================================================
-# Stage 1: Build frontend
+# SQLFlow — Multi-stage Dockerfile
 # ============================================================
-FROM node:24-alpine AS frontend
+# Builds a minimal production image containing:
+#   - Go backend (static binary with embedded React SPA)
+#   - Health check endpoint
+#   - Non-root execution
+#
+# Usage:
+#   docker build -t sqlflow:latest .
+#   docker build --build-arg VERSION=v1.0.0 --build-arg NODE_VERSION=24 --build-arg GO_VERSION=1.25 .
+#
+# ============================================================
+
+# ---------- Build arguments (global scope) ----------
+ARG NODE_VERSION=24
+ARG GO_VERSION=1.25
+ARG ALPINE_VERSION=3.21
+
+# ============================================================
+# Stage 1: Build frontend (React SPA)
+# ============================================================
+FROM node:${NODE_VERSION}-alpine AS frontend
 
 WORKDIR /app/web
 
@@ -15,7 +34,7 @@ RUN npm run build
 # ============================================================
 # Stage 2: Build Go binary
 # ============================================================
-FROM golang:1.25-alpine AS builder
+FROM golang:${GO_VERSION}-alpine AS builder
 
 WORKDIR /app
 
@@ -23,22 +42,28 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Copy source code
 COPY . .
+
 # Copy frontend build output into the embedded FS path
 COPY --from=frontend /app/web/dist ./web/dist
 
 # Build static binary with version info injected via ldflags
 ARG VERSION=dev
-ARG BUILD_TIME
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" \
+ARG BUILD_TIME=unknown
+RUN CGO_ENABLED=0 GOOS=linux \
+    go build \
+    -ldflags="-s -w \
+      -X main.version=${VERSION} \
+      -X main.buildTime=${BUILD_TIME}" \
     -o /sqlflow ./cmd/server/
 
 # ============================================================
-# Stage 3: Runtime (minimal image)
+# Stage 3: Runtime (minimal scratch-like image)
 # ============================================================
-FROM alpine:3.21
+FROM alpine:${ALPINE_VERSION}
 
+# Install minimal runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata curl
 
 # Create non-root user before copying files
@@ -49,17 +74,28 @@ WORKDIR /app
 # Copy with ownership in a single layer (avoids chown duplication)
 COPY --chown=sqlflow:sqlflow \
     --from=builder /sqlflow /app/sqlflow
-COPY --chown=sqlflow:sqlflow config/config.yaml /app/config.yaml
+# Copy default config (sensitive values overridden via env vars)
+COPY --chown=sqlflow:sqlflow config/config.example.yaml /app/config.yaml
 COPY --chown=sqlflow:sqlflow entrypoint.sh /app/entrypoint.sh
 COPY --chown=sqlflow:sqlflow --from=frontend /app/web/dist /app/web/dist
 
-RUN chmod +x /app/entrypoint.sh && mkdir -p /app/data && chown sqlflow:sqlflow /app/data
+# Ensure correct permissions
+RUN chmod +x /app/entrypoint.sh \
+    && mkdir -p /app/data \
+    && chown sqlflow:sqlflow /app/data
 
+# Run as non-root
 USER sqlflow
 
+# Expose application port
 EXPOSE 8080
 
+# Health check — container orchestrators (Docker Swarm, K8s, compose) use this
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8080/health || exit 1
+
+# Pass build args as environment for entrypoint
+ARG VERSION=dev
+ENV APP_VERSION=${VERSION}
 
 ENTRYPOINT ["/app/entrypoint.sh"]
