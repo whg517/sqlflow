@@ -44,6 +44,28 @@ var (
 		Name:      "db_queries_total",
 		Help:      "Total number of database queries executed",
 	}, []string{"datasource"})
+
+	// TicketsTotal tracks ticket counts by status.
+	TicketsTotal = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "tickets_total",
+		Help:      "Number of tickets by status",
+	}, []string{"status"})
+
+	// ActiveDatasources tracks the current number of active datasources.
+	ActiveDatasources = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "active_datasources",
+		Help:      "Current number of active datasources",
+	})
+
+	// DBQueryDuration tracks external datasource query latency in seconds.
+	DBQueryDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Name:      "db_query_duration_seconds",
+		Help:      "External datasource query duration in seconds",
+		Buckets:   []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
+	}, []string{"datasource_type"})
 )
 
 // Middleware returns an Echo middleware that records Prometheus metrics for each request.

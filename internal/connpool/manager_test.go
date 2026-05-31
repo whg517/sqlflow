@@ -367,3 +367,20 @@ func TestManager_RemoveAfterGetMySQL(t *testing.T) {
 	// Even if GetMySQL failed to actually connect, Remove should not panic.
 	m.Remove(1, "127.0.0.1", 3306, "nodb")
 }
+
+func TestManager_HealthCheck_Empty(t *testing.T) {
+	m := NewManager()
+	// Empty manager should report healthy (no pools to check)
+	if err := m.HealthCheck(); err != nil {
+		t.Errorf("empty manager should be healthy, got: %v", err)
+	}
+}
+
+func TestManager_HealthCheck_AfterClose(t *testing.T) {
+	m := NewManager()
+	m.Close()
+	// After close, pools are empty, should still report healthy
+	if err := m.HealthCheck(); err != nil {
+		t.Errorf("closed manager should be healthy (no pools), got: %v", err)
+	}
+}

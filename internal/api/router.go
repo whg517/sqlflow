@@ -7,6 +7,7 @@ import (
 	"github.com/whg517/sqlflow/config"
 	"github.com/whg517/sqlflow/internal/api/handler"
 	"github.com/whg517/sqlflow/internal/api/middleware"
+	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/pkg/metrics"
 	"github.com/whg517/sqlflow/internal/service"
 
@@ -15,7 +16,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, oidcSvc *service.OIDCService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, shareSvc *service.ShareService, vitalsSvc *service.WebVitalsService, snapshotSvc *service.SnapshotService, approvalEngine *service.ApprovalEngine, db *sql.DB, cfg *config.Config) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, oidcSvc *service.OIDCService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, shareSvc *service.ShareService, vitalsSvc *service.WebVitalsService, snapshotSvc *service.SnapshotService, approvalEngine *service.ApprovalEngine, db *sql.DB, cfg *config.Config, connMgr *connpool.Manager) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -28,9 +29,12 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 		e.Use(metrics.Middleware())
 	}
 
-	// Health check (public, enhanced with DB check)
+	// Health check endpoints (public)
 	healthHandler := handler.NewHealthHandler(db)
+	healthHandler.SetConnPoolManager(connMgr)
 	e.GET("/health", healthHandler.Health)
+	e.GET("/healthz", healthHandler.Healthz)   // Liveness probe (no dependency checks)
+	e.GET("/readyz", healthHandler.Readyz)     // Readiness probe (checks all deps)
 	e.GET("/api/health", healthHandler.Health)
 
 	// Prometheus metrics endpoint

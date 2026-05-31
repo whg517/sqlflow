@@ -117,4 +117,13 @@ func TestPrometheusCounters(t *testing.T) {
 	if DBQueriesTotal == nil {
 		t.Error("DBQueriesTotal counter is nil")
 	}
+	if TicketsTotal == nil {
+		t.Error("TicketsTotal gauge is nil")
+	}
+	if ActiveDatasources == nil {
+		t.Error("ActiveDatasources gauge is nil")
+	}
+	if DBQueryDuration == nil {
+		t.Error("DBQueryDuration histogram is nil")
+	}
 }
