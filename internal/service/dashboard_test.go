@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/whg517/sqlflow/internal/db"
 )
@@ -120,108 +121,220 @@ func TestDashboardService_GetStats_WithData(t *testing.T) {
 	}
 }
 
-func TestDashboardService_GetOverview_Empty(t *testing.T) {
+// --- GetFullStats tests ---
+
+func TestDashboardService_GetFullStats_Empty(t *testing.T) {
 	testDB := setupDashboardTestDB(t)
 	svc := NewDashboardService(mustWrapDB(testDB))
 
-	overview, err := svc.GetOverview(context.Background(), TimeRangeLast30d)
+	stats, err := svc.GetFullStats(context.Background(), "", "")
 	if err != nil {
-		t.Fatalf("GetOverview failed: %v", err)
+		t.Fatalf("GetFullStats on empty DB: %v", err)
 	}
 
-	if overview.Stats.PendingTickets != 0 {
-		t.Errorf("PendingTickets = %d, want 0", overview.Stats.PendingTickets)
+	if stats.PendingTickets != 0 {
+		t.Errorf("PendingTickets = %d, want 0", stats.PendingTickets)
 	}
-	if len(overview.QueryTrend) != 0 {
-		t.Errorf("QueryTrend length = %d, want 0", len(overview.QueryTrend))
+	if stats.RecentQueries7d != 0 {
+		t.Errorf("RecentQueries7d = %d, want 0", stats.RecentQueries7d)
 	}
-	if len(overview.TicketStatusDist) != 0 {
-		t.Errorf("TicketStatusDist length = %d, want 0", len(overview.TicketStatusDist))
+	if stats.ActiveDatasources != 0 {
+		t.Errorf("ActiveDatasources = %d, want 0", stats.ActiveDatasources)
 	}
-	if len(overview.RecentActivities) != 0 {
-		t.Errorf("RecentActivities length = %d, want 0", len(overview.RecentActivities))
+	if len(stats.PendingTicketSparkline) != 7 {
+		t.Errorf("PendingTicketSparkline len = %d, want 7", len(stats.PendingTicketSparkline))
+	}
+	if len(stats.QuerySparkline) != 7 {
+		t.Errorf("QuerySparkline len = %d, want 7", len(stats.QuerySparkline))
+	}
+	if len(stats.DatasourceSparkline) != 7 {
+		t.Errorf("DatasourceSparkline len = %d, want 7", len(stats.DatasourceSparkline))
+	}
+	if len(stats.TicketStatusDistribution) != 0 {
+		t.Errorf("TicketStatusDistribution should be empty, got %v", stats.TicketStatusDistribution)
+	}
+	if len(stats.RecentActivity) != 0 {
+		t.Errorf("RecentActivity should be empty, got %d items", len(stats.RecentActivity))
+	}
+	if len(stats.QueryTrend) != 7 {
+		t.Errorf("QueryTrend default should be 7 days, got %d", len(stats.QueryTrend))
 	}
 }
 
-func TestDashboardService_GetOverview_WithData(t *testing.T) {
+func TestDashboardService_GetFullStats_WithData(t *testing.T) {
 	testDB := setupDashboardTestDB(t)
 	svc := NewDashboardService(mustWrapDB(testDB))
 	ctx := context.Background()
 
-	// Seed user
+	// Seed datasources
 	testDB.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')`,
-	)
+		`INSERT INTO datasources (name, type, host, port, status) VALUES ('ds1', 'mysql', 'localhost', 3306, 'active')`)
 
-	// Seed tickets in different statuses
-	for _, status := range []string{"SUBMITTED", "PENDING_APPROVAL", "DONE", "REJECTED"} {
+	// Seed query history today
+	for i := 0; i < 5; i++ {
 		testDB.ExecContext(ctx,
-			`INSERT INTO tickets (submitter_id, datasource_id, sql_content, status) VALUES (1, 1, 'SELECT 1', ?)`,
-			status,
-		)
+			`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 1', datetime('now'))`)
 	}
 
-	// Seed query history entries
-	for i := 0; i < 3; i++ {
+	// Seed tickets in different statuses
+	statuses := []string{"SUBMITTED", "SUBMITTED", "DONE", "REJECTED", "APPROVED"}
+	for _, s := range statuses {
 		testDB.ExecContext(ctx,
-			`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 1', datetime('now', ?))`,
-			"-1 day",
-		)
+			`INSERT INTO tickets (submitter_id, datasource_id, sql_content, status) VALUES (1, 1, 'ALTER TABLE t ADD c INT', ?)`,
+			s)
 	}
 
 	// Seed audit logs
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 15; i++ {
 		testDB.ExecContext(ctx,
-			`INSERT INTO audit_logs (user_id, action, sql_summary, created_at) VALUES (1, 'QUERY', 'SELECT * FROM t', datetime('now', ?))`,
-			"-1 hour",
-		)
+			`INSERT INTO audit_logs (user_id, action, ip_address, created_at) VALUES (1, 'query', '127.0.0.1', datetime('now'))`)
 	}
 
-	overview, err := svc.GetOverview(ctx, TimeRangeLast30d)
+	stats, err := svc.GetFullStats(ctx, "", "")
 	if err != nil {
-		t.Fatalf("GetOverview failed: %v", err)
+		t.Fatalf("GetFullStats failed: %v", err)
 	}
 
-	// Basic stats
-	if overview.Stats.TotalUsers != 1 {
-		t.Errorf("TotalUsers = %d, want 1", overview.Stats.TotalUsers)
+	// Stat cards
+	if stats.PendingTickets != 2 {
+		t.Errorf("PendingTickets = %d, want 2", stats.PendingTickets)
+	}
+	if stats.RecentQueries7d != 5 {
+		t.Errorf("RecentQueries7d = %d, want 5", stats.RecentQueries7d)
+	}
+	if stats.ActiveDatasources != 1 {
+		t.Errorf("ActiveDatasources = %d, want 1", stats.ActiveDatasources)
 	}
 
-	// Ticket status distribution should have entries
-	if len(overview.TicketStatusDist) == 0 {
-		t.Error("TicketStatusDist should not be empty")
+	// Sparklines should be length 7
+	if len(stats.QuerySparkline) != 7 {
+		t.Errorf("QuerySparkline len = %d, want 7", len(stats.QuerySparkline))
+	}
+	if stats.QuerySparkline[6] != 5 {
+		t.Errorf("QuerySparkline[6] (today) = %d, want 5", stats.QuerySparkline[6])
 	}
 
-	// Query trend should have entries
-	if len(overview.QueryTrend) == 0 {
-		t.Error("QueryTrend should not be empty")
+	// Ticket distribution
+	if stats.TicketStatusDistribution["SUBMITTED"] != 2 {
+		t.Errorf("SUBMITTED count = %d, want 2", stats.TicketStatusDistribution["SUBMITTED"])
+	}
+	if stats.TicketStatusDistribution["DONE"] != 1 {
+		t.Errorf("DONE count = %d, want 1", stats.TicketStatusDistribution["DONE"])
+	}
+	if stats.TicketStatusDistribution["REJECTED"] != 1 {
+		t.Errorf("REJECTED count = %d, want 1", stats.TicketStatusDistribution["REJECTED"])
+	}
+	if stats.TicketStatusDistribution["APPROVED"] != 1 {
+		t.Errorf("APPROVED count = %d, want 1", stats.TicketStatusDistribution["APPROVED"])
 	}
 
-	// Recent activities should have entries
-	if len(overview.RecentActivities) == 0 {
-		t.Error("RecentActivities should not be empty")
+	// Recent activity capped at 10
+	if len(stats.RecentActivity) != 10 {
+		t.Errorf("RecentActivity len = %d, want 10", len(stats.RecentActivity))
 	}
-	if len(overview.RecentActivities) > 10 {
-		t.Errorf("RecentActivities length = %d, want <= 10", len(overview.RecentActivities))
+
+	// Query trend
+	if len(stats.QueryTrend) != 7 {
+		t.Errorf("QueryTrend default len = %d, want 7", len(stats.QueryTrend))
 	}
 }
 
-func TestDashboardService_GetOverview_TimeRange(t *testing.T) {
+func TestDashboardService_GetFullStats_DateRange(t *testing.T) {
 	testDB := setupDashboardTestDB(t)
 	svc := NewDashboardService(mustWrapDB(testDB))
 	ctx := context.Background()
 
-	// Seed user
+	// Seed query history 3 days ago
 	testDB.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')`,
-	)
+		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 1', datetime('now', '-3 days'))`)
+	testDB.ExecContext(ctx,
+		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 2', datetime('now', '-3 days'))`)
+	testDB.ExecContext(ctx,
+		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 3', datetime('now'))`)
 
-	// Test each time range doesn't error
-	ranges := []TimeRange{TimeRangeToday, TimeRangeThisWeek, TimeRangeThisMonth, TimeRangeLast30d}
-	for _, tr := range ranges {
-		_, err := svc.GetOverview(ctx, tr)
-		if err != nil {
-			t.Errorf("GetOverview with range %s failed: %v", tr, err)
+	// Query with specific date range (5 days)
+	now := time.Now()
+	startDate := now.AddDate(0, 0, -4).Format("2006-01-02")
+	endDate := now.Format("2006-01-02")
+
+	stats, err := svc.GetFullStats(ctx, startDate, endDate)
+	if err != nil {
+		t.Fatalf("GetFullStats with date range failed: %v", err)
+	}
+
+	if len(stats.QueryTrend) != 5 {
+		t.Errorf("QueryTrend len = %d, want 5", len(stats.QueryTrend))
+	}
+
+	// Count should be 2 for 3 days ago, 1 for today
+	threeDaysAgo := now.AddDate(0, 0, -3).Format("2006-01-02")
+	today := now.Format("2006-01-02")
+
+	found3d := false
+	foundToday := false
+	for _, d := range stats.QueryTrend {
+		if d.Date == threeDaysAgo {
+			found3d = true
+			if d.Count != 2 {
+				t.Errorf("3 days ago count = %d, want 2", d.Count)
+			}
 		}
+		if d.Date == today {
+			foundToday = true
+			if d.Count != 1 {
+				t.Errorf("today count = %d, want 1", d.Count)
+			}
+		}
+	}
+	if !found3d {
+		t.Errorf("missing 3 days ago in trend")
+	}
+	if !foundToday {
+		t.Errorf("missing today in trend")
+	}
+}
+
+func TestDashboardService_GetFullStats_InvalidDateRange(t *testing.T) {
+	testDB := setupDashboardTestDB(t)
+	svc := NewDashboardService(mustWrapDB(testDB))
+
+	_, err := svc.GetFullStats(context.Background(), "not-a-date", "")
+	if err == nil {
+		t.Error("expected error for invalid start_date")
+	}
+
+	_, err = svc.GetFullStats(context.Background(), "", "bad")
+	if err == nil {
+		t.Error("expected error for invalid end_date")
+	}
+
+	// end < start
+	now := time.Now()
+	_, err = svc.GetFullStats(context.Background(), now.Format("2006-01-02"), now.AddDate(0, 0, -1).Format("2006-01-02"))
+	if err == nil {
+		t.Error("expected error for end_date < start_date")
+	}
+}
+
+func TestDashboardService_GetFullStats_CacheHit(t *testing.T) {
+	testDB := setupDashboardTestDB(t)
+	svc := NewDashboardService(mustWrapDB(testDB))
+	ctx := context.Background()
+
+	// First call populates cache
+	stats1, err := svc.GetFullStats(ctx, "", "")
+	if err != nil {
+		t.Fatalf("first call failed: %v", err)
+	}
+
+	// Second call should hit cache
+	stats2, err := svc.GetFullStats(ctx, "", "")
+	if err != nil {
+		t.Fatalf("second call (cached) failed: %v", err)
+	}
+
+	// Should return same data
+	if stats1.PendingTickets != stats2.PendingTickets {
+		t.Errorf("cached PendingTickets mismatch: %d vs %d", stats1.PendingTickets, stats2.PendingTickets)
 	}
 }
