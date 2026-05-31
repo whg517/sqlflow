@@ -55,6 +55,15 @@ func Open(dbPath string) (*DB, error) {
 	return &DB{DB: conn, client: client}, nil
 }
 
+// WrapSQL wraps an existing *sql.DB connection with an ent client.
+// This is useful for tests that already have a *sql.DB and need to
+// pass a *DB to services that require ent client access.
+func WrapSQL(conn *sql.DB) (*DB, error) {
+	drv := entsql.OpenDB(dialect.SQLite, conn)
+	client := ent.NewClient(ent.Driver(drv))
+	return &DB{DB: conn, client: client}, nil
+}
+
 // Migrate runs all pending schema migrations using golang-migrate.
 //
 // Phase 1: golang-migrate manages all DDL. ent schemas are defined but

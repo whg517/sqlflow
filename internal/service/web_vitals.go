@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entVital "github.com/whg517/sqlflow/internal/db/ent/webvital"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -14,21 +16,25 @@ const webVitalsRetentionDays = 30
 
 // WebVitalsService handles Core Web Vitals metric ingestion.
 type WebVitalsService struct {
-	db *sql.DB
+	database *db.DB
+	client   *ent.Client
 }
 
 // NewWebVitalsService creates a new WebVitalsService.
-func NewWebVitalsService(db *sql.DB) *WebVitalsService {
-	return &WebVitalsService{db: db}
+func NewWebVitalsService(database *db.DB) *WebVitalsService {
+	return &WebVitalsService{database: database, client: database.Client()}
 }
 
 // RecordMetric stores a single web vital metric.
 func (s *WebVitalsService) RecordMetric(ctx context.Context, m *model.WebVital) error {
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO web_vitals (metric_name, value, rating, path, navigation_type, user_agent)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		m.MetricName, m.Value, m.Rating, m.Path, m.NavigationType, m.UserAgent,
-	)
+	_, err := s.client.WebVital.Create().
+		SetMetricName(m.MetricName).
+		SetValue(m.Value).
+		SetRating(m.Rating).
+		SetPath(m.Path).
+		SetNavigationType(m.NavigationType).
+		SetUserAgent(m.UserAgent).
+		Save(ctx)
 	if err != nil {
 		log.Printf("RecordMetric failed: %v", err)
 		return fmt.Errorf("记录指标失败")
@@ -38,26 +44,21 @@ func (s *WebVitalsService) RecordMetric(ctx context.Context, m *model.WebVital) 
 
 // RecordBatch stores multiple web vital metrics in a single transaction.
 func (s *WebVitalsService) RecordBatch(ctx context.Context, metrics []model.WebVital) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback()
-
-	stmt, err := tx.PrepareContext(ctx,
-		`INSERT INTO web_vitals (metric_name, value, rating, path, navigation_type, user_agent)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-	)
-	if err != nil {
-		return fmt.Errorf("prepare statement: %w", err)
-	}
-	defer stmt.Close()
+	defer func() { _ = tx.Rollback() }()
 
 	for i := range metrics {
-		_, err := stmt.ExecContext(ctx,
-			metrics[i].MetricName, metrics[i].Value, metrics[i].Rating,
-			metrics[i].Path, metrics[i].NavigationType, metrics[i].UserAgent,
-		)
+		_, err := tx.WebVital.Create().
+			SetMetricName(metrics[i].MetricName).
+			SetValue(metrics[i].Value).
+			SetRating(metrics[i].Rating).
+			SetPath(metrics[i].Path).
+			SetNavigationType(metrics[i].NavigationType).
+			SetUserAgent(metrics[i].UserAgent).
+			Save(ctx)
 		if err != nil {
 			return fmt.Errorf("insert metric %d: %w", i, err)
 		}
@@ -73,11 +74,11 @@ func (s *WebVitalsService) RecordBatch(ctx context.Context, metrics []model.WebV
 // CleanupOld removes metrics older than 30 days.
 func (s *WebVitalsService) CleanupOld(ctx context.Context) (int64, error) {
 	cutoff := time.Now().AddDate(0, 0, -webVitalsRetentionDays)
-	result, err := s.db.ExecContext(ctx,
-		`DELETE FROM web_vitals WHERE created_at < ?`, cutoff.Format("2006-01-02 15:04:05"),
-	)
+	n, err := s.client.WebVital.Delete().
+		Where(entVital.CreatedAtLT(cutoff)).
+		Exec(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("cleanup old metrics: %w", err)
 	}
-	return result.RowsAffected()
+	return int64(n), nil
 }

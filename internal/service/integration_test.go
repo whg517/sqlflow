@@ -82,7 +82,7 @@ func setIntegrationTicketStatus(t *testing.T, testDB *sql.DB, ticketID int64, st
 
 func TestIntegration_TicketLifecycleWithAudit(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	auditSvc := NewAuditService(testDB, 100, 50*time.Millisecond)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 100, 50*time.Millisecond)
 	defer auditSvc.Close()
 
 	notifySvc := NewNotifyService("", "") // disabled
@@ -648,7 +648,7 @@ func TestIntegration_AuditServiceBatchWithTicketOps(t *testing.T) {
 	testDB := setupIntegrationDB(t)
 
 	// Use AuditService's batch writer
-	auditSvc := NewAuditService(testDB, 3, 50*time.Millisecond)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 3, 50*time.Millisecond)
 
 	// Write audit records through the batch service
 	for i := 0; i < 7; i++ {
@@ -676,7 +676,7 @@ func TestIntegration_AuditServiceBatchWithTicketOps(t *testing.T) {
 	seedIntegrationUser(t, testDB, "audit_user", "developer")
 	dsID := seedIntegrationDatasource(t, testDB, "audit-db")
 
-	ticketAuditSvc := NewAuditService(testDB, 100, 50*time.Millisecond)
+	ticketAuditSvc := NewAuditService(mustWrapDB(testDB), 100, 50*time.Millisecond)
 	defer ticketAuditSvc.Close()
 	ticketSvc := NewTicketService(testDB, ticketAuditSvc, nil)
 	devID := seedIntegrationUser(t, testDB, "audit_dev", "developer")
@@ -771,7 +771,7 @@ func TestIntegration_NotificationWithTicketLifecycle(t *testing.T) {
 	defer server.Close()
 
 	notifySvc := NewNotifyService(server.URL, "test-secret")
-	auditSvc := NewAuditService(testDB, 100, 50*time.Millisecond)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 100, 50*time.Millisecond)
 	defer auditSvc.Close()
 	ticketSvc := NewTicketService(testDB, auditSvc, notifySvc)
 
@@ -920,7 +920,7 @@ func TestIntegration_AIReviewWithMockLLMToDecision(t *testing.T) {
 
 func TestIntegration_MaskingAndAuditLog(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	auditSvc := NewAuditService(testDB, 100, 50*time.Millisecond)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 100, 50*time.Millisecond)
 
 	// Setup mask rules
 	maskRules := []mask.Rule{

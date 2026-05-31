@@ -141,7 +141,7 @@ func TestAuditService_Search_BasicKeyword(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 	seedAuditFTSData(t, svc)
 
 	result, err := svc.Search(context.Background(), SearchParams{
@@ -164,7 +164,7 @@ func TestAuditService_Search_EmptyKeyword(t *testing.T) {
 	db := newAuditFTSTestDB(t)
 	defer db.Close()
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 	seedAuditFTSData(t, svc)
 
 	result, err := svc.Search(context.Background(), SearchParams{
@@ -187,7 +187,7 @@ func TestAuditService_Search_WhitespaceKeyword(t *testing.T) {
 	db := newAuditFTSTestDB(t)
 	defer db.Close()
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 
 	result, err := svc.Search(context.Background(), SearchParams{
 		Keyword:  "   ",
@@ -215,7 +215,7 @@ func TestAuditService_Search_FilterByAction(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 	seedAuditFTSData(t, svc)
 
 	result, err := svc.Search(context.Background(), SearchParams{
@@ -252,7 +252,7 @@ func TestAuditService_Search_FilterByUserID(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 	seedAuditFTSData(t, svc)
 
 	result, err := svc.Search(context.Background(), SearchParams{
@@ -279,7 +279,7 @@ func TestAuditService_Search_Pagination(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 
 	// Insert many records with "SELECT" keyword.
 	for i := 0; i < 20; i++ {
@@ -331,7 +331,7 @@ func TestAuditService_Search_HighlightFields(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 	svc.Write(context.Background(), AuditRecord{
 		UserID:     1,
 		Action:     "query_execute",
@@ -374,7 +374,7 @@ func TestAuditService_Search_NoResults(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 	seedAuditFTSData(t, svc)
 
 	result, err := svc.Search(context.Background(), SearchParams{
@@ -402,7 +402,7 @@ func TestAuditService_Search_FilterByTimeRange(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 	svc.Write(context.Background(), AuditRecord{
 		UserID:     1,
 		Action:     "query_execute",
@@ -448,7 +448,7 @@ func TestAuditService_Search_ChineseKeyword(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 	svc.Write(context.Background(), AuditRecord{
 		UserID:     1,
 		Action:     "query_execute",
@@ -477,7 +477,7 @@ func TestAuditService_RebuildFTS(t *testing.T) {
 	db := newAuditFTSTestDB(t)
 	defer db.Close()
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 
 	// Insert records before FTS triggers are active (they should be, but test rebuild anyway).
 	svc.Write(context.Background(), AuditRecord{

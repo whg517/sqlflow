@@ -31,7 +31,7 @@ func setupTicketHandlerTest(t *testing.T) (*echo.Echo, *TicketHandler, *db.DB) {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	auditSvc := service.NewAuditService(database.DB, 10, 5*time.Second)
+	auditSvc := service.NewAuditService(database, 10, 5*time.Second)
 	t.Cleanup(func() { auditSvc.Close() })
 
 	ticketSvc := service.NewTicketService(database.DB, auditSvc, nil)

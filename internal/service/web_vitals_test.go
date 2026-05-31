@@ -26,7 +26,7 @@ func setupVitalsTestDB(t *testing.T) *sql.DB {
 
 func TestWebVitalsService_RecordMetric(t *testing.T) {
 	conn := setupVitalsTestDB(t)
-	svc := NewWebVitalsService(conn)
+	svc := NewWebVitalsService(mustWrapDB(conn))
 
 	m := &model.WebVital{
 		MetricName:     "LCP",
@@ -52,7 +52,7 @@ func TestWebVitalsService_RecordMetric(t *testing.T) {
 
 func TestWebVitalsService_RecordBatch(t *testing.T) {
 	conn := setupVitalsTestDB(t)
-	svc := NewWebVitalsService(conn)
+	svc := NewWebVitalsService(mustWrapDB(conn))
 
 	metrics := []model.WebVital{
 		{MetricName: "LCP", Value: 1200, Rating: "good", Path: "/", NavigationType: "navigate"},
@@ -74,7 +74,7 @@ func TestWebVitalsService_RecordBatch(t *testing.T) {
 
 func TestWebVitalsService_CleanupOld(t *testing.T) {
 	conn := setupVitalsTestDB(t)
-	svc := NewWebVitalsService(conn)
+	svc := NewWebVitalsService(mustWrapDB(conn))
 
 	// Insert a metric with old timestamp (31 days ago)
 	oldTime := time.Now().AddDate(0, 0, -31).Format("2006-01-02 15:04:05")

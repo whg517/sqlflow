@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/whg517/sqlflow/internal/db"
 )
 
 // --- Report Data Types ---
@@ -124,12 +126,12 @@ type RiskDistEntry struct {
 
 // AuditReportService provides aggregated audit and ticket report data.
 type AuditReportService struct {
-	db *sql.DB
+	database *db.DB
 }
 
 // NewAuditReportService creates a new AuditReportService.
-func NewAuditReportService(db *sql.DB) *AuditReportService {
-	return &AuditReportService{db: db}
+func NewAuditReportService(database *db.DB) *AuditReportService {
+	return &AuditReportService{database: database}
 }
 
 // ReportParams holds the common filter parameters for all reports.
@@ -161,7 +163,7 @@ func (s *AuditReportService) GetUsageStats(ctx context.Context, params ReportPar
 	stats := &UsageStats{}
 
 	// Total actions
-	err := s.db.QueryRowContext(ctx,
+	err := s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= ?`, startDate,
 	).Scan(&stats.TotalActions)
 	if err != nil {
@@ -169,7 +171,7 @@ func (s *AuditReportService) GetUsageStats(ctx context.Context, params ReportPar
 	}
 
 	// Unique users
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(DISTINCT user_id) FROM audit_logs WHERE created_at >= ?`, startDate,
 	).Scan(&stats.UniqueUsers)
 	if err != nil {
@@ -177,7 +179,7 @@ func (s *AuditReportService) GetUsageStats(ctx context.Context, params ReportPar
 	}
 
 	// Unique IPs
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(DISTINCT ip_address) FROM audit_logs WHERE created_at >= ? AND ip_address != ''`, startDate,
 	).Scan(&stats.UniqueIPs)
 	if err != nil {
@@ -212,7 +214,7 @@ func (s *AuditReportService) GetUsageStats(ctx context.Context, params ReportPar
 }
 
 func (s *AuditReportService) queryTopUsers(ctx context.Context, startDate string) ([]UserActionStat, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT a.user_id, COALESCE(u.username, ''), COUNT(*) as count
 		 FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id
 		 WHERE a.created_at >= ?
@@ -234,7 +236,7 @@ func (s *AuditReportService) queryTopUsers(ctx context.Context, startDate string
 }
 
 func (s *AuditReportService) queryTopActions(ctx context.Context, startDate string) ([]ActionStat, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT action, COUNT(*) as count FROM audit_logs WHERE created_at >= ? AND action != '' GROUP BY action ORDER BY count DESC LIMIT 10`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query top actions: %w", err)
@@ -253,7 +255,7 @@ func (s *AuditReportService) queryTopActions(ctx context.Context, startDate stri
 }
 
 func (s *AuditReportService) queryTopDatabases(ctx context.Context, startDate string) ([]DatabaseStat, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT database, COUNT(*) as count FROM audit_logs WHERE created_at >= ? AND database != '' GROUP BY database ORDER BY count DESC LIMIT 10`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query top databases: %w", err)
@@ -272,7 +274,7 @@ func (s *AuditReportService) queryTopDatabases(ctx context.Context, startDate st
 }
 
 func (s *AuditReportService) queryDailyAuditTrend(ctx context.Context, startDate string) ([]DailyAuditTrend, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT DATE(created_at) as date, COUNT(*) as count FROM audit_logs WHERE created_at >= ? GROUP BY DATE(created_at) ORDER BY date`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query daily audit trend: %w", err)
@@ -298,7 +300,7 @@ func (s *AuditReportService) GetErrorStats(ctx context.Context, params ReportPar
 	stats := &ErrorStats{}
 
 	// Total errors (audit logs with non-empty error_message)
-	err := s.db.QueryRowContext(ctx,
+	err := s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= ? AND error_message != ''`, startDate,
 	).Scan(&stats.TotalErrors)
 	if err != nil {
@@ -307,7 +309,7 @@ func (s *AuditReportService) GetErrorStats(ctx context.Context, params ReportPar
 
 	// Total actions for error rate
 	var totalActions int64
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= ?`, startDate,
 	).Scan(&totalActions)
 	if err != nil {
@@ -339,7 +341,7 @@ func (s *AuditReportService) GetErrorStats(ctx context.Context, params ReportPar
 }
 
 func (s *AuditReportService) queryTopErrorTypes(ctx context.Context, startDate string) ([]ErrorTypeStat, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT action, COUNT(*) as count FROM audit_logs WHERE created_at >= ? AND error_message != '' GROUP BY action ORDER BY count DESC LIMIT 10`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query top error types: %w", err)
@@ -358,7 +360,7 @@ func (s *AuditReportService) queryTopErrorTypes(ctx context.Context, startDate s
 }
 
 func (s *AuditReportService) queryRecentErrors(ctx context.Context, startDate string) ([]RecentErrorEntry, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT a.id, a.action, a.database, a.error_message, COALESCE(u.username, ''), a.created_at
 		 FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id
 		 WHERE a.created_at >= ? AND a.error_message != ''
@@ -380,7 +382,7 @@ func (s *AuditReportService) queryRecentErrors(ctx context.Context, startDate st
 }
 
 func (s *AuditReportService) queryDailyErrorTrend(ctx context.Context, startDate string) ([]DailyAuditTrend, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT DATE(created_at) as date, COUNT(*) as count FROM audit_logs WHERE created_at >= ? AND error_message != '' GROUP BY DATE(created_at) ORDER BY date`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query daily error trend: %w", err)
@@ -407,7 +409,7 @@ func (s *AuditReportService) GetPerformanceReport(ctx context.Context, params Re
 
 	// Average execution time
 	var avgMs sql.NullFloat64
-	err := s.db.QueryRowContext(ctx,
+	err := s.database.DB.QueryRowContext(ctx,
 		`SELECT CAST(COALESCE(AVG(execution_time_ms), 0) AS REAL) FROM audit_logs WHERE created_at >= ? AND execution_time_ms > 0`, startDate,
 	).Scan(&avgMs)
 	if err != nil {
@@ -416,7 +418,7 @@ func (s *AuditReportService) GetPerformanceReport(ctx context.Context, params Re
 	stats.AvgExecutionMs = avgMs.Float64
 
 	// Max execution time
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COALESCE(MAX(execution_time_ms), 0) FROM audit_logs WHERE created_at >= ?`, startDate,
 	).Scan(&stats.MaxExecutionMs)
 	if err != nil {
@@ -424,7 +426,7 @@ func (s *AuditReportService) GetPerformanceReport(ctx context.Context, params Re
 	}
 
 	// P95 execution time (approximate via subquery with LIMIT)
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT execution_time_ms FROM audit_logs WHERE created_at >= ? AND execution_time_ms > 0 ORDER BY execution_time_ms ASC LIMIT 1 OFFSET (SELECT COUNT(*) FROM audit_logs WHERE created_at >= ? AND execution_time_ms > 0) * 95 / 100 - 1`, startDate, startDate,
 	).Scan(&stats.P95ExecutionMs)
 	if err != nil {
@@ -435,7 +437,7 @@ func (s *AuditReportService) GetPerformanceReport(ctx context.Context, params Re
 	}
 
 	// Total result rows
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(result_rows), 0) FROM audit_logs WHERE created_at >= ?`, startDate,
 	).Scan(&stats.TotalResultRows)
 	if err != nil {
@@ -443,7 +445,7 @@ func (s *AuditReportService) GetPerformanceReport(ctx context.Context, params Re
 	}
 
 	// Total affected rows
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(affected_rows), 0) FROM audit_logs WHERE created_at >= ?`, startDate,
 	).Scan(&stats.AffectedRows)
 	if err != nil {
@@ -460,7 +462,7 @@ func (s *AuditReportService) GetPerformanceReport(ctx context.Context, params Re
 }
 
 func (s *AuditReportService) queryDailyPerfTrend(ctx context.Context, startDate string) ([]DailyPerfTrend, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT DATE(created_at) as date,
 		        CAST(COALESCE(AVG(execution_time_ms), 0) AS REAL) as avg_time_ms,
 		        COALESCE(MAX(execution_time_ms), 0) as max_time_ms,
@@ -492,7 +494,7 @@ func (s *AuditReportService) GetTicketReport(ctx context.Context, params ReportP
 	stats := &TicketStats{}
 
 	// Status counts
-	err := s.db.QueryRowContext(ctx,
+	err := s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM tickets WHERE created_at >= ?`, startDate,
 	).Scan(&stats.TotalTickets)
 	if err != nil {
@@ -500,35 +502,35 @@ func (s *AuditReportService) GetTicketReport(ctx context.Context, params ReportP
 	}
 
 	// Pending (SUBMITTED + AI_REVIEWED + PENDING_APPROVAL)
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM tickets WHERE created_at >= ? AND status IN ('SUBMITTED', 'AI_REVIEWED', 'PENDING_APPROVAL')`, startDate,
 	).Scan(&stats.PendingCount)
 	if err != nil {
 		return nil, fmt.Errorf("query pending tickets: %w", err)
 	}
 
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM tickets WHERE created_at >= ? AND status = 'APPROVED'`, startDate,
 	).Scan(&stats.ApprovedCount)
 	if err != nil {
 		return nil, fmt.Errorf("query approved tickets: %w", err)
 	}
 
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM tickets WHERE created_at >= ? AND status = 'REJECTED'`, startDate,
 	).Scan(&stats.RejectedCount)
 	if err != nil {
 		return nil, fmt.Errorf("query rejected tickets: %w", err)
 	}
 
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM tickets WHERE created_at >= ? AND status = 'DONE'`, startDate,
 	).Scan(&stats.DoneCount)
 	if err != nil {
 		return nil, fmt.Errorf("query done tickets: %w", err)
 	}
 
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM tickets WHERE created_at >= ? AND status = 'CANCELLED'`, startDate,
 	).Scan(&stats.CancelledCount)
 	if err != nil {
@@ -537,7 +539,7 @@ func (s *AuditReportService) GetTicketReport(ctx context.Context, params ReportP
 
 	// Average approval time (from created_at to updated_at for APPROVED/DONE tickets)
 	var avgApprovalH sql.NullFloat64
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT CAST(COALESCE(AVG((julianday(updated_at) - julianday(created_at)) * 24), 0) AS REAL)
 		 FROM tickets WHERE created_at >= ? AND status IN ('APPROVED', 'DONE', 'REJECTED')`, startDate,
 	).Scan(&avgApprovalH)
@@ -562,7 +564,7 @@ func (s *AuditReportService) GetTicketReport(ctx context.Context, params ReportP
 }
 
 func (s *AuditReportService) queryDailyTicketTrend(ctx context.Context, startDate string) ([]DailyTicketTrend, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT DATE(created_at) as date,
 		        SUM(CASE WHEN 1=1 THEN 1 ELSE 0 END) as created,
 		        SUM(CASE WHEN status IN ('APPROVED', 'DONE') THEN 1 ELSE 0 END) as approved,
@@ -586,7 +588,7 @@ func (s *AuditReportService) queryDailyTicketTrend(ctx context.Context, startDat
 }
 
 func (s *AuditReportService) queryRiskDistribution(ctx context.Context, startDate string) ([]RiskDistEntry, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT risk_level, COUNT(*) as count FROM tickets WHERE created_at >= ? AND risk_level != '' GROUP BY risk_level ORDER BY count DESC`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query risk distribution: %w", err)

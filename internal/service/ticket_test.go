@@ -714,7 +714,7 @@ func TestCancelWorkflow(t *testing.T) {
 
 func TestAuditLogWritten(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	auditSvc := NewAuditService(testDB, 100, 50*time.Millisecond)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 100, 50*time.Millisecond)
 	defer auditSvc.Close()
 	svc := NewTicketService(testDB, auditSvc, nil)
 	devID := seedTestUser(t, testDB, "dev1", "developer")

@@ -2,24 +2,26 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
 // AuditService handles audit logging with synchronous writing and paginated queries.
 type AuditService struct {
-	db *sql.DB
+	database *db.DB
+	client   *ent.Client
 }
 
 // NewAuditService creates a new AuditService.
 // The batchSize and flushInterval parameters are accepted for interface compatibility but are no longer used.
-func NewAuditService(db *sql.DB, batchSize int, flushInterval time.Duration) *AuditService {
-	return &AuditService{db: db}
+func NewAuditService(database *db.DB, batchSize int, flushInterval time.Duration) *AuditService {
+	return &AuditService{database: database, client: database.Client()}
 }
 
 // Write inserts an audit record directly into the database.
@@ -28,14 +30,22 @@ func (s *AuditService) Write(ctx context.Context, rec AuditRecord) {
 	if s == nil {
 		return
 	}
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, desensitized_fields, ip_address, ai_review_result, ticket_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		rec.UserID, rec.Action, rec.DatasourceID, rec.Database,
-		rec.SQLContent, rec.SQLSummary, rec.ResultRows, rec.AffectedRows,
-		rec.ExecutionTimeMs, rec.ErrorMessage, rec.DesensitizedFields, rec.IPAddress,
-		rec.AIReviewResult, rec.TicketID,
-	)
+	_, err := s.client.AuditLog.Create().
+		SetUserID(rec.UserID).
+		SetAction(rec.Action).
+		SetDatasourceID(rec.DatasourceID).
+		SetDatabase(rec.Database).
+		SetSQLContent(rec.SQLContent).
+		SetSQLSummary(rec.SQLSummary).
+		SetResultRows(rec.ResultRows).
+		SetAffectedRows(rec.AffectedRows).
+		SetExecutionTimeMs(rec.ExecutionTimeMs).
+		SetErrorMessage(rec.ErrorMessage).
+		SetDesensitizedFields(rec.DesensitizedFields).
+		SetIPAddress(rec.IPAddress).
+		SetAiReviewResult(rec.AIReviewResult).
+		SetTicketID(rec.TicketID).
+		Save(ctx)
 	if err != nil {
 		log.Printf("audit write: insert: %v", err)
 	}
@@ -45,7 +55,8 @@ func (s *AuditService) Write(ctx context.Context, rec AuditRecord) {
 func (s *AuditService) Close() {}
 
 // List retrieves a paginated list of audit logs with filtering.
-// Supported filters: userID, action, datasourceID, start/end (time), keyword (searches sql_content, sql_summary, username, action, error_message, database, ip_address).
+// RAW_SQL: LEFT JOIN users + dynamic WHERE + LIKE filters + pagination.
+// The complex filtering and JOIN logic is better expressed in raw SQL.
 func (s *AuditService) List(ctx context.Context, page, pageSize int, userID, action, datasourceID, start, end, keyword string) ([]model.AuditLog, int64, error) {
 	p := ParsePagination(page, pageSize)
 
@@ -82,7 +93,7 @@ func (s *AuditService) List(ctx context.Context, page, pageSize int, userID, act
 		countTable = "audit_logs a LEFT JOIN users u ON a.user_id = u.id"
 	}
 	countSQL := PaginatedCountSQL(countTable, whereClause)
-	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := s.database.DB.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("统计审计日志失败: %w", err)
 	}
 
@@ -99,7 +110,7 @@ func (s *AuditService) List(ctx context.Context, page, pageSize int, userID, act
 	)
 	queryArgs := AppendLimitArgs(args, p)
 
-	rows, err := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("查询审计日志失败: %w", err)
 	}
@@ -146,15 +157,16 @@ type SearchResult struct {
 }
 
 // RebuildFTS rebuilds the FTS5 index by clearing and re-populating from audit_logs.
+// RAW_SQL: FTS5 virtual table operations (DELETE + INSERT INTO ... SELECT) — not expressible via ent.
 func (s *AuditService) RebuildFTS(ctx context.Context) error {
 	// Clear existing FTS data.
-	_, err := s.db.ExecContext(ctx, `DELETE FROM audit_logs_fts`)
+	_, err := s.database.DB.ExecContext(ctx, `DELETE FROM audit_logs_fts`)
 	if err != nil {
 		return fmt.Errorf("clear FTS index: %w", err)
 	}
 
 	// Re-populate from audit_logs.
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.database.DB.ExecContext(ctx,
 		`INSERT INTO audit_logs_fts(audit_id, sql_content, sql_summary, action, error_message, database)
 		 SELECT id, sql_content, sql_summary, action, error_message, database FROM audit_logs`,
 	)
@@ -181,8 +193,7 @@ func buildFTSSearchWhere(matchQuery string, filterClauses []FilterClause) (strin
 }
 
 // Search performs full-text search on audit logs using FTS5.
-// Supports keyword, action filter, time range, and user_id filter.
-// Returns results with snippet highlighting and relevance ranking.
+// RAW_SQL: FTS5 MATCH + JOIN + snippet highlighting — SQLite FTS5 specific, not expressible via ent.
 func (s *AuditService) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	if strings.TrimSpace(params.Keyword) == "" {
 		return &SearchResult{Logs: []model.AuditLogSearch{}, Total: 0}, nil
@@ -216,12 +227,11 @@ func (s *AuditService) Search(ctx context.Context, params SearchParams) (*Search
 		whereClause,
 	)
 	var total int64
-	if err := s.db.QueryRowContext(ctx, countSQL, allArgs...).Scan(&total); err != nil {
+	if err := s.database.DB.QueryRowContext(ctx, countSQL, allArgs...).Scan(&total); err != nil {
 		return nil, fmt.Errorf("FTS search count: %w", err)
 	}
 
 	// Search with snippet highlighting and ranking.
-	// FTS5 column indices: 0=audit_id, 1=sql_content, 2=sql_summary, 3=action, 4=error_message, 5=database
 	querySQL := fmt.Sprintf(
 		`SELECT a.id, a.user_id, a.action, a.datasource_id, a.database, a.sql_content, a.sql_summary,
 		        a.result_rows, a.affected_rows, a.execution_time_ms, a.error_message,
@@ -240,7 +250,7 @@ func (s *AuditService) Search(ctx context.Context, params SearchParams) (*Search
 	)
 	queryArgs := append(allArgs, p.PageSize, p.Offset)
 
-	rows, err := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("FTS search query: %w", err)
 	}
@@ -282,4 +292,26 @@ func escapeLike(s string) string {
 	s = strings.ReplaceAll(s, "%", "\\%")
 	s = strings.ReplaceAll(s, "_", "\\_")
 	return s
+}
+
+// entAuditLogToModel converts an ent AuditLog entity to a model.AuditLog.
+func entAuditLogToModel(a *ent.AuditLog) *model.AuditLog {
+	return &model.AuditLog{
+		ID:                 int64(a.ID),
+		UserID:             a.UserID,
+		Action:             a.Action,
+		DatasourceID:       a.DatasourceID,
+		Database:           a.Database,
+		SQLContent:         a.SQLContent,
+		SQLSummary:         a.SQLSummary,
+		ResultRows:         a.ResultRows,
+		AffectedRows:       a.AffectedRows,
+		ExecutionTimeMs:    a.ExecutionTimeMs,
+		ErrorMessage:       a.ErrorMessage,
+		DesensitizedFields: a.DesensitizedFields,
+		IPAddress:          a.IPAddress,
+		AIReviewResult:     a.AiReviewResult,
+		TicketID:           a.TicketID,
+		CreatedAt:          a.CreatedAt,
+	}
 }

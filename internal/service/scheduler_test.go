@@ -13,7 +13,7 @@ func setupSchedulerTest(t *testing.T) (*db.DB, *TicketService) {
 	t.Helper()
 	testDB := setupAuthTestDB(t)
 
-	auditSvc := NewAuditService(testDB.DB, 0, 0)
+	auditSvc := NewAuditService(testDB, 0, 0)
 	// Insert datasource
 	testDB.Exec(`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		"test-ds", "mysql", "10.0.0.1", 3306, "root", "enc", "active")

@@ -63,7 +63,7 @@ func main() {
 
 	historySvc := service.NewQueryHistoryService(database.DB)
 
-	auditSvc := service.NewAuditService(database.DB, 0, 0)
+	auditSvc := service.NewAuditService(database, 0, 0)
 	defer auditSvc.Close()
 	log.Println("audit service initialized")
 
@@ -98,7 +98,7 @@ func main() {
 	aiReviewSvc := service.NewAIReviewService(database.DB, cfg.AI.Provider, cfg.AI.Model, cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Timeout)
 	log.Println("AI review service initialized")
 
-	dashboardSvc := service.NewDashboardService(database.DB)
+	dashboardSvc := service.NewDashboardService(database)
 	log.Println("dashboard service initialized")
 
 	// Initialize backup service
@@ -106,7 +106,7 @@ func main() {
 	log.Println("backup service initialized")
 
 	// Initialize audit report service
-	reportSvc := service.NewAuditReportService(database.DB)
+	reportSvc := service.NewAuditReportService(database)
 	log.Println("audit report service initialized")
 
 	// Initialize permission request service
@@ -168,7 +168,7 @@ func main() {
 	log.Println("share service initialized")
 
 	// Initialize Web Vitals service (SF-ENG0033)
-	vitalsSvc := service.NewWebVitalsService(database.DB)
+	vitalsSvc := service.NewWebVitalsService(database)
 	log.Println("web vitals service initialized")
 
 	// Seed initial admin if users table is empty

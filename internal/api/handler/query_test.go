@@ -42,7 +42,7 @@ func setupQueryTest(t *testing.T) (*echo.Echo, *service.QueryService, *service.Q
 	permSvc, _ := service.NewPermissionService(database.DB)
 	// PermissionService creation may fail if policy.csv is not found;
 	// that's OK for handler-level tests that don't reach the permission check.
-	auditSvc := service.NewAuditService(database.DB, 10, 5*time.Second)
+	auditSvc := service.NewAuditService(database, 10, 5*time.Second)
 
 	querySvc := service.NewQueryService(database.DB, dsSvc, historySvc, permSvc, auditSvc, encKey, connMgr)
 	handler := NewQueryHandler(querySvc, historySvc)

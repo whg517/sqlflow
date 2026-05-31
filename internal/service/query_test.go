@@ -77,7 +77,7 @@ func setupQueryService(t *testing.T) (*QueryService, *sql.DB) {
 		t.Fatalf("create permission service: %v", err)
 	}
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 	return qs, testDB
@@ -460,7 +460,7 @@ func TestExecuteQuery_PermissionDenied(t *testing.T) {
 
 	// "restricted" role has NO select permission on users table
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	_, err = qs.ExecuteQuery(ctx, 1, "user1", "restricted", dsID, "testdb", "SELECT * FROM users", "mysql")
@@ -487,7 +487,7 @@ func TestExecuteQuery_AdminHasWildcardPermission(t *testing.T) {
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "users", "select")
 
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	// Should pass permission check but fail at connection stage (no real MySQL)
@@ -540,7 +540,7 @@ func TestApplyDesensitization_WithRules(t *testing.T) {
 
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	result := &QueryResult{
@@ -588,7 +588,7 @@ func TestApplyDesensitization_BypassPermission(t *testing.T) {
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "desensitize:bypass")
 
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	result := &QueryResult{
@@ -644,7 +644,7 @@ func TestApplyDesensitization_MultipleMaskTypes(t *testing.T) {
 
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	result := &QueryResult{
@@ -705,7 +705,7 @@ func TestApplyDesensitization_WildcardTableRule(t *testing.T) {
 
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	result := &QueryResult{
@@ -742,7 +742,7 @@ func TestApplyDesensitization_NoMatchTable(t *testing.T) {
 
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	result := &QueryResult{
@@ -816,7 +816,7 @@ func TestApplyDesensitization_FieldNotInRow(t *testing.T) {
 
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	result := &QueryResult{
@@ -856,7 +856,7 @@ func TestLoadMaskRules(t *testing.T) {
 
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	rules := qs.loadMaskRules(ctx, dsID, "testdb", []string{"users"})
@@ -915,7 +915,7 @@ func TestExecuteQuery_AuditOnFailure(t *testing.T) {
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "select")
 
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	_, err = qs.ExecuteQuery(ctx, userID, "audit-user", "admin", dsID, "testdb", "SELECT 1", "mysql")

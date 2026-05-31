@@ -30,7 +30,7 @@ func setupMaskRuleHandlerTest(t *testing.T) (*echo.Echo, *MaskRuleHandler, *db.D
 		t.Fatalf("migrate: %v", err)
 	}
 
-	auditSvc := service.NewAuditService(database.DB, 10, 5*time.Second)
+	auditSvc := service.NewAuditService(database, 10, 5*time.Second)
 	t.Cleanup(func() { auditSvc.Close() })
 
 	maskRuleSvc := service.NewMaskRuleService(database.DB, nil, auditSvc)
@@ -1147,7 +1147,7 @@ func TestMaskRuleHandler_DeleteMaskRule_DBError(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	auditSvc := service.NewAuditService(database.DB, 10, 5*time.Second)
+	auditSvc := service.NewAuditService(database, 10, 5*time.Second)
 	maskRuleSvc := service.NewMaskRuleService(database.DB, nil, auditSvc)
 	handler := NewMaskRuleHandler(maskRuleSvc)
 	e := echo.New()
@@ -1189,7 +1189,7 @@ func TestMaskRuleHandler_DeleteSensitiveTable_DBError(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	auditSvc := service.NewAuditService(database.DB, 10, 5*time.Second)
+	auditSvc := service.NewAuditService(database, 10, 5*time.Second)
 	maskRuleSvc := service.NewMaskRuleService(database.DB, nil, auditSvc)
 	handler := NewMaskRuleHandler(maskRuleSvc)
 	e := echo.New()

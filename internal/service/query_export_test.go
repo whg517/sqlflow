@@ -46,7 +46,7 @@ func setupExportService(t *testing.T) (*QueryService, *sql.DB) {
 		t.Fatalf("create permission service: %v", err)
 	}
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 	return qs, testDB
 }
@@ -168,7 +168,7 @@ func TestExportQuery_PasswordDecryptError(t *testing.T) {
 	dsSvc := NewDatasourceService(testDB, "wrong-key-that-is-32-bytes-long!!", connMgr)
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, "wrong-key-that-is-32-bytes-long!!", connMgr)
 
 	ctx, cancel := exportCtx(t)
@@ -301,7 +301,7 @@ func TestExportQuery_Success(t *testing.T) {
 	// Recreate QueryService with the shared connMgr
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	// Also add select policy for admin on this datasource domain
@@ -341,7 +341,7 @@ func TestExportQuery_SuccessWithDesensitization(t *testing.T) {
 	seedPolicy(t, testDB, permSvc, "developer", fmt.Sprintf("ds_%d", dsID), "*", "select")
 
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	// Add a mask rule for this datasource
@@ -383,7 +383,7 @@ func TestExportQuery_EmptyResult(t *testing.T) {
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "users", "select")
 
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	// Query the users table (empty in the injected SQLite) with an impossible condition
@@ -410,7 +410,7 @@ func TestExportQuery_RowLimitExceeded(t *testing.T) {
 	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	ctx, cancel := exportCtx(t)
@@ -459,7 +459,7 @@ func TestExportQuery_AuditOnSuccess(t *testing.T) {
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "select")
 
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	userID := seedUser(t, testDB, "export-user", "admin")
@@ -495,7 +495,7 @@ func TestExportQuery_AuditOnFailure(t *testing.T) {
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "users", "select")
 
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	userID := seedUser(t, testDB, "export-fail-user", "admin")
@@ -539,7 +539,7 @@ func TestExportQuery_DefaultDBType(t *testing.T) {
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "select")
 
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	// Pass empty dbType — should default to datasource type (mysql)
@@ -562,7 +562,7 @@ func TestExportQuery_PermissionDenied(t *testing.T) {
 	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
 	permSvc, _ := NewPermissionService(testDB)
 	historySvc := NewQueryHistoryService(testDB)
-	auditSvc := NewAuditService(testDB, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
 
 	ctx, cancel := exportCtx(t)

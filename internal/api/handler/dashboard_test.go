@@ -24,7 +24,7 @@ func setupDashboardTest(t *testing.T) (*echo.Echo, *DashboardHandler, *db.DB) {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	svc := service.NewDashboardService(database.DB)
+	svc := service.NewDashboardService(database)
 	handler := NewDashboardHandler(svc)
 	e := echo.New()
 

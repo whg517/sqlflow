@@ -38,7 +38,7 @@ func setupExportTest(t *testing.T) (*echo.Echo, *service.AuditService, *service.
 		t.Fatalf("insert developer: %v", err)
 	}
 
-	auditSvc := service.NewAuditService(database.DB, 0, 0)
+	auditSvc := service.NewAuditService(database, 0, 0)
 	exportSvc := service.NewExportService(database.DB, auditSvc)
 	exportAsyncSvc := service.NewExportAsyncService(database.DB, exportSvc, auditSvc, t.TempDir())
 	t.Cleanup(func() { exportAsyncSvc.Close() })

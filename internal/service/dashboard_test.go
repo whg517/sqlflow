@@ -28,7 +28,7 @@ func setupDashboardTestDB(t *testing.T) *sql.DB {
 
 func TestNewDashboardService(t *testing.T) {
 	testDB := setupDashboardTestDB(t)
-	svc := NewDashboardService(testDB)
+	svc := NewDashboardService(mustWrapDB(testDB))
 	if svc == nil {
 		t.Fatal("NewDashboardService returned nil")
 	}
@@ -36,7 +36,7 @@ func TestNewDashboardService(t *testing.T) {
 
 func TestDashboardService_GetStats_Empty(t *testing.T) {
 	testDB := setupDashboardTestDB(t)
-	svc := NewDashboardService(testDB)
+	svc := NewDashboardService(mustWrapDB(testDB))
 
 	stats, err := svc.GetStats(context.Background())
 	if err != nil {
@@ -59,7 +59,7 @@ func TestDashboardService_GetStats_Empty(t *testing.T) {
 
 func TestDashboardService_GetStats_WithData(t *testing.T) {
 	testDB := setupDashboardTestDB(t)
-	svc := NewDashboardService(testDB)
+	svc := NewDashboardService(mustWrapDB(testDB))
 	ctx := context.Background()
 
 	// Seed users

@@ -24,6 +24,16 @@ func setupTestDB(t *testing.T) *sql.DB {
 	return database.DB
 }
 
+// mustWrapDB wraps *sql.DB into *db.DB for ent-based service constructors.
+// It panics on failure (test-only helper).
+func mustWrapDB(conn *sql.DB) *db.DB {
+	wrapped, err := db.WrapSQL(conn)
+	if err != nil {
+		panic(err)
+	}
+	return wrapped
+}
+
 func newTestMaskRuleService(t *testing.T) (*MaskRuleService, *sql.DB) {
 	t.Helper()
 	database := setupTestDB(t)

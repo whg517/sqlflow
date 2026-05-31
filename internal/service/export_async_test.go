@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS export_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, u
 
 func TestExportAsyncService_CreateAndRetrieve(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
-	auditSvc := NewAuditService(db, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
 	exportSvc := NewExportService(db, auditSvc)
 	asyncSvc := NewExportAsyncService(db, exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
@@ -97,7 +97,7 @@ func TestExportAsyncService_CreateAndRetrieve(t *testing.T) {
 
 func TestExportAsyncService_ListTasks(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
-	auditSvc := NewAuditService(db, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
 	exportSvc := NewExportService(db, auditSvc)
 	asyncSvc := NewExportAsyncService(db, exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
@@ -137,7 +137,7 @@ func TestExportAsyncService_ListTasks(t *testing.T) {
 
 func TestExportAsyncService_PermissionDenied(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
-	auditSvc := NewAuditService(db, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
 	exportSvc := NewExportService(db, auditSvc)
 	asyncSvc := NewExportAsyncService(db, exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
@@ -153,7 +153,7 @@ func TestExportAsyncService_PermissionDenied(t *testing.T) {
 
 func TestExportAsyncService_DownloadFile(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
-	auditSvc := NewAuditService(db, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
 	exportSvc := NewExportService(db, auditSvc)
 	asyncSvc := NewExportAsyncService(db, exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
@@ -206,7 +206,7 @@ func TestExportAsyncService_DownloadFile(t *testing.T) {
 
 func TestExportAsyncService_NotFound(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
-	auditSvc := NewAuditService(db, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
 	exportSvc := NewExportService(db, auditSvc)
 	asyncSvc := NewExportAsyncService(db, exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
@@ -229,7 +229,7 @@ func TestGenerateExportFilename(t *testing.T) {
 
 func TestExportAsyncService_CleanupExpiredFiles(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
-	auditSvc := NewAuditService(db, 0, 0)
+	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
 	exportSvc := NewExportService(db, auditSvc)
 	asyncSvc := NewExportAsyncService(db, exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()

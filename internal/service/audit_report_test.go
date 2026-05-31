@@ -10,7 +10,7 @@ import (
 
 func TestAuditReportService_GetUsageStats(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuditReportService(db)
+	svc := NewAuditReportService(mustWrapDB(db))
 	ctx := context.Background()
 
 	// Seed audit logs
@@ -55,7 +55,7 @@ func TestAuditReportService_GetUsageStats(t *testing.T) {
 
 func TestAuditReportService_GetErrorStats(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuditReportService(db)
+	svc := NewAuditReportService(mustWrapDB(db))
 	ctx := context.Background()
 
 	userID := createTestUser(t, db, "report_error")
@@ -95,7 +95,7 @@ func TestAuditReportService_GetErrorStats(t *testing.T) {
 
 func TestAuditReportService_GetPerformanceReport(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuditReportService(db)
+	svc := NewAuditReportService(mustWrapDB(db))
 	ctx := context.Background()
 
 	userID := createTestUser(t, db, "report_perf")
@@ -133,7 +133,7 @@ func TestAuditReportService_GetPerformanceReport(t *testing.T) {
 
 func TestAuditReportService_GetTicketReport(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuditReportService(db)
+	svc := NewAuditReportService(mustWrapDB(db))
 	ctx := context.Background()
 
 	userID := createTestUser(t, db, "report_ticket")
@@ -186,7 +186,7 @@ func TestAuditReportService_GetTicketReport(t *testing.T) {
 
 func TestAuditReportService_DefaultDays(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuditReportService(db)
+	svc := NewAuditReportService(mustWrapDB(db))
 	ctx := context.Background()
 
 	// Should not fail with days=0 (defaults to 7)
@@ -213,7 +213,7 @@ func TestAuditReportService_DefaultDays(t *testing.T) {
 
 func TestAuditReportService_EmptyData(t *testing.T) {
 	db := setupTestDB(t)
-	svc := NewAuditReportService(db)
+	svc := NewAuditReportService(mustWrapDB(db))
 	ctx := context.Background()
 
 	// Should return zero-value stats without error

@@ -67,7 +67,7 @@ func TestAuditService_WriteSync(t *testing.T) {
 	db := newAuditTestDB(t)
 	defer db.Close()
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 
 	// Write several records — each is persisted immediately.
 	for i := 0; i < 10; i++ {
@@ -93,7 +93,7 @@ func TestAuditService_WriteSingleRecord(t *testing.T) {
 	db := newAuditTestDB(t)
 	defer db.Close()
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 
 	svc.Write(context.Background(), AuditRecord{
 		UserID:     1,
@@ -115,7 +115,7 @@ func TestAuditService_List_NoFilters(t *testing.T) {
 	db := newAuditTestDB(t)
 	defer db.Close()
 
-	svc := NewAuditService(db, 100, 50*time.Millisecond)
+	svc := NewAuditService(mustWrapDB(db), 100, 50*time.Millisecond)
 
 	// Insert a user for the join.
 	_, err := db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('alice', 'hash', 'developer')")
@@ -132,7 +132,7 @@ func TestAuditService_List_NoFilters(t *testing.T) {
 	}
 	svc.Close()
 
-	svc2 := NewAuditService(db, 100, 50*time.Millisecond)
+	svc2 := NewAuditService(mustWrapDB(db), 100, 50*time.Millisecond)
 	defer svc2.Close()
 
 	logs, total, err := svc2.List(context.Background(), 1, 10, "", "", "", "", "", "")
@@ -162,13 +162,13 @@ func TestAuditService_List_WithFilters(t *testing.T) {
 		{UserID: 1, Action: "export", DatasourceID: 1, SQLContent: "SELECT * FROM users"},
 		{UserID: 1, Action: "ticket_create", DatasourceID: 2, SQLContent: "UPDATE orders SET status=1"},
 	}
-	svc := NewAuditService(db, 100, 50*time.Millisecond)
+	svc := NewAuditService(mustWrapDB(db), 100, 50*time.Millisecond)
 	for _, r := range records {
 		svc.Write(context.Background(), r)
 	}
 	svc.Close()
 
-	svc2 := NewAuditService(db, 100, 50*time.Millisecond)
+	svc2 := NewAuditService(mustWrapDB(db), 100, 50*time.Millisecond)
 	defer svc2.Close()
 
 	t.Run("filter by action", func(t *testing.T) {
@@ -221,7 +221,7 @@ func TestAuditService_List_Pagination(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 100, 50*time.Millisecond)
+	svc := NewAuditService(mustWrapDB(db), 100, 50*time.Millisecond)
 	for i := 0; i < 15; i++ {
 		svc.Write(context.Background(), AuditRecord{
 			UserID:     1,
@@ -231,7 +231,7 @@ func TestAuditService_List_Pagination(t *testing.T) {
 	}
 	svc.Close()
 
-	svc2 := NewAuditService(db, 100, 50*time.Millisecond)
+	svc2 := NewAuditService(mustWrapDB(db), 100, 50*time.Millisecond)
 	defer svc2.Close()
 
 	// Page 1 with size 5.
@@ -269,7 +269,7 @@ func TestAuditService_List_Empty(t *testing.T) {
 	db := newAuditTestDB(t)
 	defer db.Close()
 
-	svc := NewAuditService(db, 100, 50*time.Millisecond)
+	svc := NewAuditService(mustWrapDB(db), 100, 50*time.Millisecond)
 	defer svc.Close()
 
 	logs, total, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "")
@@ -316,7 +316,7 @@ func TestAuditService_List_KeywordWithWildcards(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 
 	// Insert records that contain literal % and _ characters.
 	records := []AuditRecord{
@@ -377,7 +377,7 @@ func TestAuditService_CloseIsNoop(t *testing.T) {
 	db := newAuditTestDB(t)
 	defer db.Close()
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 	svc.Write(context.Background(), AuditRecord{UserID: 1, Action: "query_execute"})
 	svc.Close()
 
@@ -407,7 +407,7 @@ func TestAuditService_Close_MultipleTimes(t *testing.T) {
 	db := newAuditTestDB(t)
 	defer db.Close()
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 	svc.Write(context.Background(), AuditRecord{UserID: 1, Action: "query_execute"})
 
 	// Calling Close multiple times should not panic
@@ -428,7 +428,7 @@ func TestAuditService_Write_AllFields(t *testing.T) {
 	db := newAuditTestDB(t)
 	defer db.Close()
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 
 	rec := AuditRecord{
 		UserID:             42,
@@ -513,7 +513,7 @@ func TestAuditService_List_FilterByTimeRange(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 
 	svc.Write(context.Background(), AuditRecord{UserID: 1, Action: "query_execute", SQLContent: "SELECT 1"})
 
@@ -538,7 +538,7 @@ func TestAuditService_List_KeywordExpandedFields(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 
 	// Insert records with unique content in different fields.
 	svc.Write(context.Background(), AuditRecord{
@@ -657,7 +657,7 @@ func TestAuditService_List_UsernameJoin(t *testing.T) {
 		t.Fatalf("insert user: %v", err)
 	}
 
-	svc := NewAuditService(db, 0, 0)
+	svc := NewAuditService(mustWrapDB(db), 0, 0)
 	svc.Write(context.Background(), AuditRecord{UserID: 1, Action: "query_execute", SQLContent: "SELECT 1"})
 
 	logs, _, err := svc.List(context.Background(), 1, 10, "", "", "", "", "", "")

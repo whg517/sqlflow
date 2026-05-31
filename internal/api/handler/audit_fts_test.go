@@ -35,7 +35,7 @@ func newAuditFTSHandlerTest(t *testing.T) (*echo.Echo, *service.AuditService, *A
 		t.Fatalf("insert user: %v", err)
 	}
 
-	auditSvc := service.NewAuditService(database.DB, 0, 0)
+	auditSvc := service.NewAuditService(database, 0, 0)
 	handler := NewAuditHandler(auditSvc)
 
 	e := echo.New()

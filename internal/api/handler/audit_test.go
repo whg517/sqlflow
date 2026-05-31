@@ -32,7 +32,7 @@ func setupAuditTest(t *testing.T) (*echo.Echo, *service.AuditService, *AuditHand
 		t.Fatalf("insert test user: %v", err)
 	}
 
-	auditSvc := service.NewAuditService(database.DB, 0, 0)
+	auditSvc := service.NewAuditService(database, 0, 0)
 
 	handler := NewAuditHandler(auditSvc)
 
