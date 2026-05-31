@@ -7,30 +7,36 @@ import (
 	"os"
 	"path/filepath"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	_ "modernc.org/sqlite"
+
+	// Preserve golang-migrate for Phase 1 dual-track compatibility.
+	// Phase 3 will remove this import and all migration files.
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
-	_ "modernc.org/sqlite"
 )
 
-//go:embed migrations/*.sql
-var migrationsFS embed.FS
-
-// DB wraps a database/sql connection for SQLite.
+// DB wraps both a raw *sql.DB and an ent.Client for dual-track operation.
+// During Phase 1-2, both are available. Phase 3 will remove the raw SQL path.
 type DB struct {
 	*sql.DB
+	client *ent.Client
 }
 
-// Open creates a new SQLite connection and enables WAL mode.
+// Client returns the ent client for type-safe database operations.
+func (db *DB) Client() *ent.Client {
+	return db.client
+}
+
+// Open creates a new SQLite connection with WAL mode and initializes the ent client.
 func Open(dbPath string) (*DB, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return nil, fmt.Errorf("create db directory: %w", err)
 	}
 
-	// Use file: URI with WAL pragma so every connection from the pool
-	// automatically gets the correct settings. modernc.org/sqlite
-	// requires this because PRAGMAs set via Exec only apply to the
-	// single connection that executed them, not to pooled connections.
 	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)", dbPath)
 
 	conn, err := sql.Open("sqlite", dsn)
@@ -39,22 +45,43 @@ func Open(dbPath string) (*DB, error) {
 	}
 
 	// SQLite only allows one writer at a time. Limit the pool to 1
-	// open connection to avoid "database is locked" / I/O errors
-	// when multiple goroutines write concurrently.
+	// open connection to avoid "database is locked" / I/O errors.
 	conn.SetMaxOpenConns(1)
 
-	return &DB{conn}, nil
+	// Initialize ent client backed by the same *sql.DB connection pool.
+	drv := entsql.OpenDB(dialect.SQLite, conn)
+	client := ent.NewClient(ent.Driver(drv))
+
+	return &DB{DB: conn, client: client}, nil
 }
 
 // Migrate runs all pending schema migrations using golang-migrate.
-// For existing databases, version 000001 uses CREATE TABLE IF NOT EXISTS
-// so it is safe to run against a database that already has tables.
+//
+// Phase 1: golang-migrate manages all DDL. ent schemas are defined but
+// ent auto-migrate is NOT run — SQLite ALTER TABLE limitations cause ent
+// to DROP+recreate tables, losing SQL-level DEFAULT expressions like
+// datetime('now'). (See Marcus CR feedback on commit 884eb10.)
+//
+// Phase 3: Will switch to ent auto-migrate and remove golang-migrate.
 func (db *DB) Migrate() error {
 	return MigrateDB(db.DB)
 }
 
-// MigrateDB runs migrations on the given *sql.DB connection.
-// This is the shared entry point used by both production and test code.
+// Close closes both the ent client and the underlying *sql.DB.
+func (db *DB) Close() error {
+	if err := db.client.Close(); err != nil {
+		return fmt.Errorf("close ent client: %w", err)
+	}
+	return db.DB.Close()
+}
+
+// --- Legacy golang-migrate functions preserved for Phase 1 ---
+
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
+
+// MigrateDB runs golang-migrate on the given *sql.DB connection.
+// Preserved for Phase 1 dual-track. Phase 3 will remove this.
 func MigrateDB(conn *sql.DB) error {
 	d, err := iofs.New(migrationsFS, "migrations")
 	if err != nil {
