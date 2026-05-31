@@ -1,6 +1,6 @@
 import { api } from "./client";
 
-// --- Basic Stats (existing) ---
+// --- Basic Stats (existing, unchanged) ---
 
 export interface DashboardStats {
   pending_tickets: number;
@@ -17,106 +17,152 @@ export async function getDashboardStats(): Promise<{
   return api.get("/dashboard/stats");
 }
 
-// --- Extended Dashboard Data (SF-FEAT0046) ---
+// --- Full Dashboard Data (SF-FEAT0046-BE backed) ---
 
+export interface TimeRange {
+  key: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+}
+
+export function getTimeRanges(): TimeRange[] {
+  const today = new Date();
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+
+  const daysAgo = (n: number) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - n);
+    return fmt(d);
+  };
+
+  return [
+    { key: "today", label: "今日", startDate: fmt(today), endDate: fmt(today) },
+    { key: "week", label: "本周", startDate: daysAgo(6), endDate: fmt(today) },
+    { key: "month", label: "本月", startDate: daysAgo(29), endDate: fmt(today) },
+    { key: "30d", label: "近30天", startDate: daysAgo(29), endDate: fmt(today) },
+  ];
+}
+
+// Backend response shape (DashboardFullStats)
+export interface DashboardFullStatsRaw {
+  pending_tickets: number;
+  recent_queries_7d: number;
+  active_datasources: number;
+  pending_ticket_sparkline: number[];  // 7 elements
+  query_sparkline: number[];           // 7 elements
+  datasource_sparkline: number[];      // 7 elements
+  ticket_status_distribution: Record<string, number>;
+  query_trend: { date: string; count: number }[];
+  recent_activity: {
+    id: number;
+    user_id: number;
+    action: string;
+    ip_address: string;
+    created_at: string;
+  }[];
+}
+
+// Frontend-friendly shape
 export interface SparklinePoint {
-  date: string; // YYYY-MM-DD
+  date: string;
   value: number;
 }
 
-export interface QueryTrendPoint {
-  date: string;
-  count: number;
-}
-
-export interface TicketStatusDistribution {
-  status: string;
-  count: number;
-}
-
-export interface ActivityItem {
-  id: number;
-  user: string;
-  action: string;
-  target: string;
-  timestamp: string;
+export interface StatCardData {
+  value: number;
+  sparkline: SparklinePoint[];
+  trend: number;
 }
 
 export interface DashboardOverview {
-  // Stat cards with sparkline
-  pending_tickets: { value: number; sparkline: SparklinePoint[]; trend: number };
-  query_count: { value: number; sparkline: SparklinePoint[]; trend: number };
-  active_datasources: { value: number; sparkline: SparklinePoint[]; trend: number };
-  // Charts
-  query_trend: QueryTrendPoint[];
-  ticket_distribution: TicketStatusDistribution[];
-  // Activity feed
-  recent_activity: ActivityItem[];
+  pending_tickets: StatCardData;
+  query_count: StatCardData;
+  active_datasources: StatCardData;
+  query_trend: { date: string; count: number }[];
+  ticket_distribution: { status: string; count: number }[];
+  recent_activity: {
+    id: number;
+    user: string;
+    action: string;
+    target: string;
+    timestamp: string;
+  }[];
 }
 
-export type TimeRange = "today" | "week" | "month" | "30d";
+// Convert sparkline int[7] → SparklinePoint[7] with dates
+function sparklineToPoints(values: number[]): SparklinePoint[] {
+  const today = new Date();
+  return values.map((v, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (values.length - 1 - i));
+    return { date: d.toISOString().slice(0, 10), value: v };
+  });
+}
+
+// Compute trend percentage from sparkline (last vs first, or last 3 avg vs first 3 avg)
+function computeTrend(values: number[]): number {
+  if (!values || values.length < 2) return 0;
+  const first = values[0] || 0;
+  const last = values[values.length - 1] || 0;
+  if (first === 0 && last === 0) return 0;
+  if (first === 0) return 100;
+  return Math.round(((last - first) / first) * 100);
+}
+
+// Map backend status keys to display labels
+const STATUS_LABELS: Record<string, string> = {
+  PENDING_APPROVAL: "待审批",
+  APPROVED: "已通过",
+  REJECTED: "已拒绝",
+  DONE: "已完成",
+  EXECUTING: "执行中",
+  CANCELLED: "已取消",
+  SUBMITTED: "已提交",
+  AI_REVIEWED: "AI 已评审",
+};
 
 export async function getDashboardOverview(
-  range: TimeRange = "week",
+  timeRange: TimeRange,
 ): Promise<{ code: number; data: DashboardOverview }> {
-  return api.get(`/dashboard/overview?range=${range}`);
-}
+  const res = await api.get<{ code: number; data: DashboardFullStatsRaw }>(
+    `/dashboard/overview?start_date=${timeRange.startDate}&end_date=${timeRange.endDate}`,
+  );
 
-// --- Fallback: build overview from existing APIs when backend not ready ---
+  const raw = res.data;
 
-export async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
-  const statsRes = await getDashboardStats();
-  const stats = statsRes.code === 0 ? statsRes.data : null;
-
-  // Generate mock sparkline data (7 days)
-  const now = new Date();
-  const sparkline = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(now);
-    d.setDate(d.getDate() - (6 - i));
-    return {
-      date: d.toISOString().slice(0, 10),
-      value: Math.floor(Math.random() * 20) + (stats?.recent_queries_7d ?? 10) / 7,
-    };
-  });
-
-  const queryTrend = Array.from({ length: 30 }, (_, i) => {
-    const d = new Date(now);
-    d.setDate(d.getDate() - (29 - i));
-    return {
-      date: `${d.getMonth() + 1}/${d.getDate()}`,
-      count: Math.floor(Math.random() * 30) + 5,
-    };
-  });
-
-  return {
+  // Transform to frontend shape
+  const overview: DashboardOverview = {
     pending_tickets: {
-      value: stats?.pending_tickets ?? 0,
-      sparkline: sparkline.map((p) => ({ ...p, value: Math.floor(Math.random() * 10) })),
-      trend: Math.floor(Math.random() * 40) - 20,
+      value: raw.pending_tickets,
+      sparkline: sparklineToPoints(raw.pending_ticket_sparkline),
+      trend: computeTrend(raw.pending_ticket_sparkline),
     },
     query_count: {
-      value: stats?.recent_queries_7d ?? 0,
-      sparkline,
-      trend: Math.floor(Math.random() * 30),
+      value: raw.recent_queries_7d,
+      sparkline: sparklineToPoints(raw.query_sparkline),
+      trend: computeTrend(raw.query_sparkline),
     },
     active_datasources: {
-      value: stats?.active_datasources ?? 0,
-      sparkline: sparkline.map((p) => ({ ...p, value: stats?.active_datasources ?? 3 })),
-      trend: 0,
+      value: raw.active_datasources,
+      sparkline: sparklineToPoints(raw.datasource_sparkline),
+      trend: computeTrend(raw.datasource_sparkline),
     },
-    query_trend: queryTrend,
-    ticket_distribution: [
-      { status: "待审批", count: stats?.pending_tickets ?? 0 },
-      { status: "已通过", count: 15 },
-      { status: "已拒绝", count: 3 },
-      { status: "已完成", count: 42 },
-    ],
-    recent_activity: [
-      { id: 1, user: "admin", action: "提交工单", target: "ALTER TABLE users ADD COLUMN", timestamp: new Date(now.getTime() - 300000).toISOString() },
-      { id: 2, user: "dba_zhang", action: "审批通过", target: "工单 #127", timestamp: new Date(now.getTime() - 1800000).toISOString() },
-      { id: 3, user: "dev_li", action: "执行查询", target: "SELECT * FROM orders WHERE...", timestamp: new Date(now.getTime() - 3600000).toISOString() },
-      { id: 4, user: "admin", action: "创建数据源", target: "prod-mysql-01", timestamp: new Date(now.getTime() - 7200000).toISOString() },
-      { id: 5, user: "dba_wang", action: "拒绝工单", target: "工单 #125: DROP TABLE", timestamp: new Date(now.getTime() - 14400000).toISOString() },
-    ],
+    query_trend: raw.query_trend,
+    ticket_distribution: Object.entries(raw.ticket_status_distribution).map(
+      ([status, count]) => ({
+        status: STATUS_LABELS[status] || status,
+        count,
+      }),
+    ),
+    recent_activity: raw.recent_activity.map((a) => ({
+      id: Number(a.id),
+      user: `用户#${a.user_id}`,
+      action: a.action,
+      target: a.ip_address || "",
+      timestamp: a.created_at,
+    })),
   };
+
+  return { code: 0, data: overview };
 }

@@ -34,7 +34,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   getDashboardOverview,
-  getDashboardOverviewFallback,
+  getTimeRanges,
   type DashboardOverview,
   type TimeRange,
   type SparklinePoint,
@@ -42,12 +42,7 @@ import {
 
 // --- Config ---
 
-const TIME_RANGES: { value: TimeRange; label: string }[] = [
-  { value: "today", label: "今日" },
-  { value: "week", label: "本周" },
-  { value: "month", label: "本月" },
-  { value: "30d", label: "近30天" },
-];
+const TIME_RANGES = getTimeRanges();
 
 const PIE_COLORS = ["#3b82f6", "#22c55e", "#ef4444", "#6b7280"];
 
@@ -60,12 +55,12 @@ function MiniSparkline({ data, color }: { data: SparklinePoint[]; color: string 
   const points = data.map((p, i) => {
     const max = Math.max(...data.map((d) => d.value), 1);
     const x = (i / (data.length - 1)) * 100;
-    const y = 100 - (p.value / max) * 80;
+    const y = 40 - (p.value / max) * 32; // 32px usable height in 40px viewBox
     return `${x},${y}`;
   });
 
   return (
-    <svg viewBox="0 0 100 100" className="h-8 w-20" preserveAspectRatio="none">
+    <svg viewBox="0 0 100 40" className="h-8 w-20" preserveAspectRatio="none">
       <polyline
         points={points.join(" ")}
         fill="none"
@@ -221,7 +216,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<TimeRange>("week");
+  const [range, setRange] = useState<TimeRange>(TIME_RANGES[1]); // default: week
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(
@@ -235,18 +230,10 @@ export default function DashboardPage() {
         if (res.code === 0) {
           setData(res.data);
         } else {
-          // Fallback to mock data if API not ready
-          const fallback = await getDashboardOverviewFallback();
-          setData(fallback);
-        }
-      } catch {
-        // Backend API might not be ready, use fallback
-        try {
-          const fallback = await getDashboardOverviewFallback();
-          setData(fallback);
-        } catch {
           setError("获取概览数据失败");
         }
+      } catch {
+        setError("获取概览数据失败");
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -344,11 +331,11 @@ export default function DashboardPage() {
                 key={r.value}
                 className={cn(
                   "rounded-md px-2.5 py-1 text-xs transition-colors",
-                  range === r.value
+                  range.key === r.key
                     ? "bg-[var(--accent-primary)] text-white font-medium"
                     : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
                 )}
-                onClick={() => setRange(r.value)}
+                onClick={() => setRange(r)}
               >
                 {r.label}
               </button>
