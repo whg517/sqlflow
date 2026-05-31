@@ -88,6 +88,7 @@ func main() {
 
 	notifySvc := service.NewNotifyService(cfg.Notify.WebhookURL, cfg.Notify.Secret)
 	notifySvc.SetFeishuWebhook(cfg.Feishu.WebhookURL)
+	notifySvc.SetDB(database.DB)
 	log.Println("notify service initialized")
 	ticketSvc.SetNotifyService(notifySvc)
 	ticketSvc.SetDatasourceService(dsSvc, connMgr, cfg.EncryptionKey)
@@ -193,6 +194,7 @@ func main() {
 
 	// Start server
 	approvalEngine := service.NewApprovalEngine(database.DB)
+	approvalEngine.SetNotifyService(notifySvc)
 	_ = approvalEngine.EnsureDefaultPolicy(context.Background())
 
 	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, oidcSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, snapshotSvc, approvalEngine, database.DB, cfg)

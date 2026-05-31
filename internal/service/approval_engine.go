@@ -14,12 +14,18 @@ import (
 
 // ApprovalEngine manages configurable approval policies.
 type ApprovalEngine struct {
-	db *sql.DB
+	db        *sql.DB
+	notifySvc *NotifyService
 }
 
 // NewApprovalEngine creates a new ApprovalEngine.
 func NewApprovalEngine(db *sql.DB) *ApprovalEngine {
 	return &ApprovalEngine{db: db}
+}
+
+// SetNotifyService sets the notification service for sending alerts.
+func (e *ApprovalEngine) SetNotifyService(notifySvc *NotifyService) {
+	e.notifySvc = notifySvc
 }
 
 // PolicyCondition defines matching criteria for a policy.
@@ -254,6 +260,14 @@ func (e *ApprovalEngine) ApplyPolicy(ctx context.Context, ticketID int64, policy
 		return nil, fmt.Errorf("更新工单审批阶段失败: %w", err)
 	}
 
+	// Notify approvers about pending approval
+	if e.notifySvc != nil {
+		t, _ := getTicketForNotify(ctx, e.db, ticketID)
+		if t != nil {
+			e.notifySvc.NotifyTicketPendingApproval(ctx, t)
+		}
+	}
+
 	return result, nil
 }
 
@@ -324,7 +338,17 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 			approverID, comment, now, ticketID,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("拒绝工单失败: %w", err)
+		return nil, fmt.Errorf("拒绝工单失败: %w", err)
+		}
+
+		// Notify submitter about rejection
+		if e.notifySvc != nil {
+			t, _ := getTicketForNotify(ctx, e.db, ticketID)
+			if t != nil {
+				t.ReviewerID = approverID
+				t.ReviewComment = comment
+				e.notifySvc.NotifyTicketRejected(ctx, t)
+			}
 		}
 	} else {
 		// Approve: advance to next stage or fully approve
@@ -344,6 +368,16 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 		}
 		if err != nil {
 			return nil, fmt.Errorf("更新工单审批状态失败: %w", err)
+		}
+
+		// Notify when all stages approved
+		if nextStage > totalStages && e.notifySvc != nil {
+			t, _ := getTicketForNotify(ctx, e.db, ticketID)
+			if t != nil {
+				t.ReviewerID = approverID
+				t.ReviewComment = comment
+				e.notifySvc.NotifyTicketApproved(ctx, t)
+			}
 		}
 	}
 
@@ -410,4 +444,17 @@ func containsAny(list []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// getTicketForNotify fetches minimal ticket fields needed for notification.
+func getTicketForNotify(ctx context.Context, db *sql.DB, ticketID int64) (*model.Ticket, error) {
+	t := &model.Ticket{ID: ticketID}
+	err := db.QueryRowContext(ctx,
+		`SELECT submitter_id, datasource_id, database, sql_summary, risk_level, status, created_at, updated_at
+			 FROM tickets WHERE id = ?`, ticketID,
+	).Scan(&t.SubmitterID, &t.DatasourceID, &t.Database, &t.SQLSummary, &t.RiskLevel, &t.Status, &t.CreatedAt, &t.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
 }

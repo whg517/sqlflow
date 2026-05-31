@@ -232,7 +232,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, sub
 
 	// Send notification for ticket creation
 	if s.notifySvc != nil {
-		s.notifySvc.NotifyTicketCreated(t)
+		s.notifySvc.NotifyTicketCreated(ctx, t)
 	}
 
 	return t, nil
@@ -376,7 +376,7 @@ func (s *TicketService) ApproveTicket(ctx context.Context, ticketID, reviewerID 
 
 	// Send notification for approval
 	if s.notifySvc != nil {
-		s.notifySvc.NotifyTicketApproved(t)
+		s.notifySvc.NotifyTicketApproved(ctx, t)
 	}
 
 	// Clear SLA deadline on approval
@@ -432,7 +432,7 @@ func (s *TicketService) RejectTicket(ctx context.Context, ticketID, reviewerID i
 
 	// Send notification for rejection
 	if s.notifySvc != nil {
-		s.notifySvc.NotifyTicketRejected(t)
+		s.notifySvc.NotifyTicketRejected(ctx, t)
 	}
 
 	// Clear SLA deadline on rejection
@@ -601,7 +601,7 @@ func (s *TicketService) executeTicket(ctx context.Context, t *model.Ticket, oper
 	_ = sqlHash // logged via audit
 
 	if s.notifySvc != nil {
-		s.notifySvc.NotifyTicketExecuted(t)
+		s.notifySvc.NotifyTicketExecuted(ctx, t)
 	}
 
 	return t, nil
@@ -634,7 +634,7 @@ func (s *TicketService) failTicket(ctx context.Context, t *model.Ticket, operato
 	s.populateTicketNames(ctx, t)
 
 	if s.notifySvc != nil {
-		s.notifySvc.NotifyTicketExecuted(t)
+		s.notifySvc.NotifyTicketFailed(ctx, t, errMsg)
 	}
 
 	return fmt.Errorf("工单执行失败: %s", errMsg)
@@ -688,7 +688,7 @@ func (s *TicketService) ScheduleTicket(ctx context.Context, ticketID, operatorID
 	s.populateTicketNames(ctx, t)
 
 	if s.notifySvc != nil {
-		s.notifySvc.NotifyTicketScheduled(t)
+		s.notifySvc.NotifyTicketScheduled(ctx, t)
 	}
 
 	return t, nil

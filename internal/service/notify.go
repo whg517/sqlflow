@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -23,9 +24,10 @@ import (
 type NotifyService struct {
 	webhookURL    string // webhook
 	secret        string // webhook secret
-	enabled       bool // webhook enabled
+	enabled       bool   // webhook enabled
 	feishuURL     string // Feishu webhook
 	feishuEnabled bool   // Feishu
+	db            *sql.DB // notification log (nil = no dedup)
 	client        *http.Client
 	mu            sync.RWMutex
 }
@@ -39,6 +41,13 @@ func NewNotifyService(webhookURL, secret string) *NotifyService {
 		enabled:    enabled,
 		client:     &http.Client{Timeout: 5 * time.Second},
 	}
+}
+
+// SetDB sets the database for notification logging (deduplication).
+func (s *NotifyService) SetDB(db *sql.DB) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db = db
 }
 
 // SetFeishuWebhook sets the Feishu webhook URL.
@@ -109,152 +118,310 @@ func (s *NotifyService) IsEnabled() bool {
 	return s.enabled
 }
 
-// NotifyTicketCreated sends a notification when a ticket is created.
-func (s *NotifyService) NotifyTicketCreated(t *model.Ticket) {
-	if s.isEnabled() {
-		title := "📋 工单提交通知"
-		text := fmt.Sprintf(
-			"**工单 #%d 已提交**\n\n"+
-				"- **提交人**: %s\n"+
-				"- **数据源ID**: %d\n"+
-				"- **数据库**: %s\n"+
-				"- **SQL摘要**: %s\n"+
-				"- **风险等级**: %s\n"+
-				"- **提交时间**: %s",
-			t.ID, t.SubmitterName, t.DatasourceID, t.Database,
-			t.SQLSummary, riskLabel(t.RiskLevel),
-			t.CreatedAt.Format("2006-01-02 15:04:05"),
-		)
-		go s.sendMarkdown(title, text)
+// ---------------------------------------------------------------------------
+// Ticket notification methods (with deduplication via notification log)
+// ---------------------------------------------------------------------------
+
+// shouldNotify checks if a notification for the given ticket+event has already
+// been sent (idempotency). Returns true if the notification should proceed.
+func (s *NotifyService) shouldNotify(ctx context.Context, ticketID int64, eventType string) bool {
+	s.mu.RLock()
+	db := s.db
+	s.mu.RUnlock()
+
+	if db == nil {
+		return true // no dedup available
 	}
 
-	if s.isFeishuEnabled() {
-		go s.sendFeishuCard(
-			"📋 工单提交通知",
-			fmt.Sprintf("**工单 #%d 已提交**", t.ID),
-			[]feishuCardElement{
-				feishuCardField("提交人", t.SubmitterName),
-				feishuCardField("数据库", t.Database),
-				feishuCardField("SQL摘要", t.SQLSummary),
-				feishuCardField("风险等级", riskLabel(t.RiskLevel)),
-				feishuCardField("提交时间", t.CreatedAt.Format("2006-01-02 15:04:05")),
-			},
-		)
+	var count int
+	err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM ticket_notification_logs WHERE ticket_id = ? AND event_type = ?`,
+		ticketID, eventType,
+	).Scan(&count)
+	if err != nil {
+		log.Printf("notify: check log: %v", err)
+		return true // on error, allow notification
 	}
+	return count == 0
+}
+
+// recordNotification records that a notification was sent for deduplication.
+func (s *NotifyService) recordNotification(ctx context.Context, ticketID int64, eventType string) {
+	s.mu.RLock()
+	db := s.db
+	s.mu.RUnlock()
+
+	if db == nil {
+		return
+	}
+
+	_, err := db.ExecContext(ctx,
+		`INSERT OR IGNORE INTO ticket_notification_logs (ticket_id, event_type) VALUES (?, ?)`,
+		ticketID, eventType,
+	)
+	if err != nil {
+		log.Printf("notify: record log: %v", err)
+	}
+}
+
+// notifyWithDedup wraps a notification send with idempotency check and logging.
+func (s *NotifyService) notifyWithDedup(ctx context.Context, ticketID int64, eventType string, sendFn func()) {
+	if s.shouldNotify(ctx, ticketID, eventType) {
+		sendFn()
+		s.recordNotification(ctx, ticketID, eventType)
+	}
+}
+
+// NotifyTicketCreated sends a notification when a ticket is created.
+func (s *NotifyService) NotifyTicketCreated(ctx context.Context, t *model.Ticket) {
+	s.notifyWithDedup(ctx, t.ID, "created", func() {
+		if s.isEnabled() {
+			title := "📋 工单提交通知"
+			text := fmt.Sprintf(
+				"**工单 #%d 已提交**\n\n"+
+					"- **提交人**: %s\n"+
+					"- **数据源ID**: %d\n"+
+					"- **数据库**: %s\n"+
+					"- **SQL摘要**: %s\n"+
+					"- **风险等级**: %s\n"+
+					"- **提交时间**: %s",
+				t.ID, t.SubmitterName, t.DatasourceID, t.Database,
+				t.SQLSummary, riskLabel(t.RiskLevel),
+				t.CreatedAt.Format("2006-01-02 15:04:05"),
+			)
+			go s.sendMarkdown(title, text)
+		}
+
+		if s.isFeishuEnabled() {
+			go s.sendFeishuCard(
+				"📋 工单提交通知",
+				fmt.Sprintf("**工单 #%d 已提交**", t.ID),
+				[]feishuCardElement{
+					feishuCardField("提交人", t.SubmitterName),
+					feishuCardField("数据库", t.Database),
+					feishuCardField("SQL摘要", t.SQLSummary),
+					feishuCardField("风险等级", riskLabel(t.RiskLevel)),
+					feishuCardField("提交时间", t.CreatedAt.Format("2006-01-02 15:04:05")),
+				},
+			)
+		}
+	})
+}
+
+// NotifyTicketPendingApproval sends a notification to approvers when a ticket enters the approval queue.
+func (s *NotifyService) NotifyTicketPendingApproval(ctx context.Context, t *model.Ticket) {
+	s.notifyWithDedup(ctx, t.ID, "pending_approval", func() {
+		if s.isEnabled() {
+			title := "📝 待审批工单提醒"
+			text := fmt.Sprintf(
+				"**工单 #%d 进入审批队列**\n\n"+
+					"- **提交人**: %s\n"+
+					"- **数据库**: %s\n"+
+					"- **SQL摘要**: %s\n"+
+					"- **风险等级**: %s\n"+
+					"- **提交时间**: %s\n\n"+
+					"请及时审批。",
+				t.ID, t.SubmitterName, t.Database,
+				t.SQLSummary, riskLabel(t.RiskLevel),
+				t.CreatedAt.Format("2006-01-02 15:04:05"),
+			)
+			go s.sendMarkdown(title, text)
+		}
+
+		if s.isFeishuEnabled() {
+			go s.sendFeishuCard(
+				"📝 待审批工单提醒",
+				fmt.Sprintf("**工单 #%d 进入审批队列，请及时处理**", t.ID),
+				[]feishuCardElement{
+					feishuCardField("提交人", t.SubmitterName),
+					feishuCardField("数据库", t.Database),
+					feishuCardField("SQL摘要", t.SQLSummary),
+					feishuCardField("风险等级", riskLabel(t.RiskLevel)),
+					feishuCardField("提交时间", t.CreatedAt.Format("2006-01-02 15:04:05")),
+				},
+			)
+		}
+	})
 }
 
 // NotifyTicketApproved sends a notification when a ticket is approved.
-func (s *NotifyService) NotifyTicketApproved(t *model.Ticket) {
-	if s.isEnabled() {
-		title := "✅ 工单审批通过通知"
-		text := fmt.Sprintf(
-			"**工单 #%d 已审批通过**\n\n"+
-				"- **提交人**: %s\n"+
-				"- **审批人**: %s\n"+
-				"- **SQL摘要**: %s\n"+
-				"- **风险等级**: %s\n"+
-				"- **审批时间**: %s",
-			t.ID, t.SubmitterName, t.ReviewerName,
-			t.SQLSummary, riskLabel(t.RiskLevel),
-			t.UpdatedAt.Format("2006-01-02 15:04:05"),
-		)
-		go s.sendMarkdown(title, text)
-	}
+func (s *NotifyService) NotifyTicketApproved(ctx context.Context, t *model.Ticket) {
+	s.notifyWithDedup(ctx, t.ID, "approved", func() {
+		if s.isEnabled() {
+			title := "✅ 工单审批通过通知"
+			text := fmt.Sprintf(
+				"**工单 #%d 已审批通过**\n\n"+
+					"- **提交人**: %s\n"+
+					"- **审批人**: %s\n"+
+					"- **SQL摘要**: %s\n"+
+					"- **风险等级**: %s\n"+
+					"- **审批时间**: %s",
+				t.ID, t.SubmitterName, t.ReviewerName,
+				t.SQLSummary, riskLabel(t.RiskLevel),
+				t.UpdatedAt.Format("2006-01-02 15:04:05"),
+			)
+			go s.sendMarkdown(title, text)
+		}
 
-	if s.isFeishuEnabled() {
-		go s.sendFeishuCard(
-			"✅ 工单审批通过通知",
-			fmt.Sprintf("**工单 #%d 已审批通过**", t.ID),
-			[]feishuCardElement{
-				feishuCardField("提交人", t.SubmitterName),
-				feishuCardField("审批人", t.ReviewerName),
-				feishuCardField("SQL摘要", t.SQLSummary),
-				feishuCardField("风险等级", riskLabel(t.RiskLevel)),
-				feishuCardField("审批时间", t.UpdatedAt.Format("2006-01-02 15:04:05")),
-			},
-		)
-	}
+		if s.isFeishuEnabled() {
+			go s.sendFeishuCard(
+				"✅ 工单审批通过通知",
+				fmt.Sprintf("**工单 #%d 已审批通过**", t.ID),
+				[]feishuCardElement{
+					feishuCardField("提交人", t.SubmitterName),
+					feishuCardField("审批人", t.ReviewerName),
+					feishuCardField("SQL摘要", t.SQLSummary),
+					feishuCardField("风险等级", riskLabel(t.RiskLevel)),
+					feishuCardField("审批时间", t.UpdatedAt.Format("2006-01-02 15:04:05")),
+				},
+			)
+		}
+	})
 }
 
 // NotifyTicketRejected sends a notification when a ticket is rejected.
-func (s *NotifyService) NotifyTicketRejected(t *model.Ticket) {
-	if s.isEnabled() {
-		title := "❌ 工单驳回通知"
-		text := fmt.Sprintf(
-			"**工单 #%d 已驳回**\n\n"+
-				"- **提交人**: %s\n"+
-				"- **审批人**: %s\n"+
-				"- **SQL摘要**: %s\n"+
-				"- **驳回原因**: %s\n"+
-				"- **驳回时间**: %s",
-			t.ID, t.SubmitterName, t.ReviewerName,
-			t.SQLSummary, t.ReviewComment,
-			t.UpdatedAt.Format("2006-01-02 15:04:05"),
-		)
-		go s.sendMarkdown(title, text)
-	}
+func (s *NotifyService) NotifyTicketRejected(ctx context.Context, t *model.Ticket) {
+	s.notifyWithDedup(ctx, t.ID, "rejected", func() {
+		if s.isEnabled() {
+			title := "❌ 工单驳回通知"
+			text := fmt.Sprintf(
+				"**工单 #%d 已驳回**\n\n"+
+					"- **提交人**: %s\n"+
+					"- **审批人**: %s\n"+
+					"- **SQL摘要**: %s\n"+
+					"- **驳回原因**: %s\n"+
+					"- **驳回时间**: %s",
+				t.ID, t.SubmitterName, t.ReviewerName,
+				t.SQLSummary, t.ReviewComment,
+				t.UpdatedAt.Format("2006-01-02 15:04:05"),
+			)
+			go s.sendMarkdown(title, text)
+		}
 
-	if s.isFeishuEnabled() {
-		go s.sendFeishuCard(
-			"❌ 工单驳回通知",
-			fmt.Sprintf("**工单 #%d 已驳回**", t.ID),
-			[]feishuCardElement{
-				feishuCardField("提交人", t.SubmitterName),
-				feishuCardField("审批人", t.ReviewerName),
-				feishuCardField("SQL摘要", t.SQLSummary),
-				feishuCardField("驳回原因", t.ReviewComment),
-				feishuCardField("驳回时间", t.UpdatedAt.Format("2006-01-02 15:04:05")),
-			},
-		)
-	}
+		if s.isFeishuEnabled() {
+			go s.sendFeishuCard(
+				"❌ 工单驳回通知",
+				fmt.Sprintf("**工单 #%d 已驳回**", t.ID),
+				[]feishuCardElement{
+					feishuCardField("提交人", t.SubmitterName),
+					feishuCardField("审批人", t.ReviewerName),
+					feishuCardField("SQL摘要", t.SQLSummary),
+					feishuCardField("驳回原因", t.ReviewComment),
+					feishuCardField("驳回时间", t.UpdatedAt.Format("2006-01-02 15:04:05")),
+				},
+			)
+		}
+	})
 }
 
 // NotifyTicketScheduled sends a notification when a ticket is scheduled for execution.
-func (s *NotifyService) NotifyTicketScheduled(t *model.Ticket) {
-	if !s.isEnabled() {
-		return
-	}
+func (s *NotifyService) NotifyTicketScheduled(ctx context.Context, t *model.Ticket) {
+	s.notifyWithDedup(ctx, t.ID, "scheduled", func() {
+		var scheduledTime string
+		if t.ScheduledAt != nil {
+			scheduledTime = t.ScheduledAt.Format("2006-01-02 15:04:05")
+		} else {
+			scheduledTime = "未指定"
+		}
 
-	var scheduledTime string
-	if t.ScheduledAt != nil {
-		scheduledTime = t.ScheduledAt.Format("2006-01-02 15:04:05")
-	} else {
-		scheduledTime = "未指定"
-	}
+		if s.isEnabled() {
+			title := "⏰ 工单定时执行通知"
+			text := fmt.Sprintf(
+				"**工单 #%d 已设置定时执行**\n\n"+
+					"- **提交人**: %s\n"+
+					"- **SQL摘要**: %s\n"+
+					"- **风险等级**: %s\n"+
+					"- **计划执行时间**: %s",
+				t.ID, t.SubmitterName,
+				t.SQLSummary, riskLabel(t.RiskLevel),
+				scheduledTime,
+			)
+			go s.sendMarkdown(title, text)
+		}
 
-	title := "⏰ 工单定时执行通知"
-	text := fmt.Sprintf(
-		"**工单 #%d 已设置定时执行**\n\n"+
-			"- **提交人**: %s\n"+
-			"- **SQL摘要**: %s\n"+
-			"- **风险等级**: %s\n"+
-			"- **计划执行时间**: %s",
-		t.ID, t.SubmitterName,
-		t.SQLSummary, riskLabel(t.RiskLevel),
-		scheduledTime,
-	)
-
-	go s.sendMarkdown(title, text)
+		if s.isFeishuEnabled() {
+			go s.sendFeishuCard(
+				"⏰ 工单定时执行通知",
+				fmt.Sprintf("**工单 #%d 已设置定时执行**", t.ID),
+				[]feishuCardElement{
+					feishuCardField("提交人", t.SubmitterName),
+					feishuCardField("SQL摘要", t.SQLSummary),
+					feishuCardField("风险等级", riskLabel(t.RiskLevel)),
+					feishuCardField("计划执行时间", scheduledTime),
+				},
+			)
+		}
+	})
 }
 
-// NotifyTicketExecuted sends a notification when a ticket SQL is executed.
-func (s *NotifyService) NotifyTicketExecuted(t *model.Ticket) {
-	if !s.isEnabled() {
-		return
-	}
+// NotifyTicketExecuted sends a notification when a ticket SQL is executed successfully.
+func (s *NotifyService) NotifyTicketExecuted(ctx context.Context, t *model.Ticket) {
+	s.notifyWithDedup(ctx, t.ID, "executed", func() {
+		if s.isEnabled() {
+			title := "🔧 工单执行完成通知"
+			text := fmt.Sprintf(
+				"**工单 #%d 已执行完成**\n\n"+
+					"- **提交人**: %s\n"+
+					"- **SQL摘要**: %s\n"+
+					"- **执行时间**: %s",
+				t.ID, t.SubmitterName,
+				t.SQLSummary,
+				t.UpdatedAt.Format("2006-01-02 15:04:05"),
+			)
+			go s.sendMarkdown(title, text)
+		}
 
-	title := "🔧 工单执行完成通知"
-	text := fmt.Sprintf(
-		"**工单 #%d 已执行完成**\n\n"+
-			"- **提交人**: %s\n"+
-			"- **SQL摘要**: %s\n"+
-			"- **执行时间**: %s",
-		t.ID, t.SubmitterName,
-		t.SQLSummary,
-		t.UpdatedAt.Format("2006-01-02 15:04:05"),
-	)
+		if s.isFeishuEnabled() {
+			go s.sendFeishuCard(
+				"🔧 工单执行完成通知",
+				fmt.Sprintf("**工单 #%d 已执行完成**", t.ID),
+				[]feishuCardElement{
+					feishuCardField("提交人", t.SubmitterName),
+					feishuCardField("SQL摘要", t.SQLSummary),
+					feishuCardField("执行时间", t.UpdatedAt.Format("2006-01-02 15:04:05")),
+				},
+			)
+		}
+	})
+}
 
-	go s.sendMarkdown(title, text)
+// NotifyTicketFailed sends a notification when a ticket execution fails.
+func (s *NotifyService) NotifyTicketFailed(ctx context.Context, t *model.Ticket, errMsg string) {
+	s.notifyWithDedup(ctx, t.ID, "failed", func() {
+		// Truncate error message for display
+		displayErr := errMsg
+		if len(displayErr) > 200 {
+			displayErr = displayErr[:200] + "..."
+		}
+
+		if s.isEnabled() {
+			title := "🚨 工单执行失败通知"
+			text := fmt.Sprintf(
+				"**工单 #%d 执行失败**\n\n"+
+					"- **提交人**: %s\n"+
+					"- **SQL摘要**: %s\n"+
+					"- **错误信息**: %s\n"+
+					"- **失败时间**: %s",
+				t.ID, t.SubmitterName,
+				t.SQLSummary, displayErr,
+				t.UpdatedAt.Format("2006-01-02 15:04:05"),
+			)
+			go s.sendMarkdown(title, text)
+		}
+
+		if s.isFeishuEnabled() {
+			go s.sendFeishuCard(
+				"🚨 工单执行失败通知",
+				fmt.Sprintf("**工单 #%d 执行失败**", t.ID),
+				[]feishuCardElement{
+					feishuCardField("提交人", t.SubmitterName),
+					feishuCardField("SQL摘要", t.SQLSummary),
+					feishuCardField("错误信息", displayErr),
+					feishuCardField("失败时间", t.UpdatedAt.Format("2006-01-02 15:04:05")),
+				},
+			)
+		}
+	})
 }
 
 // NotifyRiskAlert sends a real-time alert for medium/high risk operations.
