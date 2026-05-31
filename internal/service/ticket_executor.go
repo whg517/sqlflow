@@ -62,6 +62,13 @@ func (s *TicketService) executeSQL(ctx context.Context, ds *model.DataSource, da
 	results := make([]statementResult, 0, len(statements))
 	var firstErr error
 
+	// PostgreSQL: use transactional execution (DDL is rollback-capable in PG)
+	// MySQL: execute statements individually (DDL auto-commits, cannot be rolled back)
+	if ds.Type == "postgresql" || ds.Type == "postgres" {
+		return s.executeSQLTransactional(ctx, targetDB, statements)
+	}
+
+	// MySQL: non-transactional execution (each statement auto-commits)
 	for _, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {
@@ -94,6 +101,77 @@ func (s *TicketService) executeSQL(ctx context.Context, ds *model.DataSource, da
 	}
 
 	return results, firstErr
+}
+
+// executeSQLTransactional wraps all statements in a single database transaction.
+// Used for PostgreSQL where DDL is transactional (can be rolled back).
+// On any statement failure, the entire transaction is rolled back.
+func (s *TicketService) executeSQLTransactional(ctx context.Context, targetDB *sql.DB, statements []string) ([]statementResult, error) {
+	tx, err := targetDB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("开启事务失败: %w", err)
+	}
+
+	results := make([]statementResult, 0, len(statements))
+	var firstErr error
+
+	defer func() {
+		if firstErr != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				log.Printf("pg tx rollback failed: %v", rbErr)
+			}
+		}
+	}()
+
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
+			continue
+		}
+
+		start := time.Now()
+		sqlResult, execErr := tx.ExecContext(ctx, stmt)
+		duration := time.Since(start).Milliseconds()
+
+		r := statementResult{
+			SQL:        stmt,
+			DurationMs: duration,
+		}
+
+		if execErr != nil {
+			r.Status = "error"
+			r.Error = sanitizeErrMsg(execErr.Error())
+			if firstErr == nil {
+				firstErr = fmt.Errorf("statement failed: %s", r.Error)
+			}
+			results = append(results, r)
+			// Stop executing further statements on first error
+			break
+		}
+
+		r.Status = "success"
+		if sqlResult != nil {
+			r.RowsAffected, _ = sqlResult.RowsAffected()
+		}
+		results = append(results, r)
+	}
+
+	if firstErr != nil {
+		// Rollback will happen via defer
+		// Mark rolled-back statements in results
+		for i := range results {
+			if results[i].Status == "success" {
+				results[i].Status = "rolled_back"
+			}
+		}
+		return results, firstErr
+	}
+
+	if err := tx.Commit(); err != nil {
+		return results, fmt.Errorf("提交事务失败: %w", err)
+	}
+
+	return results, nil
 }
 
 // executeMongoStatements executes MongoDB operations from a JSON command body.
