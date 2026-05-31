@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/whg517/sqlflow/internal/connpool"
@@ -624,10 +623,14 @@ func mapPGType(pgType, udtName string) string {
 	}
 }
 
+// buildMongoURI constructs a MongoDB connection URI.
+// Format: mongodb://user:password@host:port (with credentials) or mongodb://host:port (without)
 func buildMongoURI(host string, port int, user, password string) string {
 	if user != "" && password != "" {
+		return fmt.Sprintf("mongodb://%s:%s@%s:%d",
+			url.QueryEscape(user), url.QueryEscape(password), host, port)
 	}
-	return "mongodb://" + url.QueryEscape(host) + ":" + strconv.Itoa(port)
+	return fmt.Sprintf("mongodb://%s:%d", host, port)
 }
 
 // parseESUrls 将逗号分隔的 ES URL 字符串解析为 []string。

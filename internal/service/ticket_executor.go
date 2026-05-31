@@ -11,9 +11,13 @@ import (
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
+	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
 )
 
 // statementResult holds the outcome of executing a single SQL statement.
@@ -26,11 +30,17 @@ type statementResult struct {
 }
 
 // executeSQL connects to the target database and executes the ticket's SQL.
-// It splits multi-statement SQL and executes each statement individually.
+// For MySQL/PostgreSQL: splits multi-statement SQL and executes each statement individually.
+// For MongoDB: parses JSON command body and executes via mongo driver.
 func (s *TicketService) executeSQL(ctx context.Context, ds *model.DataSource, database, dbType, sqlContent string) ([]statementResult, error) {
 	password, err := crypto.Decrypt(ds.PasswordEncrypted, s.encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("解密数据库密码失败: %w", err)
+	}
+
+	// MongoDB has a separate execution path
+	if ds.Type == "mongodb" {
+		return s.executeMongoStatements(ctx, ds, database, password, sqlContent)
 	}
 
 	var targetDB *sql.DB
@@ -84,6 +94,166 @@ func (s *TicketService) executeSQL(ctx context.Context, ds *model.DataSource, da
 	}
 
 	return results, firstErr
+}
+
+// executeMongoStatements executes MongoDB operations from a JSON command body.
+// Supports find, aggregate, insert, update, delete operations.
+// Multiple operations are delimited by a special separator or sent as separate tickets.
+func (s *TicketService) executeMongoStatements(ctx context.Context, ds *model.DataSource, database, password, sqlContent string) ([]statementResult, error) {
+	uri := buildMongoURI(ds.Host, ds.Port, ds.Username, password)
+	client, err := s.connMgr.GetMongoDB(ctx, ds.ID, uri)
+	if err != nil {
+		return nil, fmt.Errorf("连接MongoDB失败: %w", err)
+	}
+
+	// Parse the MongoDB command
+	mongoResult, err := sqlparser.ParseMongo(sqlContent)
+	if err != nil {
+		return nil, fmt.Errorf("解析MongoDB命令失败: %w", err)
+	}
+
+	if database == "" {
+		return nil, fmt.Errorf("MongoDB操作必须指定数据库")
+	}
+	if mongoResult.Collection == "" {
+		return nil, fmt.Errorf("MongoDB操作必须指定集合名称 (collection)")
+	}
+
+	collection := client.Database(database).Collection(mongoResult.Collection)
+
+	start := time.Now()
+	var rowsAffected int64
+	var execErr error
+
+	switch mongoResult.Operation {
+	case sqlparser.MongoOpFind:
+		// find is read-only, but for ticket execution we allow it (e.g. data verification)
+		filter := bson.M{}
+		if mongoResult.HasFilter && !mongoResult.HasEmptyFilter {
+			bodyMap := parseMongoBody(sqlContent)
+			if f, ok := bodyMap["filter"]; ok {
+				bsonBytes, _ := bson.MarshalExtJSON(f, false, false)
+				_ = bson.Unmarshal(bsonBytes, &filter)
+			}
+		}
+		cursor, findErr := collection.Find(ctx, filter)
+		if findErr != nil {
+			execErr = findErr
+		} else {
+			defer func() { _ = cursor.Close(ctx) }()
+				var results []bson.M
+				if err := cursor.All(ctx, &results); err != nil {
+					execErr = err
+				} else {
+					rowsAffected = int64(len(results))
+				}
+			}
+
+	case sqlparser.MongoOpAggregate:
+		pipeline := bson.A{}
+		bodyMap := parseMongoBody(sqlContent)
+		if p, ok := bodyMap["pipeline"]; ok {
+			bsonBytes, _ := bson.MarshalExtJSON(p, false, false)
+			_ = bson.Unmarshal(bsonBytes, &pipeline)
+		}
+		cursor, aggErr := collection.Aggregate(ctx, pipeline)
+		if aggErr != nil {
+			execErr = aggErr
+		} else {
+			defer func() { _ = cursor.Close(ctx) }()
+				var results []bson.M
+			if err := cursor.All(ctx, &results); err != nil {
+				execErr = err
+			} else {
+				rowsAffected = int64(len(results))
+			}
+		}
+
+	case sqlparser.MongoOpUpdate:
+		filter := bson.M{}
+		updateDoc := bson.M{}
+		bodyMap := parseMongoBody(sqlContent)
+		if f, ok := bodyMap["filter"]; ok {
+			bsonBytes, _ := bson.MarshalExtJSON(f, false, false)
+			_ = bson.Unmarshal(bsonBytes, &filter)
+		}
+		if u, ok := bodyMap["update"]; ok {
+			bsonBytes, _ := bson.MarshalExtJSON(u, false, false)
+			_ = bson.Unmarshal(bsonBytes, &updateDoc)
+		}
+		var updateResult *mongo.UpdateResult
+		if mongoResult.IsMulti {
+			updateResult, execErr = collection.UpdateMany(ctx, filter, updateDoc)
+		} else {
+			updateResult, execErr = collection.UpdateOne(ctx, filter, updateDoc)
+		}
+		if execErr == nil && updateResult != nil {
+			rowsAffected = updateResult.ModifiedCount
+		}
+
+	case sqlparser.MongoOpDelete:
+		filter := bson.M{}
+		bodyMap := parseMongoBody(sqlContent)
+		if f, ok := bodyMap["filter"]; ok {
+			bsonBytes, _ := bson.MarshalExtJSON(f, false, false)
+			_ = bson.Unmarshal(bsonBytes, &filter)
+		}
+		var deleteResult *mongo.DeleteResult
+		if mongoResult.IsMulti {
+			deleteResult, execErr = collection.DeleteMany(ctx, filter)
+		} else {
+			deleteResult, execErr = collection.DeleteOne(ctx, filter)
+		}
+		if execErr == nil && deleteResult != nil {
+			rowsAffected = deleteResult.DeletedCount
+		}
+
+	case sqlparser.MongoOpInsert:
+		bodyMap := parseMongoBody(sqlContent)
+		if doc, ok := bodyMap["document"]; ok {
+			// Single document insert
+			bsonBytes, _ := bson.MarshalExtJSON(doc, false, false)
+			var docBSON bson.M
+			_ = bson.Unmarshal(bsonBytes, &docBSON)
+			_, execErr = collection.InsertOne(ctx, docBSON)
+			if execErr == nil {
+				rowsAffected = 1
+			}
+		} else if docs, ok := bodyMap["documents"]; ok {
+			// Multi document insert
+			bsonBytes, _ := bson.MarshalExtJSON(docs, false, false)
+			var docsBSON []interface{}
+			_ = bson.Unmarshal(bsonBytes, &docsBSON)
+			insertResult, insertErr := collection.InsertMany(ctx, docsBSON)
+			if insertErr != nil {
+				execErr = insertErr
+			} else {
+				rowsAffected = int64(len(insertResult.InsertedIDs))
+			}
+		} else {
+			return nil, fmt.Errorf("MongoDB insert操作必须包含 document 或 documents 字段")
+		}
+
+	default:
+		return nil, fmt.Errorf("不支持的MongoDB操作类型: %s", mongoResult.Operation)
+	}
+
+	duration := time.Since(start).Milliseconds()
+
+	r := statementResult{
+		SQL:        sqlContent,
+		DurationMs: duration,
+	}
+
+	if execErr != nil {
+		r.Status = "error"
+		r.Error = sanitizeErrMsg(execErr.Error())
+		return []statementResult{r}, fmt.Errorf("MongoDB操作失败: %s", r.Error)
+	}
+
+	r.Status = "success"
+	r.RowsAffected = rowsAffected
+	return []statementResult{r}, nil
 }
 
 // recordExecutionResult writes a single statement execution result to the database.

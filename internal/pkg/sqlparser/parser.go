@@ -193,6 +193,8 @@ func parseMongoUnified(body string) (*SQLParseResult, error) {
 		result.Operation = OpDelete
 	case MongoOpAggregate:
 		result.Operation = OpSelect
+	case MongoOpInsert:
+		result.Operation = OpDML
 	default:
 		result.Operation = OpSelect
 	}

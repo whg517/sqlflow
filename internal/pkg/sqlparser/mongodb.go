@@ -14,6 +14,7 @@ const (
 	MongoOpAggregate MongoOperation = "aggregate"
 	MongoOpUpdate    MongoOperation = "update"
 	MongoOpDelete    MongoOperation = "delete"
+	MongoOpInsert    MongoOperation = "insert"
 	MongoOpUnknown   MongoOperation = "unknown"
 )
 
@@ -165,6 +166,8 @@ func determineMongoOp(m map[string]interface{}) MongoOperation {
 			return MongoOpUpdate
 		case "deleteone", "deletemany", "delete":
 			return MongoOpDelete
+		case "insertone", "insertmany", "insert":
+			return MongoOpInsert
 		}
 	}
 
@@ -174,6 +177,12 @@ func determineMongoOp(m map[string]interface{}) MongoOperation {
 	}
 	if _, ok := m["update"]; ok {
 		return MongoOpUpdate
+	}
+	if _, ok := m["document"]; ok {
+		return MongoOpInsert
+	}
+	if _, ok := m["documents"]; ok {
+		return MongoOpInsert
 	}
 	if _, ok := m["filter"]; ok {
 		if _, hasUpdate := m["update"]; hasUpdate {
