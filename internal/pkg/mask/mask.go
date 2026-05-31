@@ -108,6 +108,96 @@ func MatchRules(rules []Rule, tableName string) []Rule {
 	return matched
 }
 
+// getNestedValue retrieves a value from a nested map using a dot-separated path.
+// For example, "user.phone" navigates doc["user"]["phone"].
+// Returns nil, false if any intermediate key doesn't exist or isn't a map.
+func getNestedValue(doc map[string]interface{}, path string) (interface{}, bool) {
+	parts := strings.Split(path, ".")
+	current := doc
+	for i, part := range parts {
+		val, exists := current[part]
+		if !exists {
+			return nil, false
+		}
+		if i == len(parts)-1 {
+			return val, true
+		}
+		next, ok := val.(map[string]interface{})
+		if !ok {
+			return nil, false
+		}
+		current = next
+	}
+	return nil, false
+}
+
+// setNestedValue sets a value in a nested map using a dot-separated path.
+// Creates intermediate maps if they don't exist.
+func setNestedValue(doc map[string]interface{}, path string, value interface{}) {
+	parts := strings.Split(path, ".")
+	current := doc
+	for i := 0; i < len(parts)-1; i++ {
+		part := parts[i]
+		next, ok := current[part].(map[string]interface{})
+		if !ok {
+			next = make(map[string]interface{})
+			current[part] = next
+		}
+		current = next
+	}
+	current[parts[len(parts)-1]] = value
+}
+
+// ApplyToDoc applies matching mask rules to a single document.
+// Supports dot-notation field paths for nested documents (e.g., "user.phone").
+// For flat fields, behaves identically to ApplyToRow.
+// Returns the list of field paths that were masked.
+func ApplyToDoc(doc map[string]interface{}, rules []Rule) []string {
+	var masked []string
+	for _, rule := range rules {
+		if !strings.Contains(rule.Field, ".") {
+			// Simple flat field — same as ApplyToRow
+			if val, exists := doc[rule.Field]; exists {
+				maskedVal := ApplyField(val, rule)
+				if maskedVal != val {
+					doc[rule.Field] = maskedVal
+					masked = append(masked, rule.Field)
+				}
+			}
+			continue
+		}
+		// Dot-path: navigate nested documents
+		val, found := getNestedValue(doc, rule.Field)
+		if !found {
+			continue
+		}
+		maskedVal := ApplyField(val, rule)
+		if maskedVal != val {
+			setNestedValue(doc, rule.Field, maskedVal)
+			masked = append(masked, rule.Field)
+		}
+	}
+	return masked
+}
+
+// ApplyToMongoRows applies mask rules to all documents in a MongoDB result set.
+// Supports dot-notation paths for nested document fields.
+// Returns the list of field paths that were masked.
+func ApplyToMongoRows(rows []map[string]interface{}, rules []Rule) []string {
+	maskedFields := make(map[string]bool)
+	for i := range rows {
+		masked := ApplyToDoc(rows[i], rules)
+		for _, f := range masked {
+			maskedFields[f] = true
+		}
+	}
+	result := make([]string, 0, len(maskedFields))
+	for f := range maskedFields {
+		result = append(result, f)
+	}
+	return result
+}
+
 func maskPhone(s string) string {
 	if utf8.RuneCountInString(s) < 7 {
 		return strings.Repeat("*", utf8.RuneCountInString(s))

@@ -537,7 +537,9 @@ func (s *QueryService) applyDesensitization(ctx context.Context, result *QueryRe
 		if len(tableRules) == 0 {
 			continue
 		}
-		masked := mask.ApplyToRows(result.Rows, tableRules)
+		// Use ApplyToMongoRows which supports dot-notation paths for nested documents.
+		// For flat SQL results, behaves identically to ApplyToRows.
+		masked := mask.ApplyToMongoRows(result.Rows, tableRules)
 		allMaskedFields = append(allMaskedFields, masked...)
 	}
 

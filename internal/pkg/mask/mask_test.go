@@ -453,3 +453,257 @@ func TestValidMaskTypes(t *testing.T) {
 		}
 	}
 }
+
+// --- getNestedValue / setNestedValue ---
+
+func TestGetNestedValue(t *testing.T) {
+	doc := map[string]interface{}{
+		"name": "test",
+		"user": map[string]interface{}{
+			"phone": "13812341234",
+			"profile": map[string]interface{}{
+				"email": "test@example.com",
+			},
+		},
+	}
+
+	tests := []struct {
+		name  string
+		path  string
+		found bool
+		want  interface{}
+	}{
+		{"top_level", "name", true, "test"},
+		{"one_level", "user.phone", true, "13812341234"},
+		{"two_levels", "user.profile.email", true, "test@example.com"},
+		{"missing_key", "user.age", false, nil},
+		{"missing_intermediate", "address.city", false, nil},
+		{"intermediate_not_map", "name.length", false, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, found := getNestedValue(doc, tt.path)
+			if found != tt.found {
+				t.Errorf("found = %v, want %v", found, tt.found)
+			}
+			if found && val != tt.want {
+				t.Errorf("val = %v, want %v", val, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetNestedValue(t *testing.T) {
+	t.Run("existing_path", func(t *testing.T) {
+		doc := map[string]interface{}{
+			"user": map[string]interface{}{
+				"phone": "13812341234",
+			},
+		}
+		setNestedValue(doc, "user.phone", "masked")
+		if doc["user"].(map[string]interface{})["phone"] != "masked" {
+			t.Errorf("value not set correctly")
+		}
+	})
+
+	t.Run("create_intermediate", func(t *testing.T) {
+		doc := map[string]interface{}{}
+		setNestedValue(doc, "user.phone", "new_value")
+		userMap := doc["user"].(map[string]interface{})
+		if userMap["phone"] != "new_value" {
+			t.Errorf("intermediate map not created, got %v", userMap)
+		}
+	})
+
+	t.Run("top_level", func(t *testing.T) {
+		doc := map[string]interface{}{}
+		setNestedValue(doc, "name", "test")
+		if doc["name"] != "test" {
+			t.Errorf("top level value not set")
+		}
+	})
+}
+
+// --- ApplyToDoc (MongoDB dot-notation support) ---
+
+func TestApplyToDoc(t *testing.T) {
+	t.Run("flat_field", func(t *testing.T) {
+		doc := map[string]interface{}{
+			"phone": "13812341234",
+			"name":  "张三",
+		}
+		rules := []Rule{{Field: "phone", MaskType: MaskPhone, TableName: "users"}}
+		masked := ApplyToDoc(doc, rules)
+		if len(masked) != 1 || masked[0] != "phone" {
+			t.Errorf("expected [phone], got %v", masked)
+		}
+		if doc["phone"] != "138****1234" {
+			t.Errorf("phone not masked: %v", doc["phone"])
+		}
+	})
+
+	t.Run("nested_field", func(t *testing.T) {
+		doc := map[string]interface{}{
+			"name": "张三",
+			"contact": map[string]interface{}{
+				"phone": "13812341234",
+				"email": "test@example.com",
+			},
+		}
+		rules := []Rule{{Field: "contact.phone", MaskType: MaskPhone, TableName: "users"}}
+		masked := ApplyToDoc(doc, rules)
+		if len(masked) != 1 || masked[0] != "contact.phone" {
+			t.Errorf("expected [contact.phone], got %v", masked)
+		}
+		contact := doc["contact"].(map[string]interface{})
+		if contact["phone"] != "138****1234" {
+			t.Errorf("nested phone not masked: %v", contact["phone"])
+		}
+		if contact["email"] != "test@example.com" {
+			t.Errorf("email should not be masked: %v", contact["email"])
+		}
+	})
+
+	t.Run("deeply_nested", func(t *testing.T) {
+		doc := map[string]interface{}{
+			"user": map[string]interface{}{
+				"profile": map[string]interface{}{
+					"id_card": "310101199001011234",
+				},
+			},
+		}
+		rules := []Rule{{Field: "user.profile.id_card", MaskType: MaskIDCard, TableName: "users"}}
+		masked := ApplyToDoc(doc, rules)
+		if len(masked) != 1 || masked[0] != "user.profile.id_card" {
+			t.Errorf("expected [user.profile.id_card], got %v", masked)
+		}
+		profile := doc["user"].(map[string]interface{})["profile"].(map[string]interface{})
+		if profile["id_card"] != "310***********1234" {
+			t.Errorf("deeply nested id_card not masked: %v", profile["id_card"])
+		}
+	})
+
+	t.Run("mixed_flat_and_nested", func(t *testing.T) {
+		doc := map[string]interface{}{
+			"email": "test@example.com",
+			"user": map[string]interface{}{
+				"phone": "13812341234",
+			},
+		}
+		rules := []Rule{
+			{Field: "email", MaskType: MaskEmail, TableName: "users"},
+			{Field: "user.phone", MaskType: MaskPhone, TableName: "users"},
+		}
+		masked := ApplyToDoc(doc, rules)
+		if len(masked) != 2 {
+			t.Errorf("expected 2 masked fields, got %v", masked)
+		}
+		if doc["email"] != "t***@example.com" {
+			t.Errorf("flat email not masked: %v", doc["email"])
+		}
+		if doc["user"].(map[string]interface{})["phone"] != "138****1234" {
+			t.Errorf("nested phone not masked")
+		}
+	})
+
+	t.Run("missing_nested_path", func(t *testing.T) {
+		doc := map[string]interface{}{
+			"name": "张三",
+		}
+		rules := []Rule{{Field: "contact.phone", MaskType: MaskPhone, TableName: "users"}}
+		masked := ApplyToDoc(doc, rules)
+		if len(masked) != 0 {
+			t.Errorf("expected no masked fields for missing path, got %v", masked)
+		}
+	})
+
+	t.Run("nil_doc", func(t *testing.T) {
+		rules := []Rule{{Field: "phone", MaskType: MaskPhone, TableName: "users"}}
+		masked := ApplyToDoc(nil, rules)
+		if len(masked) != 0 {
+			t.Errorf("expected no masked fields for nil doc, got %v", masked)
+		}
+	})
+
+	t.Run("non_string_nested_value", func(t *testing.T) {
+		doc := map[string]interface{}{
+			"user": map[string]interface{}{
+				"age": 25,
+			},
+		}
+		rules := []Rule{{Field: "user.age", MaskType: MaskFull, TableName: "users"}}
+		masked := ApplyToDoc(doc, rules)
+		if len(masked) != 0 {
+			t.Errorf("non-string value should not be masked, got %v", masked)
+		}
+		if doc["user"].(map[string]interface{})["age"] != 25 {
+			t.Errorf("non-string value should remain unchanged")
+		}
+	})
+}
+
+// --- ApplyToMongoRows ---
+
+func TestApplyToMongoRows(t *testing.T) {
+	t.Run("multiple_docs_nested_fields", func(t *testing.T) {
+		rules := []Rule{
+			{Field: "contact.phone", MaskType: MaskPhone, TableName: "users"},
+		}
+		docs := []map[string]interface{}{
+			{
+				"name": "张三",
+				"contact": map[string]interface{}{
+					"phone": "13812341234",
+				},
+			},
+			{
+				"name": "李四",
+				"contact": map[string]interface{}{
+					"phone": "13987654321",
+				},
+			},
+		}
+		masked := ApplyToMongoRows(docs, rules)
+		if len(masked) != 1 || masked[0] != "contact.phone" {
+			t.Errorf("expected [contact.phone], got %v", masked)
+		}
+		if docs[0]["contact"].(map[string]interface{})["phone"] != "138****1234" {
+			t.Errorf("first doc phone not masked")
+		}
+		if docs[1]["contact"].(map[string]interface{})["phone"] != "139****4321" {
+			t.Errorf("second doc phone not masked")
+		}
+	})
+
+	t.Run("backward_compat_flat_rows", func(t *testing.T) {
+		// Verify ApplyToMongoRows works identically to ApplyToRows for flat SQL results
+		rules := []Rule{{Field: "phone", MaskType: MaskPhone, TableName: "users"}}
+		rows := []map[string]interface{}{
+			{"phone": "13812341234", "name": "张三"},
+			{"phone": "13987654321", "name": "李四"},
+		}
+		masked := ApplyToMongoRows(rows, rules)
+		if len(masked) != 1 || masked[0] != "phone" {
+			t.Errorf("expected [phone], got %v", masked)
+		}
+		if rows[0]["phone"] != "138****1234" {
+			t.Errorf("first row phone not masked")
+		}
+	})
+
+	t.Run("nil_docs", func(t *testing.T) {
+		rules := []Rule{{Field: "phone", MaskType: MaskPhone}}
+		masked := ApplyToMongoRows(nil, rules)
+		if len(masked) != 0 {
+			t.Errorf("expected no masked fields for nil docs, got %v", masked)
+		}
+	})
+
+	t.Run("empty_rules", func(t *testing.T) {
+		docs := []map[string]interface{}{{"phone": "13812341234"}}
+		masked := ApplyToMongoRows(docs, nil)
+		if len(masked) != 0 {
+			t.Errorf("expected no masked fields with nil rules, got %v", masked)
+		}
+	})
+}
