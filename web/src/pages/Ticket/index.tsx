@@ -652,7 +652,7 @@ export default function TicketPage() {
                 <TableHead className="w-24 text-xs text-[var(--text-secondary)]">
                   AI 风险
                 </TableHead>
-                <TableHead className="w-24 text-xs text-[var(--text-secondary)]">
+                <TableHead className="w-32 text-xs text-[var(--text-secondary)]">
                   状态
                 </TableHead>
                 <TableHead className="w-24 text-xs text-[var(--text-secondary)]">
@@ -721,11 +721,23 @@ export default function TicketPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      className={`${getStatusColor(t.status as TicketStatus)} border-0 text-[10px]`}
-                    >
-                      {getStatusLabel(t.status as TicketStatus)}
-                    </Badge>
+                    <div className="flex flex-col gap-0.5">
+                      <Badge
+                        className={`${getStatusColor(t.status as TicketStatus)} border-0 text-[10px] w-fit`}
+                      >
+                        {getStatusLabel(t.status as TicketStatus)}
+                      </Badge>
+                      {t.status === "PENDING_APPROVAL" && t.total_stages > 1 && (
+                        <span className="text-[10px] text-zinc-500">
+                          阶段 {t.current_stage + 1}/{t.total_stages}
+                        </span>
+                      )}
+                      {t.auto_approved && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-400">
+                          🤖 自动通过
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {t.status === "PENDING_APPROVAL" && slaStatuses[t.id] ? (

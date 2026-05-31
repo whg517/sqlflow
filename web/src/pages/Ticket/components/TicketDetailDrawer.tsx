@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Loader2, CheckCircle2, XCircle, Ban, Play, Copy } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Ban, Play, Copy, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -38,6 +38,10 @@ import {
   type Ticket,
   type TicketStatus,
 } from "@/api/ticket";
+import { getApprovalHistory, type ApprovalRecord } from "@/api/approval";
+import ApprovalStepper from "./ApprovalStepper";
+import ApprovalHistory from "./ApprovalHistory";
+import ResubmitSheet from "./ResubmitSheet";
 import CommentSection from "./CommentSection";
 import GitInfoSection from "@/components/GitInfoSection";
 
@@ -61,6 +65,10 @@ export default function TicketDetailDrawer({
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [approvalRecords, setApprovalRecords] = useState<ApprovalRecord[]>([]);
+
+  // Resubmit mode
+  const [resubmitMode, setResubmitMode] = useState(false);
 
   // Approval dialog
   const [approveOpen, setApproveOpen] = useState(false);
@@ -81,8 +89,15 @@ export default function TicketDetailDrawer({
     if (open && ticketId) {
       const id = requestAnimationFrame(() => {
         setLoading(true);
-        getTicket(ticketId)
-          .then((res) => setTicket(res.data))
+        setResubmitMode(false);
+        Promise.all([
+          getTicket(ticketId),
+          getApprovalHistory(ticketId),
+        ])
+          .then(([ticketRes, records]) => {
+            setTicket(ticketRes.data);
+            setApprovalRecords(records);
+          })
           .catch((err) =>
             toast.error(err instanceof Error ? err.message : "获取工单失败"),
           )
@@ -92,6 +107,8 @@ export default function TicketDetailDrawer({
     } else {
       const id = requestAnimationFrame(() => {
         setTicket(null);
+        setApprovalRecords([]);
+        setResubmitMode(false);
       });
       return () => cancelAnimationFrame(id);
     }
@@ -107,6 +124,20 @@ export default function TicketDetailDrawer({
     setExecOpen(false);
   }
 
+  async function refreshTicket() {
+    if (!ticketId) return;
+    try {
+      const [ticketRes, records] = await Promise.all([
+        getTicket(ticketId),
+        getApprovalHistory(ticketId),
+      ]);
+      setTicket(ticketRes.data);
+      setApprovalRecords(records);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "刷新失败");
+    }
+  }
+
   async function handleAction(fn: () => Promise<unknown>, msg: string) {
     setActionLoading(true);
     try {
@@ -114,11 +145,7 @@ export default function TicketDetailDrawer({
       toast.success(msg);
       resetDialogs();
       onActionComplete();
-      // Refresh ticket detail
-      if (ticketId) {
-        const res = await getTicket(ticketId);
-        setTicket(res.data);
-      }
+      await refreshTicket();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "操作失败");
     } finally {
@@ -153,6 +180,12 @@ export default function TicketDetailDrawer({
     handleAction(() => executeTicket(ticketId!), "工单已执行");
   }
 
+  function handleResubmitSuccess() {
+    setResubmitMode(false);
+    onActionComplete();
+    refreshTicket();
+  }
+
   // Permission checks
   const isDBA = userRole === "admin" || userRole === "dba";
   const isSubmitter = ticket?.submitter_id === userId;
@@ -160,6 +193,7 @@ export default function TicketDetailDrawer({
 
   const canApprove = isDBA && status === "PENDING_APPROVAL";
   const canReject = isDBA && status === "PENDING_APPROVAL";
+  const canResubmit = isSubmitter && status === "REJECTED";
   const canCancel =
     (isSubmitter || isDBA) &&
     ["SUBMITTED", "AI_REVIEWED", "PENDING_APPROVAL", "APPROVED"].includes(
@@ -181,6 +215,33 @@ export default function TicketDetailDrawer({
     }
   }
 
+  // Determine approval chain JSON from the first record or empty
+  const approvalChainJson = useMemo(() => {
+    if (!ticket) return "[]";
+    // Try to reconstruct chain from records
+    if (approvalRecords.length > 0) {
+      const stages = approvalRecords
+        .sort((a, b) => a.stage - b.stage)
+        .map((r) => ({ role: r.approver_role }));
+      // Deduplicate by stage
+      const seen = new Set<number>();
+      const unique: { role: string }[] = [];
+      for (const r of approvalRecords.sort((a, b) => a.stage - b.stage)) {
+        if (!seen.has(r.stage)) {
+          seen.add(r.stage);
+          unique.push({ role: r.approver_role });
+        }
+      }
+      return JSON.stringify(unique.length > 0 ? unique : stages);
+    }
+    // Fallback: use total_stages to create default chain
+    const stages = [];
+    for (let i = 0; i < (ticket.total_stages || 1); i++) {
+      stages.push({ role: i === 0 ? "dba" : "admin" });
+    }
+    return JSON.stringify(stages);
+  }, [ticket, approvalRecords]);
+
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -192,6 +253,11 @@ export default function TicketDetailDrawer({
           <SheetHeader className="px-6 pt-6 pb-0">
             <SheetTitle className="text-[var(--text-primary)]">
               工单 #{ticket?.id ?? "..."}
+              {ticket && ticket.revision > 1 && (
+                <span className="ml-2 text-sm font-normal text-zinc-500">
+                  Rev. {ticket.revision}
+                </span>
+              )}
             </SheetTitle>
           </SheetHeader>
 
@@ -223,7 +289,25 @@ export default function TicketDetailDrawer({
                       {getRiskLabel(ticket.risk_level)}
                     </span>
                   )}
+                  {ticket.auto_approved && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-blue-400">
+                      🤖 自动通过
+                    </span>
+                  )}
                 </div>
+
+                {/* Approval Stepper */}
+                {(ticket.total_stages > 0 || ticket.auto_approved) && (
+                  <ApprovalStepper
+                    currentStage={ticket.current_stage}
+                    totalStages={ticket.total_stages}
+                    approvalChain={approvalChainJson}
+                    records={approvalRecords}
+                    autoApproved={ticket.auto_approved}
+                    autoApproveReason={ticket.auto_approve_reason}
+                    currentUserId={userId}
+                  />
+                )}
 
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--text-secondary)]">
                   <span>
@@ -239,98 +323,89 @@ export default function TicketDetailDrawer({
 
                 <Separator className="bg-[var(--border-default)]" />
 
-                {/* SQL Content */}
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
-                    SQL 内容
-                  </label>
-                  <div className="relative">
-                    <pre className="max-h-48 overflow-auto rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 text-xs text-[var(--text-primary)] whitespace-pre-wrap break-all">
-                      {ticket.sql_content}
-                    </pre>
-                    <button
-                      className="absolute top-2 right-2 rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-base)] hover:text-[var(--text-primary)]"
-                      onClick={() => {
-                        navigator.clipboard.writeText(ticket.sql_content);
-                        toast.success("已复制");
-                      }}
-                    >
-                      <Copy size={12} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* AI Review */}
-                {aiReview && (
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
-                      AI 评审
-                    </label>
-                    <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 space-y-2">
-                      {aiReview.summary && (
-                        <p className="text-xs text-[var(--text-primary)]">
-                          {aiReview.summary}
-                        </p>
-                      )}
-                      {aiReview.suggestions &&
-                        aiReview.suggestions.length > 0 && (
-                          <ul className="space-y-1 pl-3">
-                            {aiReview.suggestions.map((s, i) => (
-                              <li
-                                key={i}
-                                className="text-xs text-[var(--text-muted)] list-disc"
-                              >
-                                {s}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      {aiReview.impact_analysis && (
-                        <p className="text-xs text-[var(--text-muted)]">
-                          影响分析: {aiReview.impact_analysis}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Change Reason */}
-                {ticket.change_reason && (
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
-                      变更原因
-                    </label>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {ticket.change_reason}
-                    </p>
-                  </div>
-                )}
-
-                {/* Review Record */}
-                {ticket.reviewer_id > 0 && (
+                {/* Resubmit mode or View mode */}
+                {resubmitMode ? (
+                  <ResubmitSheet
+                    ticket={ticket}
+                    onSuccess={handleResubmitSuccess}
+                  />
+                ) : (
                   <>
-                    <Separator className="bg-[var(--border-default)]" />
+                    {/* SQL Content */}
                     <div>
                       <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
-                        审批记录
+                        SQL 内容
                       </label>
-                      <div className="space-y-1 text-xs text-[var(--text-muted)]">
-                        <p>
-                          {ticket.status === "APPROVED" ||
-                          ticket.status === "DONE" ||
-                          ticket.status === "EXECUTING"
-                            ? `${formatTime(ticket.updated_at)} ${ticket.reviewer_name || `用户#${ticket.reviewer_id}`} 审批通过`
-                            : `${formatTime(ticket.updated_at)} ${ticket.reviewer_name || `用户#${ticket.reviewer_id}`} 已拒绝`}
-                        </p>
-                        {ticket.review_comment && (
-                          <p className="pl-3 text-[var(--text-secondary)]">
-                            "{ticket.review_comment}"
-                          </p>
-                        )}
+                      <div className="relative">
+                        <pre className="max-h-48 overflow-auto rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 text-xs text-[var(--text-primary)] whitespace-pre-wrap break-all">
+                          {ticket.sql_content}
+                        </pre>
+                        <button
+                          className="absolute top-2 right-2 rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-base)] hover:text-[var(--text-primary)]"
+                          onClick={() => {
+                            navigator.clipboard.writeText(ticket.sql_content);
+                            toast.success("已复制");
+                          }}
+                        >
+                          <Copy size={12} />
+                        </button>
                       </div>
                     </div>
+
+                    {/* AI Review */}
+                    {aiReview && (
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
+                          AI 评审
+                        </label>
+                        <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 space-y-2">
+                          {aiReview.summary && (
+                            <p className="text-xs text-[var(--text-primary)]">
+                              {aiReview.summary}
+                            </p>
+                          )}
+                          {aiReview.suggestions &&
+                            aiReview.suggestions.length > 0 && (
+                              <ul className="space-y-1 pl-3">
+                                {aiReview.suggestions.map((s, i) => (
+                                  <li
+                                    key={i}
+                                    className="text-xs text-[var(--text-muted)] list-disc"
+                                  >
+                                    {s}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          {aiReview.impact_analysis && (
+                            <p className="text-xs text-[var(--text-muted)]">
+                              影响分析: {aiReview.impact_analysis}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Change Reason */}
+                    {ticket.change_reason && (
+                      <div>
+                        <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
+                          变更原因
+                        </label>
+                        <p className="text-xs text-[var(--text-muted)]">
+                          {ticket.change_reason}
+                        </p>
+                      </div>
+                    )}
                   </>
                 )}
+
+                {/* Approval History Timeline */}
+                <Separator className="bg-[var(--border-default)]" />
+                <ApprovalHistory
+                  ticketId={ticket.id}
+                  revision={ticket.revision}
+                />
 
                 {/* Executed At */}
                 {ticket.executed_at && (
@@ -358,9 +433,20 @@ export default function TicketDetailDrawer({
           )}
 
           {/* Footer Actions */}
-          {ticket && (canApprove || canReject || canCancel || canExecute) && (
+          {ticket && (canApprove || canReject || canCancel || canExecute || canResubmit) && !resubmitMode && (
             <SheetFooter className="border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3">
               <div className="flex w-full items-center gap-2">
+                {canResubmit && (
+                  <Button
+                    size="sm"
+                    className="h-8 gap-1.5 bg-[var(--accent-primary)] px-3 text-xs text-white hover:bg-[var(--accent-hover)]"
+                    onClick={() => setResubmitMode(true)}
+                    disabled={actionLoading}
+                  >
+                    <RotateCcw size={14} />
+                    修改重提
+                  </Button>
+                )}
                 {canApprove && (
                   <Button
                     size="sm"

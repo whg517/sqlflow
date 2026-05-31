@@ -21,6 +21,7 @@ export interface Ticket {
   database: string;
   sql_content: string;
   sql_summary: string;
+  sql_type?: string;
   db_type: string;
   change_reason: string;
   status: TicketStatus;
@@ -29,6 +30,12 @@ export interface Ticket {
   reviewer_id: number;
   reviewer_name: string;
   review_comment: string;
+  revision: number;
+  current_stage: number;
+  total_stages: number;
+  auto_approved: boolean;
+  auto_approve_reason: string;
+  policy_id: number;
   executed_at: string | null;
   created_at: string;
   updated_at: string;

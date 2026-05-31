@@ -53,6 +53,7 @@ import {
 import MaskRulesTab from "./MaskRulesTab";
 import AIConfigTab from "./AIConfigTab";
 import SLATab from "./SLATab";
+import ApprovalPoliciesTab from "./ApprovalPoliciesTab";
 import { listSensitiveTables } from "@/api/maskRule";
 
 // --- Types ---
@@ -89,14 +90,15 @@ interface ApiResponse {
   message: string;
 }
 
-type SettingsTab = "datasource" | "mask-rules" | "ai-config" | "sla";
+type SettingsTab = "datasource" | "mask-rules" | "ai-config" | "sla" | "approval-policies";
 
 // --- Constants ---
 
 const NAV_ITEMS: { key: SettingsTab; label: string; icon: typeof Database }[] =
   [
     { key: "datasource", label: "数据源", icon: Database },
-    { key: "mask-rules", label: "脱敏规则", icon: ShieldCheck },
+    { key: "approval-policies", label: "审批策略", icon: ShieldCheck },
+    { key: "mask-rules", label: "脱敏规则", icon: EyeOff },
     { key: "sla", label: "SLA 告警", icon: Clock },
     { key: "ai-config", label: "AI 配置", icon: Brain },
   ];
@@ -830,6 +832,7 @@ export default function SettingsPage() {
       {/* Content */}
       <div className="flex-1 overflow-auto rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] ml-5 p-5">
         {activeTab === "datasource" && <DataSourceTab />}
+        {activeTab === "approval-policies" && <ApprovalPoliciesTab />}
         {activeTab === "mask-rules" && <MaskRulesTab />}
         {activeTab === "sla" && <SLATab />}
         {activeTab === "ai-config" && <AIConfigTab />}
