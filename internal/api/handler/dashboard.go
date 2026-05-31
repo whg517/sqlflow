@@ -36,3 +36,35 @@ func (h *DashboardHandler) GetStats(c echo.Context) error {
 	}
 	return resp.OK(c, stats)
 }
+
+// GetOverview handles GET /api/dashboard/overview.
+//
+// @Summary 获取仪表盘看板数据
+// @Description 获取看板完整数据：统计卡片、查询趋势、工单状态分布、最近活动流
+// @Tags 仪表盘
+// @Produce json
+// @Security BearerAuth
+// @Param range query string false "时间范围: today|this_week|this_month|last_30d" Enums(today,this_week,this_month,last_30d)
+// @Success 200 {object} resp.SuccessResponse{data=service.DashboardOverview} "成功"
+// @Failure 500 {object} resp.ErrorResponse "获取看板数据失败"
+// @Router /dashboard/overview [get]
+func (h *DashboardHandler) GetOverview(c echo.Context) error {
+	tr := service.TimeRange(c.QueryParam("range"))
+	if tr == "" {
+		tr = service.TimeRangeLast30d
+	}
+	// Validate time range
+	switch tr {
+	case service.TimeRangeToday, service.TimeRangeThisWeek, service.TimeRangeThisMonth, service.TimeRangeLast30d:
+		// valid
+	default:
+		tr = service.TimeRangeLast30d
+	}
+
+	overview, err := h.dashboardSvc.GetOverview(c.Request().Context(), tr)
+	if err != nil {
+		log.Printf("GetOverview failed: %v", err)
+		return resp.InternalError(c, "获取看板数据失败")
+	}
+	return resp.OK(c, overview)
+}

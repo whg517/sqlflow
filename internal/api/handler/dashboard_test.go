@@ -82,3 +82,96 @@ func TestDashboardHandler_GetStats(t *testing.T) {
 		t.Errorf("recent_queries_7d = %v, want 0", data["recent_queries_7d"])
 	}
 }
+
+func TestDashboardHandler_GetOverview(t *testing.T) {
+	e, h, database := setupDashboardTest(t)
+
+	// Seed some data
+	ctx := contextWithTimeout(t)
+	database.ExecContext(ctx,
+		`INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')`,
+	)
+	database.ExecContext(ctx,
+		`INSERT INTO tickets (submitter_id, datasource_id, sql_content, status) VALUES (1, 1, 'SELECT 1', 'DONE')`,
+	)
+	database.ExecContext(ctx,
+		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 1', datetime('now'))`,
+	)
+
+	// Test default time range (no query param)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/overview", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.GetOverview(c); err != nil {
+		t.Fatalf("GetOverview handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	data, ok := result["data"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("data missing or not an object")
+	}
+
+	// Verify overview structure
+	if _, ok := data["stats"]; !ok {
+		t.Error("data.stats missing")
+	}
+	if _, ok := data["query_trend"]; !ok {
+		t.Error("data.query_trend missing")
+	}
+	if _, ok := data["ticket_status_dist"]; !ok {
+		t.Error("data.ticket_status_dist missing")
+	}
+	if _, ok := data["recent_activities"]; !ok {
+		t.Error("data.recent_activities missing")
+	}
+	if _, ok := data["query_sparkline"]; !ok {
+		t.Error("data.query_sparkline missing")
+	}
+	if _, ok := data["ticket_sparkline"]; !ok {
+		t.Error("data.ticket_sparkline missing")
+	}
+}
+
+func TestDashboardHandler_GetOverview_WithTimeRange(t *testing.T) {
+	e, h, _ := setupDashboardTest(t)
+
+	// Test with explicit time range
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/overview?range=today", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.GetOverview(c); err != nil {
+		t.Fatalf("GetOverview handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+func TestDashboardHandler_GetOverview_InvalidRange(t *testing.T) {
+	e, h, _ := setupDashboardTest(t)
+
+	// Test with invalid time range — should default to last_30d
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/overview?range=invalid", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.GetOverview(c); err != nil {
+		t.Fatalf("GetOverview handler error: %v", err)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}

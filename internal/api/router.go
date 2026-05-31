@@ -84,6 +84,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	// Authenticated routes (supports both JWT and API Token)
 	authGroup := e.Group("", middleware.Auth(authSvc, tokenSvc))
 	authGroup.GET("/api/dashboard/stats", dashboardHandler.GetStats)
+	authGroup.GET("/api/dashboard/overview", dashboardHandler.GetOverview)
 	authGroup.GET("/api/auth/me", userHandler.Me)
 	authGroup.PUT("/api/auth/password", userHandler.ChangePassword)
 
