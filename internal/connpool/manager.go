@@ -308,6 +308,43 @@ func PostgreSQLPing(ctx context.Context, host string, port int, user, password, 
 	return db.PingContext(pingCtx)
 }
 
+// HealthCheck verifies that all cached connection pools are still alive.
+// Returns an error summarizing which pools are unhealthy.
+func (m *Manager) HealthCheck() error {
+	var errs []string
+
+	// Check SQL pools (MySQL + PostgreSQL)
+	m.sqlPools.Range(func(key, value interface{}) bool {
+		pool, ok := value.(*sql.DB)
+		if !ok {
+			return true
+		}
+		if err := pool.Ping(); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", key, err))
+		}
+		return true
+	})
+
+	// Check MongoDB pools
+	m.mongoPools.Range(func(key, value interface{}) bool {
+		client, ok := value.(*mongo.Client)
+		if !ok {
+			return true
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := client.Ping(ctx, nil); err != nil {
+			errs = append(errs, fmt.Sprintf("mongo:%s: %v", key, err))
+		}
+		return true
+	})
+
+	if len(errs) > 0 {
+		return fmt.Errorf("unhealthy pools: %s", strings.Join(errs, "; "))
+	}
+	return nil
+}
+
 // InjectPGForTest stores a pre-built *sql.DB in the PostgreSQL pool for testing.
 func (m *Manager) InjectPGForTest(dsID int64, host string, port int, database string, db *sql.DB) {
 	key := pgPoolKey(dsID, host, port, database)
