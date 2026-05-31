@@ -23,8 +23,10 @@ type SLATicketStatus struct {
 // SLAService only needs these fields — it never touches full ticket scan.
 type slaTicketRow struct {
 	ID           int64
+	SubmitterID  int64
 	RiskLevel    string
 	ReviewerID   int64
+	SQLSummary   string
 	CreatedAt    time.Time
 	SLADeadline  *time.Time
 	SLAStatus    string
@@ -54,7 +56,7 @@ func NewSLAService(db *sql.DB, notifySvc *NotifyService) *SLAService {
 // ListConfigs returns all SLA configurations.
 func (s *SLAService) ListConfigs(ctx context.Context) ([]*model.SLAConfig, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, priority, timeout_minutes, reminder_percent, escalate_to_role, escalate_to_user, enabled, created_at, updated_at
+		`SELECT id, priority, timeout_minutes, reminder_percent, escalate_to_role, escalate_to_user, auto_reject_enabled, enabled, created_at, updated_at
 		 FROM sla_config ORDER BY timeout_minutes ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("list sla configs: %w", err)
@@ -64,12 +66,13 @@ func (s *SLAService) ListConfigs(ctx context.Context) ([]*model.SLAConfig, error
 	var configs []*model.SLAConfig
 	for rows.Next() {
 		c := &model.SLAConfig{}
-		var enabled int
+		var enabled, autoReject int
 		if err := rows.Scan(&c.ID, &c.Priority, &c.TimeoutMinutes, &c.ReminderPercent,
-			&c.EscalateToRole, &c.EscalateToUser, &enabled, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			&c.EscalateToRole, &c.EscalateToUser, &autoReject, &enabled, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan sla config: %w", err)
 		}
 		c.Enabled = enabled == 1
+		c.AutoRejectEnabled = autoReject == 1
 		configs = append(configs, c)
 	}
 	return configs, rows.Err()
@@ -78,12 +81,12 @@ func (s *SLAService) ListConfigs(ctx context.Context) ([]*model.SLAConfig, error
 // GetConfig returns the SLA config for a given priority.
 func (s *SLAService) GetConfig(ctx context.Context, priority string) (*model.SLAConfig, error) {
 	c := &model.SLAConfig{}
-	var enabled int
+	var enabled, autoReject int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, priority, timeout_minutes, reminder_percent, escalate_to_role, escalate_to_user, enabled, created_at, updated_at
+		`SELECT id, priority, timeout_minutes, reminder_percent, escalate_to_role, escalate_to_user, auto_reject_enabled, enabled, created_at, updated_at
 		 FROM sla_config WHERE priority = ?`, priority).Scan(
 		&c.ID, &c.Priority, &c.TimeoutMinutes, &c.ReminderPercent,
-		&c.EscalateToRole, &c.EscalateToUser, &enabled, &c.CreatedAt, &c.UpdatedAt)
+		&c.EscalateToRole, &c.EscalateToUser, &autoReject, &enabled, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -91,6 +94,7 @@ func (s *SLAService) GetConfig(ctx context.Context, priority string) (*model.SLA
 		return nil, fmt.Errorf("get sla config: %w", err)
 	}
 	c.Enabled = enabled == 1
+	c.AutoRejectEnabled = autoReject == 1
 	return c, nil
 }
 
@@ -100,11 +104,15 @@ func (s *SLAService) CreateConfig(ctx context.Context, cfg *model.SLAConfig) (*m
 	if cfg.Enabled {
 		enabled = 1
 	}
+	autoReject := 0
+	if cfg.AutoRejectEnabled {
+		autoReject = 1
+	}
 	now := time.Now()
 	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, escalate_to_user, enabled, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		cfg.Priority, cfg.TimeoutMinutes, cfg.ReminderPercent, cfg.EscalateToRole, cfg.EscalateToUser, enabled, now, now)
+		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, escalate_to_user, auto_reject_enabled, enabled, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		cfg.Priority, cfg.TimeoutMinutes, cfg.ReminderPercent, cfg.EscalateToRole, cfg.EscalateToUser, autoReject, enabled, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("create sla config: %w", err)
 	}
@@ -121,11 +129,15 @@ func (s *SLAService) UpdateConfig(ctx context.Context, id int64, cfg *model.SLAC
 	if cfg.Enabled {
 		enabled = 1
 	}
+	autoReject := 0
+	if cfg.AutoRejectEnabled {
+		autoReject = 1
+	}
 	now := time.Now()
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE sla_config SET priority = ?, timeout_minutes = ?, reminder_percent = ?, escalate_to_role = ?, escalate_to_user = ?, enabled = ?, updated_at = ?
+		`UPDATE sla_config SET priority = ?, timeout_minutes = ?, reminder_percent = ?, escalate_to_role = ?, escalate_to_user = ?, auto_reject_enabled = ?, enabled = ?, updated_at = ?
 		 WHERE id = ?`,
-		cfg.Priority, cfg.TimeoutMinutes, cfg.ReminderPercent, cfg.EscalateToRole, cfg.EscalateToUser, enabled, now, id)
+		cfg.Priority, cfg.TimeoutMinutes, cfg.ReminderPercent, cfg.EscalateToRole, cfg.EscalateToUser, autoReject, enabled, now, id)
 	if err != nil {
 		return fmt.Errorf("update sla config: %w", err)
 	}
@@ -199,7 +211,7 @@ func (s *SLAService) CheckSLA(ctx context.Context) error {
 	// This is intentionally separate from TicketService.scanTicket —
 	// SLAService owns its own query to maintain clear responsibility boundaries.
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, risk_level, reviewer_id, created_at, sla_deadline, sla_status
+		`SELECT id, submitter_id, risk_level, reviewer_id, sql_summary, created_at, sla_deadline, sla_status
 		 FROM tickets
 		 WHERE status = ? AND sla_deadline IS NOT NULL`,
 		model.TicketStatusPendingApproval,
@@ -242,10 +254,18 @@ func (s *SLAService) CheckSLA(ctx context.Context) error {
 
 		switch {
 		case percent >= 100:
-			// Escalation: limit 1 per day — idempotent via sla_action_log
-			dedupKey := fmt.Sprintf("%d:escalate:%s", t.ID, now.Format("2006-01-02"))
-			if ok, _ := s.tryRecordAction(ctx, t.ID, "escalate", dedupKey, approverName, cfg.ID); ok {
-				s.sendEscalation(ctx, t, cfg, approverName)
+			// Auto-reject: if enabled, reject the ticket and notify submitter
+			if cfg.AutoRejectEnabled {
+				dedupKey := fmt.Sprintf("%d:auto_reject", t.ID)
+				if ok, _ := s.tryRecordAction(ctx, t.ID, "auto_reject", dedupKey, "", cfg.ID); ok {
+					s.autoRejectTicket(ctx, t, cfg)
+				}
+			} else {
+				// Escalation: limit 1 per day — idempotent via sla_action_log
+				dedupKey := fmt.Sprintf("%d:escalate:%s", t.ID, now.Format("2006-01-02"))
+				if ok, _ := s.tryRecordAction(ctx, t.ID, "escalate", dedupKey, approverName, cfg.ID); ok {
+					s.sendEscalation(ctx, t, cfg, approverName)
+				}
 			}
 			// Update status to breached
 			if t.SLAStatus != "breached" {
@@ -375,12 +395,16 @@ func (s *SLAService) scanActiveTicketRows(rows *sql.Rows) ([]slaTicketRow, error
 	for rows.Next() {
 		var t slaTicketRow
 		var deadline sql.NullTime
-		err := rows.Scan(&t.ID, &t.RiskLevel, &t.ReviewerID, &t.CreatedAt, &deadline, &t.SLAStatus)
+		var sqlSummary sql.NullString
+		err := rows.Scan(&t.ID, &t.SubmitterID, &t.RiskLevel, &t.ReviewerID, &sqlSummary, &t.CreatedAt, &deadline, &t.SLAStatus)
 		if err != nil {
 			return nil, err
 		}
 		if deadline.Valid {
 			t.SLADeadline = &deadline.Time
+		}
+		if sqlSummary.Valid {
+			t.SQLSummary = sqlSummary.String
 		}
 		tickets = append(tickets, t)
 	}
@@ -434,4 +458,32 @@ func (s *SLAService) sendEscalation(ctx context.Context, t slaTicketRow, cfg *mo
 	slaHours := float64(cfg.TimeoutMinutes) / 60.0
 
 	s.notifySvc.NotifySLAEscalateRaw(t.ID, fmt.Sprintf("%.1f", slaHours), approverName)
+}
+
+// autoRejectTicket rejects a ticket due to SLA breach and notifies the submitter.
+// This is idempotent — the dedup_key ensures it only runs once per ticket.
+func (s *SLAService) autoRejectTicket(ctx context.Context, t slaTicketRow, cfg *model.SLAConfig) {
+	now := time.Now()
+
+	// Atomically reject: PENDING_APPROVAL → REJECTED
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE tickets SET status = ?, reviewer_id = 0, review_comment = ?, updated_at = ? WHERE id = ? AND status = ?`,
+		model.TicketStatusRejected, "审批超时自动拒绝 (SLA: "+cfg.Priority+", 超时 "+fmt.Sprintf("%d", cfg.TimeoutMinutes)+" 分钟)", now, t.ID, model.TicketStatusPendingApproval,
+	)
+	if err != nil {
+		log.Printf("sla: auto-reject ticket #%d failed: %v", t.ID, err)
+		return
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return // already processed by someone else
+	}
+
+	log.Printf("sla: ticket #%d auto-rejected (SLA breach, priority=%s, timeout=%dm)", t.ID, cfg.Priority, cfg.TimeoutMinutes)
+
+	// Notify submitter about auto-rejection
+	if s.notifySvc != nil {
+		submitterName := s.lookupUsername(ctx, t.SubmitterID)
+		s.notifySvc.NotifySLAAutoReject(t.ID, cfg.Priority, cfg.TimeoutMinutes, submitterName, t.SQLSummary)
+	}
 }

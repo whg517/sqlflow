@@ -38,12 +38,13 @@ func (h *SLAHandler) ListSLAConfigs(c echo.Context) error {
 }
 
 type createSLAConfigRequest struct {
-	Priority        string `json:"priority"`
-	TimeoutMinutes  int    `json:"timeout_minutes"`
-	ReminderPercent int    `json:"reminder_percent"`
-	EscalateToRole  string `json:"escalate_to_role"`
-	EscalateToUser  string `json:"escalate_to_user"`
-	Enabled         bool   `json:"enabled"`
+	Priority           string `json:"priority"`
+	TimeoutMinutes     int    `json:"timeout_minutes"`
+	ReminderPercent    int    `json:"reminder_percent"`
+	EscalateToRole     string `json:"escalate_to_role"`
+	EscalateToUser     string `json:"escalate_to_user"`
+	AutoRejectEnabled  bool   `json:"auto_reject_enabled"`
+	Enabled            bool   `json:"enabled"`
 }
 
 // CreateSLAConfig handles POST /api/settings/sla.
@@ -72,12 +73,13 @@ func (h *SLAHandler) CreateSLAConfig(c echo.Context) error {
 	}
 
 	cfg := &model.SLAConfig{
-		Priority:        req.Priority,
-		TimeoutMinutes:  req.TimeoutMinutes,
-		ReminderPercent: req.ReminderPercent,
-		EscalateToRole:  req.EscalateToRole,
-		EscalateToUser:  req.EscalateToUser,
-		Enabled:         req.Enabled,
+		Priority:          req.Priority,
+		TimeoutMinutes:    req.TimeoutMinutes,
+		ReminderPercent:   req.ReminderPercent,
+		EscalateToRole:    req.EscalateToRole,
+		EscalateToUser:    req.EscalateToUser,
+		AutoRejectEnabled: req.AutoRejectEnabled,
+		Enabled:           req.Enabled,
 	}
 	created, err := h.slaSvc.CreateConfig(c.Request().Context(), cfg)
 	if err != nil {
@@ -113,12 +115,13 @@ func (h *SLAHandler) UpdateSLAConfig(c echo.Context) error {
 	}
 
 	cfg := &model.SLAConfig{
-		Priority:        req.Priority,
-		TimeoutMinutes:  req.TimeoutMinutes,
-		ReminderPercent: req.ReminderPercent,
-		EscalateToRole:  req.EscalateToRole,
-		EscalateToUser:  req.EscalateToUser,
-		Enabled:         req.Enabled,
+		Priority:          req.Priority,
+		TimeoutMinutes:    req.TimeoutMinutes,
+		ReminderPercent:   req.ReminderPercent,
+		EscalateToRole:    req.EscalateToRole,
+		EscalateToUser:    req.EscalateToUser,
+		AutoRejectEnabled: req.AutoRejectEnabled,
+		Enabled:           req.Enabled,
 	}
 	if err := h.slaSvc.UpdateConfig(c.Request().Context(), id, cfg); err != nil {
 		return resp.InternalError(c, "更新 SLA 配置失败")
