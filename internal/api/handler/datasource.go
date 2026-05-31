@@ -445,3 +445,60 @@ func (h *DatasourceHandler) GetTables(c echo.Context) error {
 func parseDatasourceID(c echo.Context) (int64, error) {
 	return strconv.ParseInt(c.Param("id"), 10, 64)
 }
+
+// GetESIndices returns the list of Elasticsearch indices for a datasource.
+func (h *DatasourceHandler) GetESIndices(c echo.Context) error {
+	id, err := parseDatasourceID(c)
+	if err != nil {
+		return resp.BadRequest(c, "无效的数据源ID")
+	}
+
+	// Parse query parameters
+	query := c.QueryParam("q")
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
+
+	indices, total, err := h.dsSvc.GetESIndices(c.Request().Context(), id, query, page, pageSize)
+	if err != nil {
+		if err == service.ErrDatasourceNotFound {
+			return resp.NotFound(c, "数据源不存在")
+		}
+		if err == service.ErrDatasourceDisabled {
+			return resp.BadRequest(c, "数据源已禁用")
+		}
+		log.Printf("GetESIndices failed for datasource %d: %v", id, err)
+		return resp.InternalError(c, "获取 ES 索引列表失败")
+	}
+
+	return resp.OK(c, map[string]interface{}{
+		"items": indices,
+		"total": total,
+	})
+}
+
+// GetESIndexFields returns field mapping for a specific Elasticsearch index.
+func (h *DatasourceHandler) GetESIndexFields(c echo.Context) error {
+	id, err := parseDatasourceID(c)
+	if err != nil {
+		return resp.BadRequest(c, "无效的数据源ID")
+	}
+
+	indexName := c.Param("index")
+	if indexName == "" {
+		return resp.BadRequest(c, "索引名称不能为空")
+	}
+
+	fields, err := h.dsSvc.GetESIndexFields(c.Request().Context(), id, indexName)
+	if err != nil {
+		if err == service.ErrDatasourceNotFound {
+			return resp.NotFound(c, "数据源不存在")
+		}
+		if err == service.ErrDatasourceDisabled {
+			return resp.BadRequest(c, "数据源已禁用")
+		}
+		log.Printf("GetESIndexFields failed for datasource %d index %q: %v", id, indexName, err)
+		return resp.InternalError(c, "获取 ES 索引字段失败")
+	}
+
+	return resp.OK(c, fields)
+}
