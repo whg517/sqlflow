@@ -668,7 +668,25 @@ func (s *NotifyService) NotifySLAEscalateRaw(ticketID int64, slaHours, approverN
 	go s.sendMarkdown(title, text)
 }
 
-// riskLabel returns a human-readable risk level label.
+// NotifySLAAutoReject sends a notification to the submitter when their ticket
+// is automatically rejected due to SLA timeout.
+func (s *NotifyService) NotifySLAAutoReject(ticketID int64, priority string, timeoutMinutes int, submitterName, sqlSummary string) {
+	if !s.isEnabled() {
+		return
+	}
+
+	title := "\U0001f6ab [SQLFlow] 工单审批超时自动拒绝"
+	text := fmt.Sprintf(
+		"**工单 #%d 已因审批超时被自动拒绝**\n\n"+
+			"- **优先级**: %s\n"+
+			"- **超时阈值**: %d 分钟\n"+
+			"- **SQL 摘要**: %s\n\n"+
+			"如有疑问请联系审批人或管理员。",
+		ticketID, priority, timeoutMinutes, sqlSummary,
+	)
+
+	go s.sendMarkdown(title, text)
+}
 func riskLabel(level string) string {
 	switch strings.ToLower(level) {
 	case "low":

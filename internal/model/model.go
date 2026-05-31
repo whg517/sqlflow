@@ -287,15 +287,16 @@ type APIToken struct {
 
 // SLAConfig defines the SLA timeout rule for a priority level.
 type SLAConfig struct {
-	ID              int64     `json:"id"`
-	Priority        string    `json:"priority"`
-	TimeoutMinutes  int       `json:"timeout_minutes"`
-	ReminderPercent int       `json:"reminder_percent"`
-	EscalateToRole  string    `json:"escalate_to_role"`
-	EscalateToUser  string    `json:"escalate_to_user"`
-	Enabled         bool      `json:"enabled"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID                 int64     `json:"id"`
+	Priority           string    `json:"priority"`
+	TimeoutMinutes     int       `json:"timeout_minutes"`
+	ReminderPercent    int       `json:"reminder_percent"`
+	EscalateToRole     string    `json:"escalate_to_role"`
+	EscalateToUser     string    `json:"escalate_to_user"`
+	AutoRejectEnabled  bool      `json:"auto_reject_enabled"`
+	Enabled            bool      `json:"enabled"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // SLANotification records a SLA action log entry.
