@@ -1,0 +1,117 @@
+# e2e.yml — End-to-End Tests
+# =============================================
+# Triggered by:
+#   - Pull requests to main (smoke tests only — fast feedback)
+#   - Push to main (full E2E — real + mock)
+#   - Scheduled (weekdays 14:00 CST — regression guard)
+#   - Manual dispatch (on-demand runs)
+#
+# Uses docker-compose.test.yml for isolated test environment.
+# Based on SF-QA0023 E2E ops design.
+
+name: E2E Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**.go"
+      - "web/src/**"
+      - "Dockerfile"
+      - "docker-compose*.yml"
+      - "config/**"
+      - "e2e/**"
+      - ".github/workflows/e2e.yml"
+  push:
+    branches: [main]
+  schedule:
+    # Weekdays 06:00 UTC = 14:00 CST
+    - cron: "0 6 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Test scope (smoke, real, mock, or all)"
+        required: false
+        default: "all"
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: false  # Never cancel E2E runs
+
+env:
+  PLAYWRIGHT_VERSION: "v1.52.0"
+  COMPOSE_FILE: docker-compose.test.yml
+
+jobs:
+  e2e:
+    name: E2E (${{ matrix.scope }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      matrix:
+        # PR: smoke only (fast). Push/schedule/dispatch: real + mock (full).
+        scope: ${{ (github.event_name == 'pull_request' && '["smoke"]') || '["real", "mock"]' }}
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create test environment file
+        working-directory: e2e
+        run: cp .env.e2e.example .env.e2e
+
+      - name: Build SQLFlow Docker image
+        run: |
+          docker build \
+            -t sqlflow-e2e:${{ github.sha }} \
+            -t sqlflow-e2e:latest .
+
+      - name: Start E2E test stack
+        run: |
+          docker compose \
+            --env-file e2e/.env.e2e \
+            -f ${{ env.COMPOSE_FILE }} \
+            up -d --wait
+
+      - name: Install Playwright dependencies
+        working-directory: e2e
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E tests (${{ matrix.scope }})
+        working-directory: e2e
+        run: |
+          npx playwright test \
+            --project=${{ matrix.scope }} \
+            --reporter=list \
+            --retries=2
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-${{ matrix.scope }}-${{ github.sha }}
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+          retention-days: 7
+
+      - name: Upload container logs
+        if: always()
+        run: |
+          docker compose -f ${{ env.COMPOSE_FILE }} logs --no-color > e2e-logs-${{ matrix.scope }}.txt 2>&1 || true
+
+      - name: Upload logs artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs-${{ matrix.scope }}-${{ github.sha }}
+          path: e2e-logs-*.txt
+          retention-days: 3
+
+      - name: Teardown test environment
+        if: always()
+        run: |
+          docker compose -f ${{ env.COMPOSE_FILE }} down -v
