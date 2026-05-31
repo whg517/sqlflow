@@ -454,7 +454,7 @@ func TestIntegration_SQLParsingToTicketCreation(t *testing.T) {
 
 func TestIntegration_MaskRulesWithDataMasking(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	maskRuleSvc := NewMaskRuleService(testDB, nil, nil)
+	maskRuleSvc := NewMaskRuleService(mustWrapDB(testDB), nil, nil)
 
 	dsID := seedIntegrationDatasource(t, testDB, "mask-test-db")
 

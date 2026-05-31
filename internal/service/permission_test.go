@@ -86,7 +86,7 @@ func newTestPermissionService(t *testing.T) (*PermissionService, *sql.DB) {
 		t.Fatalf("insert dummy row: %v", err)
 	}
 
-	svc, err := NewPermissionService(testDB)
+	svc, err := NewPermissionService(mustWrapDB(testDB))
 	if err != nil {
 		t.Fatalf("NewPermissionService() error: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestNewPermissionService(t *testing.T) {
 		testDB := setupPermissionTestDB(t)
 		seedTestPolicies(t, testDB)
 
-		_, err := NewPermissionService(testDB)
+		_, err := NewPermissionService(mustWrapDB(testDB))
 		if err != nil {
 			t.Fatalf("first NewPermissionService() error: %v", err)
 		}
@@ -153,7 +153,7 @@ func TestNewPermissionService(t *testing.T) {
 		var countAfterFirst int
 		testDB.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM casbin_rule`).Scan(&countAfterFirst)
 
-		_, err = NewPermissionService(testDB)
+		_, err = NewPermissionService(mustWrapDB(testDB))
 		if err != nil {
 			t.Fatalf("second NewPermissionService() error: %v", err)
 		}
@@ -859,7 +859,7 @@ func TestPermissionService_SeedIfEmpty_SkipsWhenNonEmpty(t *testing.T) {
 		t.Fatalf("insert pre-existing policy: %v", err)
 	}
 
-	svc, err := NewPermissionService(testDB)
+	svc, err := NewPermissionService(mustWrapDB(testDB))
 	if err != nil {
 		t.Fatalf("NewPermissionService: %v", err)
 	}
@@ -920,7 +920,7 @@ func TestPermissionService_SeedIfEmpty_SeedsFromCSV(t *testing.T) {
 
 	// Table is empty, so NewPermissionService should trigger seedIfEmpty
 	// which reads from the embedded FS or policy.csv file.
-	svc, err := NewPermissionService(testDB)
+	svc, err := NewPermissionService(mustWrapDB(testDB))
 	if err != nil {
 		t.Fatalf("NewPermissionService on empty table: %v", err)
 	}

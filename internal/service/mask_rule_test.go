@@ -37,7 +37,7 @@ func mustWrapDB(conn *sql.DB) *db.DB {
 func newTestMaskRuleService(t *testing.T) (*MaskRuleService, *sql.DB) {
 	t.Helper()
 	database := setupTestDB(t)
-	svc := NewMaskRuleService(database, nil, nil)
+	svc := NewMaskRuleService(mustWrapDB(database), nil, nil)
 	return svc, database
 }
 

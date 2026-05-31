@@ -14,8 +14,12 @@ import (
 	"time"
 
 	"github.com/casbin/casbin/v2"
-	"github.com/casbin/casbin/v2/model"
+	casbinModel "github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
+
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entTemp "github.com/whg517/sqlflow/internal/db/ent/temppolicy"
 )
 
 //go:embed casbin_model.conf policy_seed.csv
@@ -52,6 +56,8 @@ type RoleInfo struct {
 var builtInRoles = []string{"admin", "dba", "developer"}
 
 // sqliteAdapter implements persist.Adapter using database/sql for SQLite.
+// RAW_SQL: casbin_rule has no ent schema — the Casbin adapter contract requires
+// direct table access for LoadPolicy/SavePolicy/AddPolicy/RemovePolicy.
 type sqliteAdapter struct {
 	db *sql.DB
 }
@@ -78,7 +84,7 @@ func (a *sqliteAdapter) loadPolicyData(ctx context.Context) ([]CasbinRule, error
 	return rules, rows.Err()
 }
 
-func (a *sqliteAdapter) LoadPolicy(model model.Model) error {
+func (a *sqliteAdapter) LoadPolicy(model casbinModel.Model) error {
 	rules, err := a.loadPolicyData(context.Background())
 	if err != nil {
 		return err
@@ -96,7 +102,7 @@ func (a *sqliteAdapter) LoadPolicy(model model.Model) error {
 	return nil
 }
 
-func (a *sqliteAdapter) SavePolicy(model model.Model) error {
+func (a *sqliteAdapter) SavePolicy(model casbinModel.Model) error {
 	tx, err := a.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
@@ -172,14 +178,14 @@ func getArg(rule []string, idx int) string {
 
 // PermissionService handles permission management logic.
 type PermissionService struct {
-	db       *sql.DB
+	database *db.DB
 	enforcer *casbin.Enforcer
 	adapter  *sqliteAdapter
 }
 
 // NewPermissionService creates a new PermissionService with a Casbin enforcer.
-func NewPermissionService(db *sql.DB) (*PermissionService, error) {
-	adapter := newSQLiteAdapter(db)
+func NewPermissionService(database *db.DB) (*PermissionService, error) {
+	adapter := newSQLiteAdapter(database.DB)
 
 	// Load model from embedded FS
 	modelData, err := fs.ReadFile(casbinModelFS, "casbin_model.conf")
@@ -187,7 +193,7 @@ func NewPermissionService(db *sql.DB) (*PermissionService, error) {
 		return nil, fmt.Errorf("read casbin model: %w", err)
 	}
 
-	m, err := model.NewModelFromString(string(modelData))
+	m, err := casbinModel.NewModelFromString(string(modelData))
 	if err != nil {
 		return nil, fmt.Errorf("parse casbin model: %w", err)
 	}
@@ -198,7 +204,7 @@ func NewPermissionService(db *sql.DB) (*PermissionService, error) {
 	}
 
 	svc := &PermissionService{
-		db:       db,
+		database: database,
 		enforcer: enforcer,
 		adapter:  adapter,
 	}
@@ -212,9 +218,10 @@ func NewPermissionService(db *sql.DB) (*PermissionService, error) {
 }
 
 // seedIfEmpty loads initial policies from policy.csv if casbin_rule table is empty.
+// RAW_SQL: casbin_rule table — no ent schema, raw SQL required.
 func (s *PermissionService) seedIfEmpty(ctx context.Context) error {
 	var count int
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM casbin_rule`).Scan(&count)
+	err := s.database.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM casbin_rule`).Scan(&count)
 	if err != nil {
 		return err
 	}
@@ -285,9 +292,10 @@ func (s *PermissionService) AddPolicy(sub, dom, obj, act string) error {
 }
 
 // RemovePolicy removes a policy rule by its database ID.
+// RAW_SQL: casbin_rule table — no ent schema.
 func (s *PermissionService) RemovePolicy(ctx context.Context, id int64) error {
 	var r CasbinRule
-	err := s.db.QueryRowContext(ctx,
+	err := s.database.DB.QueryRowContext(ctx,
 		`SELECT id, ptype, v0, v1, v2, v3, v4, v5 FROM casbin_rule WHERE id = ?`, id,
 	).Scan(&r.ID, &r.PType, &r.V0, &r.V1, &r.V2, &r.V3, &r.V4, &r.V5)
 	if err != nil {
@@ -302,6 +310,7 @@ func (s *PermissionService) RemovePolicy(ctx context.Context, id int64) error {
 }
 
 // GetPolicies returns all policy rules with pagination and optional filtering.
+// RAW_SQL: casbin_rule table — no ent schema.
 func (s *PermissionService) GetPolicies(ctx context.Context, page, pageSize int64, ptype, sub string) ([]Policy, int64, error) {
 	p := ParsePagination(int(page), int(pageSize))
 
@@ -318,7 +327,7 @@ func (s *PermissionService) GetPolicies(ctx context.Context, page, pageSize int6
 
 	var total int64
 	countSQL := PaginatedCountSQL("casbin_rule", whereClause)
-	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := s.database.DB.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -327,7 +336,7 @@ func (s *PermissionService) GetPolicies(ctx context.Context, page, pageSize int6
 		whereClause,
 	)
 	queryArgs := AppendLimitArgs(args, p)
-	rows, err := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -345,8 +354,9 @@ func (s *PermissionService) GetPolicies(ctx context.Context, page, pageSize int6
 }
 
 // GetPoliciesForRole returns all policies for a given role (v0 matches).
+// RAW_SQL: casbin_rule table — no ent schema.
 func (s *PermissionService) GetPoliciesForRole(ctx context.Context, role string) ([]Policy, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT id, ptype, v0, v1, v2, v3 FROM casbin_rule WHERE ptype = 'p' AND v0 = ? ORDER BY id`, role,
 	)
 	if err != nil {
@@ -385,10 +395,13 @@ func (s *PermissionService) AddTemporaryPolicy(ctx context.Context, sub, dom, ob
 		return nil // already exists
 	}
 
-	_, err = s.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO temp_policies (sub, dom, obj, act, expires_at) VALUES (?, ?, ?, ?, ?)`,
-		sub, dom, obj, act, expiresAt.Format("2006-01-02 15:04:05"),
-	)
+	_, err = s.database.Client().TempPolicy.Create().
+		SetSub(sub).
+		SetDom(dom).
+		SetObj(obj).
+		SetAct(act).
+		SetExpiresAt(expiresAt).
+		Save(ctx)
 	return err
 }
 
@@ -398,36 +411,42 @@ func (s *PermissionService) RemoveTemporaryPolicy(ctx context.Context, sub, dom,
 	if err != nil {
 		return err
 	}
-	_, _ = s.db.ExecContext(ctx,
-		`DELETE FROM temp_policies WHERE sub = ? AND dom = ? AND obj = ? AND act = ?`,
-		sub, dom, obj, act,
-	)
+	_, _ = s.database.Client().TempPolicy.Delete().
+		Where(
+			entTemp.SubEQ(sub),
+			entTemp.DomEQ(dom),
+			entTemp.ObjEQ(obj),
+			entTemp.ActEQ(act),
+		).
+		Exec(ctx)
 	return nil
 }
 
 // PurgeExpiredPolicies removes all temporary policies past their expiry.
 func (s *PermissionService) PurgeExpiredPolicies(ctx context.Context) (int64, error) {
-	now := time.Now().UTC().Format("2006-01-02 15:04:05")
+	now := time.Now().UTC()
 
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT sub, dom, obj, act FROM temp_policies WHERE expires_at <= ?`, now)
+	expired, err := s.database.Client().TempPolicy.Query().
+		Where(entTemp.ExpiresAtLTE(now)).
+		All(ctx)
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
 
 	var count int64
-	for rows.Next() {
-		var sub, dom, obj, act string
-		if err := rows.Scan(&sub, &dom, &obj, &act); err != nil {
-			continue
-		}
-		_, _ = s.enforcer.RemovePolicy(sub, dom, obj, act)
+	for _, tp := range expired {
+		_, _ = s.enforcer.RemovePolicy(tp.Sub, tp.Dom, tp.Obj, tp.Act)
 		count++
 	}
 
-	_, _ = s.db.ExecContext(ctx, `DELETE FROM temp_policies WHERE expires_at <= ?`, now)
-	return count, rows.Err()
+	deleted, err := s.database.Client().TempPolicy.Delete().
+		Where(entTemp.ExpiresAtLTE(now)).
+		Exec(ctx)
+	if err != nil {
+		return count, err
+	}
+	_ = deleted
+	return count, nil
 }
 
 // osReadFile reads a file from disk.
@@ -447,4 +466,9 @@ func toInterfaceSlice(s []string) []interface{} {
 		result[i] = v
 	}
 	return result
+}
+
+// entClient returns the ent client (for use by other methods in this package).
+func (s *PermissionService) entClient() *ent.Client {
+	return s.database.Client()
 }

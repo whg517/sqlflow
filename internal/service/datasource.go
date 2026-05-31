@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/whg517/sqlflow/internal/connpool"
+	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
 	"go.mongodb.org/mongo-driver/bson"
@@ -26,14 +27,14 @@ var ValidDatasourceTypes = map[string]bool{"mysql": true, "postgresql": true, "m
 
 // DatasourceService handles datasource management logic.
 type DatasourceService struct {
-	db            *sql.DB
+	database      *db.DB
 	encryptionKey string
 	connMgr       *connpool.Manager
 }
 
 // NewDatasourceService creates a new DatasourceService.
-func NewDatasourceService(db *sql.DB, encryptionKey string, connMgr *connpool.Manager) *DatasourceService {
-	return &DatasourceService{db: db, encryptionKey: encryptionKey, connMgr: connMgr}
+func NewDatasourceService(database *db.DB, encryptionKey string, connMgr *connpool.Manager) *DatasourceService {
+	return &DatasourceService{database: database, encryptionKey: encryptionKey, connMgr: connMgr}
 }
 
 // CreateDataSource creates a new datasource with encrypted password.
@@ -81,7 +82,7 @@ func (s *DatasourceService) CreateDataSource(ctx context.Context, ds *model.Data
 		encryptedESApiKey = enc
 	}
 
-	result, err := s.db.ExecContext(ctx,
+	result, err := s.database.DB.ExecContext(ctx,
 		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_api_key, es_index_pattern, es_verify_certs)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database, ds.SSLMode, ds.SchemaName,
@@ -103,7 +104,7 @@ func (s *DatasourceService) CreateDataSource(ctx context.Context, ds *model.Data
 
 // ListDataSources returns all datasources without encrypted passwords.
 func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSource, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT id, name, type, host, port, username, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_index_pattern, es_verify_certs, created_at, updated_at
 		 FROM datasources ORDER BY id`,
 	)
@@ -130,7 +131,7 @@ func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSo
 // GetDataSource returns a single datasource by ID (password not decrypted).
 func (s *DatasourceService) GetDataSource(ctx context.Context, id int64) (*model.DataSource, error) {
 	ds := &model.DataSource{}
-	err := s.db.QueryRowContext(ctx,
+	err := s.database.DB.QueryRowContext(ctx,
 		`SELECT id, name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_api_key, es_index_pattern, es_verify_certs, created_at, updated_at
 		 FROM datasources WHERE id = ?`, id,
 	).Scan(&ds.ID, &ds.Name, &ds.Type, &ds.Host, &ds.Port, &ds.Username, &ds.PasswordEncrypted, &ds.Database,
@@ -190,7 +191,7 @@ func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *
 		encryptedESApiKey = existing.ESApiKey
 	}
 
-	result, err := s.db.ExecContext(ctx,
+	result, err := s.database.DB.ExecContext(ctx,
 		`UPDATE datasources SET name=?, type=?, host=?, port=?, username=?, password_encrypted=?, database=?, sslmode=?, schema_name=?,
 		 max_open=?, max_idle=?, max_lifetime=?, max_idle_time=?, es_urls=?, es_version=?, es_auth_type=?, es_api_key=?, es_index_pattern=?, es_verify_certs=?, updated_at=datetime('now') WHERE id=?`,
 		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database, ds.SSLMode, ds.SchemaName,
@@ -235,7 +236,7 @@ func (s *DatasourceService) DisableDataSource(ctx context.Context, id int64) err
 		return err
 	}
 
-	result, err := s.db.ExecContext(ctx,
+	result, err := s.database.DB.ExecContext(ctx,
 		`UPDATE datasources SET status='disabled', updated_at=datetime('now') WHERE id=?`, id,
 	)
 	if err != nil {

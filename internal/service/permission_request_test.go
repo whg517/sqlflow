@@ -25,11 +25,11 @@ func createPermTestUser(t *testing.T, db *sql.DB, username string) int64 {
 func TestPermReqService_CreateRequest(t *testing.T) {
 	db := setupTestDB(t)
 	// Create a PermissionService (needed for dependency)
-	permSvc, err := NewPermissionService(db)
+	permSvc, err := NewPermissionService(mustWrapDB(db))
 	if err != nil {
 		t.Fatalf("create PermissionService: %v", err)
 	}
-	svc := NewPermissionRequestService(db, permSvc, nil)
+	svc := NewPermissionRequestService(mustWrapDB(db), permSvc, nil)
 	ctx := context.Background()
 
 	userID := createPermTestUser(t, db, "perm_create")
@@ -54,11 +54,11 @@ func TestPermReqService_CreateRequest(t *testing.T) {
 
 func TestPermReqService_InvalidActions(t *testing.T) {
 	db := setupTestDB(t)
-	permSvc, err := NewPermissionService(db)
+	permSvc, err := NewPermissionService(mustWrapDB(db))
 	if err != nil {
 		t.Fatalf("create PermissionService: %v", err)
 	}
-	svc := NewPermissionRequestService(db, permSvc, nil)
+	svc := NewPermissionRequestService(mustWrapDB(db), permSvc, nil)
 	ctx := context.Background()
 	userID := createPermTestUser(t, db, "perm_invalid")
 
@@ -70,11 +70,11 @@ func TestPermReqService_InvalidActions(t *testing.T) {
 
 func TestPermReqService_InvalidDuration(t *testing.T) {
 	db := setupTestDB(t)
-	permSvc, err := NewPermissionService(db)
+	permSvc, err := NewPermissionService(mustWrapDB(db))
 	if err != nil {
 		t.Fatalf("create PermissionService: %v", err)
 	}
-	svc := NewPermissionRequestService(db, permSvc, nil)
+	svc := NewPermissionRequestService(mustWrapDB(db), permSvc, nil)
 	ctx := context.Background()
 	userID := createPermTestUser(t, db, "perm_dur")
 
@@ -93,11 +93,11 @@ func TestPermReqService_InvalidDuration(t *testing.T) {
 
 func TestPermReqService_ApproveAndReject(t *testing.T) {
 	db := setupTestDB(t)
-	permSvc, err := NewPermissionService(db)
+	permSvc, err := NewPermissionService(mustWrapDB(db))
 	if err != nil {
 		t.Fatalf("create PermissionService: %v", err)
 	}
-	svc := NewPermissionRequestService(db, permSvc, nil)
+	svc := NewPermissionRequestService(mustWrapDB(db), permSvc, nil)
 	ctx := context.Background()
 	userID := createPermTestUser(t, db, "perm_approve")
 	adminID := createPermTestUser(t, db, "perm_admin")
@@ -134,11 +134,11 @@ func TestPermReqService_ApproveAndReject(t *testing.T) {
 
 func TestPermReqService_RejectPending(t *testing.T) {
 	db := setupTestDB(t)
-	permSvc, err := NewPermissionService(db)
+	permSvc, err := NewPermissionService(mustWrapDB(db))
 	if err != nil {
 		t.Fatalf("create PermissionService: %v", err)
 	}
-	svc := NewPermissionRequestService(db, permSvc, nil)
+	svc := NewPermissionRequestService(mustWrapDB(db), permSvc, nil)
 	ctx := context.Background()
 	userID := createPermTestUser(t, db, "perm_reject")
 	adminID := createPermTestUser(t, db, "perm_reject_admin")
@@ -159,11 +159,11 @@ func TestPermReqService_RejectPending(t *testing.T) {
 
 func TestPermReqService_RevokeApproved(t *testing.T) {
 	db := setupTestDB(t)
-	permSvc, err := NewPermissionService(db)
+	permSvc, err := NewPermissionService(mustWrapDB(db))
 	if err != nil {
 		t.Fatalf("create PermissionService: %v", err)
 	}
-	svc := NewPermissionRequestService(db, permSvc, nil)
+	svc := NewPermissionRequestService(mustWrapDB(db), permSvc, nil)
 	ctx := context.Background()
 	userID := createPermTestUser(t, db, "perm_revoke")
 	adminID := createPermTestUser(t, db, "perm_revoke_admin")
@@ -189,11 +189,11 @@ func TestPermReqService_RevokeApproved(t *testing.T) {
 
 func TestPermReqService_ListRequests(t *testing.T) {
 	db := setupTestDB(t)
-	permSvc, err := NewPermissionService(db)
+	permSvc, err := NewPermissionService(mustWrapDB(db))
 	if err != nil {
 		t.Fatalf("create PermissionService: %v", err)
 	}
-	svc := NewPermissionRequestService(db, permSvc, nil)
+	svc := NewPermissionRequestService(mustWrapDB(db), permSvc, nil)
 	ctx := context.Background()
 	userID := createPermTestUser(t, db, "perm_list")
 

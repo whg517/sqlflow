@@ -33,7 +33,7 @@ func setupMaskRuleHandlerTest(t *testing.T) (*echo.Echo, *MaskRuleHandler, *db.D
 	auditSvc := service.NewAuditService(database, 10, 5*time.Second)
 	t.Cleanup(func() { auditSvc.Close() })
 
-	maskRuleSvc := service.NewMaskRuleService(database.DB, nil, auditSvc)
+	maskRuleSvc := service.NewMaskRuleService(database, nil, auditSvc)
 	handler := NewMaskRuleHandler(maskRuleSvc)
 
 	e := echo.New()
@@ -1148,7 +1148,7 @@ func TestMaskRuleHandler_DeleteMaskRule_DBError(t *testing.T) {
 	}
 
 	auditSvc := service.NewAuditService(database, 10, 5*time.Second)
-	maskRuleSvc := service.NewMaskRuleService(database.DB, nil, auditSvc)
+	maskRuleSvc := service.NewMaskRuleService(database, nil, auditSvc)
 	handler := NewMaskRuleHandler(maskRuleSvc)
 	e := echo.New()
 
@@ -1190,7 +1190,7 @@ func TestMaskRuleHandler_DeleteSensitiveTable_DBError(t *testing.T) {
 	}
 
 	auditSvc := service.NewAuditService(database, 10, 5*time.Second)
-	maskRuleSvc := service.NewMaskRuleService(database.DB, nil, auditSvc)
+	maskRuleSvc := service.NewMaskRuleService(database, nil, auditSvc)
 	handler := NewMaskRuleHandler(maskRuleSvc)
 	e := echo.New()
 

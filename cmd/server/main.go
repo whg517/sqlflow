@@ -54,8 +54,8 @@ func main() {
 	connMgr := connpool.NewManager()
 	defer connMgr.Close()
 
-	dsSvc := service.NewDatasourceService(database.DB, cfg.EncryptionKey, connMgr)
-	permSvc, err := service.NewPermissionService(database.DB)
+	dsSvc := service.NewDatasourceService(database, cfg.EncryptionKey, connMgr)
+	permSvc, err := service.NewPermissionService(database)
 	if err != nil {
 		log.Fatalf("failed to initialize permission service: %v", err)
 	}
@@ -92,7 +92,7 @@ func main() {
 	ticketSvc.SetNotifyService(notifySvc)
 	ticketSvc.SetDatasourceService(dsSvc, connMgr, cfg.EncryptionKey)
 
-	maskRuleSvc := service.NewMaskRuleService(database.DB, permSvc, auditSvc)
+	maskRuleSvc := service.NewMaskRuleService(database, permSvc, auditSvc)
 	log.Println("mask rule service initialized")
 
 	aiReviewSvc := service.NewAIReviewService(database.DB, cfg.AI.Provider, cfg.AI.Model, cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Timeout)
@@ -110,7 +110,7 @@ func main() {
 	log.Println("audit report service initialized")
 
 	// Initialize permission request service
-	permReqSvc := service.NewPermissionRequestService(database.DB, permSvc, auditSvc)
+	permReqSvc := service.NewPermissionRequestService(database, permSvc, auditSvc)
 	log.Println("permission request service initialized")
 
 	commentSvc := service.NewCommentService(database.DB)

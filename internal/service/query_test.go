@@ -71,8 +71,8 @@ func setupQueryService(t *testing.T) (*QueryService, *sql.DB) {
 	t.Helper()
 	testDB := setupQueryTestDB(t)
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
-	permSvc, err := NewPermissionService(testDB)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	permSvc, err := NewPermissionService(mustWrapDB(testDB))
 	if err != nil {
 		t.Fatalf("create permission service: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestExecuteQuery_DisabledDataSource(t *testing.T) {
 	ctx, cancel := queryCtx(t)
 	defer cancel()
 
-	dsSvc := NewDatasourceService(testDB, testEncKey, connpool.NewManager())
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connpool.NewManager())
 	dsID := seedQueryDatasourceWithStatus(t, dsSvc, ctx, "disabled")
 
 	_, err := qs.ExecuteQuery(ctx, 1, "user1", "developer", dsID, "testdb", "SELECT 1", "mysql")
@@ -336,7 +336,7 @@ func TestExecuteQuery_NonSelectBlocked(t *testing.T) {
 	ctx, cancel := queryCtx(t)
 	defer cancel()
 
-	dsSvc := NewDatasourceService(testDB, testEncKey, connpool.NewManager())
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connpool.NewManager())
 	dsID := seedQueryDatasource(t, dsSvc, ctx)
 
 	tests := []struct {
@@ -365,7 +365,7 @@ func TestExecuteQuery_BlockedSQL(t *testing.T) {
 	ctx, cancel := queryCtx(t)
 	defer cancel()
 
-	dsSvc := NewDatasourceService(testDB, testEncKey, connpool.NewManager())
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connpool.NewManager())
 	dsID := seedQueryDatasource(t, dsSvc, ctx)
 
 	tests := []struct {
@@ -398,7 +398,7 @@ func TestExecuteQuery_SelectPassesParsing(t *testing.T) {
 	ctx, cancel := queryCtx(t)
 	defer cancel()
 
-	dsSvc := NewDatasourceService(testDB, testEncKey, connpool.NewManager())
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connpool.NewManager())
 	dsID := seedQueryDatasource(t, dsSvc, ctx)
 
 	// SELECT should pass parsing and risk checks but fail at connection stage
@@ -418,7 +418,7 @@ func TestExecuteQuery_InvalidSQL(t *testing.T) {
 	ctx, cancel := queryCtx(t)
 	defer cancel()
 
-	dsSvc := NewDatasourceService(testDB, testEncKey, connpool.NewManager())
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connpool.NewManager())
 	dsID := seedQueryDatasource(t, dsSvc, ctx)
 
 	_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "NOT VALID SQL !!!", "mysql")
@@ -432,7 +432,7 @@ func TestExecuteQuery_UnsupportedDBType(t *testing.T) {
 	ctx, cancel := queryCtx(t)
 	defer cancel()
 
-	dsSvc := NewDatasourceService(testDB, testEncKey, connpool.NewManager())
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connpool.NewManager())
 	dsID := seedQueryDatasource(t, dsSvc, ctx)
 
 	_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1", "postgres")
@@ -448,8 +448,8 @@ func TestExecuteQuery_UnsupportedDBType(t *testing.T) {
 func TestExecuteQuery_PermissionDenied(t *testing.T) {
 	testDB := setupQueryTestDB(t)
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
-	permSvc, err := NewPermissionService(testDB)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	permSvc, err := NewPermissionService(mustWrapDB(testDB))
 	if err != nil {
 		t.Fatalf("create permission service: %v", err)
 	}
@@ -473,8 +473,8 @@ func TestExecuteQuery_PermissionDenied(t *testing.T) {
 func TestExecuteQuery_AdminHasWildcardPermission(t *testing.T) {
 	testDB := setupQueryTestDB(t)
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
-	permSvc, err := NewPermissionService(testDB)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	permSvc, err := NewPermissionService(mustWrapDB(testDB))
 	if err != nil {
 		t.Fatalf("create permission service: %v", err)
 	}
@@ -531,14 +531,14 @@ func TestApplyDesensitization_WithRules(t *testing.T) {
 	ctx := context.Background()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
 	ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	dsID := seedQueryDatasource(t, dsSvc, ctx2)
 
 	seedMaskRule(t, testDB, dsID, "testdb", "users", "phone", "phone")
 
-	permSvc, _ := NewPermissionService(testDB)
+	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
@@ -577,14 +577,14 @@ func TestApplyDesensitization_BypassPermission(t *testing.T) {
 	ctx := context.Background()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
 	ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	dsID := seedQueryDatasource(t, dsSvc, ctx2)
 
 	seedMaskRule(t, testDB, dsID, "testdb", "users", "phone", "phone")
 
-	permSvc, _ := NewPermissionService(testDB)
+	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "desensitize:bypass")
 
 	historySvc := NewQueryHistoryService(testDB)
@@ -617,7 +617,7 @@ func TestApplyDesensitization_MultipleMaskTypes(t *testing.T) {
 	ctx := context.Background()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
 	ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	dsID := seedQueryDatasource(t, dsSvc, ctx2)
@@ -642,7 +642,7 @@ func TestApplyDesensitization_MultipleMaskTypes(t *testing.T) {
 		}
 	}
 
-	permSvc, _ := NewPermissionService(testDB)
+	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
@@ -688,7 +688,7 @@ func TestApplyDesensitization_WildcardTableRule(t *testing.T) {
 	ctx := context.Background()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
 	ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	dsID := seedQueryDatasource(t, dsSvc, ctx2)
@@ -703,7 +703,7 @@ func TestApplyDesensitization_WildcardTableRule(t *testing.T) {
 		t.Fatalf("seed wildcard mask rule: %v", err)
 	}
 
-	permSvc, _ := NewPermissionService(testDB)
+	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
@@ -733,14 +733,14 @@ func TestApplyDesensitization_NoMatchTable(t *testing.T) {
 	ctx := context.Background()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
 	ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	dsID := seedQueryDatasource(t, dsSvc, ctx2)
 
 	seedMaskRule(t, testDB, dsID, "testdb", "users", "phone", "phone")
 
-	permSvc, _ := NewPermissionService(testDB)
+	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
@@ -806,7 +806,7 @@ func TestApplyDesensitization_FieldNotInRow(t *testing.T) {
 	ctx := context.Background()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
 	ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	dsID := seedQueryDatasource(t, dsSvc, ctx2)
@@ -814,7 +814,7 @@ func TestApplyDesensitization_FieldNotInRow(t *testing.T) {
 	// Mask rule for "phone" field, but rows don't have "phone"
 	seedMaskRule(t, testDB, dsID, "testdb", "users", "phone", "phone")
 
-	permSvc, _ := NewPermissionService(testDB)
+	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
@@ -845,7 +845,7 @@ func TestLoadMaskRules(t *testing.T) {
 	ctx := context.Background()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
 	ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	dsID := seedQueryDatasource(t, dsSvc, ctx2)
@@ -854,7 +854,7 @@ func TestLoadMaskRules(t *testing.T) {
 	seedMaskRule(t, testDB, dsID, "testdb", "users", "email", "email")
 	seedMaskRule(t, testDB, dsID, "testdb", "orders", "credit_card", "bank_card")
 
-	permSvc, _ := NewPermissionService(testDB)
+	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
 	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
@@ -901,8 +901,8 @@ func TestLoadMaskRules_EmptyResult(t *testing.T) {
 func TestExecuteQuery_AuditOnFailure(t *testing.T) {
 	testDB := setupQueryTestDB(t)
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(testDB, testEncKey, connMgr)
-	permSvc, err := NewPermissionService(testDB)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	permSvc, err := NewPermissionService(mustWrapDB(testDB))
 	if err != nil {
 		t.Fatalf("create permission service: %v", err)
 	}
@@ -1097,7 +1097,7 @@ func TestExecuteQuery_CancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	dsSvc := NewDatasourceService(testDB, testEncKey, connpool.NewManager())
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connpool.NewManager())
 	dsID := seedQueryDatasource(t, dsSvc, context.Background())
 
 	_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1", "mysql")

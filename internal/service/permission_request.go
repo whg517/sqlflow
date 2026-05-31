@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -23,14 +24,14 @@ var ValidActions = []string{"select", "update", "delete", "ddl", "export"}
 
 // PermissionRequestService manages temporary access permission requests for sensitive tables.
 type PermissionRequestService struct {
-	db       *sql.DB
+	database *db.DB
 	permSvc  *PermissionService
 	auditSvc *AuditService
 }
 
 // NewPermissionRequestService creates a new PermissionRequestService.
-func NewPermissionRequestService(db *sql.DB, permSvc *PermissionService, auditSvc *AuditService) *PermissionRequestService {
-	return &PermissionRequestService{db: db, permSvc: permSvc, auditSvc: auditSvc}
+func NewPermissionRequestService(database *db.DB, permSvc *PermissionService, auditSvc *AuditService) *PermissionRequestService {
+	return &PermissionRequestService{database: database, permSvc: permSvc, auditSvc: auditSvc}
 }
 
 // CreateRequest creates a new permission request.
@@ -44,7 +45,7 @@ func (s *PermissionRequestService) CreateRequest(ctx context.Context, applicantI
 
 	expiresAt := time.Now().UTC().Add(duration)
 
-	result, err := s.db.ExecContext(ctx,
+	result, err := s.database.DB.ExecContext(ctx,
 		`INSERT INTO permission_requests (applicant_id, datasource_id, database, table_name, actions, reason, expires_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		applicantID, datasourceID, database, tableName, actions, reason, expiresAt.Format("2006-01-02 15:04:05"),
@@ -63,7 +64,7 @@ func (s *PermissionRequestService) GetRequestByID(ctx context.Context, id int64)
 	var approvedAt, revokedAt sql.NullTime
 	var approverName, datasourceName, applicantName, approveComment, revokeReason sql.NullString
 
-	err := s.db.QueryRowContext(ctx,
+	err := s.database.DB.QueryRowContext(ctx,
 		`SELECT r.id, r.applicant_id, COALESCE(u1.username, ''),
 		        COALESCE(r.approver_id, 0), COALESCE(u2.username, ''),
 		        r.datasource_id, COALESCE(ds.name, ''),
@@ -124,7 +125,7 @@ func (s *PermissionRequestService) ApproveRequest(ctx context.Context, requestID
 
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.database.DB.ExecContext(ctx,
 		`UPDATE permission_requests SET status = 'APPROVED', approver_id = ?, approve_comment = ?, approved_at = ?, updated_at = ?
 		 WHERE id = ?`,
 		approverID, comment, now, now, requestID,
@@ -167,7 +168,7 @@ func (s *PermissionRequestService) RejectRequest(ctx context.Context, requestID,
 	}
 
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.database.DB.ExecContext(ctx,
 		`UPDATE permission_requests SET status = 'REJECTED', approver_id = ?, approve_comment = ?, updated_at = ? WHERE id = ?`,
 		approverID, comment, now, requestID,
 	)
@@ -190,7 +191,7 @@ func (s *PermissionRequestService) RevokeRequest(ctx context.Context, requestID,
 	}
 
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.database.DB.ExecContext(ctx,
 		`UPDATE permission_requests SET status = 'REVOKED', revoked_at = ?, revoked_by = ?, revoke_reason = ?, updated_at = ?
 		 WHERE id = ?`,
 		now, revokerID, reason, now, requestID,
@@ -241,7 +242,7 @@ func (s *PermissionRequestService) ListRequests(ctx context.Context, page, pageS
 
 	var total int64
 	countSQL := fmt.Sprintf(`SELECT COUNT(*) FROM permission_requests r %s`, whereClause)
-	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := s.database.DB.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count permission requests: %w", err)
 	}
 
@@ -261,7 +262,7 @@ func (s *PermissionRequestService) ListRequests(ctx context.Context, page, pageS
 		 %s ORDER BY r.created_at DESC`, whereClause)
 
 	querySQL += fmt.Sprintf(" LIMIT %d OFFSET %d", p.PageSize, (p.Page-1)*p.PageSize)
-	rows, err := s.db.QueryContext(ctx, querySQL, args...)
+	rows, err := s.database.DB.QueryContext(ctx, querySQL, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query permission requests: %w", err)
 	}
@@ -278,7 +279,7 @@ func (s *PermissionRequestService) ListRequests(ctx context.Context, page, pageS
 func (s *PermissionRequestService) ExpireOverdue(ctx context.Context) (int64, error) {
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT id, applicant_id, datasource_id, database, table_name, actions FROM permission_requests
 		 WHERE status = 'APPROVED' AND expires_at <= ?`, now)
 	if err != nil {
@@ -294,7 +295,7 @@ func (s *PermissionRequestService) ExpireOverdue(ctx context.Context) (int64, er
 			continue
 		}
 
-		_, _ = s.db.ExecContext(ctx,
+		_, _ = s.database.DB.ExecContext(ctx,
 			`UPDATE permission_requests SET status = 'EXPIRED', updated_at = ? WHERE id = ?`, now, id)
 
 		dsStr := fmt.Sprintf("%d", datasourceID)
@@ -316,7 +317,7 @@ func (s *PermissionRequestService) ExpireOverdue(ctx context.Context) (int64, er
 
 // MyActiveRequests returns the current user's active (approved, not expired) permission requests.
 func (s *PermissionRequestService) MyActiveRequests(ctx context.Context, userID int64) ([]*model.PermissionRequest, int64, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT r.id, r.applicant_id, COALESCE(u1.username, ''),
 		        COALESCE(r.approver_id, 0), COALESCE(u2.username, ''),
 		        r.datasource_id, COALESCE(ds.name, ''),
@@ -347,7 +348,7 @@ func (s *PermissionRequestService) MyActiveRequests(ctx context.Context, userID 
 
 func (s *PermissionRequestService) markExpired(ctx context.Context, id int64) error {
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.database.DB.ExecContext(ctx,
 		`UPDATE permission_requests SET status = 'EXPIRED', updated_at = ? WHERE id = ?`, now, id)
 	return err
 }

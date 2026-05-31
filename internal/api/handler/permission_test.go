@@ -52,7 +52,7 @@ func setupPermissionTest(t *testing.T) (*echo.Echo, *service.PermissionService, 
 		}
 	}
 
-	permSvc, err := service.NewPermissionService(database.DB)
+	permSvc, err := service.NewPermissionService(database)
 	if err != nil {
 		t.Fatalf("create permission service: %v", err)
 	}
@@ -897,7 +897,7 @@ func TestPermissionHandler_SyncPolicies_LoadPolicyError(t *testing.T) {
 		"p", "admin", "*", "*", "*",
 	)
 
-	permSvc, err := service.NewPermissionService(database.DB)
+	permSvc, err := service.NewPermissionService(database)
 	if err != nil {
 		t.Fatalf("create permission service: %v", err)
 	}
