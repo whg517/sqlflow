@@ -91,6 +91,8 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	// Tables endpoint: authenticated users can access
 	authGroup.GET("/api/datasources/:id/tables", dsHandler.GetTables)
 	authGroup.GET("/api/datasources/:id/tables/:name/columns", dsHandler.GetTableColumns)
+	authGroup.GET("/api/datasources/:id/es/indices", dsHandler.GetESIndices)
+	authGroup.GET("/api/datasources/:id/es/indices/:index/fields", dsHandler.GetESIndexFields)
 
 	// Query execution & history (authenticated users)
 	authGroup.POST("/api/query/execute", queryHandler.ExecuteQuery)
