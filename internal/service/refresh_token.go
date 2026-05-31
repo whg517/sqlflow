@@ -4,12 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entRefresh "github.com/whg517/sqlflow/internal/db/ent/refreshtoken"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -22,12 +24,16 @@ const refreshDefaultExpiry = 7 * 24 * time.Hour // 7 days
 
 // RefreshTokenService manages refresh token lifecycle: creation, rotation, revocation.
 type RefreshTokenService struct {
-	db *sql.DB
+	database *db.DB
+	client   *ent.Client
 }
 
 // NewRefreshTokenService creates a new RefreshTokenService.
-func NewRefreshTokenService(db *sql.DB) *RefreshTokenService {
-	return &RefreshTokenService{db: db}
+func NewRefreshTokenService(database *db.DB) *RefreshTokenService {
+	return &RefreshTokenService{
+		database: database,
+		client:   database.Client(),
+	}
 }
 
 // GenerateToken generates a new refresh token for the given user.
@@ -46,10 +52,11 @@ func (s *RefreshTokenService) GenerateToken(ctx context.Context, userID int64) (
 
 	expiresAt := time.Now().Add(refreshDefaultExpiry)
 
-	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)`,
-		userID, hashedToken, expiresAt.UTC().Format(time.RFC3339),
-	)
+	_, err = s.client.RefreshToken.Create().
+		SetUserID(userID).
+		SetToken(hashedToken).
+		SetExpiresAt(expiresAt.UTC()).
+		Save(ctx)
 	if err != nil {
 		return "", fmt.Errorf("store refresh token: %w", err)
 	}
@@ -65,19 +72,17 @@ func (s *RefreshTokenService) RotateToken(ctx context.Context, oldRawToken strin
 	hashedToken := hex.EncodeToString(hash[:])
 
 	// Look up and validate the token in a transaction
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return "", 0, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	rt := &model.RefreshToken{}
-	err = tx.QueryRowContext(ctx,
-		`SELECT id, user_id, token, expires_at, revoked, created_at FROM refresh_tokens WHERE token = ?`,
-		hashedToken,
-	).Scan(&rt.ID, &rt.UserID, &rt.Token, &rt.ExpiresAt, &rt.Revoked, &rt.CreatedAt)
+	rt, err := tx.RefreshToken.Query().
+		Where(entRefresh.Token(hashedToken)).
+		Only(ctx)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if ent.IsNotFound(err) {
 			return "", 0, ErrRefreshTokenInvalid
 		}
 		return "", 0, fmt.Errorf("lookup refresh token: %w", err)
@@ -94,10 +99,9 @@ func (s *RefreshTokenService) RotateToken(ctx context.Context, oldRawToken strin
 	}
 
 	// Revoke the old token (token rotation)
-	_, err = tx.ExecContext(ctx,
-		`UPDATE refresh_tokens SET revoked = 1 WHERE id = ?`,
-		rt.ID,
-	)
+	_, err = tx.RefreshToken.UpdateOneID(rt.ID).
+		SetRevoked(true).
+		Save(ctx)
 	if err != nil {
 		return "", 0, fmt.Errorf("revoke old refresh token: %w", err)
 	}
@@ -114,10 +118,11 @@ func (s *RefreshTokenService) RotateToken(ctx context.Context, oldRawToken strin
 
 	newExpiresAt := time.Now().Add(refreshDefaultExpiry)
 
-	_, err = tx.ExecContext(ctx,
-		`INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)`,
-		rt.UserID, newHashedToken, newExpiresAt.UTC().Format(time.RFC3339),
-	)
+	_, err = tx.RefreshToken.Create().
+		SetUserID(rt.UserID).
+		SetToken(newHashedToken).
+		SetExpiresAt(newExpiresAt.UTC()).
+		Save(ctx)
 	if err != nil {
 		return "", 0, fmt.Errorf("store new refresh token: %w", err)
 	}
@@ -131,10 +136,13 @@ func (s *RefreshTokenService) RotateToken(ctx context.Context, oldRawToken strin
 
 // RevokeAllTokens revokes all refresh tokens for a given user (e.g., on password change).
 func (s *RefreshTokenService) RevokeAllTokens(ctx context.Context, userID int64) error {
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE refresh_tokens SET revoked = 1 WHERE user_id = ? AND revoked = 0`,
-		userID,
-	)
+	_, err := s.client.RefreshToken.Update().
+		Where(
+			entRefresh.UserID(userID),
+			entRefresh.Revoked(false),
+		).
+		SetRevoked(true).
+		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("revoke all refresh tokens: %w", err)
 	}
@@ -146,14 +154,16 @@ func (s *RefreshTokenService) RevokeToken(ctx context.Context, rawToken string) 
 	hash := sha256.Sum256([]byte(rawToken))
 	hashedToken := hex.EncodeToString(hash[:])
 
-	result, err := s.db.ExecContext(ctx,
-		`UPDATE refresh_tokens SET revoked = 1 WHERE token = ? AND revoked = 0`,
-		hashedToken,
-	)
+	n, err := s.client.RefreshToken.Update().
+		Where(
+			entRefresh.Token(hashedToken),
+			entRefresh.Revoked(false),
+		).
+		SetRevoked(true).
+		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("revoke refresh token: %w", err)
 	}
-	n, _ := result.RowsAffected()
 	if n == 0 {
 		return ErrRefreshTokenInvalid
 	}
@@ -162,13 +172,27 @@ func (s *RefreshTokenService) RevokeToken(ctx context.Context, rawToken string) 
 
 // CleanupExpiredTokens deletes expired and revoked refresh tokens older than 24 hours.
 func (s *RefreshTokenService) CleanupExpiredTokens(ctx context.Context) (int64, error) {
-	cutoff := time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339)
-	result, err := s.db.ExecContext(ctx,
-		`DELETE FROM refresh_tokens WHERE revoked = 1 AND expires_at < ?`,
-		cutoff,
-	)
+	cutoff := time.Now().Add(-24 * time.Hour).UTC()
+	n, err := s.client.RefreshToken.Delete().
+		Where(
+			entRefresh.Revoked(true),
+			entRefresh.ExpiresAtLT(cutoff),
+		).
+		Exec(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("cleanup expired tokens: %w", err)
 	}
-	return result.RowsAffected()
+	return int64(n), nil
+}
+
+// entRefreshTokenToModel converts an ent RefreshToken entity to a model.RefreshToken.
+func entRefreshTokenToModel(rt *ent.RefreshToken) *model.RefreshToken {
+	return &model.RefreshToken{
+		ID:        int64(rt.ID),
+		UserID:    rt.UserID,
+		Token:     rt.Token,
+		ExpiresAt: rt.ExpiresAt,
+		Revoked:   rt.Revoked,
+		CreatedAt: rt.CreatedAt,
+	}
 }

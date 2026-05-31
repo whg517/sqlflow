@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entUser "github.com/whg517/sqlflow/internal/db/ent/user"
 	"github.com/whg517/sqlflow/internal/model"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -28,19 +30,21 @@ var ValidRoles = map[string]bool{"admin": true, "dba": true, "developer": true}
 
 // AuthService handles authentication logic.
 type AuthService struct {
-	db              *sql.DB
+	database        *db.DB
+	client          *ent.Client
 	jwtSecret       []byte
 	jwtExpiry       time.Duration
 	refreshTokenSvc *RefreshTokenService
 }
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *sql.DB, jwtSecret string, jwtExpiry time.Duration) *AuthService {
+func NewAuthService(database *db.DB, jwtSecret string, jwtExpiry time.Duration) *AuthService {
 	return &AuthService{
-		db:              db,
+		database:        database,
+		client:          database.Client(),
 		jwtSecret:       []byte(jwtSecret),
 		jwtExpiry:       jwtExpiry,
-		refreshTokenSvc: NewRefreshTokenService(db),
+		refreshTokenSvc: NewRefreshTokenService(database),
 	}
 }
 
@@ -61,48 +65,42 @@ func (s *AuthService) CreateUser(ctx context.Context, username, password, role s
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)`,
-		username, string(hash), role,
-	)
+	created, err := s.client.User.Create().
+		SetUsername(username).
+		SetPasswordHash(string(hash)).
+		SetRole(role).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
 
-	id, _ := result.LastInsertId()
-	return s.GetUserByID(ctx, id)
+	return s.GetUserByID(ctx, int64(created.ID))
 }
 
 // GetUserByUsername finds a user by username.
 func (s *AuthService) GetUserByUsername(ctx context.Context, username string) (*model.User, error) {
-	u := &model.User{}
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE username = ?`,
-		username,
-	).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt)
+	u, err := s.client.User.Query().
+		Where(entUser.Username(username)).
+		Only(ctx)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if ent.IsNotFound(err) {
 			return nil, ErrUserNotFound
 		}
 		return nil, fmt.Errorf("query user: %w", err)
 	}
-	return u, nil
+	return entUserToModel(u), nil
 }
 
 // GetUserByID finds a user by ID.
 func (s *AuthService) GetUserByID(ctx context.Context, id int64) (*model.User, error) {
-	u := &model.User{}
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE id = ?`,
-		id,
-	).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt)
+	u, err := s.client.User.Get(ctx, int(id))
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if ent.IsNotFound(err) {
 			return nil, ErrUserNotFound
 		}
 		return nil, fmt.Errorf("query user: %w", err)
 	}
-	return u, nil
+	return entUserToModel(u), nil
 }
 
 // Authenticate validates credentials and returns a signed JWT access token and a refresh token.
@@ -146,10 +144,9 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, oldPassw
 		return fmt.Errorf("hash password: %w", err)
 	}
 
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`,
-		string(hash), userID,
-	)
+	_, err = s.client.User.UpdateOneID(int(userID)).
+		SetPasswordHash(string(hash)).
+		Save(ctx)
 	if err != nil {
 		return err
 	}
@@ -162,18 +159,19 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, oldPassw
 
 // UserCount returns the number of users in the database.
 func (s *AuthService) UserCount(ctx context.Context) (int, error) {
-	var count int
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count)
+	count, err := s.client.User.Query().Count(ctx)
 	return count, err
 }
 
 // ListUsers returns a paginated list of users.
+// RAW_SQL: pagination helper uses raw SQL for LIMIT/OFFSET with count.
+// This will be migrated to ent pagination in a future cleanup.
 func (s *AuthService) ListUsers(ctx context.Context, page, pageSize int64) ([]*model.User, int64, error) {
 	p := ParsePagination(int(page), int(pageSize))
 
 	var total int64
 	countSQL := PaginatedCountSQL("users", "")
-	if err := s.db.QueryRowContext(ctx, countSQL).Scan(&total); err != nil {
+	if err := s.database.DB.QueryRowContext(ctx, countSQL).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count users: %w", err)
 	}
 
@@ -182,7 +180,7 @@ func (s *AuthService) ListUsers(ctx context.Context, page, pageSize int64) ([]*m
 		"users", "", "id", p,
 	)
 	queryArgs := AppendLimitArgs(nil, p)
-	rows, err := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query users: %w", err)
 	}
@@ -204,38 +202,36 @@ func (s *AuthService) ListUsers(ctx context.Context, page, pageSize int64) ([]*m
 
 // UpdateUserRole updates a user's role. Returns an error if the user does not exist.
 func (s *AuthService) UpdateUserRole(ctx context.Context, userID int64, role string) (*model.User, error) {
-	result, err := s.db.ExecContext(ctx,
-		`UPDATE users SET role = ?, updated_at = datetime('now') WHERE id = ?`,
-		role, userID,
-	)
+	_, err := s.client.User.UpdateOneID(int(userID)).
+		SetRole(role).
+		Save(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ErrUserNotFound
+		}
 		return nil, fmt.Errorf("update user role: %w", err)
-	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
-		return nil, ErrUserNotFound
 	}
 	return s.GetUserByID(ctx, userID)
 }
 
 // DeleteUser deletes a user by ID.
 func (s *AuthService) DeleteUser(ctx context.Context, userID int64) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, userID)
+	err := s.client.User.DeleteOneID(int(userID)).Exec(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return ErrUserNotFound
+		}
 		return fmt.Errorf("delete user: %w", err)
-	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
-		return ErrUserNotFound
 	}
 	return nil
 }
 
 // AdminCount returns the number of admin users.
 func (s *AuthService) AdminCount(ctx context.Context) (int64, error) {
-	var count int64
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE role = 'admin'`).Scan(&count)
-	return count, err
+	count, err := s.client.User.Query().
+		Where(entUser.Role("admin")).
+		Count(ctx)
+	return int64(count), err
 }
 
 // ResetPassword resets a user's password (admin operation, no old password check).
@@ -245,16 +241,14 @@ func (s *AuthService) ResetPassword(ctx context.Context, userID int64, newPasswo
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
-	result, err := s.db.ExecContext(ctx,
-		`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`,
-		string(hash), userID,
-	)
+	_, err = s.client.User.UpdateOneID(int(userID)).
+		SetPasswordHash(string(hash)).
+		Save(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return ErrUserNotFound
+		}
 		return fmt.Errorf("reset password: %w", err)
-	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
-		return ErrUserNotFound
 	}
 
 	// Revoke all refresh tokens for security (best-effort, ignore failure)
@@ -307,4 +301,18 @@ func (s *AuthService) ParseToken(tokenStr string) (*Claims, error) {
 		return nil, errors.New("invalid token")
 	}
 	return claims, nil
+}
+
+// entUserToModel converts an ent User entity to a model.User.
+func entUserToModel(u *ent.User) *model.User {
+	return &model.User{
+		ID:           int64(u.ID),
+		Username:     u.Username,
+		PasswordHash: u.PasswordHash,
+		Role:         u.Role,
+		OIDCSubject:  u.OidcSubject,
+		OIDCProvider: u.OidcProvider,
+		CreatedAt:    u.CreatedAt,
+		UpdatedAt:    u.UpdatedAt,
+	}
 }

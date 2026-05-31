@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -17,6 +16,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entOIDC "github.com/whg517/sqlflow/internal/db/ent/oidcprovider"
+	entUser "github.com/whg517/sqlflow/internal/db/ent/user"
 	"github.com/whg517/sqlflow/internal/model"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -31,11 +34,11 @@ var (
 
 // OIDCClaims represents standard OIDC ID token claims used for user mapping.
 type OIDCClaims struct {
-	Sub      string `json:"sub"`
-	Email    string `json:"email"`
-	Name     string `json:"name"`
+	Sub               string `json:"sub"`
+	Email             string `json:"email"`
+	Name              string `json:"name"`
 	PreferredUsername string `json:"preferred_username"`
-	Picture  string `json:"picture"`
+	Picture           string `json:"picture"`
 }
 
 // oidcDiscovery represents the OIDC discovery document.
@@ -57,19 +60,21 @@ type oidcTokenResponse struct {
 
 // OIDCService provides generic OIDC Authorization Code Flow + PKCE authentication.
 type OIDCService struct {
-	db         *sql.DB
+	database   *db.DB
+	client     *ent.Client
 	authSvc    *AuthService
 	httpClient *http.Client
 
-	mu         sync.RWMutex
-	discovery  map[string]*oidcDiscovery // cached per provider name
-	providers  map[string]*model.OIDCProvider // cached per provider name
+	mu        sync.RWMutex
+	discovery map[string]*oidcDiscovery         // cached per provider name
+	providers map[string]*model.OIDCProvider // cached per provider name
 }
 
 // NewOIDCService creates a new OIDCService.
-func NewOIDCService(db *sql.DB, authSvc *AuthService) *OIDCService {
+func NewOIDCService(database *db.DB, authSvc *AuthService) *OIDCService {
 	return &OIDCService{
-		db:         db,
+		database:   database,
+		client:     database.Client(),
 		authSvc:    authSvc,
 		httpClient: &http.Client{Timeout: 15 * time.Second},
 		discovery:  make(map[string]*oidcDiscovery),
@@ -79,14 +84,13 @@ func NewOIDCService(db *sql.DB, authSvc *AuthService) *OIDCService {
 
 // LoadProviders loads all enabled OIDC providers from the database.
 func (s *OIDCService) LoadProviders(ctx context.Context) error {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, issuer, client_id, client_secret, scopes, enabled, created_at, updated_at
-		 FROM oidc_providers WHERE enabled = 1 ORDER BY name`,
-	)
+	all, err := s.client.OIDCProvider.Query().
+		Where(entOIDC.Enabled(true)).
+		Order(ent.Asc(entOIDC.FieldName)).
+		All(ctx)
 	if err != nil {
 		return fmt.Errorf("query oidc_providers: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -95,14 +99,10 @@ func (s *OIDCService) LoadProviders(ctx context.Context) error {
 	s.providers = make(map[string]*model.OIDCProvider)
 	s.discovery = make(map[string]*oidcDiscovery)
 
-	for rows.Next() {
-		p := &model.OIDCProvider{}
-		if err := rows.Scan(&p.ID, &p.Name, &p.Issuer, &p.ClientID, &p.ClientSecret, &p.Scopes, &p.Enabled, &p.CreatedAt, &p.UpdatedAt); err != nil {
-			return fmt.Errorf("scan oidc_provider: %w", err)
-		}
-		s.providers[p.Name] = p
+	for _, p := range all {
+		s.providers[p.Name] = entOIDCProviderToModel(p)
 	}
-	return rows.Err()
+	return nil
 }
 
 // LoadConfigProviders loads providers from config (for bootstrapping when DB is empty).
@@ -112,8 +112,9 @@ func (s *OIDCService) LoadConfigProviders(ctx context.Context, providers []Confi
 			continue
 		}
 		// Check if already exists in DB
-		var count int
-		err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM oidc_providers WHERE name = ?`, cp.Name).Scan(&count)
+		count, err := s.client.OIDCProvider.Query().
+			Where(entOIDC.Name(cp.Name)).
+			Count(ctx)
 		if err != nil {
 			return fmt.Errorf("check provider %s: %w", cp.Name, err)
 		}
@@ -124,11 +125,14 @@ func (s *OIDCService) LoadConfigProviders(ctx context.Context, providers []Confi
 		if scopes == "" {
 			scopes = "openid profile email"
 		}
-		_, err = s.db.ExecContext(ctx,
-			`INSERT INTO oidc_providers (name, issuer, client_id, client_secret, scopes, enabled)
-			 VALUES (?, ?, ?, ?, ?, 1)`,
-			cp.Name, cp.Issuer, cp.ClientID, cp.ClientSecret, scopes,
-		)
+		_, err = s.client.OIDCProvider.Create().
+			SetName(cp.Name).
+			SetIssuer(cp.Issuer).
+			SetClientID(cp.ClientID).
+			SetClientSecret(cp.ClientSecret).
+			SetScopes(scopes).
+			SetEnabled(true).
+			Save(ctx)
 		if err != nil {
 			return fmt.Errorf("insert provider %s: %w", cp.Name, err)
 		}
@@ -400,7 +404,7 @@ func (s *OIDCService) findOrCreateUser(ctx context.Context, providerName string,
 	if err == nil {
 		return u, nil
 	}
-	if !errors.Is(err, sql.ErrNoRows) {
+	if !ent.IsNotFound(err) {
 		return nil, fmt.Errorf("query by oidc subject: %w", err)
 	}
 
@@ -409,10 +413,10 @@ func (s *OIDCService) findOrCreateUser(ctx context.Context, providerName string,
 		u, err = s.findByEmail(ctx, claims.Email)
 		if err == nil {
 			// Link OIDC identity to existing account.
-			_, err = s.db.ExecContext(ctx,
-				`UPDATE users SET oidc_subject = ?, oidc_provider = ?, updated_at = datetime('now') WHERE id = ?`,
-				claims.Sub, providerName, u.ID,
-			)
+			_, err = s.client.User.UpdateOneID(int(u.ID)).
+				SetOidcSubject(claims.Sub).
+				SetOidcProvider(providerName).
+				Save(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("link oidc identity: %w", err)
 			}
@@ -420,7 +424,7 @@ func (s *OIDCService) findOrCreateUser(ctx context.Context, providerName string,
 			u.OIDCProvider = providerName
 			return u, nil
 		}
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !ent.IsNotFound(err) {
 			return nil, fmt.Errorf("query by email: %w", err)
 		}
 	}
@@ -432,26 +436,29 @@ func (s *OIDCService) findOrCreateUser(ctx context.Context, providerName string,
 // findByOIDCSubject finds a user by their OIDC subject and provider.
 func (s *OIDCService) findByOIDCSubject(ctx context.Context, subject, provider string) (*model.User, error) {
 	if subject == "" {
-		return nil, sql.ErrNoRows
+		return nil, &ent.NotFoundError{}
 	}
-	u := &model.User{}
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, username, password_hash, role, oidc_subject, oidc_provider, created_at, updated_at
-		 FROM users WHERE oidc_subject = ? AND oidc_provider = ?`,
-		subject, provider,
-	).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OIDCSubject, &u.OIDCProvider, &u.CreatedAt, &u.UpdatedAt)
-	return u, err
+	u, err := s.client.User.Query().
+		Where(
+			entUser.OidcSubject(subject),
+			entUser.OidcProvider(provider),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return entUserToModel(u), nil
 }
 
 // findByEmail finds a user by email stored in username field (convention).
 func (s *OIDCService) findByEmail(ctx context.Context, email string) (*model.User, error) {
-	u := &model.User{}
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, username, password_hash, role, oidc_subject, oidc_provider, created_at, updated_at
-		 FROM users WHERE username = ?`,
-		email,
-	).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OIDCSubject, &u.OIDCProvider, &u.CreatedAt, &u.UpdatedAt)
-	return u, err
+	u, err := s.client.User.Query().
+		Where(entUser.Username(email)).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return entUserToModel(u), nil
 }
 
 // createUserFromOIDC creates a new user from OIDC claims.
@@ -465,7 +472,7 @@ func (s *OIDCService) createUserFromOIDC(ctx context.Context, providerName strin
 	}
 
 	// Ensure uniqueness
-	username = ensureUniqueUsername(ctx, s.db, username)
+	username = s.ensureUniqueUsername(ctx, username)
 
 	// Random password (user authenticates via OIDC, not password)
 	randomPassword := generateRandomPassword(32)
@@ -474,42 +481,34 @@ func (s *OIDCService) createUserFromOIDC(ctx context.Context, providerName strin
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, role, oidc_subject, oidc_provider)
-		 VALUES (?, ?, 'developer', ?, ?)`,
-		username, string(hash), claims.Sub, providerName,
-	)
+	_, err = s.client.User.Create().
+		SetUsername(username).
+		SetPasswordHash(string(hash)).
+		SetRole("developer").
+		SetOidcSubject(claims.Sub).
+		SetOidcProvider(providerName).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
-
-	id, _ := result.LastInsertId()
-	_ = id
 
 	// Re-fetch to get all columns
 	return s.findByOIDCSubject(ctx, claims.Sub, providerName)
 }
 
 // ensureUniqueUsername appends a numeric suffix if the username already exists.
-func ensureUniqueUsername(ctx context.Context, db *sql.DB, username string) string {
+func (s *OIDCService) ensureUniqueUsername(ctx context.Context, username string) string {
 	base := username
 	for i := 1; i <= 100; i++ {
-		var count int
-		err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE username = ?`, username).Scan(&count)
+		count, err := s.client.User.Query().
+			Where(entUser.Username(username)).
+			Count(ctx)
 		if err != nil || count == 0 {
 			return username
 		}
 		username = fmt.Sprintf("%s_%d", base, i)
 	}
 	return base + "_overflow"
-}
-
-// truncateString truncates a string to maxLen.
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen]
 }
 
 // InvalidateDiscovery clears cached discovery documents for a provider.
@@ -531,4 +530,27 @@ func generateRandomPassword(length int) string {
 	b := make([]byte, length)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// truncateString truncates a string to maxLen.
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
+}
+
+// entOIDCProviderToModel converts an ent OIDCProvider entity to a model.OIDCProvider.
+func entOIDCProviderToModel(p *ent.OIDCProvider) *model.OIDCProvider {
+	return &model.OIDCProvider{
+		ID:           int64(p.ID),
+		Name:         p.Name,
+		Issuer:       p.Issuer,
+		ClientID:     p.ClientID,
+		ClientSecret: p.ClientSecret,
+		Scopes:       p.Scopes,
+		Enabled:      p.Enabled,
+		CreatedAt:    p.CreatedAt,
+		UpdatedAt:    p.UpdatedAt,
+	}
 }

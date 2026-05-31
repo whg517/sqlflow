@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -11,7 +10,7 @@ import (
 )
 
 // setupAuthTestDB creates a temp SQLite database with schema migrated.
-func setupAuthTestDB(t *testing.T) *sql.DB {
+func setupAuthTestDB(t *testing.T) *db.DB {
 	t.Helper()
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -23,11 +22,11 @@ func setupAuthTestDB(t *testing.T) *sql.DB {
 	if err := database.Migrate(); err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}
-	return database.DB
+	return database
 }
 
 // newTestAuthService creates an AuthService with a real SQLite DB and test JWT config.
-func newTestAuthService(t *testing.T) (*AuthService, *sql.DB) {
+func newTestAuthService(t *testing.T) (*AuthService, *db.DB) {
 	t.Helper()
 	testDB := setupAuthTestDB(t)
 	svc := NewAuthService(testDB, "test-secret-key", 1*time.Hour)

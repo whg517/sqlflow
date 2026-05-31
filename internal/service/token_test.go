@@ -2,21 +2,38 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/whg517/sqlflow/internal/db"
 )
 
-// createTestUser creates a test user and returns the ID.
-func createTokenTestUser(t *testing.T, db *sql.DB, username string) int64 {
+// setupTokenTestDB creates a test database with schema migrated, returning *db.DB for ent-based services.
+func setupTokenTestDB(t *testing.T) *db.DB {
 	t.Helper()
-	_, err := db.Exec(`INSERT INTO users (username, password_hash, role) VALUES (?, 'hashed', 'developer')`, username)
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	database, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	if err := database.Migrate(); err != nil {
+		t.Fatalf("migrate test db: %v", err)
+	}
+	return database
+}
+
+// createTokenTestUser creates a test user and returns the ID.
+func createTokenTestUser(t *testing.T, database *db.DB, username string) int64 {
+	t.Helper()
+	_, err := database.Exec(`INSERT INTO users (username, password_hash, role) VALUES (?, 'hashed', 'developer')`, username)
 	if err != nil {
 		t.Fatalf("create test user: %v", err)
 	}
 	var id int64
-	err = db.QueryRow(`SELECT id FROM users WHERE username = ?`, username).Scan(&id)
+	err = database.QueryRow(`SELECT id FROM users WHERE username = ?`, username).Scan(&id)
 	if err != nil {
 		t.Fatalf("get test user id: %v", err)
 	}
@@ -24,7 +41,7 @@ func createTokenTestUser(t *testing.T, db *sql.DB, username string) int64 {
 }
 
 func TestTokenService_CreateToken(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupTokenTestDB(t)
 	svc := NewTokenService(db)
 	ctx := context.Background()
 	userID := createTokenTestUser(t, db, "token_create")
@@ -54,7 +71,7 @@ func TestTokenService_CreateToken(t *testing.T) {
 }
 
 func TestTokenService_CreateToken_DuplicateName(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupTokenTestDB(t)
 	svc := NewTokenService(db)
 	ctx := context.Background()
 	userID := createTokenTestUser(t, db, "token_dup")
@@ -71,7 +88,7 @@ func TestTokenService_CreateToken_DuplicateName(t *testing.T) {
 }
 
 func TestTokenService_ValidateToken(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupTokenTestDB(t)
 	svc := NewTokenService(db)
 	ctx := context.Background()
 	userID := createTokenTestUser(t, db, "token_validate")
@@ -104,7 +121,7 @@ func TestTokenService_ValidateToken(t *testing.T) {
 }
 
 func TestTokenService_ValidateToken_Expired(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupTokenTestDB(t)
 	svc := NewTokenService(db)
 	ctx := context.Background()
 	userID := createTokenTestUser(t, db, "token_expired")
@@ -122,7 +139,7 @@ func TestTokenService_ValidateToken_Expired(t *testing.T) {
 }
 
 func TestTokenService_RevokeToken(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupTokenTestDB(t)
 	svc := NewTokenService(db)
 	ctx := context.Background()
 	userID := createTokenTestUser(t, db, "token_revoke")
@@ -153,7 +170,7 @@ func TestTokenService_RevokeToken(t *testing.T) {
 }
 
 func TestTokenService_ListTokens(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupTokenTestDB(t)
 	svc := NewTokenService(db)
 	ctx := context.Background()
 	userID := createTokenTestUser(t, db, "token_list")
@@ -210,7 +227,7 @@ func TestTokenService_HasScope(t *testing.T) {
 }
 
 func TestTokenService_ValidateToken_IncrementsUsage(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupTokenTestDB(t)
 	svc := NewTokenService(db)
 	ctx := context.Background()
 	userID := createTokenTestUser(t, db, "token_usage")

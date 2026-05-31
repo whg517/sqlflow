@@ -11,6 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entToken "github.com/whg517/sqlflow/internal/db/ent/apitoken"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -34,12 +37,16 @@ var ValidAPITokenScopes = []string{
 
 // TokenService manages API tokens for external integrations.
 type TokenService struct {
-	db *sql.DB
+	database *db.DB
+	client   *ent.Client
 }
 
 // NewTokenService creates a new TokenService.
-func NewTokenService(db *sql.DB) *TokenService {
-	return &TokenService{db: db}
+func NewTokenService(database *db.DB) *TokenService {
+	return &TokenService{
+		database: database,
+		client:   database.Client(),
+	}
 }
 
 // CreateToken generates a new API token and stores its hash.
@@ -51,11 +58,13 @@ func (s *TokenService) CreateToken(ctx context.Context, userID int64, name, desc
 	}
 
 	// Check duplicate name for same user
-	var count int
-	err = s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM api_tokens WHERE user_id = ? AND name = ? AND is_active = 1`,
-		userID, name,
-	).Scan(&count)
+	count, err := s.client.APIToken.Query().
+		Where(
+			entToken.UserID(userID),
+			entToken.Name(name),
+			entToken.IsActive(true),
+		).
+		Count(ctx)
 	if err != nil {
 		return "", nil, fmt.Errorf("check token name: %w", err)
 	}
@@ -79,17 +88,20 @@ func (s *TokenService) CreateToken(ctx context.Context, userID int64, name, desc
 
 	scopeStr := strings.Join(scopes, ",")
 
-	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO api_tokens (user_id, name, token_hash, token_prefix, scopes, expires_at, description)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		userID, name, tokenHash, prefix, scopeStr, expiresAt.Format("2006-01-02 15:04:05"), description,
-	)
+	created, err := s.client.APIToken.Create().
+		SetUserID(userID).
+		SetName(name).
+		SetTokenHash(tokenHash).
+		SetTokenPrefix(prefix).
+		SetScopes(scopeStr).
+		SetExpiresAt(expiresAt.UTC()).
+		SetDescription(description).
+		Save(ctx)
 	if err != nil {
 		return "", nil, fmt.Errorf("insert token: %w", err)
 	}
 
-	id, _ := result.LastInsertId()
-	token, err = s.GetTokenByID(ctx, id)
+	token, err = s.GetTokenByID(ctx, int64(created.ID))
 	if err != nil {
 		return plainToken, nil, nil // token saved but lookup failed, still return plaintext
 	}
@@ -98,13 +110,14 @@ func (s *TokenService) CreateToken(ctx context.Context, userID int64, name, desc
 }
 
 // GetTokenByID retrieves a token by its ID.
+// RAW_SQL: LEFT JOIN users for username — no ent edge defined for this relation.
 func (s *TokenService) GetTokenByID(ctx context.Context, id int64) (*model.APIToken, error) {
 	t := &model.APIToken{}
 	var isActive int
 	var lastUsedAt sql.NullTime
 	var username sql.NullString
 
-	err := s.db.QueryRowContext(ctx,
+	err := s.database.DB.QueryRowContext(ctx,
 		`SELECT t.id, t.user_id, u.username, t.name, t.token_hash, t.token_prefix,
 		        t.scopes, t.expires_at, t.last_used_at, t.use_count, t.is_active,
 		        t.description, t.created_at, t.updated_at
@@ -134,6 +147,7 @@ func (s *TokenService) GetTokenByID(ctx context.Context, id int64) (*model.APITo
 }
 
 // ListTokens returns all active tokens for a user.
+// RAW_SQL: LEFT JOIN users for username — no ent edge defined for this relation.
 func (s *TokenService) ListTokens(ctx context.Context, userID int64) ([]*model.APIToken, error) {
 	query := `SELECT t.id, t.user_id, COALESCE(u.username, ''), t.name, t.token_hash, t.token_prefix,
 			        t.scopes, t.expires_at, t.last_used_at, t.use_count, t.is_active,
@@ -143,7 +157,7 @@ func (s *TokenService) ListTokens(ctx context.Context, userID int64) ([]*model.A
 			 WHERE t.user_id = ?
 			 ORDER BY t.created_at DESC`
 
-	rows, err := s.db.QueryContext(ctx, query, userID)
+	rows, err := s.database.DB.QueryContext(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("query tokens: %w", err)
 	}
@@ -153,14 +167,16 @@ func (s *TokenService) ListTokens(ctx context.Context, userID int64) ([]*model.A
 }
 
 // ListAllTokens returns all tokens (admin view).
+// RAW_SQL: LEFT JOIN users for username — no ent edge defined for this relation.
 func (s *TokenService) ListAllTokens(ctx context.Context, page, pageSize int) ([]*model.APIToken, int64, error) {
 	p := ParsePagination(page, pageSize)
 
 	var total int64
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM api_tokens`).Scan(&total)
+	count, err := s.client.APIToken.Query().Count(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count tokens: %w", err)
 	}
+	total = int64(count)
 
 	querySQL := PaginatedQuerySQL(
 		`SELECT t.id, t.user_id, COALESCE(u.username, ''), t.name, t.token_hash, t.token_prefix,
@@ -171,7 +187,7 @@ func (s *TokenService) ListAllTokens(ctx context.Context, page, pageSize int) ([
 		"", "", "t.id", p,
 	)
 	queryArgs := AppendLimitArgs(nil, p)
-	rows, err := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query tokens: %w", err)
 	}
@@ -186,38 +202,39 @@ func (s *TokenService) ListAllTokens(ctx context.Context, page, pageSize int) ([
 
 // RevokeToken deactivates a token.
 func (s *TokenService) RevokeToken(ctx context.Context, tokenID, userID int64) error {
-	result, err := s.db.ExecContext(ctx,
-		`UPDATE api_tokens SET is_active = 0, updated_at = datetime('now') WHERE id = ? AND user_id = ?`,
-		tokenID, userID,
-	)
+	// First verify the token belongs to the user
+	t, err := s.client.APIToken.Get(ctx, int(tokenID))
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return ErrTokenNotFound
+		}
 		return fmt.Errorf("revoke token: %w", err)
 	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
+	if t.UserID != userID {
 		return ErrTokenNotFound
 	}
-	return nil
+	return s.client.APIToken.UpdateOneID(int(tokenID)).
+		SetIsActive(false).
+		Exec(ctx)
 }
 
-// RevokeTokenAdmin deactivates any token (admin operation).
+// RevokeTokenAdmin deactivates any token (admin operation, soft delete).
 func (s *TokenService) RevokeTokenAdmin(ctx context.Context, tokenID int64) error {
-	result, err := s.db.ExecContext(ctx,
-		`UPDATE api_tokens SET is_active = 0, updated_at = datetime('now') WHERE id = ?`,
-		tokenID,
-	)
+	err := s.client.APIToken.UpdateOneID(int(tokenID)).
+		SetIsActive(false).
+		Exec(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return ErrTokenNotFound
+		}
 		return fmt.Errorf("revoke token: %w", err)
-	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
-		return ErrTokenNotFound
 	}
 	return nil
 }
 
 // ValidateToken checks if a plaintext token is valid and returns the associated user info.
 // It also records usage (last_used_at, use_count).
+// RAW_SQL: LEFT JOIN users for username — no ent edge defined for this relation.
 func (s *TokenService) ValidateToken(ctx context.Context, plainToken string) (userID int64, username string, scopes []string, err error) {
 	hash := sha256.Sum256([]byte(plainToken))
 	tokenHash := hex.EncodeToString(hash[:])
@@ -227,7 +244,7 @@ func (s *TokenService) ValidateToken(ctx context.Context, plainToken string) (us
 	var expiresAt time.Time
 	var lastUsedAt sql.NullTime
 
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT t.user_id, COALESCE(u.username, ''), t.scopes, t.expires_at, t.is_active, t.last_used_at
 		 FROM api_tokens t
 		 LEFT JOIN users u ON u.id = t.user_id
@@ -250,7 +267,8 @@ func (s *TokenService) ValidateToken(ctx context.Context, plainToken string) (us
 	}
 
 	// Update usage (best-effort, don't fail auth on update error)
-	_, _ = s.db.ExecContext(ctx,
+	// RAW_SQL: atomic increment via raw SQL (use_count = use_count + 1)
+	_, _ = s.database.DB.ExecContext(ctx,
 		`UPDATE api_tokens SET last_used_at = datetime('now'), use_count = use_count + 1, updated_at = datetime('now') WHERE token_hash = ?`,
 		tokenHash,
 	)
@@ -316,8 +334,10 @@ func scanTokens(rows *sql.Rows) ([]*model.APIToken, error) {
 }
 
 // GetTokenStats returns aggregate token statistics for a user.
+// RAW_SQL: aggregate query with SUM/CASE — ent query builder can express this
+// but raw SQL is clearer for this specific aggregation pattern.
 func (s *TokenService) GetTokenStats(ctx context.Context, userID int64) (totalCount, activeCount, totalUsage int64, err error) {
-	err = s.db.QueryRowContext(ctx,
+	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*), SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), COALESCE(SUM(use_count), 0)
 		 FROM api_tokens WHERE user_id = ?`, userID,
 	).Scan(&totalCount, &activeCount, &totalUsage)

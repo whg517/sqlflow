@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -11,7 +10,7 @@ import (
 )
 
 // setupRefreshTokenTest creates a test database with a user for refresh token tests.
-func setupRefreshTokenTest(t *testing.T) (*sql.DB, int64) {
+func setupRefreshTokenTest(t *testing.T) (*db.DB, int64) {
 	t.Helper()
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -33,7 +32,7 @@ func setupRefreshTokenTest(t *testing.T) (*sql.DB, int64) {
 	}
 	userID, _ := result.LastInsertId()
 
-	return database.DB, userID
+	return database, userID
 }
 
 func TestRefreshTokenService_GenerateToken(t *testing.T) {

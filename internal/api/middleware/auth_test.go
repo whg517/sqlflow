@@ -414,7 +414,7 @@ func newTestAuthSvc(t *testing.T) *service.AuthService {
 	if err := database.Migrate(); err != nil {
 		t.Fatalf("migrate test db: %v", err)
 	}
-	return service.NewAuthService(database.DB, "test-secret-key", 1*time.Hour)
+	return service.NewAuthService(database, "test-secret-key", 1*time.Hour)
 }
 
 // generateToken creates a signed JWT with the given claims and secret.

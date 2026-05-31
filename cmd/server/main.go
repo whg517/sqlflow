@@ -48,7 +48,7 @@ func main() {
 	log.Println("database migrated successfully")
 
 	// Initialize services
-	authSvc := service.NewAuthService(database.DB, cfg.JWT.Secret, cfg.JWT.Expiry)
+	authSvc := service.NewAuthService(database, cfg.JWT.Secret, cfg.JWT.Expiry)
 
 	// Initialize connection pool manager
 	connMgr := connpool.NewManager()
@@ -117,7 +117,7 @@ func main() {
 	log.Println("comment service initialized")
 
 	// Initialize OIDC service
-	oidcSvc := service.NewOIDCService(database.DB, authSvc)
+	oidcSvc := service.NewOIDCService(database, authSvc)
 	if len(cfg.OIDC.Providers) > 0 {
 		configProviders := make([]service.ConfigOIDCProvider, 0, len(cfg.OIDC.Providers))
 		for _, p := range cfg.OIDC.Providers {
@@ -152,7 +152,7 @@ func main() {
 	log.Println("SLA scheduler started (interval=10m)")
 
 	// Initialize API token service
-	tokenSvc := service.NewTokenService(database.DB)
+	tokenSvc := service.NewTokenService(database)
 	log.Println("api token service initialized")
 
 	// Initialize SQL template service

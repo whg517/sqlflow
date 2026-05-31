@@ -38,7 +38,7 @@ func setupUserTest(t *testing.T) (*echo.Echo, *service.AuthService, *UserHandler
 		t.Fatalf("migrate: %v", err)
 	}
 
-	authSvc := service.NewAuthService(database.DB, "test-jwt-secret-32byteslong!", 24*time.Hour)
+	authSvc := service.NewAuthService(database, "test-jwt-secret-32byteslong!", 24*time.Hour)
 	handler := NewUserHandler(authSvc)
 
 	e := echo.New()
