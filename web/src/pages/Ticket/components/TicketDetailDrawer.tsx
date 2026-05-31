@@ -201,6 +201,11 @@ export default function TicketDetailDrawer({
     );
   const canExecute = (isSubmitter || isDBA) && status === "APPROVED";
 
+  // Already acted — show disabled indicator for processed tickets
+  const alreadyActed =
+    isDBA &&
+    ["APPROVED", "REJECTED", "DONE", "EXECUTING"].includes(status ?? "");
+
   // Parse AI review result
   let aiReview: {
     summary?: string;
@@ -337,7 +342,7 @@ export default function TicketDetailDrawer({
                         SQL 内容
                       </label>
                       <div className="relative">
-                        <pre className="max-h-48 overflow-auto rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 text-xs text-[var(--text-primary)] whitespace-pre-wrap break-all">
+                        <pre className="max-h-48 overflow-auto rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 text-xs text-[var(--text-primary)] whitespace-pre-wrap break-words [word-break:break-word]">
                           {ticket.sql_content}
                         </pre>
                         <button
@@ -383,6 +388,19 @@ export default function TicketDetailDrawer({
                             </p>
                           )}
                         </div>
+                      </div>
+                    )}
+
+                    {/* Rejection Reason — show for REJECTED tickets */}
+                    {status === "REJECTED" && ticket.review_comment && (
+                      <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2">
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-red-400 mb-1">
+                          <XCircle size={12} />
+                          驳回原因
+                        </div>
+                        <p className="text-xs text-red-300/70 whitespace-pre-wrap">
+                          {ticket.review_comment}
+                        </p>
                       </div>
                     )}
 
@@ -433,9 +451,15 @@ export default function TicketDetailDrawer({
           )}
 
           {/* Footer Actions */}
-          {ticket && (canApprove || canReject || canCancel || canExecute || canResubmit) && !resubmitMode && (
+          {ticket && !resubmitMode && (canApprove || canReject || canCancel || canExecute || canResubmit || alreadyActed) && (
             <SheetFooter className="border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3">
               <div className="flex w-full items-center gap-2">
+                {/* Already acted indicator */}
+                {alreadyActed && !canApprove && !canReject && !canExecute && !canResubmit && (
+                  <span className="text-xs text-[var(--text-muted)]">
+                    审批已完成
+                  </span>
+                )}
                 {canResubmit && (
                   <Button
                     size="sm"
