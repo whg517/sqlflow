@@ -51,7 +51,7 @@ jobs:
     strategy:
       matrix:
         # PR: smoke only (fast). Push/schedule/dispatch: real + mock (full).
-        scope: ${{ (github.event_name == 'pull_request' && '["smoke"]') || '["real", "mock"]' }}
+        scope: ${{ fromJSON(github.event_name == 'pull_request' && '[["smoke"]]' || '[["real"],["mock"]]') }}
       fail-fast: false
 
     steps:
