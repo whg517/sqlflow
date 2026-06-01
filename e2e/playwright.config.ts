@@ -61,12 +61,5 @@ export default defineConfig({
       testDir: './tests',
       testIgnore: '**/smoke.spec.ts',
     },
-    {
-      name: 'mock',
-      testDir: './tests',
-      // Mock project: currently aliases to smoke tests
-      // TODO: add dedicated mock/API-intercept tests when needed
-      testMatch: '**/smoke.spec.ts',
-    },
   ],
 })

@@ -100,7 +100,7 @@ jobs:
     if: github.event_name != 'pull_request'
     strategy:
       matrix:
-        scope: [real, mock]
+        scope: [real]
       fail-fast: false
 
     steps:
