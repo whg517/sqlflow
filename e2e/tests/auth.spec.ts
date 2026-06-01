@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test'
 import { apiRequest, login, waitForBackend, cleanup, resetToken } from '../support/real-api'
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
-const DEFAULT_USERNAME = process.env.E2E_USERNAME ?? 'e2e-admin'
+const DEFAULT_USERNAME = process.env.E2E_USERNAME ?? 'e2eadmin'
 const DEFAULT_PASSWORD = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
 
 // Real-backend tests are slower — give them generous timeouts.
@@ -114,13 +114,13 @@ test('登录成功：获取 token → 存储 → 跳转 /query', async ({ page }
 
 test('登录失败：错误密码 → 401 → 显示错误提示', async ({ page }) => {
   const { status } = await loginViaApi({
-    username: 'e2e-admin',
+    username: 'e2eadmin',
     password: 'wrong-password-123',
   })
   expect(status).toBe(401)
 
   await page.goto(`${BASE_URL}/login`)
-  await page.getByPlaceholder('用户名').fill('e2e-admin')
+  await page.getByPlaceholder('用户名').fill('e2eadmin')
   await page.getByPlaceholder('密码').fill('wrong-password-123')
   await page.getByRole('button', { name: '登 录' }).click()
 

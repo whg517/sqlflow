@@ -13,7 +13,7 @@
  *   - ticket-flow 通过 API 直接审批/执行，验证数据正确性
  *   - 本文件通过 UI 交互触发审批和执行，验证 UI 联动
  *
- * 前置：docker-compose.test.yml 环境，e2e-admin 账号可用
+ * 前置：docker-compose.test.yml 环境，e2eadmin 账号可用
  */
 import { test, expect, BASE_URL, loginViaUI, apiHelper, getFirstDatasourceId } from '../support/real-test-helpers'
 

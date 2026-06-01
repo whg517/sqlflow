@@ -9,7 +9,7 @@
  *   - 本文件专精拒绝流程，测试更多边界场景（原因必填、列表/详情状态同步、
  *     拒绝后执行按钮消失、通过按钮消失等）
  *
- * 前置：docker-compose.test.yml 环境，e2e-admin 账号可用
+ * 前置：docker-compose.test.yml 环境，e2eadmin 账号可用
  */
 import { test, expect, BASE_URL, loginViaUI, apiHelper, getFirstDatasourceId } from '../support/real-test-helpers'
 

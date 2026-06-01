@@ -9,7 +9,7 @@ import { test as base, expect, request, type Page } from '@playwright/test'
 // --- Config (defaults match docker-compose.test.yml) ---
 
 export const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
-export const ADMIN_USER = process.env.E2E_USERNAME ?? 'e2e-admin'
+export const ADMIN_USER = process.env.E2E_USERNAME ?? 'e2eadmin'
 export const ADMIN_PASS = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
 
 // --- Re-export base test & expect ---

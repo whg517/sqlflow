@@ -14,7 +14,7 @@
  *   - 50 条上限校验
  *   - 批量操作后列表刷新
  *
- * 前置：docker-compose.test.yml 环境，e2e-admin 账号可用（admin/dba 角色可批量操作）
+ * 前置：docker-compose.test.yml 环境，e2eadmin 账号可用（admin/dba 角色可批量操作）
  */
 import { test, expect, loginViaApi, getFirstDatasourceId, apiHelper } from '../support/real-test-helpers'
 import {

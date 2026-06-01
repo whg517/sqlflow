@@ -17,7 +17,7 @@ import { test, expect, type Page } from '@playwright/test'
 // --- Config ---
 
 const BACKEND = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
-const USERNAME = process.env.E2E_USERNAME ?? 'e2e-admin'
+const USERNAME = process.env.E2E_USERNAME ?? 'e2eadmin'
 const PASSWORD = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
 
 // Extend timeout for real network calls

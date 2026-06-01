@@ -6,7 +6,7 @@ import { test, expect, type Page } from '@playwright/test'
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
 
 // Default admin credentials for real backend login
-const ADMIN_USERNAME = process.env.E2E_USERNAME ?? 'e2e-admin'
+const ADMIN_USERNAME = process.env.E2E_USERNAME ?? 'e2eadmin'
 const ADMIN_PASSWORD = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
 
 // --- Helpers ---

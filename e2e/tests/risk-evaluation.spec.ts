@@ -17,7 +17,7 @@
  *   - 敏感表交叉检测（通过敏感表 API 配置 + 工单创建验证）
  *   - 边界条件
  *
- * 前置：docker-compose.test.yml 环境，e2e-admin 账号可用
+ * 前置：docker-compose.test.yml 环境，e2eadmin 账号可用
  */
 import { test, expect, BASE_URL, ADMIN_USER, ADMIN_PASS, loginViaApi, getFirstDatasourceId, apiHelper, getToken } from '../support/real-test-helpers'
 import type { Page } from '@playwright/test'

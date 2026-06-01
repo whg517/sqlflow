@@ -12,7 +12,7 @@
  *   - 多语句（单条）
  *   - 边界条件：空 SQL、纯注释、特殊语法
  *
- * 前置：docker-compose.test.yml 环境，e2e-admin 账号可用
+ * 前置：docker-compose.test.yml 环境，e2eadmin 账号可用
  */
 import { test, expect, BASE_URL, ADMIN_USER, ADMIN_PASS, loginViaApi, getFirstDatasourceId, apiHelper } from '../support/real-test-helpers'
 import type { Page } from '@playwright/test'

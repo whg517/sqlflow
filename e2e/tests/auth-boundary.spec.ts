@@ -31,7 +31,7 @@ test.describe('认证边界 — 密码场景', () => {
     await page.goto('/login')
 
     await page.getByPlaceholder('用户名').fill(ADMIN_USER)
-    // 使用 8 字符密码（如果 e2e-admin 密码恰好是 8 字符则验证通过）
+    // 使用 8 字符密码（如果 e2eadmin 密码恰好是 8 字符则验证通过）
     await page.getByPlaceholder('密码').fill(ADMIN_PASS)
     await page.getByRole('button', { name: '登 录' }).click()
 

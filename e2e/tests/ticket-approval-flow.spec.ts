@@ -7,7 +7,7 @@
  *   - ticket-flow 做基础全流程（API 创建→审批→执行→验证数据）
  *   - 本文件聚焦 UI 层：详情抽屉打开/关闭、按钮显隐状态、审批对话框交互、toast 提示
  *
- * 前置：docker-compose.test.yml 环境，e2e-admin 账号可用
+ * 前置：docker-compose.test.yml 环境，e2eadmin 账号可用
  */
 import { test, expect, BASE_URL, ADMIN_USER, loginViaUI, apiHelper, getFirstDatasourceId } from '../support/real-test-helpers'
 

@@ -216,7 +216,7 @@ test.describe('审批安全测试', () => {
   test('权限矩阵 — 3 角色工单页面行为差异', async ({ page }) => {
     const roles = ['admin', 'developer', 'dba'] as const
     const credentials: Record<string, [string, string]> = {
-      admin: ['e2e-admin', 'e2e-test-pass-123'],
+      admin: ['e2eadmin', 'e2e-test-pass-123'],
       developer: ['e2e-developer', 'e2e-test-pass-123'],
       dba: ['e2e-dba', 'e2e-test-pass-123'],
     }

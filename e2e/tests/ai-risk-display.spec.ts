@@ -17,7 +17,7 @@
  *   medium: bg-yellow-500/20 text-yellow-400  (dot: bg-yellow-400)
  *   high:   bg-red-500/20 text-red-400       (dot: bg-red-400)
  *
- * 前置：docker-compose.test.yml 环境，e2e-admin 账号可用
+ * 前置：docker-compose.test.yml 环境，e2eadmin 账号可用
  */
 import { test, expect, loginViaApi, getFirstDatasourceId, apiHelper } from '../support/real-test-helpers'
 import {

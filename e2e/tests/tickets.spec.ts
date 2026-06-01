@@ -7,7 +7,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
-const ADMIN_USER = process.env.E2E_USERNAME ?? 'e2e-admin'
+const ADMIN_USER = process.env.E2E_USERNAME ?? 'e2eadmin'
 const ADMIN_PASS = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
 
 test.describe.configure({ timeout: 45_000 })

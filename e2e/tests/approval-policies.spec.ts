@@ -19,7 +19,7 @@
  *   - 边界：策略名称重复、JSON 格式错误、空名称
  *
  * 隔离：策略名称使用 e2e_test_{uuid}_ 前缀
- * 前置：docker-compose.test.yml 环境，e2e-admin 账号可用
+ * 前置：docker-compose.test.yml 环境，e2eadmin 账号可用
  */
 import { test, expect, BASE_URL, ADMIN_USER, ADMIN_PASS, getToken, loginViaApi } from '../support/real-test-helpers'
 

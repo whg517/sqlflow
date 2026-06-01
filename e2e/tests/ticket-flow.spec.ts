@@ -26,7 +26,7 @@ import { test, expect, type Page } from '@playwright/test'
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
 const DB_NAME = process.env.E2E_DB_NAME || 'sqlflow_test'
-const ADMIN_USER = process.env.E2E_USERNAME ?? 'e2e-admin'
+const ADMIN_USER = process.env.E2E_USERNAME ?? 'e2eadmin'
 const ADMIN_PASS = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
 
 const E2E_TABLE = 'e2e_test'

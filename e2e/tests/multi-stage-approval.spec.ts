@@ -20,7 +20,7 @@
  *   - 非法审批动作拦截
  *
  * 隔离：策略名称使用 e2e_test_{uuid}_ 前缀
- * 前置：docker-compose.test.yml 环境，e2e-admin 账号可用
+ * 前置：docker-compose.test.yml 环境，e2eadmin 账号可用
  */
 import { test, expect, BASE_URL, ADMIN_USER, ADMIN_PASS, loginViaApi, getFirstDatasourceId, getToken, apiHelper } from '../support/real-test-helpers'
 import type { Page } from '@playwright/test'
@@ -159,7 +159,7 @@ test.describe('多级审批流程', () => {
     const ticket = await getTicket(page, ticketId)
     expect(['PENDING_APPROVAL', 'SUBMITTED']).toContain(ticket.data.status)
 
-    // 第一级审批通过（e2e-admin 角色）
+    // 第一级审批通过（e2eadmin 角色）
     const r1 = await engineApprove(page, ticketId, 'approved', 'Stage 1: dba approved')
     expect(r1.status).toBe(200)
 

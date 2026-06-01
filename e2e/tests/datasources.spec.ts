@@ -13,7 +13,7 @@ const TEST_DS = {
   max_open: 10,
 }
 
-const ADMIN_USERNAME = process.env.E2E_USERNAME ?? 'e2e-admin'
+const ADMIN_USERNAME = process.env.E2E_USERNAME ?? 'e2eadmin'
 const ADMIN_PASSWORD = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
 const ADMIN_CREDS = { username: ADMIN_USERNAME, password: ADMIN_PASSWORD }
 

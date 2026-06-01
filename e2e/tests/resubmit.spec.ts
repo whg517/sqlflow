@@ -21,7 +21,7 @@
  *   - 超长评论边界条件
  *
  * 隔离：工单 change_reason 使用 e2e_test_ 前缀
- * 前置：docker-compose.test.yml 环境，e2e-admin 账号可用
+ * 前置：docker-compose.test.yml 环境，e2eadmin 账号可用
  */
 import { test, expect, BASE_URL, ADMIN_USER, ADMIN_PASS, loginViaApi, getFirstDatasourceId, apiHelper } from '../support/real-test-helpers'
 import type { Page } from '@playwright/test'

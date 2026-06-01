@@ -14,7 +14,7 @@
  *   - 审批对话框取消后状态不变
  *   - 焦点管理（对话框打开时焦点在 textarea）
  *
- * 前置：docker-compose.test.yml 环境，e2e-admin 账号可用
+ * 前置：docker-compose.test.yml 环境，e2eadmin 账号可用
  */
 import { test, expect, loginViaApi, getFirstDatasourceId, apiHelper } from '../support/real-test-helpers'
 import {

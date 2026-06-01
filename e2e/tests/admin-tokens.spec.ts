@@ -18,7 +18,7 @@ async function getToken(): Promise<string> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      username: process.env.E2E_USERNAME ?? 'e2e-admin',
+      username: process.env.E2E_USERNAME ?? 'e2eadmin',
       password: process.env.E2E_PASSWORD ?? 'e2e-test-pass-123',
     }),
   })
