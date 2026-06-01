@@ -1,15 +1,9 @@
-# ci.yml — Continuous Integration (PR trigger)
+# test.yml — Unit Tests + Build
 # =============================================
-# Runs on every pull request to main:
-#   - Backend lint (golangci-lint)
-#   - Frontend lint (ESLint + Prettier)
-#   - Backend unit tests
-#   - Frontend unit tests
-#   - Full build (frontend + Go embed)
-#
-# Required status checks for branch protection on main.
+# Runs on PR and push to main.
+# Tests + build verification. Lint is in lint.yml.
 
-name: CI
+name: Test
 
 on:
   pull_request:
@@ -19,11 +13,9 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
-      - '*.md'
 
-# Cancel in-progress runs for the same PR or push (save resources)
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.sha }}
+  group: test-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -31,46 +23,6 @@ env:
   NODE_VERSION: "20"
 
 jobs:
-  # ---- Backend Lint ----
-  lint-backend:
-    name: Lint (Go)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.64
-          args: --timeout=5m
-
-  # ---- Frontend Lint ----
-  lint-frontend:
-    name: Lint (Frontend)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
-        working-directory: web
-        run: npm install
-
-      - name: Run ESLint
-        working-directory: web
-        run: npm run lint
-
-  # ---- Backend Tests ----
   test-backend:
     name: Test (Go)
     runs-on: ubuntu-latest
@@ -85,7 +37,6 @@ jobs:
       - name: Run Go tests
         run: go test -v -race -count=1 ./...
 
-  # ---- Frontend Tests ----
   test-frontend:
     name: Test (Frontend)
     runs-on: ubuntu-latest
@@ -106,11 +57,10 @@ jobs:
         working-directory: web
         run: npm test
 
-  # ---- Full Build ----
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint-backend, lint-frontend]
+    needs: [test-backend, test-frontend]
     steps:
       - uses: actions/checkout@v4
 
