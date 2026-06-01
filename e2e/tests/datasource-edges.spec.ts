@@ -1,7 +1,6 @@
 /**
  * E2E — 数据源异常与边界场景（真实后端）
  * Covers: 异常处理 / 边界场景
- * Migrated from mock/tests/mock/datasource-edges.spec.ts
  */
 import { test, expect, loginViaUI, apiRequest, createTestDatasource, deleteDatasourceByName, cleanupDatasources } from '../support/real-test-helpers'
 

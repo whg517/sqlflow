@@ -1,6 +1,5 @@
 /**
  * E2E — 工单列表（真实后端）
- * Migrated from mock/tests/mock/tickets.spec.ts
  */
 import { test, expect, loginViaUI, getFirstDatasourceId, apiRequest, apiHelper, BASE_URL } from '../support/real-test-helpers'
 

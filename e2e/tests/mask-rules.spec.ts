@@ -1,6 +1,5 @@
 /**
  * E2E — 脱敏规则管理（真实后端）
- * SF-QA0027: Migrated from mock/tests/mock/mask-rules.spec.ts
  *
  * Tests mask rule CRUD, permission checks, and boundary scenarios.
  */

@@ -1,6 +1,5 @@
 /**
  * E2E — 权限隔离验证（真实后端）
- * Migrated from mock/tests/mock/permission-isolation.spec.ts
  */
 import { test, expect, loginViaUI, getToken, BASE_URL, ADMIN_USER, ADMIN_PASS } from '../support/real-test-helpers'
 

@@ -1,18 +1,9 @@
 /**
  * Global setup — runs once before all test projects.
  *
- * For real tests: waits for backend to be healthy and creates test datasource.
- * For mock tests: no-op (route mocks don't need a backend).
+ * Waits for backend to be healthy before tests start.
  */
 async function globalSetup() {
-  const project = process.env.PLAYWRIGHT_PROJECT
-
-  // Skip setup for mock-only runs
-  if (project === 'mock') {
-    console.log('[globalSetup] Skipping setup for mock project')
-    return
-  }
-
   const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
 
   // Poll backend health endpoint

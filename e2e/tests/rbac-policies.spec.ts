@@ -1,6 +1,5 @@
 /**
  * E2E — RBAC 策略管理（真实后端）
- * SF-QA0027: Migrated from mock/tests/mock/rbac-policies.spec.ts
  */
 import { test, expect } from '@playwright/test'
 

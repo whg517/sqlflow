@@ -1,7 +1,6 @@
 /**
  * E2E — 用户管理边界与异常场景（真实后端）
  * Covers: 异常处理 / 权限校验 / 边界场景
- * Migrated from mock/tests/mock/user-edges.spec.ts
  */
 import { test, expect, loginViaUI, apiRequest, apiHelper, cleanupUsers, getToken, BASE_URL, ADMIN_USER } from '../support/real-test-helpers'
 

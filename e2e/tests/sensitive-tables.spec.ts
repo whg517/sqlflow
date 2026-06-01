@@ -1,6 +1,5 @@
 /**
  * E2E — 敏感表管理（真实后端）
- * SF-QA0027: Migrated from mock/tests/mock/sensitive-tables.spec.ts
  */
 import { test, expect } from '@playwright/test'
 

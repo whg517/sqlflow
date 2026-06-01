@@ -51,11 +51,8 @@ services:
       SQLFLOW_JWT_SECRET: ${SQLFLOW_JWT_SECRET:-e2e-jwt-secret-for-testing-only}
       SQLFLOW_JWT_EXPIRY: 24h
       SQLFLOW_ENCRYPTION_KEY: ${SQLFLOW_ENCRYPTION_KEY:-e2e-encryption-key-32chars!!}
-      SQLFLOW_ADMIN_USERNAME: ${SQLFLOW_E2E_ADMIN:-e2e-admin}
+      SQLFLOW_ADMIN_USERNAME: ${SQLFLOW_E2E_ADMIN:-e2eadmin}
       SQLFLOW_ADMIN_PASSWORD: ${SQLFLOW_E2E_ADMIN_PASSWORD:-e2e-test-pass-123}
-      SQLFLOW_AI_PROVIDER: ${SQLFLOW_E2E_AI:-mock}
-      SQLFLOW_AI_API_KEY: ""
-      SQLFLOW_AI_BASE_URL: ""
       SQLFLOW_METRICS_ENABLED: "false"
     volumes:
       - sqlflow-e2e-data:/app/data

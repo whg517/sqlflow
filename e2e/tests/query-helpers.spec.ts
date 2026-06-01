@@ -1,7 +1,6 @@
 /**
  * E2E — 查询辅助功能（真实后端）
  * SF-QA0027: Covers query history, query execution error handling,
- * datasource switching — migrated from multiple mock/query/*.spec.ts
  */
 import { test, expect } from '@playwright/test'
 

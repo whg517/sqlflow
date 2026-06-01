@@ -1,6 +1,5 @@
 /**
  * E2E — 导出功能（真实后端）
- * SF-QA0027: Migrated from mock/tests/mock/export/export.spec.ts
  * SF-QA0032: Added async export tasks coverage (list/detail/download/polling)
  *
  * Tests sync export, async export tasks, and security scenarios against real backend.

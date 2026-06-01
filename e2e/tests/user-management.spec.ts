@@ -1,6 +1,5 @@
 /**
  * E2E — 用户管理（真实后端）
- * SF-QA0027: Migrated from mock/tests/mock/admin/user-crud.spec.ts
  */
 import { test, expect } from '@playwright/test'
 

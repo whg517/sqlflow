@@ -1,19 +1,11 @@
 /**
  * Global teardown — runs once after all test projects.
  *
- * For real tests: cleans up test-created resources via API.
- * For mock tests: no-op.
+ * Cleans up test-created resources (datasources, users) via API.
  */
 async function globalTeardown() {
-  const project = process.env.PLAYWRIGHT_PROJECT
-
-  if (project === 'mock') {
-    console.log('[globalTeardown] Skipping teardown for mock project')
-    return
-  }
-
   const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
-  const username = process.env.E2E_USERNAME ?? 'e2e-admin'
+  const username = process.env.E2E_USERNAME ?? 'e2eadmin'
   const password = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
 
   try {
@@ -28,13 +20,13 @@ async function globalTeardown() {
       return
     }
 
-    const loginBody: { code: number; data?: { token?: string } } = await loginResp.json()
-    if (loginBody.code !== 0 || !loginBody.data?.token) {
+    const loginBody: { code: number; data?: { access_token?: string } } = await loginResp.json()
+    if (loginBody.code !== 0 || !loginBody.data?.access_token) {
       console.log('[globalTeardown] No token returned, skipping cleanup')
       return
     }
 
-    const token = loginBody.data.token
+    const token = loginBody.data.access_token
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',

@@ -1,6 +1,5 @@
 /**
  * E2E — 系统设置管理（真实后端）
- * SF-QA0027: Migrated from mock/tests/mock/settings.spec.ts
  *
  * Tests AI config, notification config, settings CRUD, permission checks.
  */

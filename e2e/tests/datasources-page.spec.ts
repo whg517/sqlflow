@@ -1,6 +1,5 @@
 /**
  * E2E — 数据源管理页面（真实后端）
- * Migrated from mock/tests/mock/datasources.spec.ts
  */
 import { test, expect, loginViaUI, apiRequest, getFirstDatasourceId, createTestDatasource, cleanupDatasources, ADMIN_USER, ADMIN_PASS } from '../support/real-test-helpers'
 

@@ -1,6 +1,5 @@
 /**
  * E2E — 全局交互验证（真实后端）
- * Migrated from mock/tests/mock/global-interactions.spec.ts
  */
 import { test, expect, loginViaUI } from '../support/real-test-helpers'
 import type { Page } from '@playwright/test'

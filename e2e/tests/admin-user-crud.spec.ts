@@ -1,6 +1,5 @@
 /**
  * E2E — 用户管理 CRUD（真实后端）
- * Migrated from mock/tests/mock/admin/user-crud.spec.ts
  */
 import { test, expect, loginViaUI, apiRequest, apiHelper, cleanupUsers, getToken, ADMIN_USER, BASE_URL } from '../support/real-test-helpers'
 

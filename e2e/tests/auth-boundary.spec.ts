@@ -1,7 +1,6 @@
 /**
  * E2E — 登录/认证极端边界场景（真实后端）
  * Covers: Token 过期/刷新, 并发登录, 极端密码场景, 超时场景
- * Migrated from mock/tests/mock/auth-boundary.spec.ts
  */
 import { test, expect, loginViaUI, getToken, ADMIN_USER, ADMIN_PASS } from '../support/real-test-helpers'
 

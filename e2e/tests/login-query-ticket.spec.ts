@@ -1,6 +1,5 @@
 /**
  * E2E — Login → Query → Ticket 完整流程（真实后端）
- * Migrated from mock/tests/mock/login-query-ticket.spec.ts
  */
 import { test, expect, loginViaUI, getFirstDatasourceId, apiRequest } from '../support/real-test-helpers'
 

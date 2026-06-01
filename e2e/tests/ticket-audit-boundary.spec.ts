@@ -1,7 +1,6 @@
 /**
  * E2E — 工单与审计极端边界场景（真实后端）
  * Covers: 工单生命周期边界, 审计导出边界, 大规模数据分页
- * Migrated from mock/tests/mock/ticket-audit-boundary.spec.ts
  */
 import { test, expect, loginViaUI, apiRequest, apiHelper, getFirstDatasourceId, getToken, BASE_URL } from '../support/real-test-helpers'
 

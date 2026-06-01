@@ -1,10 +1,10 @@
 /**
- * fixtures/index.ts — Unified real test fixture (SF-QA0028)
+ * fixtures/index.ts — Unified test fixture
  *
  * All test files import from here:
  *   import { test, expect } from '../fixtures'
  *
- * Every test runs against the real backend. No mock support.
+ * Every test runs against the real backend via docker-compose.
  */
 import { test as base, expect, type Page } from '@playwright/test'
 import { loginViaUI, loginViaApi } from '../support/real-test-helpers'

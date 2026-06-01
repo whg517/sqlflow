@@ -1,6 +1,5 @@
 /**
  * E2E — Dashboard 概览（真实后端）
- * SF-QA0027: Migrated from mock/tests/mock/dashboard/dashboard.spec.ts
  *
  * Tests dashboard page rendering with real backend data.
  */

@@ -1,6 +1,5 @@
 /**
  * E2E — 工单列表与详情（真实后端）
- * SF-QA0027: Migrated from mock/tests/mock/tickets.spec.ts
  *
  * Tests ticket list rendering, tab switching, filtering, search,
  * ticket detail drawer, and new ticket form validation.

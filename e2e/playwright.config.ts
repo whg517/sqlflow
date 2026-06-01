@@ -1,18 +1,19 @@
 import { defineConfig } from '@playwright/test'
 
 /**
+ * Playwright E2E configuration
  *
- * All tests run against the real backend (docker-compose.test.yml).
- * No mock/route interception.
+ * All tests run against the real backend via docker-compose.
  *
  * Environment:
  *   E2E_BASE_URL  — backend URL (default http://localhost:8080)
- *   E2E_USERNAME  — admin username (default e2e-admin)
+ *   E2E_USERNAME  — admin username (default e2eadmin)
  *   E2E_PASSWORD  — admin password (default e2e-test-pass-123)
  *
  * Run:
- *   npm run test:e2e    # All E2E tests
- *   npx playwright test  # Same
+ *   npm run test:e2e              # All E2E tests
+ *   npx playwright test           # Same
+ *   npx playwright test --project=smoke  # Quick smoke test only
  */
 export default defineConfig({
   testDir: './tests',
