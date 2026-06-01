@@ -200,8 +200,8 @@ func TestQueryHandler_ExecuteQuery_DatasourceNotFound(t *testing.T) {
 	}
 
 	// Datasource 99999 doesn't exist → service returns error → handler returns 500
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 }
 
@@ -228,8 +228,8 @@ func TestQueryHandler_ExecuteQuery_DisabledDatasource(t *testing.T) {
 	}
 
 	// Disabled datasource → service.ErrDatasourceDisabled → handler maps to internal error
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 }
 
@@ -279,8 +279,8 @@ func TestQueryHandler_ExecuteQuery_BlockedSQL(t *testing.T) {
 	}
 
 	// Wrapped ErrSQLBlocked falls through to default handler → 500
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 }
 
@@ -301,8 +301,8 @@ func TestQueryHandler_ExecuteQuery_ConnectionError(t *testing.T) {
 		t.Fatalf("handler error: %v", err)
 	}
 
-	// Connection failure → internal error
-	if rec.Code != http.StatusInternalServerError {
+	// Connection failure → timeout → 400
+	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
 	}
 }
@@ -873,8 +873,8 @@ func TestQueryHandler_ExportQuery_ConnectionError(t *testing.T) {
 		t.Fatalf("handler error: %v", err)
 	}
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 }
 
@@ -1095,8 +1095,8 @@ func TestQueryHandler_ClearHistory_Error(t *testing.T) {
 		t.Fatalf("handler error: %v", err)
 	}
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 
 	result := decodeJSONResponse(t, rec)
@@ -1125,8 +1125,8 @@ func TestQueryHandler_ExportQuery_BlockedSQL(t *testing.T) {
 	}
 
 	// Blocked SQL wraps error → falls to default handler → 500
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 }
 

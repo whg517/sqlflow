@@ -348,10 +348,10 @@ describe("TicketPage", () => {
       renderTicketPage();
 
       await waitFor(() => {
-        expect(screen.getByText("待审批")).toBeInTheDocument();
+        expect(screen.getByRole("tab", { name: "待审批" })).toBeInTheDocument();
       });
 
-      await userEvent.click(screen.getByText("待审批"));
+      await userEvent.click(screen.getByRole("tab", { name: "待审批" }));
 
       await waitFor(() => {
         expect(mockListTickets).toHaveBeenCalledWith(
