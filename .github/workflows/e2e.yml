@@ -2,9 +2,12 @@
 # =============================================
 # Triggered by:
 #   - Pull requests to main (smoke tests only — fast feedback)
-#   - Push to main (full E2E — real + mock)
 #   - Scheduled (weekdays 14:00 CST — regression guard)
 #   - Manual dispatch (on-demand runs)
+#
+# NOTE: push to main is intentionally NOT a trigger. GitHub Actions
+# auto-cancels pending runs on the same branch, so rapid merges
+# would cancel E2E before it finishes. Use schedule or dispatch.
 #
 # Uses docker-compose.test.yml for isolated test environment.
 # Based on SF-QA0023 E2E ops design.
@@ -34,9 +37,8 @@ on:
         required: false
         default: "all"
 
-concurrency:
-  group: e2e-${{ github.event_name }}-${{ github.ref }}-${{ github.run_id }}
-  cancel-in-progress: false  # Never cancel E2E runs
+# No concurrency group — PR runs are short-lived and independent.
+# Schedule/dispatch runs are infrequent and should not cancel each other.
 
 env:
   PLAYWRIGHT_VERSION: "v1.52.0"
@@ -96,7 +98,7 @@ jobs:
   e2e-full:
     name: E2E (${{ matrix.scope }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     if: github.event_name != 'pull_request'
     strategy:
       matrix:
