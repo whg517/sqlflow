@@ -151,7 +151,7 @@ func (r *PostgreSQLParseResult) extractFromInsert(stmt *pgquery.InsertStmt) {
 	if stmt.Relation != nil {
 		r.addTable(stmt.Relation.Relname)
 	}
-	r.HasReturning = stmt.ReturningList != nil && len(stmt.ReturningList) > 0
+	r.HasReturning = len(stmt.ReturningList) > 0
 }
 
 func (r *PostgreSQLParseResult) extractFromUpdate(stmt *pgquery.UpdateStmt) {
@@ -160,7 +160,7 @@ func (r *PostgreSQLParseResult) extractFromUpdate(stmt *pgquery.UpdateStmt) {
 		r.addTable(stmt.Relation.Relname)
 	}
 	r.HasWhere = stmt.WhereClause != nil
-	r.HasReturning = stmt.ReturningList != nil && len(stmt.ReturningList) > 0
+	r.HasReturning = len(stmt.ReturningList) > 0
 }
 
 func (r *PostgreSQLParseResult) extractFromDelete(stmt *pgquery.DeleteStmt) {
@@ -169,7 +169,7 @@ func (r *PostgreSQLParseResult) extractFromDelete(stmt *pgquery.DeleteStmt) {
 		r.addTable(stmt.Relation.Relname)
 	}
 	r.HasWhere = stmt.WhereClause != nil
-	r.HasReturning = stmt.ReturningList != nil && len(stmt.ReturningList) > 0
+	r.HasReturning = len(stmt.ReturningList) > 0
 }
 
 func (r *PostgreSQLParseResult) extractFromDrop(stmt *pgquery.DropStmt) {

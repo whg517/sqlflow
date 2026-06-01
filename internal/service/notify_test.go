@@ -703,7 +703,7 @@ func TestNotifyService_Dedup(t *testing.T) {
 		svc.NotifyTicketCreated(context.Background(), ticket)
 		// No panic = pass
 	})
-	_ = mu
+	_ = &mu
 	_ = sendCount
 }
 

@@ -271,7 +271,7 @@ func (s *TemplateService) RenderTemplate(ctx context.Context, id int64, params m
 			paramValues = append(paramValues, val)
 		case "postgresql":
 			rendered.WriteString(t.SQLContent[lastIdx:match[0]])
-			rendered.WriteString(fmt.Sprintf("$%d", len(paramValues)+1))
+			rendered.Fprintf(nil, "$%d", len(paramValues)+1)
 			paramValues = append(paramValues, val)
 		case "mongodb":
 			rendered.WriteString(t.SQLContent[lastIdx:match[0]])

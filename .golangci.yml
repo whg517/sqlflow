@@ -38,6 +38,14 @@ linters:
       locale: US
       ignore-rules:
         - sqlflow
+        - cancelled
+        - Cancelled
+        - CANCELLED
+    staticcheck:
+      checks:
+        - all
+        - -QF1008  # requires database field restructuring (9 files)
+        - -ST1005  # error strings start with Chinese brand names (Elasticsearch, SQL)
   exclusions:
     generated: lax
     presets:

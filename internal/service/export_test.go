@@ -118,7 +118,7 @@ func seedTickets(t *testing.T, db *sql.DB, count int) {
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
 			1, i%2+1, fmt.Sprintf("db_%d", i%2+1),
 			fmt.Sprintf("ALTER TABLE users ADD COLUMN col_%d INT", i),
-			fmt.Sprintf("ALTER TABLE users ADD ..."),
+			"ALTER TABLE users ADD ...",
 			"mysql",
 			fmt.Sprintf("Adding column %d", i),
 			"SUBMITTED",
