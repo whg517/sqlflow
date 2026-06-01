@@ -36,6 +36,9 @@ RUN npm run build
 # ============================================================
 FROM golang:${GO_VERSION}-alpine AS builder
 
+# pg_query_go requires CGO (compiles PostgreSQL C source)
+RUN apk add --no-cache build-base
+
 WORKDIR /app
 
 # Layer cache: download modules first (only changes when go.mod/go.sum change)
@@ -48,10 +51,11 @@ COPY . .
 # Copy frontend build output into the embedded FS path
 COPY --from=frontend /app/web/dist ./web/dist
 
-# Build static binary with version info injected via ldflags
+# Build binary with version info injected via ldflags
+# CGO_ENABLED=1 required for pg_query_go (PostgreSQL C parser)
 ARG VERSION=dev
 ARG BUILD_TIME=unknown
-RUN CGO_ENABLED=0 GOOS=linux \
+RUN CGO_ENABLED=1 GOOS=linux \
     go build \
     -ldflags="-s -w \
       -X main.version=${VERSION} \
@@ -64,7 +68,8 @@ RUN CGO_ENABLED=0 GOOS=linux \
 FROM alpine:${ALPINE_VERSION}
 
 # Install minimal runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata curl
+# libc-dev needed for pg_query_go (CGO-linked binary)
+RUN apk add --no-cache ca-certificates tzdata curl libc-dev
 
 # Create non-root user before copying files
 RUN addgroup -S sqlflow && adduser -S -G sqlflow sqlflow
