@@ -1,6 +1,12 @@
 # =============================================================================
-# SQLFlow — golangci-lint configuration
+# SQLFlow — golangci-lint v2 configuration
 # =============================================================================
+# golangci-lint v2.12.2+
+# 渐进式引入：必选 linter 严格模式，推荐 linter 允许 nolint 过渡。
+# 目标：CI 中 golangci-lint 失败阻断合并。
+# =============================================================================
+
+version: "2"
 
 run:
   timeout: 5m
@@ -17,6 +23,10 @@ linters:
 
     # 代码风格
     - misspell       # 拼写检查
+
+formatters:
+  enable:
+    - gofmt
 
 issues:
   max-issues-per-linter: 0
