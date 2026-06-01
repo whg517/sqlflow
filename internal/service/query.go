@@ -21,6 +21,7 @@ import (
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
+	pkgmetrics "github.com/whg517/sqlflow/internal/pkg/metrics"
 	"github.com/whg517/sqlflow/internal/pkg/mask"
 	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
 )
@@ -166,6 +167,7 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 	}
 
 	// Execute based on db type
+	queryStart := time.Now()
 	var result *QueryResult
 	switch dbType {
 	case "mysql":
@@ -179,6 +181,11 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 	default:
 		return nil, ErrDatasourceType
 	}
+
+	// Record Prometheus metrics for external datasource queries
+	queryDuration := time.Since(queryStart).Seconds()
+	pkgmetrics.DBQueryDuration.WithLabelValues(dbType).Observe(queryDuration)
+	pkgmetrics.DBQueriesTotal.WithLabelValues(ds.Name).Inc()
 
 	if err != nil {
 		// Write audit log for failed query

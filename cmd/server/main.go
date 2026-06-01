@@ -197,7 +197,7 @@ func main() {
 	approvalEngine.SetNotifyService(notifySvc)
 	_ = approvalEngine.EnsureDefaultPolicy(context.Background())
 
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, oidcSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, snapshotSvc, approvalEngine, database.DB, cfg)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, oidcSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, snapshotSvc, approvalEngine, database.DB, cfg, connMgr)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server
