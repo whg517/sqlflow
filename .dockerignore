@@ -38,7 +38,6 @@ state/
 .env.local
 
 # Docs & meta
-docs/
 *.md
 !README.md
 CLAUDE.md
