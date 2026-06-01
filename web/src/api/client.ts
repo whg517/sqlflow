@@ -132,11 +132,11 @@ async function request<T>(
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       toast.error("请求超时，请检查网络后重试");
-      throw new Error("请求超时");
+      throw new Error("请求超时", { cause: err });
     }
     if (err instanceof TypeError) {
       toast.error("网络连接失败，请检查网络");
-      throw new Error("网络连接失败");
+      throw new Error("网络连接失败", { cause: err });
     }
     throw err;
   } finally {

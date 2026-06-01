@@ -33,7 +33,7 @@ describe("Query API - streamAIReview", () => {
           encoder.encode("event: content\ndata: Analyzing...\n\n"),
         );
         controller.enqueue(
-          encoder.encode('event: result\ndata: {\"risk_level\": \"low\"}\n\n'),
+          encoder.encode('event: result\ndata: {"risk_level": "low"}\n\n'),
         );
         controller.close();
       },

@@ -25,6 +25,10 @@ export default defineConfig([
       'no-console': 'warn',
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unused-vars': 'warn',
+      // set-state-in-effect: too many legitimate useEffect+fetchData patterns;
+      // downgrade to warn until refactored to useRequest hooks or similar
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-refresh/only-export-components': ['warn', { allowExportNames: ['default'] }],
     },
   },
 ])

@@ -321,7 +321,7 @@ function TokenTable({
       await onRevoke(id);
       onRefresh();
     } catch (err) {
-    } finally {
+      console.error('Failed to revoke token:', err);
       setRevokingId(null);
     }
   };
