@@ -15,7 +15,6 @@ linters:
   default: standard
   disable:
     - errcheck
-    - gosimple     # covered by staticcheck
     - unused
   enable:
     - misspell
