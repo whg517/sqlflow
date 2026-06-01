@@ -3,7 +3,6 @@ import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Layout from "./components/Layout";
 import AuthGuard from "./components/AuthGuard";
-import ErrorBoundary from "./components/ErrorBoundary";
 import ErrorPage from "./components/ErrorPage";
 import { lazyPage } from "./components/LazyLoad";
 

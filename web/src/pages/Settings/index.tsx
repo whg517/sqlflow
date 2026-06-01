@@ -11,6 +11,7 @@ import {
   Loader2,
   ShieldAlert,
   Clock,
+  EyeOff,
 } from "lucide-react";
 import { api } from "@/api/client";
 import { cn } from "@/lib/utils";

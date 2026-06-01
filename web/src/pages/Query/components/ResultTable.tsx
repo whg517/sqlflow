@@ -338,16 +338,11 @@ function ResultTableInner({
 
   const {
     widths,
-    isResizing,
     resizingColId,
     handleMouseDown: onResizeMouseDown,
   } = useColumnResize(tableKey, defaultWidths);
 
   // --- Virtual scroll ---
-  const totalFilteredRows = useMemo(() => {
-    // We'll compute this from the table; for the hook we pass filtered length
-    return 0; // placeholder, updated below
-  }, []);
 
   const virtualScroll = useVirtualScroll(0, scrollContainerRef);
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 
 const ROW_HEIGHT = 33; // approximate row height in px (py-1.5 + content)
 const OVERSCAN = 5; // extra rows rendered above/below viewport

@@ -52,7 +52,7 @@ function getNavigationType(): string {
   const entries = performance.getEntriesByType("navigation");
   if (entries.length > 0) {
     const entry = entries[0] as PerformanceNavigationTiming;
-    switch (entry.type) {
+      switch (entry.type as string) {
       case "navigate":
         return "navigate";
       case "reload":

@@ -69,7 +69,6 @@ const ROLE_OPTIONS = [
 export default function SLATab() {
   const [configs, setConfigs] = useState<SLAConfig[]>([]);
   const [loading, setLoading] = useState(false);
-  const [inited, setInited] = useState(false);
 
   // Dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -102,7 +101,6 @@ export default function SLATab() {
     try {
       const res = await listSLAConfigs();
       setConfigs(res.data ?? []);
-      setInited(true);
     } catch {
       toast.error("获取 SLA 配置失败");
     } finally {

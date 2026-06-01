@@ -142,7 +142,6 @@ export default function DiffView({ result }: DiffViewProps) {
               </tr>
             ) : (
               pageRows.map((row) => {
-                const displayData = row.type === "removed" ? row.left : row.right;
                 return (
                   <tr
                     key={row.rowIndex}

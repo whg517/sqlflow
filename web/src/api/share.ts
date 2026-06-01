@@ -55,7 +55,7 @@ export async function listMyShares(): Promise<SharedResultResponse[]> {
 }
 
 export async function revokeShare(id: number): Promise<void> {
-  await api.delete(`/query/share/${id}`);
+  await api.del(`/query/share/${id}`);
 }
 
 // Public API (no auth required) — uses fetch directly with full URL

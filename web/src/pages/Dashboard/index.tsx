@@ -328,7 +328,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-0.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] p-0.5">
             {TIME_RANGES.map((r) => (
               <button
-                key={r.value}
+                key={r.key}
                 className={cn(
                   "rounded-md px-2.5 py-1 text-xs transition-colors",
                   range.key === r.key
