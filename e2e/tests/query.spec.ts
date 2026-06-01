@@ -36,7 +36,7 @@ async function realLogin(page: Page): Promise<string> {
   expect(loginRes.ok(), `Login failed: ${loginRes.status()}`).toBeTruthy()
 
   const loginBody = await loginRes.json()
-  const token: string = loginBody.data?.token ?? loginBody.token ?? ''
+  const token: string = loginBody.data?.access_token ?? loginBody.access_token ?? ''
   expect(token, 'No token returned from login').toBeTruthy()
 
   // Set token in localStorage then navigate

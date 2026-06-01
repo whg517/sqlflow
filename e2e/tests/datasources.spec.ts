@@ -30,7 +30,7 @@ async function realLogin(): Promise<{ token: string; refreshToken: string }> {
   if (json.code !== 0) {
     throw new Error(`Login failed: ${json.message || JSON.stringify(json)}`)
   }
-  return { token: json.data.token, refreshToken: json.data.refresh_token }
+  return { token: json.data.access_token, refreshToken: json.data.refresh_token }
 }
 
 /** Inject token into page localStorage and navigate (bypass UI login) */

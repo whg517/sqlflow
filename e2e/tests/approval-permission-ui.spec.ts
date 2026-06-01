@@ -152,7 +152,7 @@ test.describe('审批→执行权限边界 UI', () => {
         body: JSON.stringify({ username: 'e2e-developer', password: 'e2e-test-pass-123' }),
       })
       const loginBody = await loginRes.json()
-      const devToken = loginBody.data.token
+      const devToken = loginBody.data.access_token
 
       // 创建工单
       const createRes = await fetch(`${baseUrl}/api/tickets`, {

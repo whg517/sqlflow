@@ -18,7 +18,7 @@ async function loginAndInjectToken(page: import('@playwright/test').Page): Promi
   })
   expect(loginRes.ok()).toBeTruthy()
   const body = await loginRes.json()
-  const token = body.data.token
+  const token = body.data.access_token
 
   await page.goto('/')
   await page.evaluate((t) => localStorage.setItem('token', t), token)

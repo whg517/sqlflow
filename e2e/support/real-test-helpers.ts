@@ -45,9 +45,9 @@ export async function loginViaApi(page: Page, username = ADMIN_USER, password = 
     data: { username, password },
   })
   expect(loginRes.ok(), `Login failed: ${loginRes.status()}`).toBeTruthy()
-  const body: { code: number; data: { token: string } } = await loginRes.json()
+  const body: { code: number; data: { access_token: string } } = await loginRes.json()
   expect(body.code).toBe(0)
-  const token = body.data.token
+  const token = body.data.access_token
 
   await page.goto(`${BASE_URL}/login`)
   await page.evaluate((t) => localStorage.setItem('token', t), token)
@@ -65,7 +65,7 @@ export async function getToken(username = ADMIN_USER, password = ADMIN_PASS): Pr
   })
   const body: { code: number; data: { token: string } } = await res.json()
   if (body.code !== 0) throw new Error(`getToken failed for ${username}`)
-  return body.data.token
+  return body.data.access_token
 }
 
 /**

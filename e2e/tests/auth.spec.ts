@@ -43,7 +43,7 @@ async function getRealToken(credentials = {
   if (status !== 200 || (body as { code: number }).code !== 0) {
     throw new Error(`loginViaApi failed: status=${status}`)
   }
-  return (body.data as { token: string }).token
+  return (body.data as { access_token: string }).access_token
 }
 
 async function loginViaUI(
@@ -229,6 +229,6 @@ test('真实 API 登录响应格式正确', async ({ request: ctx }) => {
   const body = await res.json()
   expect(body.code).toBe(0)
   expect(body.data).toBeDefined()
-  expect(typeof body.data.token).toBe('string')
-  expect(body.data.token.length).toBeGreaterThan(0)
+  expect(typeof body.data.access_token).toBe('string')
+  expect(body.data.access_token.length).toBeGreaterThan(0)
 })

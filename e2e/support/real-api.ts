@@ -41,7 +41,7 @@ async function getOrCreateToken(username?: string, password?: string): Promise<s
   expect(resp.ok()).toBeTruthy()
   const body = await resp.json()
   expect(body.code).toBe(0)
-  _token = body.data.token as string
+  _token = body.data.access_token as string
   return _token!
 }
 
