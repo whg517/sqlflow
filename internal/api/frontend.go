@@ -37,8 +37,8 @@ func serveFrontend(e *echo.Echo) {
 		return func(c echo.Context) error {
 			path := c.Request().URL.Path
 
-			// Skip API routes - let Echo handle them normally
-			if strings.HasPrefix(path, "/api/") {
+			// Skip non-SPA routes - let Echo handle them normally
+			if strings.HasPrefix(path, "/api/") || path == "/health" || path == "/metrics" {
 				return next(c)
 			}
 

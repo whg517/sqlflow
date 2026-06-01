@@ -46,6 +46,27 @@ export default defineConfig({
   },
 
   // Global setup/teardown
-  globalSetup: require.resolve('./globalSetup'),
-  globalTeardown: require.resolve('./globalTeardown'),
+  globalSetup: new URL('./globalSetup.ts', import.meta.url).pathname,
+  globalTeardown: new URL('./globalTeardown.ts', import.meta.url).pathname,
+
+  // Projects
+  projects: [
+    {
+      name: 'smoke',
+      testDir: './tests',
+      testMatch: '**/smoke.spec.ts',
+    },
+    {
+      name: 'real',
+      testDir: './tests',
+      testIgnore: '**/smoke.spec.ts',
+    },
+    {
+      name: 'mock',
+      testDir: './tests',
+      // Mock project: currently aliases to smoke tests
+      // TODO: add dedicated mock/API-intercept tests when needed
+      testMatch: '**/smoke.spec.ts',
+    },
+  ],
 })

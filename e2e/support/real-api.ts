@@ -9,7 +9,7 @@ import { type Page, type APIRequestContext, request, expect } from '@playwright/
 // --- Config ---
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
-const DEFAULT_USERNAME = process.env.E2E_USERNAME ?? 'e2e-admin'
+const DEFAULT_USERNAME = process.env.E2E_USERNAME ?? 'e2eadmin'
 const DEFAULT_PASSWORD = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
 
 // Track IDs created during a test run for cleanup.

@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test'
 import { login, waitForBackend, cleanup } from '../support/real-api'
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
-const USERNAME = process.env.E2E_USERNAME ?? 'e2e-admin'
+const USERNAME = process.env.E2E_USERNAME ?? 'e2eadmin'
 const PASSWORD = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
 
 test.describe('Real E2E Smoke Tests', () => {
@@ -34,9 +34,9 @@ test.describe('Real E2E Smoke Tests', () => {
     expect(resp.ok).toBeTruthy()
     const body = await resp.json()
     expect(body.code).toBe(0)
-    expect(body.data.token).toBeDefined()
-    expect(typeof body.data.token).toBe('string')
-    expect(body.data.token.length).toBeGreaterThan(0)
+    expect(body.data.access_token).toBeDefined()
+    expect(typeof body.data.access_token).toBe('string')
+    expect(body.data.access_token.length).toBeGreaterThan(0)
   })
 
   test('login and navigate to query page', async ({ page }) => {
