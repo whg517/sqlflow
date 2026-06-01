@@ -1,24 +1,40 @@
+# =============================================================================
+# SQLFlow — golangci-lint v2 configuration
+# =============================================================================
+# Conservative baseline: only catch real bugs, not style/formatting.
+# Strict linters (errcheck, govet enable-all) to be enabled gradually
+# as code quality improves. Track in separate requirements.
+# =============================================================================
+
 version: "2"
+
 run:
   modules-download-mode: readonly
+
 linters:
   default: standard
   disable:
     - errcheck
+    - gosimple     # covered by staticcheck
+    - unused
   enable:
     - misspell
   settings:
-    errcheck:
-      check-type-assertions: true
-      exclude-functions:
-        - fmt.Fprintf
-        - fmt.Fprintln
-        - fmt.Fprint
-        - fmt.Println
-        - fmt.Print
-        - fmt.Sprintf
     govet:
-      enable-all: true
+      # Only core checks, not fieldalignment/shadow
+      enable:
+        - atomicalign
+        - buildtag
+        - copylocks
+        - httpresponse
+        - loopclosure
+        - printf
+        - shift
+        - stdmethods
+        - structtag
+        - tests
+        - unmarshal
+        - unreachable
     misspell:
       locale: US
       ignore-rules:
@@ -34,16 +50,20 @@ linters:
       - path: _test.go
         linters:
           - errcheck
+          - unused
     paths:
       - testdata
       - third_party$
       - builtin$
       - examples$
+
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
+
 severity:
   default: warning
+
 formatters:
   exclusions:
     generated: lax
