@@ -33,9 +33,6 @@ on:
       - "config/**"
       - "e2e/**"
       - ".github/workflows/e2e.yml"
-  schedule:
-    # Weekdays 06:00 UTC = 14:00 CST
-    - cron: "0 6 * * 1-5"
   workflow_dispatch:
     inputs:
       scope:
