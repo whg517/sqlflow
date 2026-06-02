@@ -741,6 +741,7 @@ func TestNotifyService_FailedNotificationContent(t *testing.T) {
 		// Should contain truncation marker
 		if len(text) > 0 {
 			// Just verify no panic and something was sent
+			t.Logf("received truncated markdown length: %d", len(text))
 		}
 	})
 }

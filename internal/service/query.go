@@ -943,16 +943,16 @@ func (s *QueryService) executeElasticsearch(ctx context.Context, datasourceID in
 	}
 
 	// 解密 ES API Key（如果使用 API Key 认证）
-	esApiKey := ""
+	esAPIKey := ""
 	if ds.ESApiKey != "" {
 		dec, err := crypto.Decrypt(ds.ESApiKey, s.encryptionKey)
 		if err != nil {
 			return nil, fmt.Errorf("解密 ES API Key 失败: %w", err)
 		}
-		esApiKey = dec
+		esAPIKey = dec
 	}
 
-	client, err := s.connMgr.GetElasticsearch(ctx, datasourceID, urls, ds.ESAuthType, ds.Username, password, esApiKey, ds.ESVerifyCerts)
+	client, err := s.connMgr.GetElasticsearch(ctx, datasourceID, urls, ds.ESAuthType, ds.Username, password, esAPIKey, ds.ESVerifyCerts)
 	if err != nil {
 		return nil, fmt.Errorf("连接 Elasticsearch 失败: %w", err)
 	}

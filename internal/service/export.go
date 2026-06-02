@@ -359,10 +359,10 @@ func (s *ExportService) ExportAuditLogs(ctx context.Context, userID int64, usern
 	}
 
 	// Append watermark
-	buf.WriteString(fmt.Sprintf("\n# 导出水印: 导出人=%s | 导出时间=%s | 仅限内部使用\n",
+	fmt.Fprintf(&buf, "\n# 导出水印: 导出人=%s | 导出时间=%s | 仅限内部使用\n",
 		username,
 		time.Now().Format("2006-01-02 15:04:05 MST"),
-	))
+	)
 
 	s.auditSvc.Write(ctx, AuditRecord{
 		UserID:     userID,
@@ -402,10 +402,10 @@ func (s *ExportService) ExportTickets(ctx context.Context, userID int64, usernam
 		return nil, err
 	}
 
-	buf.WriteString(fmt.Sprintf("\n# 导出水印: 导出人=%s | 导出时间=%s | 仅限内部使用\n",
+	fmt.Fprintf(&buf, "\n# 导出水印: 导出人=%s | 导出时间=%s | 仅限内部使用\n",
 		username,
 		time.Now().Format("2006-01-02 15:04:05 MST"),
-	))
+	)
 
 	s.auditSvc.Write(ctx, AuditRecord{
 		UserID:     userID,

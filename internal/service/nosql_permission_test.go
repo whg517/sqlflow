@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"io/fs"
 	"testing"
 
@@ -38,7 +39,7 @@ func TestCheckMongoPermission_ParseError(t *testing.T) {
 	}
 
 	// Without permSvc, should return nil (no check)
-	err := svc.checkMongoPermission(nil, "developer", 1, "")
+	err := svc.checkMongoPermission(context.TODO(), "developer", 1, "")
 	if err != nil {
 		t.Errorf("expected nil when permSvc is nil, got %v", err)
 	}
@@ -48,7 +49,7 @@ func TestCheckMongoPermission_ParseError(t *testing.T) {
 func TestCheckMongoPermission_NilPermSvc(t *testing.T) {
 	svc := &TicketService{}
 
-	err := svc.checkMongoPermission(nil, "developer", 1,
+	err := svc.checkMongoPermission(context.TODO(), "developer", 1,
 		`{"operation": "find", "collection": "users", "filter": {}}`)
 	if err != nil {
 		t.Errorf("expected nil when permSvc is nil, got %v", err)
@@ -62,7 +63,7 @@ func TestCheckMongoPermission_NoCollection(t *testing.T) {
 		permSvc: nil, // intentionally nil — if code reaches Enforce, it would panic
 	}
 
-	err := svc.checkMongoPermission(nil, "developer", 1,
+	err := svc.checkMongoPermission(context.TODO(), "developer", 1,
 		`{"operation": "find", "filter": {}}`)
 	if err != nil {
 		t.Errorf("expected nil for no collection, got %v", err)

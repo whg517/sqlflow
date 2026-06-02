@@ -299,15 +299,15 @@ func (s *DatasourceService) TestConnection(ctx context.Context, ds *model.DataSo
 			return err
 		}
 		urls := parseESUrls(ds.ESUrls)
-		esApiKey := ""
+		esAPIKey := ""
 		if ds.ESApiKey != "" {
 			dec, err := crypto.Decrypt(ds.ESApiKey, s.encryptionKey)
 			if err != nil {
 				return fmt.Errorf("decrypt es_api_key: %w", err)
 			}
-			esApiKey = dec
+			esAPIKey = dec
 		}
-		return connpool.ElasticsearchPing(ctx, urls, ds.ESAuthType, ds.Username, password, esApiKey, ds.ESVerifyCerts)
+		return connpool.ElasticsearchPing(ctx, urls, ds.ESAuthType, ds.Username, password, esAPIKey, ds.ESVerifyCerts)
 	default:
 		return ErrInvalidDatasourceType
 	}
@@ -712,16 +712,16 @@ func (s *DatasourceService) getESClient(ctx context.Context, id int64) (*model.D
 		return nil, "", nil, fmt.Errorf("Elasticsearch 数据源未配置连接地址")
 	}
 
-	esApiKey := ""
+	esAPIKey := ""
 	if ds.ESApiKey != "" {
 		dec, err := crypto.Decrypt(ds.ESApiKey, s.encryptionKey)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("解密 ES API Key 失败: %w", err)
 		}
-		esApiKey = dec
+		esAPIKey = dec
 	}
 
-	client, err := s.connMgr.GetElasticsearch(ctx, id, urls, ds.ESAuthType, ds.Username, password, esApiKey, ds.ESVerifyCerts)
+	client, err := s.connMgr.GetElasticsearch(ctx, id, urls, ds.ESAuthType, ds.Username, password, esAPIKey, ds.ESVerifyCerts)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("连接 Elasticsearch 失败: %w", err)
 	}
