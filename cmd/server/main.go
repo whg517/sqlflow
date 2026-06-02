@@ -22,6 +22,10 @@ import (
 	"github.com/whg517/sqlflow/internal/api"
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
+	_ "github.com/whg517/sqlflow/internal/driver/elasticsearch"
+	_ "github.com/whg517/sqlflow/internal/driver/mongodb"
+	_ "github.com/whg517/sqlflow/internal/driver/mysql"
+	_ "github.com/whg517/sqlflow/internal/driver/postgresql"
 	"github.com/whg517/sqlflow/internal/service"
 )
 
