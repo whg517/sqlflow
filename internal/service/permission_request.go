@@ -9,8 +9,14 @@ import (
 	"time"
 
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entPermReq "github.com/whg517/sqlflow/internal/db/ent/permissionrequest"
 	"github.com/whg517/sqlflow/internal/model"
 )
+
+// Raw SQL comments explain why certain queries remain as database/sql
+// instead of being migrated to ent (typically due to LEFT JOINs across
+// tables that have no ent edge relationship defined).
 
 var (
 	ErrPermReqNotFound    = errors.New("权限申请不存在")
@@ -25,13 +31,19 @@ var ValidActions = []string{"select", "update", "delete", "ddl", "export"}
 // PermissionRequestService manages temporary access permission requests for sensitive tables.
 type PermissionRequestService struct {
 	database *db.DB
+	client   *ent.Client
 	permSvc  *PermissionService
 	auditSvc *AuditService
 }
 
 // NewPermissionRequestService creates a new PermissionRequestService.
 func NewPermissionRequestService(database *db.DB, permSvc *PermissionService, auditSvc *AuditService) *PermissionRequestService {
-	return &PermissionRequestService{database: database, permSvc: permSvc, auditSvc: auditSvc}
+	return &PermissionRequestService{
+		database: database,
+		client:   database.Client(),
+		permSvc:  permSvc,
+		auditSvc: auditSvc,
+	}
 }
 
 // CreateRequest creates a new permission request.
@@ -45,20 +57,24 @@ func (s *PermissionRequestService) CreateRequest(ctx context.Context, applicantI
 
 	expiresAt := time.Now().UTC().Add(duration)
 
-	result, err := s.database.DB.ExecContext(ctx,
-		`INSERT INTO permission_requests (applicant_id, datasource_id, database, table_name, actions, reason, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		applicantID, datasourceID, database, tableName, actions, reason, expiresAt.Format("2006-01-02 15:04:05"),
-	)
+	saved, err := s.client.PermissionRequest.Create().
+		SetApplicantID(applicantID).
+		SetDatasourceID(datasourceID).
+		SetDatabase(database).
+		SetTableName(tableName).
+		SetActions(actions).
+		SetReason(reason).
+		SetExpiresAt(expiresAt).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("insert permission request: %w", err)
 	}
 
-	id, _ := result.LastInsertId()
-	return s.GetRequestByID(ctx, id)
+	return s.GetRequestByID(ctx, int64(saved.ID))
 }
 
 // GetRequestByID retrieves a permission request with user and datasource names.
+// RAW_SQL: LEFT JOIN across users/datasources — no ent edges defined, raw SQL required.
 func (s *PermissionRequestService) GetRequestByID(ctx context.Context, id int64) (*model.PermissionRequest, error) {
 	r := &model.PermissionRequest{}
 	var approvedAt, revokedAt sql.NullTime
@@ -123,13 +139,14 @@ func (s *PermissionRequestService) ApproveRequest(ctx context.Context, requestID
 		return nil, errors.New("该申请已过期")
 	}
 
-	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-
-	_, err = s.database.DB.ExecContext(ctx,
-		`UPDATE permission_requests SET status = 'APPROVED', approver_id = ?, approve_comment = ?, approved_at = ?, updated_at = ?
-		 WHERE id = ?`,
-		approverID, comment, now, now, requestID,
-	)
+	now := time.Now().UTC()
+	_, err = s.client.PermissionRequest.UpdateOneID(int(requestID)).
+		SetStatus("APPROVED").
+		SetApproverID(approverID).
+		SetApproveComment(comment).
+		SetApprovedAt(now).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("approve permission request: %w", err)
 	}
@@ -167,11 +184,13 @@ func (s *PermissionRequestService) RejectRequest(ctx context.Context, requestID,
 		return nil, ErrPermReqAlreadyDone
 	}
 
-	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	_, err = s.database.DB.ExecContext(ctx,
-		`UPDATE permission_requests SET status = 'REJECTED', approver_id = ?, approve_comment = ?, updated_at = ? WHERE id = ?`,
-		approverID, comment, now, requestID,
-	)
+	now := time.Now().UTC()
+	_, err = s.client.PermissionRequest.UpdateOneID(int(requestID)).
+		SetStatus("REJECTED").
+		SetApproverID(approverID).
+		SetApproveComment(comment).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("reject permission request: %w", err)
 	}
@@ -190,12 +209,14 @@ func (s *PermissionRequestService) RevokeRequest(ctx context.Context, requestID,
 		return nil, ErrPermReqAlreadyDone
 	}
 
-	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	_, err = s.database.DB.ExecContext(ctx,
-		`UPDATE permission_requests SET status = 'REVOKED', revoked_at = ?, revoked_by = ?, revoke_reason = ?, updated_at = ?
-		 WHERE id = ?`,
-		now, revokerID, reason, now, requestID,
-	)
+	now := time.Now().UTC()
+	_, err = s.client.PermissionRequest.UpdateOneID(int(requestID)).
+		SetStatus("REVOKED").
+		SetRevokedAt(now).
+		SetRevokedBy(revokerID).
+		SetRevokeReason(reason).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("revoke permission request: %w", err)
 	}
@@ -220,6 +241,7 @@ func (s *PermissionRequestService) RevokeRequest(ctx context.Context, requestID,
 }
 
 // ListRequests returns paginated permission requests with optional filters.
+// RAW_SQL: LEFT JOIN across users/datasources — no ent edges defined, raw SQL required.
 func (s *PermissionRequestService) ListRequests(ctx context.Context, page, pageSize int, status, applicantIDStr string) ([]*model.PermissionRequest, int64, error) {
 	p := ParsePagination(page, pageSize)
 
@@ -277,34 +299,35 @@ func (s *PermissionRequestService) ListRequests(ctx context.Context, page, pageS
 
 // ExpireOverdue marks expired approved requests as EXPIRED and removes their policies.
 func (s *PermissionRequestService) ExpireOverdue(ctx context.Context) (int64, error) {
-	now := time.Now().UTC().Format("2006-01-02 15:04:05")
+	now := time.Now().UTC()
 
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT id, applicant_id, datasource_id, database, table_name, actions FROM permission_requests
-		 WHERE status = 'APPROVED' AND expires_at <= ?`, now)
+	// Find APPROVED requests past expiry using ent
+	expired, err := s.client.PermissionRequest.Query().
+		Where(
+			entPermReq.StatusEQ("APPROVED"),
+			entPermReq.ExpiresAtLTE(now),
+		).
+		All(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("query expired requests: %w", err)
 	}
-	defer rows.Close()
 
 	var count int64
-	for rows.Next() {
-		var id, applicantID, datasourceID int64
-		var database, tableName, actions string
-		if err := rows.Scan(&id, &applicantID, &datasourceID, &database, &tableName, &actions); err != nil {
-			continue
-		}
+	for _, r := range expired {
+		// Update to EXPIRED
+		_, _ = s.client.PermissionRequest.UpdateOneID(r.ID).
+			SetStatus("EXPIRED").
+			SetUpdatedAt(now).
+			Save(ctx)
 
-		_, _ = s.database.DB.ExecContext(ctx,
-			`UPDATE permission_requests SET status = 'EXPIRED', updated_at = ? WHERE id = ?`, now, id)
-
-		dsStr := fmt.Sprintf("%d", datasourceID)
-		userSub := fmt.Sprintf("user:%d", applicantID)
-		obj := tableName
+		// Remove temporary policies
+		dsStr := fmt.Sprintf("%d", r.DatasourceID)
+		userSub := fmt.Sprintf("user:%d", r.ApplicantID)
+		obj := r.TableName
 		if obj == "" {
-			obj = database
+			obj = r.Database
 		}
-		for _, action := range strings.Split(actions, ",") {
+		for _, action := range strings.Split(r.Actions, ",") {
 			action = strings.TrimSpace(action)
 			if action != "" {
 				_ = s.permSvc.RemoveTemporaryPolicy(ctx, userSub, dsStr, obj, action)
@@ -312,10 +335,11 @@ func (s *PermissionRequestService) ExpireOverdue(ctx context.Context) (int64, er
 		}
 		count++
 	}
-	return count, rows.Err()
+	return count, nil
 }
 
 // MyActiveRequests returns the current user's active (approved, not expired) permission requests.
+// RAW_SQL: LEFT JOIN across users/datasources — no ent edges defined, raw SQL required.
 func (s *PermissionRequestService) MyActiveRequests(ctx context.Context, userID int64) ([]*model.PermissionRequest, int64, error) {
 	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT r.id, r.applicant_id, COALESCE(u1.username, ''),
@@ -347,9 +371,11 @@ func (s *PermissionRequestService) MyActiveRequests(ctx context.Context, userID 
 }
 
 func (s *PermissionRequestService) markExpired(ctx context.Context, id int64) error {
-	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	_, err := s.database.DB.ExecContext(ctx,
-		`UPDATE permission_requests SET status = 'EXPIRED', updated_at = ? WHERE id = ?`, now, id)
+	now := time.Now().UTC()
+	_, err := s.client.PermissionRequest.UpdateOneID(int(id)).
+		SetStatus("EXPIRED").
+		SetUpdatedAt(now).
+		Save(ctx)
 	return err
 }
 
@@ -385,6 +411,9 @@ func (s *PermissionRequestService) logAudit(ctx context.Context, actorID int64, 
 		SQLSummary: fmt.Sprintf("%s permission request #%d for %s/%s", action, r.ID, r.Database, r.TableName),
 	})
 }
+
+
+
 
 func scanPermRequests(rows *sql.Rows) ([]*model.PermissionRequest, error) {
 	var requests []*model.PermissionRequest
