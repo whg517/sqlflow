@@ -1,20 +1,28 @@
 # e2e.yml — End-to-End Tests
 # =============================================
 # Triggered by:
+#   - Push to main (full E2E — verify every merge)
 #   - Pull requests to main (smoke tests only — fast feedback)
 #   - Scheduled (weekdays 14:00 CST — regression guard)
 #   - Manual dispatch (on-demand runs)
 #
-# NOTE: push to main is intentionally NOT a trigger. GitHub Actions
-# auto-cancels pending runs on the same branch, so rapid merges
-# would cancel E2E before it finishes. Use schedule or dispatch.
-#
 # Uses docker-compose.test.yml for isolated test environment.
+# Concurrency key uses sha, so rapid merges don't cancel each other.
 # Based on SF-QA0023 E2E ops design.
 
 name: E2E Tests
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "**.go"
+      - "web/src/**"
+      - "Dockerfile"
+      - "docker-compose*.yml"
+      - "config/**"
+      - "e2e/**"
+      - ".github/workflows/e2e.yml"
   pull_request:
     branches: [main]
     paths:
@@ -38,6 +46,10 @@ on:
 env:
   PLAYWRIGHT_VERSION: "v1.52.0"
   COMPOSE_FILE: docker-compose.test.yml
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   e2e-smoke:
