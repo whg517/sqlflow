@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -29,20 +30,11 @@ type createTokenRequest struct {
 }
 
 // CreateToken generates a new API token.
-// CreateToken godoc
-// @Summary 创建API令牌
-// @Description 认证用户创建新的API访问令牌
-// @Tags API令牌
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param body body object true "令牌配置"
-// @Success 201 {object} resp.SuccessResponse "创建成功"
-// @Failure 400 {object} resp.ErrorResponse "参数错误"
-// @Router /tokens [post]
-
 func (h *TokenHandler) CreateToken(c echo.Context) error {
-	userID := getContextUserID(c)
+	userID, _, _, err := requireAuth(c)
+	if err != nil {
+		return err
+	}
 
 	var req createTokenRequest
 	if err := c.Bind(&req); err != nil {
@@ -80,39 +72,31 @@ func (h *TokenHandler) CreateToken(c echo.Context) error {
 		if errors.Is(err, service.ErrTokenInvalidScope) {
 			return resp.BadRequest(c, err.Error())
 		}
+		log.Printf("CreateToken failed for user %d: %v", userID, err)
 		return resp.InternalError(c, "创建 Token 失败")
 	}
 
-	return c.JSON(http.StatusCreated, resp.SuccessResponse{
-		Code:    0,
-		Message: "created",
-		Data: map[string]interface{}{
-			"id":           token.ID,
-			"name":         token.Name,
-			"token":        plainToken, // only returned at creation
-			"token_prefix": token.TokenPrefix,
-			"scopes":       token.Scopes,
-			"expires_at":   token.ExpiresAt,
-			"created_at":   token.CreatedAt,
-		},
+	return resp.Created(c, map[string]interface{}{
+		"id":           token.ID,
+		"name":         token.Name,
+		"token":        plainToken, // only returned at creation
+		"token_prefix": token.TokenPrefix,
+		"scopes":       token.Scopes,
+		"expires_at":   token.ExpiresAt,
+		"created_at":   token.CreatedAt,
 	})
 }
 
 // ListMyTokens returns tokens for the authenticated user.
-// ListMyTokens godoc
-// @Summary 我的令牌列表
-// @Description 获取当前用户的API令牌列表
-// @Tags API令牌
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} resp.SuccessResponse "成功"
-// @Router /tokens [get]
-
 func (h *TokenHandler) ListMyTokens(c echo.Context) error {
-	userID := getContextUserID(c)
+	userID, _, _, err := requireAuth(c)
+	if err != nil {
+		return err
+	}
 
 	tokens, err := h.tokenSvc.ListTokens(c.Request().Context(), userID)
 	if err != nil {
+		log.Printf("ListMyTokens failed for user %d: %v", userID, err)
 		return resp.InternalError(c, "查询 Token 列表失败")
 	}
 
@@ -120,16 +104,12 @@ func (h *TokenHandler) ListMyTokens(c echo.Context) error {
 }
 
 // ListAllTokens returns all tokens (admin only).
-// ListAllTokens godoc
-// @Summary 所有令牌列表（管理员）
-// @Description 管理员获取所有用户的API令牌列表
-// @Tags API令牌
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} resp.SuccessResponse "成功"
-// @Router /admin/tokens [get]
-
 func (h *TokenHandler) ListAllTokens(c echo.Context) error {
+	_, _, _, err := requireAuth(c)
+	if err != nil {
+		return err
+	}
+
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
 	if page <= 0 {
@@ -141,6 +121,7 @@ func (h *TokenHandler) ListAllTokens(c echo.Context) error {
 
 	tokens, total, err := h.tokenSvc.ListAllTokens(c.Request().Context(), page, pageSize)
 	if err != nil {
+		log.Printf("ListAllTokens failed: %v", err)
 		return resp.InternalError(c, "查询 Token 列表失败")
 	}
 
@@ -148,19 +129,12 @@ func (h *TokenHandler) ListAllTokens(c echo.Context) error {
 }
 
 // RevokeMyToken revokes a token owned by the authenticated user.
-// RevokeMyToken godoc
-// @Summary 撤销我的令牌
-// @Description 撤销当前用户自己的API令牌
-// @Tags API令牌
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "令牌ID"
-// @Success 200 {object} resp.SuccessResponse "撤销成功"
-// @Failure 404 {object} resp.ErrorResponse "令牌不存在"
-// @Router /tokens/{id} [delete]
-
 func (h *TokenHandler) RevokeMyToken(c echo.Context) error {
-	userID := getContextUserID(c)
+	userID, _, _, err := requireAuth(c)
+	if err != nil {
+		return err
+	}
+
 	tokenID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resp.BadRequest(c, "无效的 Token ID")
@@ -170,6 +144,7 @@ func (h *TokenHandler) RevokeMyToken(c echo.Context) error {
 		if errors.Is(err, service.ErrTokenNotFound) {
 			return resp.NotFound(c, "Token 不存在或无权操作")
 		}
+		log.Printf("RevokeMyToken failed for user %d, token %d: %v", userID, tokenID, err)
 		return resp.InternalError(c, "撤销 Token 失败")
 	}
 
@@ -177,18 +152,12 @@ func (h *TokenHandler) RevokeMyToken(c echo.Context) error {
 }
 
 // RevokeAnyToken revokes any token (admin only).
-// RevokeAnyToken godoc
-// @Summary 撤销任意令牌（管理员）
-// @Description 管理员撤销任意用户的API令牌
-// @Tags API令牌
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "令牌ID"
-// @Success 200 {object} resp.SuccessResponse "撤销成功"
-// @Failure 404 {object} resp.ErrorResponse "令牌不存在"
-// @Router /admin/tokens/{id} [delete]
-
 func (h *TokenHandler) RevokeAnyToken(c echo.Context) error {
+	_, _, _, err := requireAuth(c)
+	if err != nil {
+		return err
+	}
+
 	tokenID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resp.BadRequest(c, "无效的 Token ID")
@@ -198,6 +167,7 @@ func (h *TokenHandler) RevokeAnyToken(c echo.Context) error {
 		if errors.Is(err, service.ErrTokenNotFound) {
 			return resp.NotFound(c, "Token 不存在")
 		}
+		log.Printf("RevokeAnyToken failed for token %d: %v", tokenID, err)
 		return resp.InternalError(c, "撤销 Token 失败")
 	}
 
@@ -205,20 +175,15 @@ func (h *TokenHandler) RevokeAnyToken(c echo.Context) error {
 }
 
 // GetTokenStats returns token usage statistics.
-// GetTokenStats godoc
-// @Summary 令牌使用统计
-// @Description 获取当前用户API令牌的使用统计
-// @Tags API令牌
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} resp.SuccessResponse "成功"
-// @Router /tokens/stats [get]
-
 func (h *TokenHandler) GetTokenStats(c echo.Context) error {
-	userID := getContextUserID(c)
+	userID, _, _, err := requireAuth(c)
+	if err != nil {
+		return err
+	}
 
 	totalCount, activeCount, totalUsage, err := h.tokenSvc.GetTokenStats(c.Request().Context(), userID)
 	if err != nil {
+		log.Printf("GetTokenStats failed for user %d: %v", userID, err)
 		return resp.InternalError(c, "查询失败")
 	}
 

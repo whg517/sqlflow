@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -319,6 +320,7 @@ func scanTokens(rows *sql.Rows) ([]*model.APIToken, error) {
 			&t.Scopes, &t.ExpiresAt, &lastUsedAt, &t.UseCount, &isActive,
 			&t.Description, &t.CreatedAt, &t.UpdatedAt)
 		if err != nil {
+			log.Printf("scanTokens: scan failed: %v", err)
 			return nil, fmt.Errorf("scan token: %w", err)
 		}
 
@@ -329,6 +331,7 @@ func scanTokens(rows *sql.Rows) ([]*model.APIToken, error) {
 		tokens = append(tokens, t)
 	}
 	if err := rows.Err(); err != nil {
+		log.Printf("scanTokens: rows iteration failed: %v", err)
 		return nil, fmt.Errorf("iterate tokens: %w", err)
 	}
 	return tokens, nil
