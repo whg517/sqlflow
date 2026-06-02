@@ -9,7 +9,7 @@ import (
 
 func TestResubmitTicket(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
@@ -114,7 +114,7 @@ func TestResubmitTicket(t *testing.T) {
 
 func TestListRevisions(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")

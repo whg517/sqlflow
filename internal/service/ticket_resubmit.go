@@ -30,13 +30,19 @@ func (s *TicketService) ResubmitTicket(ctx context.Context, ticketID, submitterI
 	}
 
 	// Snapshot the current (rejected) version into ticket_revisions
-	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO ticket_revisions (ticket_id, revision, sql_content, sql_summary, change_reason, risk_level, ai_review_result, reviewer_id, review_comment, status, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, t.Revision, t.SQLContent, t.SQLSummary, t.ChangeReason,
-		t.RiskLevel, t.AIReviewResult, t.ReviewerID, t.ReviewComment,
-		t.Status, t.UpdatedAt,
-	)
+	_, err = s.client.TicketRevision.Create().
+		SetTicketID(t.ID).
+		SetRevision(t.Revision).
+		SetSQLContent(t.SQLContent).
+		SetSQLSummary(t.SQLSummary).
+		SetChangeReason(t.ChangeReason).
+		SetRiskLevel(t.RiskLevel).
+		SetAiReviewResult(t.AIReviewResult).
+		SetReviewerID(t.ReviewerID).
+		SetReviewComment(t.ReviewComment).
+		SetStatus(string(t.Status)).
+		SetCreatedAt(t.UpdatedAt).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("保存历史版本失败: %w", err)
 	}
@@ -46,11 +52,18 @@ func (s *TicketService) ResubmitTicket(ctx context.Context, ticketID, submitterI
 	summary := truncateSQL(sqlContent)
 	newRevision := t.Revision + 1
 
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE tickets SET sql_content = ?, sql_summary = ?, change_reason = ?, status = ?, risk_level = '', ai_review_result = '', reviewer_id = 0, review_comment = '', revision = ?, updated_at = ? WHERE id = ?`,
-		sqlContent, summary, changeReason,
-		model.TicketStatusSubmitted, newRevision, now, ticketID,
-	)
+	_, err = s.client.Ticket.UpdateOneID(int(ticketID)).
+		SetSQLContent(sqlContent).
+		SetSQLSummary(summary).
+		SetChangeReason(changeReason).
+		SetStatus(string(model.TicketStatusSubmitted)).
+		SetRiskLevel("").
+		SetAiReviewResult("").
+		SetReviewerID(0).
+		SetReviewComment("").
+		SetRevision(newRevision).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("重提工单失败: %w", err)
 	}
@@ -79,7 +92,7 @@ func (s *TicketService) ResubmitTicket(ctx context.Context, ticketID, submitterI
 
 // ListRevisions returns the revision history for a ticket.
 func (s *TicketService) ListRevisions(ctx context.Context, ticketID int64) ([]model.TicketRevision, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT id, ticket_id, revision, sql_content, sql_summary, change_reason, risk_level, ai_review_result, reviewer_id, review_comment, status, created_at
 		 FROM ticket_revisions WHERE ticket_id = ? ORDER BY revision ASC`,
 		ticketID,

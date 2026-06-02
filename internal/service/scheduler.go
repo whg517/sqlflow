@@ -71,7 +71,8 @@ func (s *Scheduler) executeDueTickets(ctx context.Context) error {
 	now := time.Now()
 
 	// Find all SCHEDULED tickets whose scheduled_at <= now
-	rows, err := s.ticketSvc.db.QueryContext(ctx,
+	// RAW_SQL: atomic CAS for scheduled tickets — ent UpdateOneID doesn't support WHERE conditions on current row
+	rows, err := s.ticketSvc.database.DB.QueryContext(ctx,
 		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, reviewer_id, review_comment, scheduled_at, executed_at, created_at, updated_at
 		 FROM tickets
 		 WHERE status = ? AND scheduled_at IS NOT NULL AND scheduled_at <= ?
@@ -110,8 +111,9 @@ func (s *Scheduler) executeDueTickets(ctx context.Context) error {
 // It sets status to EXECUTING first, executes SQL, then DONE/FAILED.
 func (s *Scheduler) executeScheduledTicket(ctx context.Context, t *model.Ticket) error {
 	// Idempotent: SCHEDULED → EXECUTING (atomic)
+	// RAW_SQL: atomic CAS SCHEDULED → EXECUTING — ent doesn't support conditional WHERE
 	now := time.Now()
-	result, err := s.ticketSvc.db.ExecContext(ctx,
+	result, err := s.ticketSvc.database.DB.ExecContext(ctx,
 		`UPDATE tickets SET status = ?, updated_at = ? WHERE id = ? AND status = ?`,
 		model.TicketStatusExecuting, now, t.ID, model.TicketStatusScheduled,
 	)

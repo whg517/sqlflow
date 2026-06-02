@@ -9,18 +9,23 @@ import (
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entApprovalPolicy "github.com/whg517/sqlflow/internal/db/ent/approvalpolicy"
+	entApprovalRecord "github.com/whg517/sqlflow/internal/db/ent/approvalrecord"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
 // ApprovalEngine manages configurable approval policies.
 type ApprovalEngine struct {
-	db        *sql.DB
+	database  *db.DB
+	client    *ent.Client
 	notifySvc *NotifyService
 }
 
 // NewApprovalEngine creates a new ApprovalEngine.
-func NewApprovalEngine(db *sql.DB) *ApprovalEngine {
-	return &ApprovalEngine{db: db}
+func NewApprovalEngine(database *db.DB) *ApprovalEngine {
+	return &ApprovalEngine{database: database, client: database.Client()}
 }
 
 // SetNotifyService sets the notification service for sending alerts.
@@ -51,11 +56,19 @@ func (e *ApprovalEngine) CreatePolicy(ctx context.Context, name, description str
 	}
 
 	now := time.Now()
-	result, err := e.db.ExecContext(ctx,
-		`INSERT INTO approval_policies (name, description, enabled, priority, conditions, approval_chain, auto_approve_enabled, auto_approve_reason, is_default, created_at, updated_at)
-		 VALUES (?, ?, TRUE, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		name, description, priority, conditions, approvalChain, autoApproveEnabled, autoApproveReason, isDefault, now, now,
-	)
+	saved, err := e.client.ApprovalPolicy.Create().
+		SetName(name).
+		SetDescription(description).
+		SetEnabled(true).
+		SetPriority(priority).
+		SetConditions(conditions).
+		SetApprovalChain(approvalChain).
+		SetAutoApproveEnabled(autoApproveEnabled).
+		SetAutoApproveReason(autoApproveReason).
+		SetIsDefault(isDefault).
+		SetCreatedAt(now).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		if strings.Contains(err.Error(), "Duplicate") {
 			return nil, fmt.Errorf("策略名称已存在: %s", name)
@@ -63,66 +76,64 @@ func (e *ApprovalEngine) CreatePolicy(ctx context.Context, name, description str
 		return nil, fmt.Errorf("创建策略失败: %w", err)
 	}
 
-	id, _ := result.LastInsertId()
 	return &model.ApprovalPolicy{
-		ID:                 id,
-		Name:               name,
-		Description:        description,
-		Enabled:            true,
-		Priority:           priority,
-		Conditions:         conditions,
-		ApprovalChain:      approvalChain,
-		AutoApproveEnabled: autoApproveEnabled,
-		AutoApproveReason:  autoApproveReason,
-		IsDefault:          isDefault,
-		CreatedAt:          now,
-		UpdatedAt:          now,
+		ID:                 int64(saved.ID),
+		Name:               saved.Name,
+		Description:        strPtrValue(saved.Description),
+		Enabled:            saved.Enabled,
+		Priority:           saved.Priority,
+		Conditions:         saved.Conditions,
+		ApprovalChain:      saved.ApprovalChain,
+		AutoApproveEnabled: saved.AutoApproveEnabled,
+		AutoApproveReason:  strPtrValue(saved.AutoApproveReason),
+		IsDefault:          saved.IsDefault,
+		CreatedAt:          saved.CreatedAt,
+		UpdatedAt:          saved.UpdatedAt,
 	}, nil
 }
 
 // GetPolicy retrieves a policy by ID.
 func (e *ApprovalEngine) GetPolicy(ctx context.Context, id int64) (*model.ApprovalPolicy, error) {
-	p := &model.ApprovalPolicy{}
-	err := e.db.QueryRowContext(ctx,
-		`SELECT id, name, description, enabled, priority, conditions, approval_chain, auto_approve_enabled, auto_approve_reason, is_default, created_at, updated_at
-		 FROM approval_policies WHERE id = ?`, id,
-	).Scan(&p.ID, &p.Name, &p.Description, &p.Enabled, &p.Priority, &p.Conditions, &p.ApprovalChain, &p.AutoApproveEnabled, &p.AutoApproveReason, &p.IsDefault, &p.CreatedAt, &p.UpdatedAt)
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("策略不存在: %d", id)
-	}
+	p, err := e.client.ApprovalPolicy.Get(ctx, int(id))
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("策略不存在: %d", id)
+		}
 		return nil, fmt.Errorf("查询策略失败: %w", err)
 	}
-	return p, nil
+	return entApprovalPolicyToModel(p), nil
 }
 
 // ListPolicies lists all policies ordered by priority.
 func (e *ApprovalEngine) ListPolicies(ctx context.Context) ([]model.ApprovalPolicy, error) {
-	rows, err := e.db.QueryContext(ctx,
-		`SELECT id, name, description, enabled, priority, conditions, approval_chain, auto_approve_enabled, auto_approve_reason, is_default, created_at, updated_at
-		 FROM approval_policies ORDER BY priority DESC, id ASC`)
+	policies, err := e.client.ApprovalPolicy.Query().
+		Order(ent.Desc(entApprovalPolicy.FieldPriority), ent.Asc(entApprovalPolicy.FieldID)).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询策略列表失败: %w", err)
 	}
-	defer rows.Close()
 
-	var policies []model.ApprovalPolicy
-	for rows.Next() {
-		var p model.ApprovalPolicy
-		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.Enabled, &p.Priority, &p.Conditions, &p.ApprovalChain, &p.AutoApproveEnabled, &p.AutoApproveReason, &p.IsDefault, &p.CreatedAt, &p.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("扫描策略失败: %w", err)
-		}
-		policies = append(policies, p)
+	out := make([]model.ApprovalPolicy, 0, len(policies))
+	for _, p := range policies {
+		out = append(out, *entApprovalPolicyToModel(p))
 	}
-	return policies, nil
+	return out, nil
 }
 
 // UpdatePolicy updates an existing policy.
 func (e *ApprovalEngine) UpdatePolicy(ctx context.Context, id int64, name, description string, enabled bool, priority int, conditions, approvalChain string, autoApproveEnabled bool, autoApproveReason string, isDefault bool) (*model.ApprovalPolicy, error) {
-	_, err := e.db.ExecContext(ctx,
-		`UPDATE approval_policies SET name=?, description=?, enabled=?, priority=?, conditions=?, approval_chain=?, auto_approve_enabled=?, auto_approve_reason=?, is_default=?, updated_at=? WHERE id=?`,
-		name, description, enabled, priority, conditions, approvalChain, autoApproveEnabled, autoApproveReason, isDefault, time.Now(), id,
-	)
+	_, err := e.client.ApprovalPolicy.UpdateOneID(int(id)).
+		SetName(name).
+		SetDescription(description).
+		SetEnabled(enabled).
+		SetPriority(priority).
+		SetConditions(conditions).
+		SetApprovalChain(approvalChain).
+		SetAutoApproveEnabled(autoApproveEnabled).
+		SetAutoApproveReason(autoApproveReason).
+		SetIsDefault(isDefault).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新策略失败: %w", err)
 	}
@@ -131,7 +142,7 @@ func (e *ApprovalEngine) UpdatePolicy(ctx context.Context, id int64, name, descr
 
 // DeletePolicy deletes a policy by ID.
 func (e *ApprovalEngine) DeletePolicy(ctx context.Context, id int64) error {
-	_, err := e.db.ExecContext(ctx, `DELETE FROM approval_policies WHERE id = ?`, id)
+	err := e.client.ApprovalPolicy.DeleteOneID(int(id)).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("删除策略失败: %w", err)
 	}
@@ -229,20 +240,31 @@ func (e *ApprovalEngine) ApplyPolicy(ctx context.Context, ticketID int64, policy
 
 		// Write auto-approve record
 		now := time.Now()
-		_, err := e.db.ExecContext(ctx,
-			`INSERT INTO approval_records (ticket_id, policy_id, stage, total_stages, approver_role, action, auto_approved, auto_reason, created_at)
-			 VALUES (?, ?, 0, 0, '', 'auto_approved', TRUE, ?, ?)`,
-			ticketID, policy.ID, result.AutoReason, now,
-		)
+		_, err := e.client.ApprovalRecord.Create().
+			SetTicketID(ticketID).
+			SetPolicyID(policy.ID).
+			SetStage(0).
+			SetTotalStages(0).
+			SetApproverRole("").
+			SetAction("auto_approved").
+			SetAutoApproved(true).
+			SetAutoReason(result.AutoReason).
+			SetCreatedAt(now).
+			Save(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("写入自动审批记录失败: %w", err)
 		}
 
 		// Update ticket
-		_, err = e.db.ExecContext(ctx,
-			`UPDATE tickets SET policy_id=?, current_stage=0, total_stages=0, auto_approved=TRUE, auto_approve_reason=?, status='APPROVED', updated_at=? WHERE id=?`,
-			policy.ID, result.AutoReason, now, ticketID,
-		)
+		_, err = e.client.Ticket.UpdateOneID(int(ticketID)).
+			SetPolicyID(policy.ID).
+			SetCurrentStage(0).
+			SetTotalStages(0).
+			SetAutoApproved(true).
+			SetAutoApproveReason(result.AutoReason).
+			SetStatus("APPROVED").
+			SetUpdatedAt(now).
+			Save(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("更新工单自动审批状态失败: %w", err)
 		}
@@ -252,17 +274,21 @@ func (e *ApprovalEngine) ApplyPolicy(ctx context.Context, ticketID int64, policy
 
 	// Not auto-approved: set up multi-stage approval
 	now := time.Now()
-	_, err := e.db.ExecContext(ctx,
-		`UPDATE tickets SET policy_id=?, current_stage=1, total_stages=?, auto_approved=FALSE, status='PENDING_APPROVAL', updated_at=? WHERE id=?`,
-		policy.ID, len(chain), now, ticketID,
-	)
+	_, err := e.client.Ticket.UpdateOneID(int(ticketID)).
+		SetPolicyID(policy.ID).
+		SetCurrentStage(1).
+		SetTotalStages(len(chain)).
+		SetAutoApproved(false).
+		SetStatus("PENDING_APPROVAL").
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新工单审批阶段失败: %w", err)
 	}
 
 	// Notify approvers about pending approval
 	if e.notifySvc != nil {
-		t, _ := getTicketForNotify(ctx, e.db, ticketID)
+		t, _ := getTicketForNotify(ctx, e.database.DB, ticketID)
 		if t != nil {
 			e.notifySvc.NotifyTicketPendingApproval(ctx, t)
 		}
@@ -286,13 +312,15 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 	}
 
 	// Get current ticket state
-	var currentStage, totalStages int
-	var policyID int64
-	err := e.db.QueryRowContext(ctx,
-		`SELECT current_stage, total_stages, policy_id FROM tickets WHERE id = ?`, ticketID,
-	).Scan(&currentStage, &totalStages, &policyID)
+	tk, err := e.client.Ticket.Get(ctx, int(ticketID))
 	if err != nil {
 		return nil, fmt.Errorf("查询工单失败: %w", err)
+	}
+	currentStage := tk.CurrentStage
+	totalStages := tk.TotalStages
+	var policyID int64
+	if tk.PolicyID != nil {
+		policyID = *tk.PolicyID
 	}
 
 	if currentStage == 0 && totalStages == 0 {
@@ -321,29 +349,40 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 
 	// Write approval record
 	now := time.Now()
-	recordResult, err := e.db.ExecContext(ctx,
-		`INSERT INTO approval_records (ticket_id, policy_id, stage, total_stages, approver_role, approver_id, action, comment, auto_approved, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?)`,
-		ticketID, policyID, currentStage, totalStages, expectedStage.Role, approverID, action, comment, now,
-	)
+	savedRecord, err := e.client.ApprovalRecord.Create().
+		SetTicketID(ticketID).
+		SetPolicyID(policyID).
+		SetStage(currentStage).
+		SetTotalStages(totalStages).
+		SetApproverRole(expectedStage.Role).
+		SetApproverID(approverID).
+		SetAction(action).
+		SetComment(comment).
+		SetAutoApproved(false).
+		SetCreatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("写入审批记录失败: %w", err)
 	}
-	recordID, _ := recordResult.LastInsertId()
+	recordID := int64(savedRecord.ID)
 
 	if action == "rejected" {
 		// Reject the ticket
-		_, err = e.db.ExecContext(ctx,
-			`UPDATE tickets SET status='REJECTED', current_stage=0, total_stages=0, reviewer_id=?, review_comment=?, updated_at=? WHERE id=?`,
-			approverID, comment, now, ticketID,
-		)
+		_, err = e.client.Ticket.UpdateOneID(int(ticketID)).
+			SetStatus("REJECTED").
+			SetCurrentStage(0).
+			SetTotalStages(0).
+			SetReviewerID(approverID).
+			SetReviewComment(comment).
+			SetUpdatedAt(now).
+			Save(ctx)
 		if err != nil {
-		return nil, fmt.Errorf("拒绝工单失败: %w", err)
+			return nil, fmt.Errorf("拒绝工单失败: %w", err)
 		}
 
 		// Notify submitter about rejection
 		if e.notifySvc != nil {
-			t, _ := getTicketForNotify(ctx, e.db, ticketID)
+			t, _ := getTicketForNotify(ctx, e.database.DB, ticketID)
 			if t != nil {
 				t.ReviewerID = approverID
 				t.ReviewComment = comment
@@ -355,16 +394,20 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 		nextStage := currentStage + 1
 		if nextStage > totalStages {
 			// All stages done — approved
-			_, err = e.db.ExecContext(ctx,
-				`UPDATE tickets SET status='APPROVED', current_stage=?, total_stages=?, reviewer_id=?, review_comment=?, updated_at=? WHERE id=?`,
-				nextStage, totalStages, approverID, comment, now, ticketID,
-			)
+			_, err = e.client.Ticket.UpdateOneID(int(ticketID)).
+				SetStatus("APPROVED").
+				SetCurrentStage(nextStage).
+				SetTotalStages(totalStages).
+				SetReviewerID(approverID).
+				SetReviewComment(comment).
+				SetUpdatedAt(now).
+				Save(ctx)
 		} else {
 			// Advance to next stage
-			_, err = e.db.ExecContext(ctx,
-				`UPDATE tickets SET current_stage=?, updated_at=? WHERE id=?`,
-				nextStage, now, ticketID,
-			)
+			_, err = e.client.Ticket.UpdateOneID(int(ticketID)).
+				SetCurrentStage(nextStage).
+				SetUpdatedAt(now).
+				Save(ctx)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("更新工单审批状态失败: %w", err)
@@ -372,7 +415,7 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 
 		// Notify when all stages approved
 		if nextStage > totalStages && e.notifySvc != nil {
-			t, _ := getTicketForNotify(ctx, e.db, ticketID)
+			t, _ := getTicketForNotify(ctx, e.database.DB, ticketID)
 			if t != nil {
 				t.ReviewerID = approverID
 				t.ReviewComment = comment
@@ -397,30 +440,41 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 
 // GetApprovalHistory returns all approval records for a ticket.
 func (e *ApprovalEngine) GetApprovalHistory(ctx context.Context, ticketID int64) ([]model.ApprovalRecord, error) {
-	rows, err := e.db.QueryContext(ctx,
-		`SELECT id, ticket_id, policy_id, stage, total_stages, approver_role, approver_id, approver_name, action, comment, auto_approved, auto_reason, created_at
-		 FROM approval_records WHERE ticket_id = ? ORDER BY stage ASC, id ASC`, ticketID,
-	)
+	records, err := e.client.ApprovalRecord.Query().
+		Where(entApprovalRecord.TicketIDEQ(ticketID)).
+		Order(ent.Asc(entApprovalRecord.FieldStage), ent.Asc(entApprovalRecord.FieldID)).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询审批历史失败: %w", err)
 	}
-	defer rows.Close()
 
-	var records []model.ApprovalRecord
-	for rows.Next() {
-		var r model.ApprovalRecord
-		if err := rows.Scan(&r.ID, &r.TicketID, &r.PolicyID, &r.Stage, &r.TotalStages, &r.ApproverRole, &r.ApproverID, &r.ApproverName, &r.Action, &r.Comment, &r.AutoApproved, &r.AutoReason, &r.CreatedAt); err != nil {
-			return nil, fmt.Errorf("扫描审批记录失败: %w", err)
+	out := make([]model.ApprovalRecord, 0, len(records))
+	for _, r := range records {
+		mr := model.ApprovalRecord{
+			ID:           int64(r.ID),
+			TicketID:     r.TicketID,
+			PolicyID:     int64PtrValue(r.PolicyID),
+			Stage:        r.Stage,
+			TotalStages:  r.TotalStages,
+			ApproverRole: r.ApproverRole,
+			ApproverID:   int64PtrValue(r.ApproverID),
+			ApproverName: strPtrValue(r.ApproverName),
+			Action:       r.Action,
+			Comment:      strPtrValue(r.Comment),
+			AutoApproved: r.AutoApproved,
+			AutoReason:   strPtrValue(r.AutoReason),
+			CreatedAt:    r.CreatedAt,
 		}
-		records = append(records, r)
+		out = append(out, mr)
 	}
-	return records, nil
+	return out, nil
 }
 
 // EnsureDefaultPolicy creates a default policy if none exists.
 func (e *ApprovalEngine) EnsureDefaultPolicy(ctx context.Context) error {
-	var count int
-	err := e.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM approval_policies WHERE is_default = TRUE`).Scan(&count)
+	count, err := e.client.ApprovalPolicy.Query().
+		Where(entApprovalPolicy.IsDefaultEQ(true)).
+		Count(ctx)
 	if err != nil {
 		return fmt.Errorf("检查默认策略失败: %w", err)
 	}
@@ -446,7 +500,26 @@ func containsAny(list []string, target string) bool {
 	return false
 }
 
+// entApprovalPolicyToModel converts an ent ApprovalPolicy to a model ApprovalPolicy.
+func entApprovalPolicyToModel(p *ent.ApprovalPolicy) *model.ApprovalPolicy {
+	return &model.ApprovalPolicy{
+		ID:                 int64(p.ID),
+		Name:               p.Name,
+		Description:        strPtrValue(p.Description),
+		Enabled:            p.Enabled,
+		Priority:           p.Priority,
+		Conditions:         p.Conditions,
+		ApprovalChain:      p.ApprovalChain,
+		AutoApproveEnabled: p.AutoApproveEnabled,
+		AutoApproveReason:  strPtrValue(p.AutoApproveReason),
+		IsDefault:          p.IsDefault,
+		CreatedAt:          p.CreatedAt,
+		UpdatedAt:          p.UpdatedAt,
+	}
+}
+
 // getTicketForNotify fetches minimal ticket fields needed for notification.
+// RAW_SQL: helper for notifications, only needs a few fields — not worth ent query.
 func getTicketForNotify(ctx context.Context, db *sql.DB, ticketID int64) (*model.Ticket, error) {
 	t := &model.Ticket{ID: ticketID}
 	err := db.QueryRowContext(ctx,
@@ -457,4 +530,20 @@ func getTicketForNotify(ctx context.Context, db *sql.DB, ticketID int64) (*model
 		return nil, err
 	}
 	return t, nil
+}
+
+// strPtrValue dereferences a string pointer, returning "" for nil.
+func strPtrValue(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// int64PtrValue dereferences an int64 pointer, returning 0 for nil.
+func int64PtrValue(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }

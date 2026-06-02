@@ -21,12 +21,12 @@ import (
 	"github.com/whg517/sqlflow/config"
 	"github.com/whg517/sqlflow/internal/api"
 	"github.com/whg517/sqlflow/internal/connpool"
+	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/db"
 	_ "github.com/whg517/sqlflow/internal/driver/elasticsearch"
 	_ "github.com/whg517/sqlflow/internal/driver/mongodb"
 	_ "github.com/whg517/sqlflow/internal/driver/mysql"
 	_ "github.com/whg517/sqlflow/internal/driver/postgresql"
-	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/service"
 )
 
@@ -86,7 +86,7 @@ func main() {
 	querySvc := service.NewQueryService(database.DB, dsSvc, historySvc, permSvc, auditSvc, cfg.EncryptionKey, connMgr, poolMgr)
 	log.Println("query service initialized")
 
-	ticketSvc := service.NewTicketService(database.DB, auditSvc, nil)
+	ticketSvc := service.NewTicketService(database, auditSvc, nil)
 	log.Println("ticket service initialized")
 
 	// Initialize and start the ticket scheduler
@@ -202,7 +202,7 @@ func main() {
 	defer backupSvc.Stop()
 
 	// Start server
-	approvalEngine := service.NewApprovalEngine(database.DB)
+	approvalEngine := service.NewApprovalEngine(database)
 	approvalEngine.SetNotifyService(notifySvc)
 	_ = approvalEngine.EnsureDefaultPolicy(context.Background())
 

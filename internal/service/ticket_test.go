@@ -61,7 +61,7 @@ func seedTestDatasource(t *testing.T, testDB *sql.DB, name string) int64 {
 
 func TestNewTicketService(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	if svc == nil {
 		t.Fatal("NewTicketService returned nil")
 	}
@@ -69,7 +69,7 @@ func TestNewTicketService(t *testing.T) {
 
 func TestCreateTicket(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	userID := seedTestUser(t, testDB, "dev1", "developer")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
@@ -179,7 +179,7 @@ func TestCreateTicket(t *testing.T) {
 
 func TestGetTicket(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	userID := seedTestUser(t, testDB, "dev1", "developer")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
@@ -215,7 +215,7 @@ func TestGetTicket(t *testing.T) {
 
 func TestListTickets(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	userID := seedTestUser(t, testDB, "dev1", "developer")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
@@ -323,7 +323,7 @@ func TestListTickets(t *testing.T) {
 
 func TestApproveTicket(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
 	adminID := seedTestUser(t, testDB, "admin1", "admin")
@@ -395,7 +395,7 @@ func TestApproveTicket(t *testing.T) {
 
 func TestRejectTicket(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
@@ -436,7 +436,7 @@ func TestRejectTicket(t *testing.T) {
 
 func TestCancelTicket(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
@@ -506,7 +506,7 @@ func TestCancelTicket(t *testing.T) {
 
 func TestExecuteTicket(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
@@ -630,7 +630,7 @@ func TestStateMachine(t *testing.T) {
 func TestFullWorkflow(t *testing.T) {
 	t.Skip("Requires mock connMgr/dsSvc for ExecuteTicket — tracked in SF-FIX0004")
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
@@ -676,7 +676,7 @@ func TestFullWorkflow(t *testing.T) {
 
 func TestRejectWorkflow(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
@@ -697,7 +697,7 @@ func TestRejectWorkflow(t *testing.T) {
 
 func TestCancelWorkflow(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
@@ -717,7 +717,7 @@ func TestAuditLogWritten(t *testing.T) {
 	testDB := setupTicketTestDB(t)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 100, 50*time.Millisecond)
 	defer auditSvc.Close()
-	svc := NewTicketService(testDB, auditSvc, nil)
+	svc := NewTicketService(mustWrapDB(testDB), auditSvc, nil)
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
@@ -774,7 +774,7 @@ func TestMain(m *testing.M) {
 
 func TestScheduleTicket(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	userID := seedTestUser(t, testDB, "dev1", "developer")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
@@ -797,7 +797,7 @@ func TestScheduleTicket(t *testing.T) {
 
 func TestScheduleTicket_NotApproved(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	userID := seedTestUser(t, testDB, "dev1", "developer")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
@@ -812,7 +812,7 @@ func TestScheduleTicket_NotApproved(t *testing.T) {
 
 func TestScheduleTicket_NoPermission(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	userID := seedTestUser(t, testDB, "dev1", "developer")
 	userID2 := seedTestUser(t, testDB, "dev2", "developer")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
@@ -828,7 +828,7 @@ func TestScheduleTicket_NoPermission(t *testing.T) {
 
 func TestScheduleTicket_DBACanSchedule(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	userID := seedTestUser(t, testDB, "dev1", "developer")
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
@@ -847,7 +847,7 @@ func TestScheduleTicket_DBACanSchedule(t *testing.T) {
 
 func TestCancelSchedule(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	userID := seedTestUser(t, testDB, "dev1", "developer")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
@@ -872,7 +872,7 @@ func TestCancelSchedule(t *testing.T) {
 
 func TestCancelSchedule_NotScheduled(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	userID := seedTestUser(t, testDB, "dev1", "developer")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
@@ -887,7 +887,7 @@ func TestCancelSchedule_NotScheduled(t *testing.T) {
 
 func TestCancelSchedule_NoPermission(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 	userID := seedTestUser(t, testDB, "dev1", "developer")
 	userID2 := seedTestUser(t, testDB, "dev2", "developer")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
@@ -904,7 +904,7 @@ func TestCancelSchedule_NoPermission(t *testing.T) {
 
 func TestSetNotifyService(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 
 	// Initially nil
 	svc.SetNotifyService(nil)
@@ -917,7 +917,7 @@ func TestSetNotifyService(t *testing.T) {
 
 func TestBatchApprove(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 
 	devID := seedTestUser(t, testDB, "batchdev", "developer")
 	dbaID := seedTestUser(t, testDB, "batchdba", "dba")
@@ -1003,7 +1003,7 @@ func TestBatchApprove(t *testing.T) {
 
 func TestBatchReject(t *testing.T) {
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(testDB, nil, nil)
+	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
 
 	devID := seedTestUser(t, testDB, "batchdev2", "developer")
 	dbaID := seedTestUser(t, testDB, "batchdba2", "dba")

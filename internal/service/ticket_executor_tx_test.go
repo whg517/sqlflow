@@ -11,7 +11,7 @@ import (
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
 )
 
-func setupTxTestDB(t *testing.T) *sql.DB {
+func setupTxTestDB(t *testing.T) *db.DB {
 	t.Helper()
 	tmpDir := t.TempDir()
 	database, err := db.Open(tmpDir + "/test.db")
@@ -22,7 +22,7 @@ func setupTxTestDB(t *testing.T) *sql.DB {
 	if err := database.Migrate(); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	return database.DB
+	return database
 }
 
 // TestExecuteSQL_PostgreSQLRoute verifies that executeSQL routes to
@@ -33,9 +33,10 @@ func TestExecuteSQL_PostgreSQLRoute(t *testing.T) {
 	connMgr := connpool.NewManager()
 	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := NewDatasourceService(mustWrapDB(d), encKey, connMgr, nil)
+	dsSvc := NewDatasourceService(d, encKey, connMgr, nil)
 	svc := &TicketService{
-		db:            d,
+		database:      d,
+		client:        d.Client(),
 		dsSvc:         dsSvc,
 		connMgr:       connMgr,
 		encryptionKey: encKey,
@@ -50,7 +51,7 @@ func TestExecuteSQL_PostgreSQLRoute(t *testing.T) {
 
 	// Create datasource
 	encPass, _ := crypto.Encrypt("test", encKey)
-	result, err := d.ExecContext(context.Background(),
+	result, err := d.DB.ExecContext(context.Background(),
 		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		"test-pg-route", "postgresql", "localhost", 5432, "test", encPass, "testdb", "disable")
 	if err != nil {
@@ -99,9 +100,10 @@ func TestExecuteSQL_PostgreSQLRollback(t *testing.T) {
 	connMgr := connpool.NewManager()
 	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := NewDatasourceService(mustWrapDB(d), encKey, connMgr, nil)
+	dsSvc := NewDatasourceService(d, encKey, connMgr, nil)
 	svc := &TicketService{
-		db:            d,
+		database:      d,
+		client:        d.Client(),
 		dsSvc:         dsSvc,
 		connMgr:       connMgr,
 		encryptionKey: encKey,
@@ -114,7 +116,7 @@ func TestExecuteSQL_PostgreSQLRollback(t *testing.T) {
 	defer mockDB.Close()
 
 	encPass, _ := crypto.Encrypt("test", encKey)
-	result, err := d.ExecContext(context.Background(),
+	result, err := d.DB.ExecContext(context.Background(),
 		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		"test-pg-rollback", "postgresql", "localhost", 5432, "test", encPass, "testdb", "disable")
 	if err != nil {
@@ -164,9 +166,10 @@ func TestExecuteSQL_MySQLNoTransaction(t *testing.T) {
 	connMgr := connpool.NewManager()
 	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := NewDatasourceService(mustWrapDB(d), encKey, connMgr, nil)
+	dsSvc := NewDatasourceService(d, encKey, connMgr, nil)
 	svc := &TicketService{
-		db:            d,
+		database:      d,
+		client:        d.Client(),
 		dsSvc:         dsSvc,
 		connMgr:       connMgr,
 		encryptionKey: encKey,
@@ -179,7 +182,7 @@ func TestExecuteSQL_MySQLNoTransaction(t *testing.T) {
 	defer mockDB.Close()
 
 	encPass, _ := crypto.Encrypt("test", encKey)
-	result, err := d.ExecContext(context.Background(),
+	result, err := d.DB.ExecContext(context.Background(),
 		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		"test-mysql-notx", "mysql", "localhost", 3306, "test", encPass, "testdb")
 	if err != nil {

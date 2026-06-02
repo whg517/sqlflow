@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/whg517/sqlflow/internal/connpool"
-	"github.com/whg517/sqlflow/internal/driver"
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
 )
@@ -64,21 +65,21 @@ var validTransitions = map[model.TicketStatus][]model.TicketStatus{
 
 // TicketService handles ticket management logic.
 type TicketService struct {
-	db            *sql.DB
+	database      *db.DB
+	client        *ent.Client
 	auditSvc      *AuditService
 	notifySvc     *NotifyService
 	gitSvc        *GitService
 	slaSvc        *SLAService
 	dsSvc         *DatasourceService
 	connMgr       *connpool.Manager
-	poolMgr       *driver.PoolManager
 	encryptionKey string
 	permSvc       *PermissionService
 }
 
 // NewTicketService creates a new TicketService.
-func NewTicketService(db *sql.DB, auditSvc *AuditService, notifySvc *NotifyService) *TicketService {
-	return &TicketService{db: db, auditSvc: auditSvc, notifySvc: notifySvc}
+func NewTicketService(database *db.DB, auditSvc *AuditService, notifySvc *NotifyService) *TicketService {
+	return &TicketService{database: database, client: database.Client(), auditSvc: auditSvc, notifySvc: notifySvc}
 }
 
 // SetNotifyService sets the notification service (for deferred initialization).
@@ -103,16 +104,12 @@ func (s *TicketService) SetPermissionService(permSvc *PermissionService) {
 	s.permSvc = permSvc
 }
 
-// SetDatasourceService injects the datasource service and connection managers
+// SetDatasourceService injects the datasource service and connection manager
 // for actual SQL execution.
 func (s *TicketService) SetDatasourceService(dsSvc *DatasourceService, connMgr *connpool.Manager, encryptionKey string) {
 	s.dsSvc = dsSvc
 	s.connMgr = connMgr
 	s.encryptionKey = encryptionKey
-	// Propagate poolMgr from datasource service if available
-	if dsSvc != nil {
-		s.poolMgr = dsSvc.PoolManager()
-	}
 }
 
 // scanTicket scans a single ticket row from a sql.Rows or sql.Row.
@@ -156,11 +153,11 @@ func (s *TicketService) lookupUsername(ctx context.Context, userID int64) string
 	if userID == 0 {
 		return ""
 	}
-	var username string
-	if err := s.db.QueryRowContext(ctx, `SELECT username FROM users WHERE id = ?`, userID).Scan(&username); err != nil {
+	u, err := s.client.User.Get(ctx, int(userID))
+	if err != nil {
 		return ""
 	}
-	return username
+	return u.Username
 }
 
 // CreateTicket creates a new ticket.
@@ -198,17 +195,27 @@ func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, sub
 	}
 
 	now := time.Now()
-	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, sql_type, affected_tables, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		submitterID, datasourceID, database, sqlContent, summary, dbType, changeReason,
-		model.TicketStatusSubmitted, riskLevel, aiReviewResult, analysis.SQLType, tablesJSON, now, now,
-	)
+	saved, err := s.client.Ticket.Create().
+		SetSubmitterID(submitterID).
+		SetDatasourceID(datasourceID).
+		SetDatabase(database).
+		SetSQLContent(sqlContent).
+		SetSQLSummary(summary).
+		SetDbType(dbType).
+		SetChangeReason(changeReason).
+		SetStatus(string(model.TicketStatusSubmitted)).
+		SetRiskLevel(riskLevel).
+		SetAiReviewResult(aiReviewResult).
+		SetSQLType(analysis.SQLType).
+		SetAffectedTables(tablesJSON).
+		SetCreatedAt(now).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("创建工单失败: %w", err)
 	}
 
-	id, _ := result.LastInsertId()
+	id := int64(saved.ID)
 
 	s.auditSvc.Write(ctx, AuditRecord{
 		UserID:     submitterID,
@@ -246,7 +253,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, sub
 
 // GetTicket retrieves a ticket by ID with populated user names.
 func (s *TicketService) GetTicket(ctx context.Context, id int64) (*model.Ticket, error) {
-	t, err := scanTicket(s.db.QueryRowContext(ctx,
+	t, err := scanTicket(s.database.DB.QueryRowContext(ctx,
 		`SELECT id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result, sql_type, affected_tables, reviewer_id, review_comment, scheduled_at, executed_at, revision, created_at, updated_at
 		 FROM tickets WHERE id = ?`, id,
 	))
@@ -297,7 +304,7 @@ func (s *TicketService) ListTickets(ctx context.Context, page, pageSize int, sta
 	// Count total
 	var total int64
 	countSQL := PaginatedCountSQL("tickets", whereClause)
-	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := s.database.DB.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("统计工单失败: %w", err)
 	}
 
@@ -309,7 +316,7 @@ func (s *TicketService) ListTickets(ctx context.Context, page, pageSize int, sta
 	)
 	queryArgs := AppendLimitArgs(args, p)
 
-	rows, err := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("查询工单列表失败: %w", err)
 	}
@@ -359,10 +366,13 @@ func (s *TicketService) ApproveTicket(ctx context.Context, ticketID, reviewerID 
 
 	now := time.Now()
 	sqlHash := sha256Hash(t.SQLContent)
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, reviewer_id = ?, review_comment = ?, sql_hash = ?, updated_at = ? WHERE id = ?`,
-		model.TicketStatusApproved, reviewerID, comment, sqlHash, now, ticketID,
-	)
+	_, err = s.client.Ticket.UpdateOneID(int(ticketID)).
+		SetStatus(string(model.TicketStatusApproved)).
+		SetReviewerID(reviewerID).
+		SetReviewComment(comment).
+		SetSQLHash(sqlHash).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("审批工单失败: %w", err)
 	}
@@ -415,10 +425,12 @@ func (s *TicketService) RejectTicket(ctx context.Context, ticketID, reviewerID i
 	}
 
 	now := time.Now()
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, reviewer_id = ?, review_comment = ?, updated_at = ? WHERE id = ?`,
-		model.TicketStatusRejected, reviewerID, reason, now, ticketID,
-	)
+	_, err = s.client.Ticket.UpdateOneID(int(ticketID)).
+		SetStatus(string(model.TicketStatusRejected)).
+		SetReviewerID(reviewerID).
+		SetReviewComment(reason).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("驳回工单失败: %w", err)
 	}
@@ -480,10 +492,12 @@ func (s *TicketService) CancelTicket(ctx context.Context, ticketID, operatorID i
 	}
 
 	now := time.Now()
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, review_comment = ?, scheduled_at = NULL, updated_at = ? WHERE id = ?`,
-		model.TicketStatusCancelled, reason, now, ticketID,
-	)
+	_, err = s.client.Ticket.UpdateOneID(int(ticketID)).
+		SetStatus(string(model.TicketStatusCancelled)).
+		SetReviewComment(reason).
+		ClearScheduledAt().
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("取消工单失败: %w", err)
 	}
@@ -529,9 +543,11 @@ func (s *TicketService) executeTicket(ctx context.Context, t *model.Ticket, oper
 		return nil, fmt.Errorf("SQL 执行服务未初始化")
 	}
 
-	// Idempotent: APPROVED/SCHEDULED → EXECUTING (atomic)
+	// Idempotent: APPROVED/SCHEDULED → EXECUTING
+	// RAW_SQL: atomic CAS (Compare-And-Swap) with WHERE status IN — ent UpdateOneID does not
+	// support conditional WHERE on current row values. Keep raw SQL for atomicity.
 	now := time.Now()
-	result, err := s.db.ExecContext(ctx,
+	result, err := s.database.DB.ExecContext(ctx,
 		`UPDATE tickets SET status = ?, updated_at = ? WHERE id = ? AND status IN (?, ?)`,
 		model.TicketStatusExecuting, now, t.ID, model.TicketStatusApproved, model.TicketStatusScheduled,
 	)
@@ -575,10 +591,12 @@ func (s *TicketService) executeTicket(ctx context.Context, t *model.Ticket, oper
 
 	// Success: EXECUTING → DONE
 	now = time.Now()
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, executed_at = ?, scheduled_at = NULL, updated_at = ? WHERE id = ?`,
-		model.TicketStatusDone, now, now, t.ID,
-	)
+	_, err = s.client.Ticket.UpdateOneID(int(t.ID)).
+		SetStatus(string(model.TicketStatusDone)).
+		SetExecutedAt(now).
+		ClearScheduledAt().
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新工单状态失败: %w", err)
 	}
@@ -616,10 +634,10 @@ func (s *TicketService) executeTicket(ctx context.Context, t *model.Ticket, oper
 // failTicket transitions a ticket to FAILED status and writes audit log.
 func (s *TicketService) failTicket(ctx context.Context, t *model.Ticket, operatorID int64, errMsg string) error {
 	now := time.Now()
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, updated_at = ? WHERE id = ?`,
-		model.TicketStatusFailed, now, t.ID,
-	)
+	_, err := s.client.Ticket.UpdateOneID(int(t.ID)).
+		SetStatus(string(model.TicketStatusFailed)).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("设置失败状态失败: %w (原始错误: %s)", err, errMsg)
 	}
@@ -673,10 +691,11 @@ func (s *TicketService) ScheduleTicket(ctx context.Context, ticketID, operatorID
 	}
 
 	now := time.Now()
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, scheduled_at = ?, updated_at = ? WHERE id = ?`,
-		model.TicketStatusScheduled, scheduledAt, now, ticketID,
-	)
+	_, err = s.client.Ticket.UpdateOneID(int(ticketID)).
+		SetStatus(string(model.TicketStatusScheduled)).
+		SetScheduledAt(scheduledAt).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("设置定时执行失败: %w", err)
 	}
@@ -717,10 +736,11 @@ func (s *TicketService) CancelSchedule(ctx context.Context, ticketID, operatorID
 	}
 
 	now := time.Now()
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, scheduled_at = NULL, updated_at = ? WHERE id = ?`,
-		model.TicketStatusApproved, now, ticketID,
-	)
+	_, err = s.client.Ticket.UpdateOneID(int(ticketID)).
+		SetStatus(string(model.TicketStatusApproved)).
+		ClearScheduledAt().
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("取消定时执行失败: %w", err)
 	}

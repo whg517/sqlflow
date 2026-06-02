@@ -86,7 +86,7 @@ func TestIntegration_TicketLifecycleWithAudit(t *testing.T) {
 	defer auditSvc.Close()
 
 	notifySvc := NewNotifyService("", "") // disabled
-	ticketSvc := NewTicketService(testDB, auditSvc, notifySvc)
+	ticketSvc := NewTicketService(mustWrapDB(testDB), auditSvc, notifySvc)
 
 	devID := seedIntegrationUser(t, testDB, "developer1", "developer")
 	dbaID := seedIntegrationUser(t, testDB, "dba1", "dba")
@@ -227,7 +227,7 @@ func TestIntegration_TicketLifecycleWithAudit(t *testing.T) {
 
 func TestIntegration_PermissionChecks(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	ticketSvc := NewTicketService(testDB, nil, nil)
+	ticketSvc := NewTicketService(mustWrapDB(testDB), nil, nil)
 
 	devID := seedIntegrationUser(t, testDB, "dev_perm", "developer")
 	dev2ID := seedIntegrationUser(t, testDB, "dev2_perm", "developer")
@@ -334,7 +334,7 @@ func TestIntegration_PermissionChecks(t *testing.T) {
 func TestIntegration_SQLParsingToTicketCreation(t *testing.T) {
 	testDB := setupIntegrationDB(t)
 	aiSvc := NewAIReviewService(testDB, "openai", "test-model", "", "", 5*time.Second)
-	ticketSvc := NewTicketService(testDB, nil, nil)
+	ticketSvc := NewTicketService(mustWrapDB(testDB), nil, nil)
 
 	devID := seedIntegrationUser(t, testDB, "dev_sql", "developer")
 	dsID := seedIntegrationDatasource(t, testDB, "sql-test-db")
@@ -678,7 +678,7 @@ func TestIntegration_AuditServiceBatchWithTicketOps(t *testing.T) {
 
 	ticketAuditSvc := NewAuditService(mustWrapDB(testDB), 100, 50*time.Millisecond)
 	defer ticketAuditSvc.Close()
-	ticketSvc := NewTicketService(testDB, ticketAuditSvc, nil)
+	ticketSvc := NewTicketService(mustWrapDB(testDB), ticketAuditSvc, nil)
 	devID := seedIntegrationUser(t, testDB, "audit_dev", "developer")
 
 	_, err := ticketSvc.CreateTicket(context.Background(), devID, "developer", dsID, "mydb", "ALTER TABLE t ADD c INT", "mysql", "test", "low", "")
@@ -773,7 +773,7 @@ func TestIntegration_NotificationWithTicketLifecycle(t *testing.T) {
 	notifySvc := NewNotifyService(server.URL, "test-secret")
 	auditSvc := NewAuditService(mustWrapDB(testDB), 100, 50*time.Millisecond)
 	defer auditSvc.Close()
-	ticketSvc := NewTicketService(testDB, auditSvc, notifySvc)
+	ticketSvc := NewTicketService(mustWrapDB(testDB), auditSvc, notifySvc)
 
 	devID := seedIntegrationUser(t, testDB, "notify_dev", "developer")
 	dbaID := seedIntegrationUser(t, testDB, "notify_dba", "dba")
@@ -970,7 +970,7 @@ func TestIntegration_MaskingAndAuditLog(t *testing.T) {
 
 func TestIntegration_StateMachineCompleteness(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	ticketSvc := NewTicketService(testDB, nil, nil)
+	ticketSvc := NewTicketService(mustWrapDB(testDB), nil, nil)
 
 	devID := seedIntegrationUser(t, testDB, "sm_dev", "developer")
 	_ = seedIntegrationUser(t, testDB, "sm_dba", "dba")
@@ -1069,7 +1069,7 @@ func TestIntegration_StateMachineCompleteness(t *testing.T) {
 
 func TestIntegration_ConcurrentTicketOperations(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	ticketSvc := NewTicketService(testDB, nil, nil)
+	ticketSvc := NewTicketService(mustWrapDB(testDB), nil, nil)
 
 	devID := seedIntegrationUser(t, testDB, "concurrent_dev", "developer")
 	dbaID := seedIntegrationUser(t, testDB, "concurrent_dba", "dba")
