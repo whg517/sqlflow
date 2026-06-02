@@ -4,7 +4,7 @@
  * Tests 5 snapshot APIs against the real backend:
  *   POST   /api/query/snapshots           — create snapshot from history
  *   GET    /api/query/snapshots           — list snapshots
- *   GET    /api/query/sapshots/:id        — get snapshot detail
+ *   GET    /api/query/snapshots/:id       — get snapshot detail
  *   DELETE /api/query/snapshots/:id       — delete snapshot
  *   POST   /api/query/compare             — compare two snapshots
  *
