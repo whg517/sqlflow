@@ -15,6 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/whg517/sqlflow/internal/connpool"
+	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
 	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
@@ -47,8 +48,53 @@ func (s *TicketService) executeSQL(ctx context.Context, ds *model.DataSource, da
 
 	switch ds.Type {
 	case "mysql":
+		// Use Driver abstraction if available
+		if s.poolMgr != nil {
+			adapter := newDataSourceAdapter(ds)
+			cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+			if err != nil {
+				return nil, err
+			}
+			d, err := s.poolMgr.Get(ctx, cfg)
+			if err != nil {
+				return nil, fmt.Errorf("connect mysql: %w", err)
+			}
+			// MySQL: execute each statement via driver (non-transactional, DDL auto-commits)
+			statements := splitStatements(sqlContent)
+			results := make([]statementResult, 0, len(statements))
+			var firstErr error
+			for _, stmt := range statements {
+				stmt = strings.TrimSpace(stmt)
+				if stmt == "" {
+					continue
+				}
+				srvResult, execErr := d.ExecuteStatement(ctx, database, stmt)
+				if execErr != nil {
+					results = append(results, statementResult{
+						SQL:        stmt,
+						Status:     "error",
+						Error:      sanitizeErrMsg(execErr.Error()),
+						DurationMs: srvResult.DurationMs,
+					})
+					if firstErr == nil {
+						firstErr = fmt.Errorf("statement failed: %s", sanitizeErrMsg(execErr.Error()))
+					}
+					continue
+				}
+				results = append(results, statementResult{
+					SQL:          stmt,
+					Status:       srvResult.Status,
+					RowsAffected: srvResult.RowsAffected,
+					DurationMs:   srvResult.DurationMs,
+				})
+			}
+			return results, firstErr
+		}
+		// Fallback: legacy connpool
 		targetDB, err = s.connMgr.GetMySQL(ds.ID, ds.Host, ds.Port, ds.Username, password, database, connpool.MySQLPoolConfig{})
 	case "postgresql", "postgres":
+		// PG ticket execution requires transactional support (DDL is transactional in PG).
+		// The Driver does not expose BeginTx, so we use legacy connpool for PG tickets.
 		targetDB, err = s.connMgr.GetPostgreSQL(ds.ID, ds.Host, ds.Port, ds.Username, password, database, ds.SSLMode, connpool.PGPoolConfig{})
 	default:
 		return nil, fmt.Errorf("不支持的数据源类型: %s", ds.Type)

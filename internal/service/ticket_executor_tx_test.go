@@ -33,7 +33,7 @@ func TestExecuteSQL_PostgreSQLRoute(t *testing.T) {
 	connMgr := connpool.NewManager()
 	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := NewDatasourceService(mustWrapDB(d), encKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(d), encKey, connMgr, nil)
 	svc := &TicketService{
 		db:            d,
 		dsSvc:         dsSvc,
@@ -99,7 +99,7 @@ func TestExecuteSQL_PostgreSQLRollback(t *testing.T) {
 	connMgr := connpool.NewManager()
 	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := NewDatasourceService(mustWrapDB(d), encKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(d), encKey, connMgr, nil)
 	svc := &TicketService{
 		db:            d,
 		dsSvc:         dsSvc,
@@ -164,7 +164,7 @@ func TestExecuteSQL_MySQLNoTransaction(t *testing.T) {
 	connMgr := connpool.NewManager()
 	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := NewDatasourceService(mustWrapDB(d), encKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(d), encKey, connMgr, nil)
 	svc := &TicketService{
 		db:            d,
 		dsSvc:         dsSvc,

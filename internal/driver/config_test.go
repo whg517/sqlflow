@@ -37,6 +37,7 @@ func (m *mockDataSource) GetMaxOpen() int                { return m.maxOpen }
 func (m *mockDataSource) GetMaxIdle() int                { return m.maxIdle }
 func (m *mockDataSource) GetMaxLifetime() int            { return m.maxLifetime }
 func (m *mockDataSource) GetMaxIdleTime() int             { return m.maxIdleTime }
+func (m *mockDataSource) GetExtraConfig() string            { return "" }
 func (m *mockDataSource) GetExtra(key string) string {
 	if m.extras != nil {
 		return m.extras[key]

@@ -2,12 +2,14 @@ package handler
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/connpool"
+	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/pkg/metrics"
 )
 
@@ -19,6 +21,7 @@ type HealthHandler struct {
 
 	// Optional dependencies for readiness checks
 	connMgr *connpool.Manager
+	poolMgr *driver.PoolManager
 	mu      sync.RWMutex
 }
 
@@ -36,6 +39,13 @@ func (h *HealthHandler) SetConnPoolManager(mgr *connpool.Manager) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.connMgr = mgr
+}
+
+// SetPoolManager sets the driver PoolManager for readiness checks.
+func (h *HealthHandler) SetPoolManager(pm *driver.PoolManager) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.poolMgr = pm
 }
 
 // HealthResponse is the JSON response for /health and /healthz.
@@ -118,6 +128,7 @@ func (h *HealthHandler) Readyz(c echo.Context) error {
 	// 2. Connection pool manager check (external datasources)
 	h.mu.RLock()
 	mgr := h.connMgr
+	pm := h.poolMgr
 	h.mu.RUnlock()
 
 	if mgr != nil {
@@ -126,6 +137,15 @@ func (h *HealthHandler) Readyz(c echo.Context) error {
 			allOK = false
 		} else {
 			checks["datasources"] = "ok"
+		}
+	}
+
+	if pm != nil {
+		ids := pm.ManagedIDs()
+		if len(ids) > 0 {
+			checks["driver_pool"] = fmt.Sprintf("ok (%d connections)", len(ids))
+		} else {
+			checks["driver_pool"] = "ok (empty)"
 		}
 	}
 

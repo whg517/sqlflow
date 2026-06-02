@@ -38,7 +38,7 @@ func newTestDatasourceService(t *testing.T) (*DatasourceService, *sql.DB) {
 	t.Helper()
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
-	svc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	svc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	return svc, testDB
 }
 
@@ -983,7 +983,7 @@ func TestListDataSources_CancelledContext(t *testing.T) {
 func TestGetTables_MySQLSuccess(t *testing.T) {
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
-	svc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	svc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	ctx := ctxWithTimeout(t)
 
 	ds := &model.DataSource{
@@ -1022,7 +1022,7 @@ func TestGetTables_MySQLSuccess(t *testing.T) {
 func TestGetTables_MySQLEmptyResult(t *testing.T) {
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
-	svc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	svc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	ctx := ctxWithTimeout(t)
 
 	ds := &model.DataSource{
@@ -1058,7 +1058,7 @@ func TestGetTables_MySQLEmptyResult(t *testing.T) {
 func TestGetTables_InvalidDatasourceType(t *testing.T) {
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
-	svc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	svc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	ctx := ctxWithTimeout(t)
 
 	// Manually insert a datasource with invalid type (bypassing validation)
@@ -1085,7 +1085,7 @@ func TestGetTables_InvalidDatasourceType(t *testing.T) {
 func TestGetTables_MongoDBConnectionFails(t *testing.T) {
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
-	svc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	svc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	ctx := ctxWithTimeout(t)
 
 	ds := &model.DataSource{
@@ -1105,7 +1105,7 @@ func TestGetTables_MongoDBConnectionFails(t *testing.T) {
 func TestGetTables_MySQLQueryError(t *testing.T) {
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
-	svc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	svc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	ctx := ctxWithTimeout(t)
 
 	ds := &model.DataSource{

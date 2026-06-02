@@ -26,6 +26,7 @@ import (
 	_ "github.com/whg517/sqlflow/internal/driver/mongodb"
 	_ "github.com/whg517/sqlflow/internal/driver/mysql"
 	_ "github.com/whg517/sqlflow/internal/driver/postgresql"
+	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/service"
 )
 
@@ -58,7 +59,11 @@ func main() {
 	connMgr := connpool.NewManager()
 	defer connMgr.Close()
 
-	dsSvc := service.NewDatasourceService(database, cfg.EncryptionKey, connMgr)
+	// Initialize Driver PoolManager
+	poolMgr := driver.NewPoolManager()
+	defer poolMgr.Close()
+
+	dsSvc := service.NewDatasourceService(database, cfg.EncryptionKey, connMgr, poolMgr)
 	permSvc, err := service.NewPermissionService(database)
 	if err != nil {
 		log.Fatalf("failed to initialize permission service: %v", err)
@@ -78,7 +83,7 @@ func main() {
 	defer exportAsyncSvc.Close()
 	log.Println("async export service initialized")
 
-	querySvc := service.NewQueryService(database.DB, dsSvc, historySvc, permSvc, auditSvc, cfg.EncryptionKey, connMgr)
+	querySvc := service.NewQueryService(database.DB, dsSvc, historySvc, permSvc, auditSvc, cfg.EncryptionKey, connMgr, poolMgr)
 	log.Println("query service initialized")
 
 	ticketSvc := service.NewTicketService(database.DB, auditSvc, nil)
@@ -201,7 +206,7 @@ func main() {
 	approvalEngine.SetNotifyService(notifySvc)
 	_ = approvalEngine.EnsureDefaultPolicy(context.Background())
 
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, oidcSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, snapshotSvc, approvalEngine, database.DB, cfg, connMgr)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, oidcSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, snapshotSvc, approvalEngine, database.DB, cfg, connMgr, poolMgr)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server

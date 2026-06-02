@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/whg517/sqlflow/internal/connpool"
+	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
 )
@@ -70,6 +71,7 @@ type TicketService struct {
 	slaSvc        *SLAService
 	dsSvc         *DatasourceService
 	connMgr       *connpool.Manager
+	poolMgr       *driver.PoolManager
 	encryptionKey string
 	permSvc       *PermissionService
 }
@@ -101,12 +103,16 @@ func (s *TicketService) SetPermissionService(permSvc *PermissionService) {
 	s.permSvc = permSvc
 }
 
-// SetDatasourceService injects the datasource service and connection manager
+// SetDatasourceService injects the datasource service and connection managers
 // for actual SQL execution.
 func (s *TicketService) SetDatasourceService(dsSvc *DatasourceService, connMgr *connpool.Manager, encryptionKey string) {
 	s.dsSvc = dsSvc
 	s.connMgr = connMgr
 	s.encryptionKey = encryptionKey
+	// Propagate poolMgr from datasource service if available
+	if dsSvc != nil {
+		s.poolMgr = dsSvc.PoolManager()
+	}
 }
 
 // scanTicket scans a single ticket row from a sql.Rows or sql.Row.

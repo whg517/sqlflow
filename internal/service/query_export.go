@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/whg517/sqlflow/internal/connpool"
+	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
 	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
 )
@@ -73,7 +74,7 @@ func (s *QueryService) ExportQuery(ctx context.Context, userID int64, username, 
 		}
 	}
 
-	// Build pool config from datasource
+	// Build pool config from datasource (legacy fallback)
 	poolCfg := connpool.MySQLPoolConfig{
 		MaxOpen:     ds.MaxOpen,
 		MaxIdle:     ds.MaxIdle,
@@ -83,13 +84,50 @@ func (s *QueryService) ExportQuery(ctx context.Context, userID int64, username, 
 
 	// Execute with exportRowLimit+1 to detect overflow
 	var result *QueryResult
-	switch dbType {
-	case "mysql":
-		result, err = s.executeMySQL(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, poolCfg, exportRowLimit+1)
-	case "mongodb":
-		result, err = s.executeMongoDB(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, exportRowLimit+1)
-	default:
-		return nil, ErrDatasourceType
+
+	// Use Driver abstraction for MySQL
+	if s.poolMgr != nil && dbType == "mysql" {
+		adapter := newDataSourceAdapter(ds)
+		cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+		if err != nil {
+			return nil, err
+		}
+		d, err := s.poolMgr.Get(ctx, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("connect %s: %w", dbType, err)
+		}
+		dbName := database
+		if dbName == "" {
+			dbName = ds.Database
+			if dbName == "" {
+				dbName = "information_schema"
+			}
+		}
+		drvResult, err := d.ExecuteQuery(ctx, dbName, sqlContent, exportRowLimit+1)
+		if err != nil {
+			result = nil
+			err = fmt.Errorf("driver execute query: %w", err)
+		} else {
+			result = &QueryResult{
+				Columns:       drvResult.Columns,
+				Rows:          drvResult.Rows,
+				Total:         drvResult.Total,
+				ExecutionTime: drvResult.ExecutionTime,
+				AffectedRows:  drvResult.AffectedRows,
+			}
+		}
+	}
+
+	if result == nil && err == nil {
+		// Fallback to legacy connpool-based execution
+		switch dbType {
+		case "mysql":
+			result, err = s.executeMySQL(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, poolCfg, exportRowLimit+1)
+		case "mongodb":
+			result, err = s.executeMongoDB(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, exportRowLimit+1)
+		default:
+			return nil, ErrDatasourceType
+		}
 	}
 
 	if err != nil {

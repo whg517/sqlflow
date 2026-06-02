@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -51,20 +52,55 @@ func BuildConfigFromDataSource(ds DataSourceInfo, password string, encryptionKey
 	}
 
 	// Populate Extra based on datasource type
+	// First try ExtraConfig JSON map, then fall back to legacy struct fields
+	var extraMap map[string]interface{}
+	if ds.GetExtraConfig() != "" {
+		if err := json.Unmarshal([]byte(ds.GetExtraConfig()), &extraMap); err != nil {
+			return nil, fmt.Errorf("invalid extra_config JSON: %w", err)
+		}
+	}
+
 	switch dsType {
 	case "elasticsearch":
-		cfg.Extra["urls"] = parseCSV(ds.GetExtra("es_urls"))
-		cfg.Extra["auth_type"] = ds.GetExtra("es_auth_type")
-		cfg.Extra["verify_certs"] = ds.GetExtraBool("es_verify_certs", true)
-		if apiKey := ds.GetExtra("es_api_key"); apiKey != "" {
-			cfg.Extra["api_key"] = apiKey
-		}
-		if indexPattern := ds.GetExtra("es_index_pattern"); indexPattern != "" {
-			cfg.Extra["index_pattern"] = indexPattern
+		// ExtraConfig JSON takes priority
+		if extraMap != nil {
+			if v, ok := extraMap["urls"].(string); ok {
+				cfg.Extra["urls"] = parseCSV(v)
+			}
+			if v, ok := extraMap["auth_type"].(string); ok {
+				cfg.Extra["auth_type"] = v
+			}
+			if v, ok := extraMap["verify_certs"]; ok {
+				cfg.Extra["verify_certs"] = v
+			}
+			if v, ok := extraMap["api_key"].(string); ok {
+				cfg.Extra["api_key"] = v
+			}
+			if v, ok := extraMap["index_pattern"].(string); ok {
+				cfg.Extra["index_pattern"] = v
+			}
+		} else {
+			// Legacy fields fallback
+			cfg.Extra["urls"] = parseCSV(ds.GetExtra("es_urls"))
+			cfg.Extra["auth_type"] = ds.GetExtra("es_auth_type")
+			cfg.Extra["verify_certs"] = ds.GetExtraBool("es_verify_certs", true)
+			if apiKey := ds.GetExtra("es_api_key"); apiKey != "" {
+				cfg.Extra["api_key"] = apiKey
+			}
+			if indexPattern := ds.GetExtra("es_index_pattern"); indexPattern != "" {
+				cfg.Extra["index_pattern"] = indexPattern
+			}
 		}
 	case "mongodb":
-		if uri := ds.GetExtra("mongo_uri"); uri != "" {
-			cfg.Extra["uri"] = uri
+		if extraMap != nil {
+			if v, ok := extraMap["uri"].(string); ok {
+				cfg.Extra["uri"] = v
+			}
+		}
+		if cfg.Extra["uri"] == nil {
+			if uri := ds.GetExtra("mongo_uri"); uri != "" {
+				cfg.Extra["uri"] = uri
+			}
 		}
 	}
 
@@ -89,6 +125,7 @@ type DataSourceInfo interface {
 	GetMaxIdleTime() int
 	GetExtra(key string) string
 	GetExtraBool(key string, defaultVal bool) bool
+	GetExtraConfig() string
 }
 
 // parseCSV splits a comma-separated string into a trimmed, non-empty slice.

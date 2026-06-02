@@ -34,7 +34,7 @@ func setupDatasourceTest(t *testing.T) (*echo.Echo, *service.DatasourceService, 
 
 	encKey := "0123456789abcdef0123456789abcdef" // 32 bytes for AES-256
 	connMgr := connpool.NewManager()
-	dsSvc := service.NewDatasourceService(database, encKey, connMgr)
+	dsSvc := service.NewDatasourceService(database, encKey, connMgr, nil)
 	handler := NewDatasourceHandler(dsSvc)
 
 	e := echo.New()

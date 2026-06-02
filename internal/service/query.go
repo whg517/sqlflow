@@ -19,6 +19,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/whg517/sqlflow/internal/connpool"
+	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
 	pkgmetrics "github.com/whg517/sqlflow/internal/pkg/metrics"
@@ -79,10 +80,11 @@ type QueryService struct {
 	auditSvc      *AuditService
 	encryptionKey string
 	connMgr       *connpool.Manager
+	poolMgr       *driver.PoolManager
 }
 
 // NewQueryService creates a new QueryService.
-func NewQueryService(db *sql.DB, dsSvc *DatasourceService, historySvc *QueryHistoryService, permSvc *PermissionService, auditSvc *AuditService, encryptionKey string, connMgr *connpool.Manager) *QueryService {
+func NewQueryService(db *sql.DB, dsSvc *DatasourceService, historySvc *QueryHistoryService, permSvc *PermissionService, auditSvc *AuditService, encryptionKey string, connMgr *connpool.Manager, poolMgr *driver.PoolManager) *QueryService {
 	return &QueryService{
 		db:            db,
 		dsSvc:         dsSvc,
@@ -91,6 +93,7 @@ func NewQueryService(db *sql.DB, dsSvc *DatasourceService, historySvc *QueryHist
 		auditSvc:      auditSvc,
 		encryptionKey: encryptionKey,
 		connMgr:       connMgr,
+		poolMgr:       poolMgr,
 	}
 }
 
@@ -152,7 +155,7 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 		}
 	}
 
-	// Build pool config from datasource
+	// Build pool config from datasource (legacy fallback)
 	poolCfg := connpool.MySQLPoolConfig{
 		MaxOpen:     ds.MaxOpen,
 		MaxIdle:     ds.MaxIdle,
@@ -169,17 +172,58 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 	// Execute based on db type
 	queryStart := time.Now()
 	var result *QueryResult
-	switch dbType {
-	case "mysql":
-		result, err = s.executeMySQL(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, poolCfg, defaultRowLimit)
-	case "postgresql":
-		result, err = s.executePostgreSQL(ctx, datasourceID, database, sqlContent, ds, password, pgPoolCfg, defaultRowLimit)
-	case "mongodb":
-		result, err = s.executeMongoDB(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, defaultRowLimit)
-	case "elasticsearch":
-		result, err = s.executeElasticsearch(ctx, datasourceID, ds, password, sqlContent, defaultRowLimit)
-	default:
-		return nil, ErrDatasourceType
+
+	// Use Driver abstraction for MySQL and PostgreSQL
+	if s.poolMgr != nil && (dbType == "mysql" || dbType == "postgresql") {
+		adapter := newDataSourceAdapter(ds)
+		cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+		if err != nil {
+			return nil, err
+		}
+		d, err := s.poolMgr.Get(ctx, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("connect %s: %w", dbType, err)
+		}
+		dbName := database
+		if dbName == "" {
+			dbName = ds.Database
+			if dbName == "" && dbType == "mysql" {
+				dbName = "information_schema"
+			}
+			if dbName == "" && dbType == "postgresql" {
+				dbName = "postgres"
+			}
+		}
+		drvResult, err := d.ExecuteQuery(ctx, dbName, sqlContent, defaultRowLimit)
+		if err != nil {
+			result = nil
+			err = fmt.Errorf("driver execute query: %w", err)
+		} else {
+			result = &QueryResult{
+				Columns:       drvResult.Columns,
+				Rows:          drvResult.Rows,
+				Total:         drvResult.Total,
+				ExecutionTime: drvResult.ExecutionTime,
+				AffectedRows:  drvResult.AffectedRows,
+			}
+		}
+	}
+
+	if result == nil && err == nil {
+		// TODO: Remove legacy fallback once all types have full Driver coverage.
+		// Fallback to legacy connpool-based execution for unsupported types (MongoDB, ES)
+		switch dbType {
+		case "mysql":
+			result, err = s.executeMySQL(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, poolCfg, defaultRowLimit)
+		case "postgresql":
+			result, err = s.executePostgreSQL(ctx, datasourceID, database, sqlContent, ds, password, pgPoolCfg, defaultRowLimit)
+		case "mongodb":
+			result, err = s.executeMongoDB(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, defaultRowLimit)
+		case "elasticsearch":
+			result, err = s.executeElasticsearch(ctx, datasourceID, ds, password, sqlContent, defaultRowLimit)
+		default:
+			return nil, ErrDatasourceType
+		}
 	}
 
 	// Record Prometheus metrics for external datasource queries

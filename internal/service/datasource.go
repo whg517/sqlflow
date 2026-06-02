@@ -16,6 +16,7 @@ import (
 
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
 	"go.mongodb.org/mongo-driver/bson"
@@ -35,11 +36,17 @@ type DatasourceService struct {
 	database      *db.DB
 	encryptionKey string
 	connMgr       *connpool.Manager
+	poolMgr       *driver.PoolManager
 }
 
 // NewDatasourceService creates a new DatasourceService.
-func NewDatasourceService(database *db.DB, encryptionKey string, connMgr *connpool.Manager) *DatasourceService {
-	return &DatasourceService{database: database, encryptionKey: encryptionKey, connMgr: connMgr}
+func NewDatasourceService(database *db.DB, encryptionKey string, connMgr *connpool.Manager, poolMgr *driver.PoolManager) *DatasourceService {
+	return &DatasourceService{database: database, encryptionKey: encryptionKey, connMgr: connMgr, poolMgr: poolMgr}
+}
+
+// PoolManager returns the driver PoolManager (may be nil if not configured).
+func (s *DatasourceService) PoolManager() *driver.PoolManager {
+	return s.poolMgr
 }
 
 // CreateDataSource creates a new datasource with encrypted password.
@@ -88,11 +95,12 @@ func (s *DatasourceService) CreateDataSource(ctx context.Context, ds *model.Data
 	}
 
 	result, err := s.database.DB.ExecContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_api_key, es_index_pattern, es_verify_certs)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_api_key, es_index_pattern, es_verify_certs, extra_config)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database, ds.SSLMode, ds.SchemaName,
 		ds.MaxOpen, ds.MaxIdle, ds.MaxLifetime, ds.MaxIdleTime, ds.Status,
 		ds.ESUrls, ds.ESVersion, ds.ESAuthType, encryptedESApiKey, ds.ESIndexPattern, ds.ESVerifyCerts,
+		ds.ExtraConfig,
 	)
 	if err != nil {
 		return fmt.Errorf("insert datasource: %w", err)
@@ -110,7 +118,7 @@ func (s *DatasourceService) CreateDataSource(ctx context.Context, ds *model.Data
 // ListDataSources returns all datasources without encrypted passwords.
 func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSource, error) {
 	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT id, name, type, host, port, username, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_index_pattern, es_verify_certs, created_at, updated_at
+		`SELECT id, name, type, host, port, username, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_index_pattern, es_verify_certs, extra_config, created_at, updated_at
 		 FROM datasources ORDER BY id`,
 	)
 	if err != nil {
@@ -125,6 +133,7 @@ func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSo
 			&ds.SSLMode, &ds.SchemaName,
 			&ds.MaxOpen, &ds.MaxIdle, &ds.MaxLifetime, &ds.MaxIdleTime, &ds.Status,
 			&ds.ESUrls, &ds.ESVersion, &ds.ESAuthType, &ds.ESIndexPattern, &ds.ESVerifyCerts,
+			&ds.ExtraConfig,
 			&ds.CreatedAt, &ds.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan datasource: %w", err)
 		}
@@ -137,12 +146,13 @@ func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSo
 func (s *DatasourceService) GetDataSource(ctx context.Context, id int64) (*model.DataSource, error) {
 	ds := &model.DataSource{}
 	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT id, name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_api_key, es_index_pattern, es_verify_certs, created_at, updated_at
+		`SELECT id, name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_api_key, es_index_pattern, es_verify_certs, extra_config, created_at, updated_at
 		 FROM datasources WHERE id = ?`, id,
 	).Scan(&ds.ID, &ds.Name, &ds.Type, &ds.Host, &ds.Port, &ds.Username, &ds.PasswordEncrypted, &ds.Database,
 		&ds.SSLMode, &ds.SchemaName,
 		&ds.MaxOpen, &ds.MaxIdle, &ds.MaxLifetime, &ds.MaxIdleTime, &ds.Status,
 		&ds.ESUrls, &ds.ESVersion, &ds.ESAuthType, &ds.ESApiKey, &ds.ESIndexPattern, &ds.ESVerifyCerts,
+		&ds.ExtraConfig,
 		&ds.CreatedAt, &ds.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -198,10 +208,11 @@ func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *
 
 	result, err := s.database.DB.ExecContext(ctx,
 		`UPDATE datasources SET name=?, type=?, host=?, port=?, username=?, password_encrypted=?, database=?, sslmode=?, schema_name=?,
-		 max_open=?, max_idle=?, max_lifetime=?, max_idle_time=?, es_urls=?, es_version=?, es_auth_type=?, es_api_key=?, es_index_pattern=?, es_verify_certs=?, updated_at=datetime('now') WHERE id=?`,
+		 max_open=?, max_idle=?, max_lifetime=?, max_idle_time=?, es_urls=?, es_version=?, es_auth_type=?, es_api_key=?, es_index_pattern=?, es_verify_certs=?, extra_config=?, updated_at=datetime('now') WHERE id=?`,
 		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database, ds.SSLMode, ds.SchemaName,
 		ds.MaxOpen, ds.MaxIdle, ds.MaxLifetime, ds.MaxIdleTime,
 		ds.ESUrls, ds.ESVersion, ds.ESAuthType, encryptedESApiKey, ds.ESIndexPattern, ds.ESVerifyCerts,
+		ds.ExtraConfig,
 		id,
 	)
 	if err != nil {
@@ -213,6 +224,12 @@ func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *
 	}
 
 	// Invalidate cached connection pool since config may have changed
+	// Use PoolManager (Driver) if available
+	if s.poolMgr != nil {
+		s.poolMgr.Remove(id)
+	}
+
+	// Also invalidate legacy connpool for backward compatibility
 	if ds.Type == "mysql" {
 		s.connMgr.Remove(id, ds.Host, ds.Port, ds.Database)
 		if existing.Host != ds.Host || existing.Port != ds.Port || existing.Database != ds.Database {
@@ -253,6 +270,9 @@ func (s *DatasourceService) DisableDataSource(ctx context.Context, id int64) err
 	}
 
 	// Clean up cached connection pool
+	if s.poolMgr != nil {
+		s.poolMgr.Remove(id)
+	}
 	if existing.Type == "mysql" {
 		s.connMgr.Remove(id, existing.Host, existing.Port, existing.Database)
 	}
@@ -269,7 +289,7 @@ func (s *DatasourceService) DisableDataSource(ctx context.Context, id int64) err
 	return nil
 }
 
-// TestConnection attempts to connect to the datasource.
+// TestConnection attempts to connect to the datasource using the Driver abstraction.
 func (s *DatasourceService) TestConnection(ctx context.Context, ds *model.DataSource) error {
 	password := ds.PasswordEncrypted
 
@@ -284,8 +304,36 @@ func (s *DatasourceService) TestConnection(ctx context.Context, ds *model.DataSo
 			return fmt.Errorf("decrypt password: %w", err)
 		}
 		password = decrypted
+		// Use stored values for ES fields that need decrypted API key
+		ds.ESUrls = stored.ESUrls
+		ds.ESAuthType = stored.ESAuthType
+		ds.ESApiKey = stored.ESApiKey
+		ds.ESIndexPattern = stored.ESIndexPattern
+		ds.ESVerifyCerts = stored.ESVerifyCerts
 	}
 
+	// If poolMgr is available, use Driver abstraction for all types.
+	// NOTE: This means the legacy connpool path below is dead code when poolMgr is set.
+	// When poolMgr is fully adopted and connpool is removed, this comment and the
+	// fallback block below should be deleted.
+	if s.poolMgr != nil {
+		adapter := newDataSourceAdapter(ds)
+		cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+		if err != nil {
+			return err
+		}
+		d, err := driver.NewDriver(ds.Type)
+		if err != nil {
+			return err
+		}
+		if err := d.Connect(ctx, cfg); err != nil {
+			return err
+		}
+		defer d.Close()
+		return d.Ping(ctx)
+	}
+
+	// Fallback to legacy connpool
 	switch ds.Type {
 	case "mysql":
 		return connpool.MySQLPing(ctx, ds.Host, ds.Port, ds.Username, password)
@@ -313,7 +361,7 @@ func (s *DatasourceService) TestConnection(ctx context.Context, ds *model.DataSo
 	}
 }
 
-// GetTables returns table names for a MySQL datasource or database names for MongoDB.
+// GetTables returns table names for a datasource.
 func (s *DatasourceService) GetTables(ctx context.Context, id int64) ([]string, error) {
 	ds, err := s.GetDataSource(ctx, id)
 	if err != nil {
@@ -329,6 +377,39 @@ func (s *DatasourceService) GetTables(ctx context.Context, id int64) ([]string, 
 		return nil, fmt.Errorf("decrypt password: %w", err)
 	}
 
+	// Use Driver abstraction if available (MySQL, PG)
+	if s.poolMgr != nil {
+		switch ds.Type {
+		case "mysql", "postgresql":
+			adapter := newDataSourceAdapter(ds)
+			cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+			if err != nil {
+				return nil, err
+			}
+			d, err := s.poolMgr.Get(ctx, cfg)
+			if err != nil {
+				return nil, fmt.Errorf("connect %s: %w", ds.Type, err)
+			}
+			dbName := ds.Database
+			if dbName == "" && ds.Type == "mysql" {
+				dbName = "information_schema"
+			}
+			if dbName == "" && ds.Type == "postgresql" {
+				dbName = "postgres"
+			}
+			tables, err := d.ListTables(ctx, dbName)
+			if err != nil {
+				return nil, err
+			}
+			names := make([]string, 0, len(tables))
+			for _, t := range tables {
+				names = append(names, t.Name)
+			}
+			return names, nil
+		}
+	}
+
+	// Fallback to legacy connpool
 	switch ds.Type {
 	case "mysql":
 		dbName := ds.Database
@@ -393,6 +474,43 @@ func (s *DatasourceService) GetTableColumns(ctx context.Context, id int64, table
 		return nil, fmt.Errorf("decrypt password: %w", err)
 	}
 
+	// Use Driver abstraction if available (MySQL, PG)
+	if s.poolMgr != nil {
+		switch ds.Type {
+		case "mysql", "postgresql":
+			adapter := newDataSourceAdapter(ds)
+			cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+			if err != nil {
+				return nil, err
+			}
+			d, err := s.poolMgr.Get(ctx, cfg)
+			if err != nil {
+				return nil, fmt.Errorf("connect %s: %w", ds.Type, err)
+			}
+			dbName := ds.Database
+			if dbName == "" && ds.Type == "mysql" {
+				dbName = "information_schema"
+			}
+			if dbName == "" && ds.Type == "postgresql" {
+				dbName = "postgres"
+			}
+			columns, err := d.GetColumns(ctx, dbName, tableName)
+			if err != nil {
+				return nil, err
+			}
+			svcColumns := make([]ColumnInfo, 0, len(columns))
+			for _, c := range columns {
+				svcColumns = append(svcColumns, ColumnInfo{
+					Name:    c.Name,
+					Type:    c.Type,
+					Comment: c.Comment,
+				})
+			}
+			return svcColumns, nil
+		}
+	}
+
+	// Fallback to legacy connpool
 	switch ds.Type {
 	case "mysql":
 		return s.getMySQLColumns(ctx, ds, password, tableName)

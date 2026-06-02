@@ -40,14 +40,14 @@ func setupExportService(t *testing.T) (*QueryService, *sql.DB) {
 	t.Helper()
 	testDB := setupExportTestDB(t)
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	permSvc, err := NewPermissionService(mustWrapDB(testDB))
 	if err != nil {
 		t.Fatalf("create permission service: %v", err)
 	}
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 	return qs, testDB
 }
 
@@ -146,7 +146,7 @@ func TestExportQuery_DisabledDataSource(t *testing.T) {
 	defer cancel()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	ds := &model.DataSource{
 		Name: "disabled-export", Type: "mysql", Host: "10.0.0.1", Port: 3306,
 		Username: "root", PasswordEncrypted: "secret", Database: "testdb",
@@ -165,11 +165,11 @@ func TestExportQuery_DisabledDataSource(t *testing.T) {
 func TestExportQuery_PasswordDecryptError(t *testing.T) {
 	testDB := setupExportTestDB(t)
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), "wrong-key-that-is-32-bytes-long!!", connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), "wrong-key-that-is-32-bytes-long!!", connMgr, nil)
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, "wrong-key-that-is-32-bytes-long!!", connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, "wrong-key-that-is-32-bytes-long!!", connMgr, nil)
 
 	ctx, cancel := exportCtx(t)
 	defer cancel()
@@ -179,7 +179,7 @@ func TestExportQuery_PasswordDecryptError(t *testing.T) {
 		Name: "decrypt-err", Type: "mysql", Host: "10.0.0.1", Port: 3306,
 		Username: "root", PasswordEncrypted: "secret", Database: "testdb",
 	}
-	encSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	encSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	if err := encSvc.CreateDataSource(ctx, ds); err != nil {
 		t.Fatalf("CreateDataSource() error: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestExportQuery_NonSelectBlocked(t *testing.T) {
 	defer cancel()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	tests := []struct {
@@ -227,7 +227,7 @@ func TestExportQuery_BlockedSQL(t *testing.T) {
 	defer cancel()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	tests := []struct {
@@ -257,7 +257,7 @@ func TestExportQuery_ConnectionError(t *testing.T) {
 	defer cancel()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT * FROM users LIMIT 10", "mysql")
@@ -272,7 +272,7 @@ func TestExportQuery_UnsupportedDBType(t *testing.T) {
 	defer cancel()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1", "postgres")
@@ -291,7 +291,7 @@ func TestExportQuery_Success(t *testing.T) {
 	defer cancel()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	// Inject SQLite DB as the target MySQL pool
@@ -302,7 +302,7 @@ func TestExportQuery_Success(t *testing.T) {
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	// Also add select policy for admin on this datasource domain
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "select")
@@ -331,7 +331,7 @@ func TestExportQuery_SuccessWithDesensitization(t *testing.T) {
 	defer cancel()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	sqliteDB := setupExportTestDB(t)
@@ -342,7 +342,7 @@ func TestExportQuery_SuccessWithDesensitization(t *testing.T) {
 
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	// Add a mask rule for this datasource
 	now := time.Now()
@@ -373,7 +373,7 @@ func TestExportQuery_EmptyResult(t *testing.T) {
 	defer cancel()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	sqliteDB := setupExportTestDB(t)
@@ -384,7 +384,7 @@ func TestExportQuery_EmptyResult(t *testing.T) {
 
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	// Query the users table (empty in the injected SQLite) with an impossible condition
 	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb",
@@ -407,11 +407,11 @@ func TestExportQuery_EmptyResult(t *testing.T) {
 func TestExportQuery_RowLimitExceeded(t *testing.T) {
 	testDB := setupExportTestDB(t)
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	ctx, cancel := exportCtx(t)
 	defer cancel()
@@ -449,7 +449,7 @@ func TestExportQuery_AuditOnSuccess(t *testing.T) {
 	defer cancel()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	sqliteDB := setupExportTestDB(t)
@@ -460,7 +460,7 @@ func TestExportQuery_AuditOnSuccess(t *testing.T) {
 
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	userID := seedUser(t, testDB, "export-user", "admin")
 
@@ -488,7 +488,7 @@ func TestExportQuery_AuditOnFailure(t *testing.T) {
 	defer cancel()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
@@ -496,7 +496,7 @@ func TestExportQuery_AuditOnFailure(t *testing.T) {
 
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	userID := seedUser(t, testDB, "export-fail-user", "admin")
 
@@ -529,7 +529,7 @@ func TestExportQuery_DefaultDBType(t *testing.T) {
 	defer cancel()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	sqliteDB := setupExportTestDB(t)
@@ -540,7 +540,7 @@ func TestExportQuery_DefaultDBType(t *testing.T) {
 
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	// Pass empty dbType — should default to datasource type (mysql)
 	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1 AS id", "")
@@ -559,11 +559,11 @@ func TestExportQuery_DefaultDBType(t *testing.T) {
 func TestExportQuery_PermissionDenied(t *testing.T) {
 	testDB := setupExportTestDB(t)
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	historySvc := NewQueryHistoryService(testDB)
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr)
+	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	ctx, cancel := exportCtx(t)
 	defer cancel()
@@ -587,7 +587,7 @@ func TestExportQuery_HighRiskSQL(t *testing.T) {
 	defer cancel()
 
 	connMgr := connpool.NewManager()
-	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr)
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	// UPDATE without WHERE is high risk
