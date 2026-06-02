@@ -50,7 +50,7 @@ test.describe('Token Management — User scope', () => {
       data: {
         name: `${TEST_PREFIX}${Date.now()}`,
         description: 'E2E test token',
-        scopes: ['query:read', 'query:write'],
+        scopes: ['read:query', 'execute:query'],
         expires_days: 30,
       },
     })
@@ -66,7 +66,7 @@ test.describe('Token Management — User scope', () => {
     const token = await page.evaluate(() => localStorage.getItem('token')!)
     const res = await page.request.post(`${BASE_URL}/api/tokens`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      data: { name: '', scopes: ['query:read'] },
+      data: { name: '', scopes: ['read:query'] },
     })
     expect(res.status()).toBe(400)
   })
@@ -85,7 +85,7 @@ test.describe('Token Management — User scope', () => {
     const token = await page.evaluate(() => localStorage.getItem('token')!)
     const createRes = await page.request.post(`${BASE_URL}/api/tokens`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      data: { name: `${TEST_PREFIX}${Date.now()}`, scopes: ['query:read'] },
+      data: { name: `${TEST_PREFIX}${Date.now()}`, scopes: ['read:query'] },
     })
     const createBody = await createRes.json() as { data: { id: number } }
     createdTokenId = createBody.data.id
@@ -117,7 +117,7 @@ test.describe('Token Management — User scope', () => {
     const token = await page.evaluate(() => localStorage.getItem('token')!)
     const createRes = await page.request.post(`${BASE_URL}/api/tokens`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      data: { name: `${TEST_PREFIX}${Date.now()}`, scopes: ['query:read'], expires_days: 1 },
+      data: { name: `${TEST_PREFIX}${Date.now()}`, scopes: ['read:query'], expires_days: 1 },
     })
     const createBody = await createRes.json() as { data: { id: number } }
     const tokenId = createBody.data.id
@@ -158,7 +158,7 @@ test.describe('Token Management — Admin scope', () => {
     const token = await page.evaluate(() => localStorage.getItem('token')!)
     const createRes = await page.request.post(`${BASE_URL}/api/tokens`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      data: { name: `${TEST_PREFIX}admin-revoke-${Date.now()}`, scopes: ['query:read'], expires_days: 1 },
+      data: { name: `${TEST_PREFIX}admin-revoke-${Date.now()}`, scopes: ['read:query'], expires_days: 1 },
     })
     const createBody = await createRes.json() as { data: { id: number } }
     const tokenId = createBody.data.id

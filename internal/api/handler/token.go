@@ -77,6 +77,9 @@ func (h *TokenHandler) CreateToken(c echo.Context) error {
 				Message: "同名 Token 已存在",
 			})
 		}
+		if errors.Is(err, service.ErrTokenInvalidScope) {
+			return resp.BadRequest(c, err.Error())
+		}
 		return resp.InternalError(c, "创建 Token 失败")
 	}
 

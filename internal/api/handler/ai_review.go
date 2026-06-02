@@ -121,6 +121,8 @@ func (h *AIReviewHandler) ReviewStream(c echo.Context) error {
 		flusher.Flush()
 	}
 
-	_ = c.Response().Writer.(io.Closer).Close()
+	if closer, ok := c.Response().Writer.(io.Closer); ok {
+		_ = closer.Close()
+	}
 	return nil
 }

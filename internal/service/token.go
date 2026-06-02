@@ -18,10 +18,11 @@ import (
 )
 
 var (
-	ErrTokenNotFound   = errors.New("API token not found")
-	ErrTokenExpired    = errors.New("API token has expired")
-	ErrTokenRevoked    = errors.New("API token has been revoked")
-	ErrTokenNameExists = errors.New("token name already exists for this user")
+	ErrTokenNotFound    = errors.New("API token not found")
+	ErrTokenExpired     = errors.New("API token has expired")
+	ErrTokenRevoked     = errors.New("API token has been revoked")
+	ErrTokenNameExists  = errors.New("token name already exists for this user")
+	ErrTokenInvalidScope = errors.New("invalid token scope")
 )
 
 // ValidAPITokenScopes lists allowed scopes for API tokens.
@@ -300,7 +301,7 @@ func validateScopes(scopes []string) error {
 			}
 		}
 		if !valid {
-			return fmt.Errorf("invalid scope: %s", s)
+			return fmt.Errorf("%w: %s", ErrTokenInvalidScope, s)
 		}
 	}
 	return nil
