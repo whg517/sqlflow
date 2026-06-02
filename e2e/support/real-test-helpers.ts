@@ -63,7 +63,7 @@ export async function getToken(username = ADMIN_USER, password = ADMIN_PASS): Pr
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   })
-  const body: { code: number; data: { token: string } } = await res.json()
+  const body: { code: number; data: { access_token: string } } = await res.json()
   if (body.code !== 0) throw new Error(`getToken failed for ${username}`)
   return body.data.access_token
 }
@@ -118,6 +118,7 @@ export async function apiRequest(
 
 /**
  * Get the first active datasource ID and name from the real backend.
+ * If none exists, auto-create a MySQL datasource pointing to the E2E test MySQL.
  */
 export async function getFirstDatasourceId(page: Page): Promise<{ id: number; name: string }> {
   const token = await page.evaluate(() => localStorage.getItem('token'))
@@ -132,7 +133,13 @@ export async function getFirstDatasourceId(page: Page): Promise<{ id: number; na
   const list = res.data ?? []
   const ds = list.find((d) => d.type === 'mysql' && d.status === 'active')
     ?? list.find((d) => d.status === 'active')
-  expect(ds, 'No active datasource found').toBeTruthy()
+
+  // Auto-create a MySQL datasource if none exists (E2E environment self-sufficiency)
+  if (!ds) {
+    const dsId = await createTestDatasource(page, { name: 'e2e-auto-mysql' })
+    return { id: dsId, name: 'e2e-auto-mysql' }
+  }
+
   return { id: ds!.id, name: ds!.name }
 }
 
@@ -141,13 +148,17 @@ export async function getFirstDatasourceId(page: Page): Promise<{ id: number; na
  */
 export async function createTestDatasource(page: Page, params?: { name?: string }): Promise<number> {
   const dsName = params?.name ?? `e2e-ds-${Date.now()}`
+  // In docker-compose, the MySQL host is 'mysql-test'; locally it's 'localhost'
+  const mysqlHost = process.env.E2E_MYSQL_HOST ?? 'mysql-test'
+  const mysqlPort = parseInt(process.env.E2E_MYSQL_PORT ?? '3306', 10)
+  const mysqlPassword = process.env.MYSQL_ROOT_PASSWORD ?? 'e2e-root-pass-123'
   const { status, body } = await apiRequest(page, 'POST', '/datasources', {
     name: dsName,
     type: 'mysql',
-    host: 'mysql-test',
-    port: 3306,
+    host: mysqlHost,
+    port: mysqlPort,
     username: 'root',
-    password: process.env.MYSQL_ROOT_PASSWORD ?? 'e2e-mysql-root-123',
+    password: mysqlPassword,
     database: 'testdb',
   })
   expect(status).toBe(200)

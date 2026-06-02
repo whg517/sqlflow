@@ -149,10 +149,10 @@ export async function createDataSource(
   const resp = await apiRequest('POST', '/api/datasources', {
     name: params?.name ?? `e2e-test-ds-${Date.now()}`,
     type: 'mysql',
-    host: params?.host ?? 'mysql-test',
-    port: params?.port ?? 3306,
+    host: params?.host ?? process.env.E2E_MYSQL_HOST ?? 'mysql-test',
+    port: params?.port ?? parseInt(process.env.E2E_MYSQL_PORT ?? '3306', 10),
     username: params?.username ?? 'root',
-    password: params?.password ?? process.env.MYSQL_ROOT_PASSWORD ?? 'e2e-mysql-root-123',
+    password: params?.password ?? process.env.MYSQL_ROOT_PASSWORD ?? 'e2e-root-pass-123',
     database: params?.database ?? 'testdb',
   })
   expect(resp.ok()).toBeTruthy()

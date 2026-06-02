@@ -1,17 +1,22 @@
 /**
- * query-snapshot-diff.spec.ts — E2E: Query snapshots & diff (SF-QA0029)
+ * query-snapshot-diff.spec.ts — E2E: Query snapshots & diff (SF-QA0029 / SF-ENG0056)
  *
  * Tests 5 snapshot APIs against the real backend:
  *   POST   /api/query/snapshots           — create snapshot from history
  *   GET    /api/query/snapshots           — list snapshots
- *   GET    /api/query/snapshots/:id       — get snapshot detail
+ *   GET    /api/query/sapshots/:id        — get snapshot detail
  *   DELETE /api/query/snapshots/:id       — delete snapshot
- *   POST   /api/query/compare              — compare two snapshots
+ *   POST   /api/query/compare             — compare two snapshots
  *
  * Coverage: create → list → detail → compare → delete
  * Edge cases: same snapshot compare, schema mismatch, empty list, non-existent ID
+ *
+ * Environment self-sufficiency:
+ *   - Uses getFirstDatasourceId() which auto-creates a MySQL datasource if none exists
+ *   - Snapshots are created/destroyed within each test lifecycle
+ *   - No external dependencies beyond the E2E docker-compose stack
  */
-import { test, expect, BASE_URL, loginViaUI, apiRequest, cleanupDatasources, getFirstDatasourceId } from '../support/real-test-helpers'
+import { test, expect, BASE_URL, loginViaUI, apiRequest, getFirstDatasourceId } from '../support/real-test-helpers'
 
 test.describe.configure({ timeout: 45_000 })
 
@@ -42,13 +47,10 @@ async function createSnapshot(
   return { status, data: body as { code: number; data: { id: number; sql: string } } }
 }
 
-/** List snapshots. */
+/** List snapshots via shared apiRequest helper. */
 async function listSnapshots(page: import('@playwright/test').Page, page_ = 1, pageSize = 20) {
-  const token = await page.evaluate(() => localStorage.getItem('token')!)
-  const res = await page.request.get(`${BASE_URL}/api/query/snapshots?page=${page_}&page_size=${pageSize}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  return { status: res.status(), data: await res.json() }
+  const { status, body } = await apiRequest(page, 'GET', `/query/snapshots?page=${page_}&page_size=${pageSize}`)
+  return { status, data: body as { code: number; data: Array<{ id: number }> } }
 }
 
 /** Get snapshot detail. */
@@ -125,7 +127,7 @@ test.describe('Query Snapshot — Create & List', () => {
     const { status, data } = await listSnapshots(page)
     expect(status).toBe(200)
     expect(data.code).toBe(0)
-    const list = data.data as Array<{ id: number }>
+    const list = data.data
     expect(list.length).toBeGreaterThanOrEqual(2)
     expect(list.some((s) => s.id === snap1.data.data.id)).toBeTruthy()
     expect(list.some((s) => s.id === snap2.data.data.id)).toBeTruthy()
@@ -134,14 +136,14 @@ test.describe('Query Snapshot — Create & List', () => {
   test('should return empty list when no snapshots exist', async ({ page }) => {
     // Clean up existing snapshots first
     const { data: listData } = await listSnapshots(page, 1, 100)
-    const list = (listData.data as Array<{ id: number }>) ?? []
+    const list = listData.data ?? []
     for (const s of list) {
       await deleteSnapshot(page, s.id).catch(() => {})
     }
 
     const { status, data } = await listSnapshots(page)
     expect(status).toBe(200)
-    const emptyList = (data.data as Array<unknown>) ?? []
+    const emptyList = data.data ?? []
     expect(emptyList.length).toBe(0)
   })
 })
