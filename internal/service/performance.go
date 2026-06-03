@@ -87,7 +87,7 @@ func (s *QueryHistoryService) ListSlowQueries(ctx context.Context, params SlowQu
 
 	var total int
 	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM query_history qh %s", whereClause)
-	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := s.database.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count slow queries: %w", err)
 	}
 
@@ -97,7 +97,7 @@ func (s *QueryHistoryService) ListSlowQueries(ctx context.Context, params SlowQu
 	)
 	queryArgs := AppendLimitArgs(args, p)
 
-	rows, err := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query slow queries: %w", err)
 	}
@@ -130,7 +130,7 @@ func (s *QueryHistoryService) GetPerformanceStats(ctx context.Context, days int)
 	// Overall stats
 	var totalQueries, slowQueries int
 	var avgTime sql.NullFloat64
-	err := s.db.QueryRowContext(ctx,
+	err := s.database.QueryRowContext(ctx,
 		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN execution_time >= 1000 THEN 1 ELSE 0 END), 0), CAST(COALESCE(AVG(execution_time), 0) AS REAL)
 		 FROM query_history WHERE created_at >= ?`, startDate,
 	).Scan(&totalQueries, &slowQueries, &avgTime)
@@ -144,7 +144,7 @@ func (s *QueryHistoryService) GetPerformanceStats(ctx context.Context, days int)
 	}
 
 	// Daily trend
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.QueryContext(ctx,
 		`SELECT DATE(created_at) as date, COUNT(*) as count,
 		        CAST(COALESCE(AVG(execution_time), 0) AS INTEGER) as avg_time,
 		        SUM(CASE WHEN execution_time >= 1000 THEN 1 ELSE 0 END) as slow_count
@@ -168,7 +168,7 @@ func (s *QueryHistoryService) GetPerformanceStats(ctx context.Context, days int)
 	}
 
 	// Per-datasource stats
-	dsRows, err := s.db.QueryContext(ctx,
+	dsRows, err := s.database.QueryContext(ctx,
 		`SELECT qh.datasource_id, COALESCE(ds.name, '未知'), COUNT(*) as count,
 		        CAST(COALESCE(AVG(qh.execution_time), 0) AS INTEGER) as avg_time
 		 FROM query_history qh
@@ -194,7 +194,7 @@ func (s *QueryHistoryService) GetPerformanceStats(ctx context.Context, days int)
 	}
 
 	// Top 10 slow queries
-	topRows, err := s.db.QueryContext(ctx,
+	topRows, err := s.database.QueryContext(ctx,
 		`SELECT qh.id, qh.sql_summary, qh.execution_time, COALESCE(ds.name, '未知'), qh.created_at
 		 FROM query_history qh
 		 LEFT JOIN datasources ds ON qh.datasource_id = ds.id

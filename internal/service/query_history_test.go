@@ -9,7 +9,7 @@ import (
 
 func TestQueryHistoryService_CreateAndList(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	svc := NewQueryHistoryService(testDB)
+	svc := NewQueryHistoryService(mustWrapDB(testDB))
 
 	userID := seedIntegrationUser(t, testDB, "qh_user", "developer")
 	dsID := seedIntegrationDatasource(t, testDB, "qh-ds")
@@ -140,7 +140,7 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 
 func TestQueryHistoryService_DeleteHistory(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	svc := NewQueryHistoryService(testDB)
+	svc := NewQueryHistoryService(mustWrapDB(testDB))
 
 	userID := seedIntegrationUser(t, testDB, "qh_del_user", "developer")
 	dsID := seedIntegrationDatasource(t, testDB, "qh-del-ds")
@@ -201,7 +201,7 @@ func TestQueryHistoryService_DeleteHistory(t *testing.T) {
 
 func TestQueryHistoryService_ClearHistory(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	svc := NewQueryHistoryService(testDB)
+	svc := NewQueryHistoryService(mustWrapDB(testDB))
 
 	userID := seedIntegrationUser(t, testDB, "qh_clear_user", "developer")
 	dsID := seedIntegrationDatasource(t, testDB, "qh-clear-ds")
@@ -258,7 +258,7 @@ func TestQueryHistoryService_ClearHistory(t *testing.T) {
 
 func TestQueryHistoryService_CreateHistoryWithZeroValues(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	svc := NewQueryHistoryService(testDB)
+	svc := NewQueryHistoryService(mustWrapDB(testDB))
 
 	userID := seedIntegrationUser(t, testDB, "qh_zero_user", "developer")
 	dsID := seedIntegrationDatasource(t, testDB, "qh-zero-ds")

@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	"entgo.io/ent/dialect/sql"
+	"github.com/whg517/sqlflow/internal/db/ent/querysnapshot"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -19,21 +22,22 @@ type QueryExecutor interface {
 
 // SnapshotService handles query snapshot CRUD and comparison.
 type SnapshotService struct {
-	db   *sql.DB
-	exec QueryExecutor
+	database *db.DB
+	client   *ent.Client
+	exec     QueryExecutor
 }
 
 // NewSnapshotService creates a new SnapshotService.
-func NewSnapshotService(db *sql.DB, exec QueryExecutor) *SnapshotService {
-	return &SnapshotService{db: db, exec: exec}
+func NewSnapshotService(database *db.DB, exec QueryExecutor) *SnapshotService {
+	return &SnapshotService{database: database, client: database.Client(), exec: exec}
 }
 
 var (
-	ErrSnapshotNotFound   = errors.New("快照不存在")
-	ErrSnapshotForbidden  = errors.New("无权访问此快照")
-	ErrSchemaMismatch     = errors.New("两个快照的列结构不一致")
-	ErrSameSnapshot       = errors.New("不能对比同一个快照")
-	ErrHistoryNotFound    = errors.New("查询历史记录不存在")
+	ErrSnapshotNotFound  = errors.New("快照不存在")
+	ErrSnapshotForbidden = errors.New("无权访问此快照")
+	ErrSchemaMismatch    = errors.New("两个快照的列结构不一致")
+	ErrSameSnapshot      = errors.New("不能对比同一个快照")
+	ErrHistoryNotFound   = errors.New("查询历史记录不存在")
 )
 
 // queryHistoryRow represents a row from query_history table.
@@ -82,25 +86,28 @@ func (s *SnapshotService) CreateSnapshotFromHistory(ctx context.Context, userID 
 		return nil, fmt.Errorf("序列化行数据失败: %w", err)
 	}
 
-	// 4. Save snapshot
-	now := time.Now().Format("2006-01-02 15:04:05")
-	dbResult, err := s.db.ExecContext(ctx,
-		`INSERT INTO query_snapshots (user_id, query_history_id, label, columns, rows, row_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		userID, queryHistoryID, "", string(columnsJSON), string(rowsJSON), len(result.Rows), now,
-	)
+	// 4. Save snapshot via ent
+	saved, err := s.client.QuerySnapshot.Create().
+		SetUserID(userID).
+		SetQueryHistoryID(queryHistoryID).
+		SetLabel("").
+		SetColumnsJSON(string(columnsJSON)).
+		SetRowsJSON(string(rowsJSON)).
+		SetRowCount(int64(len(result.Rows))).
+		SetCreatedAt(time.Now()).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("创建快照失败: %w", err)
 	}
 
-	id, _ := dbResult.LastInsertId()
 	return &model.QuerySnapshot{
-		ID:             id,
+		ID:             int64(saved.ID),
 		UserID:         userID,
 		QueryHistoryID: queryHistoryID,
 		Columns:        json.RawMessage(columnsJSON),
 		Rows:           json.RawMessage(rowsJSON),
 		RowCount:       len(result.Rows),
-		CreatedAt:      now,
+		CreatedAt:      saved.CreatedAt.Format("2006-01-02 15:04:05"),
 		SQLContent:     history.SQLContent,
 		SQLSummary:     history.SQLSummary,
 		Database:       history.Database,
@@ -109,16 +116,11 @@ func (s *SnapshotService) CreateSnapshotFromHistory(ctx context.Context, userID 
 
 // getQueryHistory fetches a query history record and verifies ownership.
 func (s *SnapshotService) getQueryHistory(ctx context.Context, id, userID int64) (*queryHistoryRow, error) {
-	h := &queryHistoryRow{}
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, user_id, datasource_id, database, sql_content, sql_summary, db_type FROM query_history WHERE id = ?`,
-		id,
-	).Scan(&h.ID, &h.UserID, &h.DatasourceID, &h.Database, &h.SQLContent, &h.SQLSummary, &h.DBType)
-
-	if err == sql.ErrNoRows {
-		return nil, ErrHistoryNotFound
-	}
+	h, err := s.client.QueryHistory.Get(ctx, int(id))
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ErrHistoryNotFound
+		}
 		return nil, fmt.Errorf("查询历史记录失败: %w", err)
 	}
 
@@ -126,23 +128,24 @@ func (s *SnapshotService) getQueryHistory(ctx context.Context, id, userID int64)
 		return nil, ErrSnapshotForbidden
 	}
 
-	return h, nil
+	return &queryHistoryRow{
+		ID:           int64(h.ID),
+		UserID:       h.UserID,
+		DatasourceID: h.DatasourceID,
+		Database:     h.Database,
+		SQLContent:   h.SQLContent,
+		SQLSummary:   h.SQLSummary,
+		DBType:       h.DbType,
+	}, nil
 }
 
 // GetSnapshot returns a single snapshot by ID (must belong to userID).
 func (s *SnapshotService) GetSnapshot(ctx context.Context, id, userID int64) (*model.QuerySnapshot, error) {
-	snap := &model.QuerySnapshot{}
-	var columns, rows string
-
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, user_id, query_history_id, columns, rows, row_count, created_at FROM query_snapshots WHERE id = ?`,
-		id,
-	).Scan(&snap.ID, &snap.UserID, &snap.QueryHistoryID, &columns, &rows, &snap.RowCount, &snap.CreatedAt)
-
-	if err == sql.ErrNoRows {
-		return nil, ErrSnapshotNotFound
-	}
+	snap, err := s.client.QuerySnapshot.Get(ctx, int(id))
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ErrSnapshotNotFound
+		}
 		return nil, fmt.Errorf("查询快照失败: %w", err)
 	}
 
@@ -150,18 +153,27 @@ func (s *SnapshotService) GetSnapshot(ctx context.Context, id, userID int64) (*m
 		return nil, ErrSnapshotForbidden
 	}
 
-	snap.Columns = json.RawMessage(columns)
-	snap.Rows = json.RawMessage(rows)
+	result := &model.QuerySnapshot{
+		ID:             int64(snap.ID),
+		UserID:         snap.UserID,
+		QueryHistoryID: snap.QueryHistoryID,
+		Columns:        json.RawMessage(snap.ColumnsJSON),
+		Rows:           json.RawMessage(snap.RowsJSON),
+		RowCount:       int(snap.RowCount),
+		CreatedAt:      snap.CreatedAt.Format("2006-01-02 15:04:05"),
+	}
 
 	// Join query_history info for display
 	if snap.QueryHistoryID > 0 {
-		_ = s.db.QueryRowContext(ctx,
-			`SELECT sql_content, COALESCE(sql_summary, ''), database FROM query_history WHERE id = ?`,
-			snap.QueryHistoryID,
-		).Scan(&snap.SQLContent, &snap.SQLSummary, &snap.Database)
+		qh, err := s.client.QueryHistory.Get(ctx, int(snap.QueryHistoryID))
+		if err == nil {
+			result.SQLContent = qh.SQLContent
+			result.SQLSummary = qh.SQLSummary
+			result.Database = qh.Database
+		}
 	}
 
-	return snap, nil
+	return result, nil
 }
 
 // ListSnapshots returns snapshots belonging to userID, ordered by newest first.
@@ -173,35 +185,38 @@ func (s *SnapshotService) ListSnapshots(ctx context.Context, userID int64, page,
 		pageSize = 20
 	}
 
-	var total int
-	err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM query_snapshots WHERE user_id = ?`, userID).Scan(&total)
+	total, err := s.client.QuerySnapshot.Query().
+		Where(querysnapshot.UserID(userID)).
+		Count(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("统计快照失败: %w", err)
 	}
 
 	offset := (page - 1) * pageSize
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, user_id, query_history_id, columns, rows, row_count, created_at FROM query_snapshots WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-		userID, pageSize, offset,
-	)
+	snapshots, err := s.client.QuerySnapshot.Query().
+		Where(querysnapshot.UserID(userID)).
+		Order(querysnapshot.ByCreatedAt(sql.OrderDesc())).
+		Limit(pageSize).
+		Offset(offset).
+		All(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("查询快照列表失败: %w", err)
 	}
-	defer rows.Close()
 
-	var snapshots []*model.QuerySnapshot
-	for rows.Next() {
-		snap := &model.QuerySnapshot{}
-		var columns, rowsData string
-		if err := rows.Scan(&snap.ID, &snap.UserID, &snap.QueryHistoryID, &columns, &rowsData, &snap.RowCount, &snap.CreatedAt); err != nil {
-			return nil, 0, err
-		}
-		snap.Columns = json.RawMessage(columns)
-		snap.Rows = json.RawMessage(rowsData)
-		snapshots = append(snapshots, snap)
+	var result []*model.QuerySnapshot
+	for _, snap := range snapshots {
+		result = append(result, &model.QuerySnapshot{
+			ID:             int64(snap.ID),
+			UserID:         snap.UserID,
+			QueryHistoryID: snap.QueryHistoryID,
+			Columns:        json.RawMessage(snap.ColumnsJSON),
+			Rows:           json.RawMessage(snap.RowsJSON),
+			RowCount:       int(snap.RowCount),
+			CreatedAt:      snap.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
 	}
 
-	return snapshots, total, nil
+	return result, total, nil
 }
 
 // DeleteSnapshot deletes a snapshot (must belong to userID).
@@ -211,7 +226,9 @@ func (s *SnapshotService) DeleteSnapshot(ctx context.Context, id, userID int64) 
 		return err
 	}
 
-	_, err = s.db.ExecContext(ctx, `DELETE FROM query_snapshots WHERE id = ? AND user_id = ?`, snap.ID, userID)
+	_, err = s.client.QuerySnapshot.Delete().
+		Where(querysnapshot.ID(int(snap.ID)), querysnapshot.UserID(userID)).
+		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("删除快照失败: %w", err)
 	}

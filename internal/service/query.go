@@ -19,6 +19,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/whg517/sqlflow/internal/connpool"
+	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
@@ -73,7 +74,7 @@ type AuditRecord struct {
 
 // QueryService handles SQL query execution logic.
 type QueryService struct {
-	db            *sql.DB
+	database      *db.DB
 	dsSvc         *DatasourceService
 	historySvc    *QueryHistoryService
 	permSvc       *PermissionService
@@ -84,9 +85,9 @@ type QueryService struct {
 }
 
 // NewQueryService creates a new QueryService.
-func NewQueryService(db *sql.DB, dsSvc *DatasourceService, historySvc *QueryHistoryService, permSvc *PermissionService, auditSvc *AuditService, encryptionKey string, connMgr *connpool.Manager, poolMgr *driver.PoolManager) *QueryService {
+func NewQueryService(database *db.DB, dsSvc *DatasourceService, historySvc *QueryHistoryService, permSvc *PermissionService, auditSvc *AuditService, encryptionKey string, connMgr *connpool.Manager, poolMgr *driver.PoolManager) *QueryService {
 	return &QueryService{
-		db:            db,
+		database:      database,
 		dsSvc:         dsSvc,
 		historySvc:    historySvc,
 		permSvc:       permSvc,
@@ -620,7 +621,7 @@ func (s *QueryService) loadMaskRules(ctx context.Context, datasourceID int64, da
 		query += fmt.Sprintf(` AND (table_name IN (%s) OR table_name = '*')`, strings.Join(placeholders, ","))
 	}
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.database.QueryContext(ctx, query, args...)
 	if err != nil {
 		log.Printf("load mask rules: %v", err)
 		return nil

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -16,6 +15,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	"entgo.io/ent/dialect/sql"
+	entexporttask "github.com/whg517/sqlflow/internal/db/ent/exporttask"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -39,21 +42,23 @@ var (
 
 // ExportAsyncService handles asynchronous export task lifecycle.
 type ExportAsyncService struct {
-	db          *sql.DB
-	exportSvc   *ExportService
-	auditSvc    *AuditService
-	exportDir   string
-	tasks       sync.Map // taskID -> *model.ExportTask (in-memory cache for active tasks)
+	database   *db.DB
+	client     *ent.Client
+	exportSvc  *ExportService
+	auditSvc   *AuditService
+	exportDir  string
+	tasks      sync.Map // taskID -> *model.ExportTask (in-memory cache for active tasks)
 	stopCleanup chan struct{}
 }
 
 // NewExportAsyncService creates a new ExportAsyncService.
-func NewExportAsyncService(db *sql.DB, exportSvc *ExportService, auditSvc *AuditService, dataDir string) *ExportAsyncService {
+func NewExportAsyncService(database *db.DB, exportSvc *ExportService, auditSvc *AuditService, dataDir string) *ExportAsyncService {
 	dir := filepath.Join(dataDir, ExportDir)
 	_ = os.MkdirAll(dir, 0755)
 
 	svc := &ExportAsyncService{
-		db:          db,
+		database:    database,
+		client:      database.Client(),
 		exportSvc:   exportSvc,
 		auditSvc:    auditSvc,
 		exportDir:   dir,
@@ -84,8 +89,21 @@ func (s *ExportAsyncService) CreateAsyncExport(ctx context.Context, userID int64
 	filename := generateExportFilename(exportType)
 	filePath := filepath.Join(s.exportDir, filename)
 
-	now := time.Now()
+	saved, err := s.client.ExportTask.Create().
+		SetUserID(userID).
+		SetUsername(username).
+		SetExportType(exportType).
+		SetStatus(string(model.ExportTaskStatusPending)).
+		SetFilename(filename).
+		SetFilePath(filePath).
+		SetFiltersJSON(filtersJSON).
+		Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("创建导出任务失败: %w", err)
+	}
+
 	task := &model.ExportTask{
+		ID:          int64(saved.ID),
 		UserID:      userID,
 		Username:    username,
 		ExportType:  exportType,
@@ -93,22 +111,10 @@ func (s *ExportAsyncService) CreateAsyncExport(ctx context.Context, userID int64
 		Filename:    filename,
 		FilePath:    filePath,
 		FiltersJSON: filtersJSON,
-		CreatedAt:   now,
+		CreatedAt:   saved.CreatedAt,
 	}
 
-	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO export_tasks (user_id, username, export_type, status, filename, file_path, filters_json, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		task.UserID, task.Username, task.ExportType, task.Status,
-		task.Filename, task.FilePath, task.FiltersJSON, task.CreatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("创建导出任务失败: %w", err)
-	}
-
-	id, _ := result.LastInsertId()
-	task.ID = id
-	s.tasks.Store(id, task)
+	s.tasks.Store(task.ID, task)
 
 	// Launch async export in goroutine
 	go s.executeExport(task, username, role)
@@ -118,63 +124,62 @@ func (s *ExportAsyncService) CreateAsyncExport(ctx context.Context, userID int64
 
 // GetTask retrieves an export task by ID.
 func (s *ExportAsyncService) GetTask(ctx context.Context, taskID int64, userID int64) (*model.ExportTask, error) {
-	var task model.ExportTask
-	var completedAt sql.NullTime
-
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, user_id, username, export_type, status, filename, file_path,
-		        total_rows, file_bytes, filters_json, error_msg, created_at, completed_at
-		 FROM export_tasks WHERE id = ? AND user_id = ?`,
-		taskID, userID,
-	).Scan(
-		&task.ID, &task.UserID, &task.Username, &task.ExportType, &task.Status,
-		&task.Filename, &task.FilePath,
-		&task.TotalRows, &task.FileBytes, &task.FiltersJSON, &task.ErrorMsg,
-		&task.CreatedAt, &completedAt,
-	)
-	if err == sql.ErrNoRows {
-		return nil, ErrExportNotFound
-	}
+	t, err := s.client.ExportTask.Query().
+		Where(entexporttask.ID(int(taskID)), entexporttask.UserID(userID)).
+		Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ErrExportNotFound
+		}
 		return nil, fmt.Errorf("查询导出任务失败: %w", err)
 	}
 
-	if completedAt.Valid {
-		task.CompletedAt = &completedAt.Time
+	task := &model.ExportTask{
+		ID:          int64(t.ID),
+		UserID:      t.UserID,
+		Username:    t.Username,
+		ExportType:  t.ExportType,
+		Status:      model.ExportTaskStatus(t.Status),
+		Filename:    t.Filename,
+		FilePath:    t.FilePath,
+		TotalRows:   t.TotalRows,
+		FileBytes:   t.FileBytes,
+		FiltersJSON: t.FiltersJSON,
+		ErrorMsg:    t.ErrorMsg,
+		CreatedAt:   t.CreatedAt,
+		CompletedAt: t.CompletedAt,
 	}
 
-	return &task, nil
+	return task, nil
 }
 
 // ListTasks lists export tasks for a user.
 func (s *ExportAsyncService) ListTasks(ctx context.Context, userID int64) ([]model.ExportTaskSlim, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, export_type, status, filename, total_rows, file_bytes, error_msg, created_at, completed_at
-		 FROM export_tasks WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`,
-		userID,
-	)
+	tasks, err := s.client.ExportTask.Query().
+		Where(entexporttask.UserID(userID)).
+		Order(entexporttask.ByCreatedAt(sql.OrderDesc())).
+		Limit(50).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询导出任务列表失败: %w", err)
 	}
-	defer rows.Close()
 
-	var tasks []model.ExportTaskSlim
-	for rows.Next() {
-		var t model.ExportTaskSlim
-		var completedAt sql.NullTime
-		if err := rows.Scan(
-			&t.ID, &t.ExportType, &t.Status, &t.Filename,
-			&t.TotalRows, &t.FileBytes, &t.ErrorMsg,
-			&t.CreatedAt, &completedAt,
-		); err != nil {
-			continue
+	var result []model.ExportTaskSlim
+	for _, t := range tasks {
+		slim := model.ExportTaskSlim{
+			ID:          int64(t.ID),
+			ExportType:  t.ExportType,
+			Status:      model.ExportTaskStatus(t.Status),
+			Filename:    t.Filename,
+			TotalRows:   t.TotalRows,
+			FileBytes:   t.FileBytes,
+			ErrorMsg:    t.ErrorMsg,
+			CreatedAt:   t.CreatedAt,
+			CompletedAt: t.CompletedAt,
 		}
-		if completedAt.Valid {
-			t.CompletedAt = &completedAt.Time
-		}
-		tasks = append(tasks, t)
+		result = append(result, slim)
 	}
-	return tasks, rows.Err()
+	return result, nil
 }
 
 // DownloadFile returns the file content for a completed export task.
@@ -260,8 +265,9 @@ func (s *ExportAsyncService) executeExport(task *model.ExportTask, username, rol
 }
 
 // updateTaskStatus updates the task status in both DB and in-memory cache.
+// Uses raw SQL (no context) to match Phase 3 Scheduler pattern for background goroutines.
 func (s *ExportAsyncService) updateTaskStatus(taskID int64, status model.ExportTaskStatus, errMsg string, totalRows, fileBytes int64, completedAt *time.Time) {
-	_, err := s.db.Exec(
+	_, err := s.database.Exec(
 		`UPDATE export_tasks SET status = ?, error_msg = ?, total_rows = ?, file_bytes = ?, completed_at = ? WHERE id = ?`,
 		string(status), errMsg, totalRows, fileBytes, completedAt, taskID,
 	)
@@ -281,8 +287,9 @@ func (s *ExportAsyncService) updateTaskStatus(taskID int64, status model.ExportT
 }
 
 // recoverPendingTasks re-marks any tasks left in processing state as failed (server restart recovery).
+// Uses raw SQL — same pattern as Phase 3 Scheduler.
 func (s *ExportAsyncService) recoverPendingTasks() {
-	_, err := s.db.Exec(
+	_, err := s.database.Exec(
 		`UPDATE export_tasks SET status = ?, error_msg = ? WHERE status IN (?, ?)`,
 		string(model.ExportTaskStatusFailed), "服务器重启，任务中断", string(model.ExportTaskStatusPending), string(model.ExportTaskStatusProcessing),
 	)
@@ -307,11 +314,12 @@ func (s *ExportAsyncService) cleanupLoop() {
 }
 
 // cleanupExpiredFiles removes export files older than ExportFileTTL.
+// Uses raw SQL for the file path query — no ent equivalent for this pattern.
 func (s *ExportAsyncService) cleanupExpiredFiles() {
 	cutoff := time.Now().Add(-ExportFileTTL)
 
 	// Find expired completed tasks
-	rows, err := s.db.Query(
+	rows, err := s.database.Query(
 		`SELECT id, file_path FROM export_tasks WHERE status = ? AND completed_at < ?`,
 		string(model.ExportTaskStatusCompleted), cutoff,
 	)
@@ -337,7 +345,7 @@ func (s *ExportAsyncService) cleanupExpiredFiles() {
 
 	// Mark as failed (archived) to indicate file no longer available
 	for _, id := range taskIDs {
-		_, _ = s.db.Exec(
+		_, _ = s.database.Exec(
 			`UPDATE export_tasks SET status = ?, error_msg = ? WHERE id = ?`,
 			string(model.ExportTaskStatusFailed), "导出文件已过期清理（24小时）", id,
 		)

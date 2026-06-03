@@ -41,8 +41,8 @@ CREATE TABLE IF NOT EXISTS export_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, u
 func TestExportAsyncService_CreateAndRetrieve(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	exportSvc := NewExportService(db, auditSvc)
-	asyncSvc := NewExportAsyncService(db, exportSvc, auditSvc, dataDir)
+	exportSvc := NewExportService(mustWrapDB(db), auditSvc)
+	asyncSvc := NewExportAsyncService(mustWrapDB(db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
 	// Insert a test user
@@ -98,8 +98,8 @@ func TestExportAsyncService_CreateAndRetrieve(t *testing.T) {
 func TestExportAsyncService_ListTasks(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	exportSvc := NewExportService(db, auditSvc)
-	asyncSvc := NewExportAsyncService(db, exportSvc, auditSvc, dataDir)
+	exportSvc := NewExportService(mustWrapDB(db), auditSvc)
+	asyncSvc := NewExportAsyncService(mustWrapDB(db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
 	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')")
@@ -138,8 +138,8 @@ func TestExportAsyncService_ListTasks(t *testing.T) {
 func TestExportAsyncService_PermissionDenied(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	exportSvc := NewExportService(db, auditSvc)
-	asyncSvc := NewExportAsyncService(db, exportSvc, auditSvc, dataDir)
+	exportSvc := NewExportService(mustWrapDB(db), auditSvc)
+	asyncSvc := NewExportAsyncService(mustWrapDB(db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
 	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('dev', 'hash', 'developer')")
@@ -154,8 +154,8 @@ func TestExportAsyncService_PermissionDenied(t *testing.T) {
 func TestExportAsyncService_DownloadFile(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	exportSvc := NewExportService(db, auditSvc)
-	asyncSvc := NewExportAsyncService(db, exportSvc, auditSvc, dataDir)
+	exportSvc := NewExportService(mustWrapDB(db), auditSvc)
+	asyncSvc := NewExportAsyncService(mustWrapDB(db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
 	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')")
@@ -207,8 +207,8 @@ func TestExportAsyncService_DownloadFile(t *testing.T) {
 func TestExportAsyncService_NotFound(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	exportSvc := NewExportService(db, auditSvc)
-	asyncSvc := NewExportAsyncService(db, exportSvc, auditSvc, dataDir)
+	exportSvc := NewExportService(mustWrapDB(db), auditSvc)
+	asyncSvc := NewExportAsyncService(mustWrapDB(db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
 	_, err := asyncSvc.GetTask(context.Background(), 99999, 1)
@@ -230,8 +230,8 @@ func TestGenerateExportFilename(t *testing.T) {
 func TestExportAsyncService_CleanupExpiredFiles(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	exportSvc := NewExportService(db, auditSvc)
-	asyncSvc := NewExportAsyncService(db, exportSvc, auditSvc, dataDir)
+	exportSvc := NewExportService(mustWrapDB(db), auditSvc)
+	asyncSvc := NewExportAsyncService(mustWrapDB(db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
 	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')")

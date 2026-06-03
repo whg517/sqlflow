@@ -25,7 +25,7 @@ func setupShareTestDB(t *testing.T) *sql.DB {
 
 func TestShareService_CreateAndGet(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(dbConn)
+	svc := NewShareService(mustWrapDB(dbConn))
 
 	req := &CreateShareRequest{
 		UserID:    1,
@@ -74,7 +74,7 @@ func TestShareService_CreateAndGet(t *testing.T) {
 
 func TestShareService_ExpiredShare(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(dbConn)
+	svc := NewShareService(mustWrapDB(dbConn))
 
 	req := &CreateShareRequest{
 		UserID:   1,
@@ -99,7 +99,7 @@ func TestShareService_ExpiredShare(t *testing.T) {
 
 func TestShareService_PasswordProtection(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(dbConn)
+	svc := NewShareService(mustWrapDB(dbConn))
 
 	req := &CreateShareRequest{
 		UserID:    1,
@@ -138,7 +138,7 @@ func TestShareService_PasswordProtection(t *testing.T) {
 
 func TestShareService_Revoke(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(dbConn)
+	svc := NewShareService(mustWrapDB(dbConn))
 
 	req := &CreateShareRequest{
 		UserID:    1,
@@ -172,7 +172,7 @@ func TestShareService_Revoke(t *testing.T) {
 
 func TestShareService_RowLimit(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(dbConn)
+	svc := NewShareService(mustWrapDB(dbConn))
 
 	rows := make([]map[string]interface{}, shareMaxRows+1)
 	for i := range rows {
@@ -195,7 +195,7 @@ func TestShareService_RowLimit(t *testing.T) {
 
 func TestShareService_TokenUniqueness(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(dbConn)
+	svc := NewShareService(mustWrapDB(dbConn))
 
 	req := &CreateShareRequest{
 		UserID:    1,

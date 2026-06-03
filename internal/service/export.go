@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -49,13 +50,13 @@ type ExportResult struct {
 
 // ExportService handles data export for audit logs and tickets.
 type ExportService struct {
-	db       *sql.DB
+	database *db.DB
 	auditSvc *AuditService
 }
 
 // NewExportService creates a new ExportService.
-func NewExportService(db *sql.DB, auditSvc *AuditService) *ExportService {
-	return &ExportService{db: db, auditSvc: auditSvc}
+func NewExportService(database *db.DB, auditSvc *AuditService) *ExportService {
+	return &ExportService{database: database, auditSvc: auditSvc}
 }
 
 // hasExportPermission checks if a user has export permission.
@@ -114,7 +115,7 @@ func (s *ExportService) countAuditLogs(ctx context.Context, filters AuditExportF
 	countSQL := PaginatedCountSQL(countTable, whereClause)
 
 	var total int64
-	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := s.database.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return 0, fmt.Errorf("统计审计日志失败: %w", err)
 	}
 	return total, nil
@@ -127,7 +128,7 @@ func (s *ExportService) countTickets(ctx context.Context, filters TicketExportFi
 
 	var total int64
 	countSQL := PaginatedCountSQL("tickets", whereClause)
-	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := s.database.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return 0, fmt.Errorf("统计工单失败: %w", err)
 	}
 	return total, nil
@@ -166,7 +167,7 @@ func (s *ExportService) StreamExportAuditLogs(ctx context.Context, w io.Writer, 
 	)
 	queryArgs := append(args, ExportMaxRows)
 
-	rows, err := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return 0, fmt.Errorf("查询审计日志失败: %w", err)
 	}
@@ -260,7 +261,7 @@ func (s *ExportService) StreamExportTickets(ctx context.Context, w io.Writer, us
 	)
 	queryArgs := append(args, ExportMaxRows)
 
-	rows, err := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return 0, fmt.Errorf("查询工单失败: %w", err)
 	}

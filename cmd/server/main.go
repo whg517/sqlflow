@@ -70,20 +70,20 @@ func main() {
 	}
 	log.Println("permission service initialized")
 
-	historySvc := service.NewQueryHistoryService(database.DB)
+	historySvc := service.NewQueryHistoryService(database)
 
 	auditSvc := service.NewAuditService(database, 0, 0)
 	defer auditSvc.Close()
 	log.Println("audit service initialized")
 
-	exportSvc := service.NewExportService(database.DB, auditSvc)
+	exportSvc := service.NewExportService(database, auditSvc)
 	log.Println("export service initialized")
 
-	exportAsyncSvc := service.NewExportAsyncService(database.DB, exportSvc, auditSvc, cfg.DB.Path)
+	exportAsyncSvc := service.NewExportAsyncService(database, exportSvc, auditSvc, cfg.DB.Path)
 	defer exportAsyncSvc.Close()
 	log.Println("async export service initialized")
 
-	querySvc := service.NewQueryService(database.DB, dsSvc, historySvc, permSvc, auditSvc, cfg.EncryptionKey, connMgr, poolMgr)
+	querySvc := service.NewQueryService(database, dsSvc, historySvc, permSvc, auditSvc, cfg.EncryptionKey, connMgr, poolMgr)
 	log.Println("query service initialized")
 
 	ticketSvc := service.NewTicketService(database, auditSvc, nil)
@@ -171,11 +171,11 @@ func main() {
 	log.Println("sql template service initialized")
 
 	// Initialize snapshot service (SF-FEAT0041)
-	snapshotSvc := service.NewSnapshotService(database.DB, querySvc)
+	snapshotSvc := service.NewSnapshotService(database, querySvc)
 	log.Println("snapshot service initialized")
 
 	// Initialize share service (SF-FEAT0038)
-	shareSvc := service.NewShareService(database.DB)
+	shareSvc := service.NewShareService(database)
 	log.Println("share service initialized")
 
 	// Initialize Web Vitals service (SF-ENG0033)

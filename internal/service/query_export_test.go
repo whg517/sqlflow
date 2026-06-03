@@ -45,9 +45,9 @@ func setupExportService(t *testing.T) (*QueryService, *sql.DB) {
 	if err != nil {
 		t.Fatalf("create permission service: %v", err)
 	}
-	historySvc := NewQueryHistoryService(testDB)
+	historySvc := NewQueryHistoryService(mustWrapDB(testDB))
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
+	qs := NewQueryService(mustWrapDB(testDB), dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 	return qs, testDB
 }
 
@@ -167,9 +167,9 @@ func TestExportQuery_PasswordDecryptError(t *testing.T) {
 	connMgr := connpool.NewManager()
 	dsSvc := NewDatasourceService(mustWrapDB(testDB), "wrong-key-that-is-32-bytes-long!!", connMgr, nil)
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
-	historySvc := NewQueryHistoryService(testDB)
+	historySvc := NewQueryHistoryService(mustWrapDB(testDB))
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, "wrong-key-that-is-32-bytes-long!!", connMgr, nil)
+	qs := NewQueryService(mustWrapDB(testDB), dsSvc, historySvc, permSvc, auditSvc, "wrong-key-that-is-32-bytes-long!!", connMgr, nil)
 
 	ctx, cancel := exportCtx(t)
 	defer cancel()
@@ -300,9 +300,9 @@ func TestExportQuery_Success(t *testing.T) {
 
 	// Recreate QueryService with the shared connMgr
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
-	historySvc := NewQueryHistoryService(testDB)
+	historySvc := NewQueryHistoryService(mustWrapDB(testDB))
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
+	qs := NewQueryService(mustWrapDB(testDB), dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	// Also add select policy for admin on this datasource domain
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "select")
@@ -340,9 +340,9 @@ func TestExportQuery_SuccessWithDesensitization(t *testing.T) {
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	seedPolicy(t, testDB, permSvc, "developer", fmt.Sprintf("ds_%d", dsID), "*", "select")
 
-	historySvc := NewQueryHistoryService(testDB)
+	historySvc := NewQueryHistoryService(mustWrapDB(testDB))
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
+	qs := NewQueryService(mustWrapDB(testDB), dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	// Add a mask rule for this datasource
 	now := time.Now()
@@ -382,9 +382,9 @@ func TestExportQuery_EmptyResult(t *testing.T) {
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "users", "select")
 
-	historySvc := NewQueryHistoryService(testDB)
+	historySvc := NewQueryHistoryService(mustWrapDB(testDB))
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
+	qs := NewQueryService(mustWrapDB(testDB), dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	// Query the users table (empty in the injected SQLite) with an impossible condition
 	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb",
@@ -409,9 +409,9 @@ func TestExportQuery_RowLimitExceeded(t *testing.T) {
 	connMgr := connpool.NewManager()
 	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
-	historySvc := NewQueryHistoryService(testDB)
+	historySvc := NewQueryHistoryService(mustWrapDB(testDB))
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
+	qs := NewQueryService(mustWrapDB(testDB), dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	ctx, cancel := exportCtx(t)
 	defer cancel()
@@ -458,9 +458,9 @@ func TestExportQuery_AuditOnSuccess(t *testing.T) {
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "select")
 
-	historySvc := NewQueryHistoryService(testDB)
+	historySvc := NewQueryHistoryService(mustWrapDB(testDB))
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
+	qs := NewQueryService(mustWrapDB(testDB), dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	userID := seedUser(t, testDB, "export-user", "admin")
 
@@ -494,9 +494,9 @@ func TestExportQuery_AuditOnFailure(t *testing.T) {
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "users", "select")
 
-	historySvc := NewQueryHistoryService(testDB)
+	historySvc := NewQueryHistoryService(mustWrapDB(testDB))
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
+	qs := NewQueryService(mustWrapDB(testDB), dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	userID := seedUser(t, testDB, "export-fail-user", "admin")
 
@@ -538,9 +538,9 @@ func TestExportQuery_DefaultDBType(t *testing.T) {
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "select")
 
-	historySvc := NewQueryHistoryService(testDB)
+	historySvc := NewQueryHistoryService(mustWrapDB(testDB))
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
+	qs := NewQueryService(mustWrapDB(testDB), dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	// Pass empty dbType — should default to datasource type (mysql)
 	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1 AS id", "")
@@ -561,9 +561,9 @@ func TestExportQuery_PermissionDenied(t *testing.T) {
 	connMgr := connpool.NewManager()
 	dsSvc := NewDatasourceService(mustWrapDB(testDB), testEncKey, connMgr, nil)
 	permSvc, _ := NewPermissionService(mustWrapDB(testDB))
-	historySvc := NewQueryHistoryService(testDB)
+	historySvc := NewQueryHistoryService(mustWrapDB(testDB))
 	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
-	qs := NewQueryService(testDB, dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
+	qs := NewQueryService(mustWrapDB(testDB), dsSvc, historySvc, permSvc, auditSvc, testEncKey, connMgr, nil)
 
 	ctx, cancel := exportCtx(t)
 	defer cancel()

@@ -9,7 +9,7 @@ import (
 
 func TestPerformanceService_ListSlowQueries(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	svc := NewQueryHistoryService(testDB)
+	svc := NewQueryHistoryService(mustWrapDB(testDB))
 
 	userID := seedIntegrationUser(t, testDB, "perf_user", "developer")
 	dsID := seedIntegrationDatasource(t, testDB, "perf-ds")
@@ -124,7 +124,7 @@ func TestPerformanceService_ListSlowQueries(t *testing.T) {
 
 func TestPerformanceService_GetPerformanceStats(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	svc := NewQueryHistoryService(testDB)
+	svc := NewQueryHistoryService(mustWrapDB(testDB))
 
 	userID := seedIntegrationUser(t, testDB, "perf_stats_user", "developer")
 	dsID := seedIntegrationDatasource(t, testDB, "perf-stats-ds")
@@ -201,7 +201,7 @@ func TestPerformanceService_GetPerformanceStats(t *testing.T) {
 
 func TestPerformanceService_EmptyStats(t *testing.T) {
 	testDB := setupIntegrationDB(t)
-	svc := NewQueryHistoryService(testDB)
+	svc := NewQueryHistoryService(mustWrapDB(testDB))
 
 	// No data seeded
 	stats, err := svc.GetPerformanceStats(context.Background(), 7)

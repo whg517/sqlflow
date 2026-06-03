@@ -34,7 +34,7 @@ func setupSnapshotTestDB(t *testing.T) *SnapshotService {
 	if err := database.Migrate(); err != nil {
 		t.Fatalf("migrate test db: %v", err)
 	}
-	return NewSnapshotService(database.DB, &mockQueryExecutor{})
+	return NewSnapshotService(database, &mockQueryExecutor{})
 }
 
 func setupSnapshotTestDBWithExecutor(t *testing.T, exec QueryExecutor) *SnapshotService {
@@ -48,7 +48,7 @@ func setupSnapshotTestDBWithExecutor(t *testing.T, exec QueryExecutor) *Snapshot
 	if err := database.Migrate(); err != nil {
 		t.Fatalf("migrate test db: %v", err)
 	}
-	return NewSnapshotService(database.DB, exec)
+	return NewSnapshotService(database, exec)
 }
 
 func seedTestHistory(t *testing.T, testDB *sql.DB, userID, dsID int64, sqlContent, dbType string) int64 {
@@ -519,7 +519,7 @@ func TestValueEqual_FloatVsInt(t *testing.T) {
 }
 
 // DB returns the underlying database connection (for testing only).
-func (s *SnapshotService) DB() *sql.DB { return s.db }
+func (s *SnapshotService) DB() *sql.DB { return s.database.DB }
 
 // getDBFromService extracts the underlying db for seeding test data.
 func getDBFromService(t *testing.T, svc *SnapshotService) *sql.DB {

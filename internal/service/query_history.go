@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	"github.com/whg517/sqlflow/internal/db/ent/queryhistory"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -13,22 +15,28 @@ const maxHistoryPerUser = 200
 
 // QueryHistoryService handles query history logic.
 type QueryHistoryService struct {
-	db *sql.DB
+	database *db.DB
+	client   *ent.Client
 }
 
 // NewQueryHistoryService creates a new QueryHistoryService.
-func NewQueryHistoryService(db *sql.DB) *QueryHistoryService {
-	return &QueryHistoryService{db: db}
+func NewQueryHistoryService(database *db.DB) *QueryHistoryService {
+	return &QueryHistoryService{database: database, client: database.Client()}
 }
 
 // CreateHistory inserts a new query history record and auto-cleans old records.
 func (s *QueryHistoryService) CreateHistory(ctx context.Context, h *model.QueryHistory) error {
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO query_history (user_id, datasource_id, database, sql_content, sql_summary, db_type, execution_time, result_rows, affected_rows)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		h.UserID, h.DatasourceID, h.Database, h.SQLContent, h.SQLSummary,
-		h.DBType, h.ExecutionTime, h.ResultRows, h.AffectedRows,
-	)
+	_, err := s.client.QueryHistory.Create().
+		SetUserID(h.UserID).
+		SetDatasourceID(h.DatasourceID).
+		SetDatabase(h.Database).
+		SetSQLContent(h.SQLContent).
+		SetSQLSummary(h.SQLSummary).
+		SetDbType(h.DBType).
+		SetExecutionTime(h.ExecutionTime).
+		SetResultRows(h.ResultRows).
+		SetAffectedRows(h.AffectedRows).
+		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("insert query history: %w", err)
 	}
@@ -40,6 +48,7 @@ func (s *QueryHistoryService) CreateHistory(ctx context.Context, h *model.QueryH
 }
 
 // ListHistory returns paginated query history for a user.
+// Uses raw SQL for the LIKE keyword search across multiple fields.
 func (s *QueryHistoryService) ListHistory(ctx context.Context, userID int64, page, pageSize int, keyword string) ([]model.QueryHistory, int, error) {
 	p := ParsePagination(page, pageSize)
 
@@ -57,7 +66,7 @@ func (s *QueryHistoryService) ListHistory(ctx context.Context, userID int64, pag
 
 	var total int
 	countSQL := PaginatedCountSQL("query_history", whereClause)
-	if err := s.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	if err := s.database.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count query history: %w", err)
 	}
 
@@ -66,7 +75,7 @@ func (s *QueryHistoryService) ListHistory(ctx context.Context, userID int64, pag
 		"query_history", whereClause, "id DESC", p,
 	)
 	queryArgs := AppendLimitArgs(args, p)
-	rows, err := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query history: %w", err)
 	}
@@ -90,13 +99,12 @@ func (s *QueryHistoryService) ListHistory(ctx context.Context, userID int64, pag
 
 // DeleteHistory deletes a single query history record (only if it belongs to the user).
 func (s *QueryHistoryService) DeleteHistory(ctx context.Context, id, userID int64) error {
-	result, err := s.db.ExecContext(ctx,
-		`DELETE FROM query_history WHERE id = ? AND user_id = ?`, id, userID,
-	)
+	n, err := s.client.QueryHistory.Delete().
+		Where(queryhistory.ID(int(id)), queryhistory.UserID(userID)).
+		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("delete query history: %w", err)
 	}
-	n, _ := result.RowsAffected()
 	if n == 0 {
 		return fmt.Errorf("记录不存在或无权删除")
 	}
@@ -105,7 +113,9 @@ func (s *QueryHistoryService) DeleteHistory(ctx context.Context, id, userID int6
 
 // ClearHistory deletes all query history for a user.
 func (s *QueryHistoryService) ClearHistory(ctx context.Context, userID int64) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM query_history WHERE user_id = ?`, userID)
+	_, err := s.client.QueryHistory.Delete().
+		Where(queryhistory.UserID(userID)).
+		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("clear query history: %w", err)
 	}
@@ -113,8 +123,9 @@ func (s *QueryHistoryService) ClearHistory(ctx context.Context, userID int64) er
 }
 
 // cleanupOldRecords removes records exceeding the per-user limit.
+// Uses raw SQL for the subquery-based DELETE (ent doesn't support this pattern directly).
 func (s *QueryHistoryService) cleanupOldRecords(userID int64) {
-	_, _ = s.db.Exec(
+	_, _ = s.database.Exec(
 		`DELETE FROM query_history WHERE user_id = ? AND id NOT IN (
 			SELECT id FROM query_history WHERE user_id = ? ORDER BY id DESC LIMIT ?
 		)`,

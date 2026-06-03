@@ -133,7 +133,7 @@ func seedTickets(t *testing.T, db *sql.DB, count int) {
 func TestExportService_HasPermission(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
-	svc := NewExportService(db, NewAuditService(mustWrapDB(db), 0, 0))
+	svc := NewExportService(mustWrapDB(db), NewAuditService(mustWrapDB(db), 0, 0))
 
 	tests := []struct {
 		role       string
@@ -162,7 +162,7 @@ func TestExportService_ExportAuditLogs_AdminSuccess(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedAuditLogs(t, db, 5)
 
@@ -191,7 +191,7 @@ func TestExportService_ExportAuditLogs_DeveloperDenied(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedAuditLogs(t, db, 5)
 
@@ -205,7 +205,7 @@ func TestExportService_ExportAuditLogsWithFilters(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedAuditLogs(t, db, 10)
 
@@ -224,7 +224,7 @@ func TestExportService_ExportAuditLogs_Watermark(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedAuditLogs(t, db, 3)
 
@@ -249,7 +249,7 @@ func TestExportService_ExportAuditLogs_ExceedsLimit(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	// Seed more than ExportMaxRows
 	seedAuditLogs(t, db, ExportMaxRows+1)
@@ -264,7 +264,7 @@ func TestExportService_ExportTickets_AuthenticatedSuccess(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedTickets(t, db, 5)
 
@@ -289,7 +289,7 @@ func TestExportService_ExportTickets_WithFilters(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedTickets(t, db, 10)
 
@@ -319,7 +319,7 @@ func TestExportService_ExportTickets_Watermark(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedTickets(t, db, 2)
 
@@ -341,7 +341,7 @@ func TestExportService_ExportTickets_ExceedsLimit(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedTickets(t, db, ExportMaxRows+1)
 
@@ -355,7 +355,7 @@ func TestExportService_ExportAuditLogs_Empty(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	result, err := svc.ExportAuditLogs(context.Background(), 1, "admin", "admin", AuditExportFilters{})
 	if err != nil {
@@ -370,7 +370,7 @@ func TestExportService_ExportTickets_Empty(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	result, err := svc.ExportTickets(context.Background(), 1, "admin", "admin", TicketExportFilters{})
 	if err != nil {
@@ -412,7 +412,7 @@ func TestStreamExportAuditLogs_CSVOutput(t *testing.T) {
 	})
 
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	exportSvc := NewExportService(db, auditSvc)
+	exportSvc := NewExportService(mustWrapDB(db), auditSvc)
 
 	var buf strings.Builder
 	buf.Write([]byte{0xEF, 0xBB, 0xBF})
@@ -433,7 +433,7 @@ func TestExportService_StreamExportAuditLogs(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedAuditLogs(t, db, 5)
 
@@ -462,7 +462,7 @@ func TestExportService_StreamExportTickets(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedTickets(t, db, 3)
 
@@ -487,7 +487,7 @@ func TestExportService_ValidateExport(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedAuditLogs(t, db, 5)
 
@@ -520,7 +520,7 @@ func TestExportService_ValidateExport_ExceedsLimit(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedAuditLogs(t, db, ExportMaxRows+1)
 
@@ -537,7 +537,7 @@ func TestExportService_StreamExport_ContextCancellation(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := NewAuditService(mustWrapDB(db), 0, 0)
-	svc := NewExportService(db, auditSvc)
+	svc := NewExportService(mustWrapDB(db), auditSvc)
 
 	seedAuditLogs(t, db, 5)
 
