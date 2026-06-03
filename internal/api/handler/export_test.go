@@ -39,8 +39,8 @@ func setupExportTest(t *testing.T) (*echo.Echo, *service.AuditService, *service.
 	}
 
 	auditSvc := service.NewAuditService(database, 0, 0)
-	exportSvc := service.NewExportService(database.DB, auditSvc)
-	exportAsyncSvc := service.NewExportAsyncService(database.DB, exportSvc, auditSvc, t.TempDir())
+	exportSvc := service.NewExportService(database, auditSvc)
+	exportAsyncSvc := service.NewExportAsyncService(database, exportSvc, auditSvc, t.TempDir())
 	t.Cleanup(func() { exportAsyncSvc.Close() })
 	handler := NewExportHandler(exportSvc, exportAsyncSvc)
 

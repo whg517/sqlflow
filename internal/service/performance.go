@@ -145,11 +145,11 @@ func (s *QueryHistoryService) GetPerformanceStats(ctx context.Context, days int)
 
 	// Daily trend
 	rows, err := s.database.QueryContext(ctx,
-		`SELECT DATE(created_at) as date, COUNT(*) as count,
+		`SELECT COALESCE(DATE(created_at), '') as date, COUNT(*) as count,
 		        CAST(COALESCE(AVG(execution_time), 0) AS INTEGER) as avg_time,
 		        SUM(CASE WHEN execution_time >= 1000 THEN 1 ELSE 0 END) as slow_count
 		 FROM query_history WHERE created_at >= ?
-		 GROUP BY DATE(created_at) ORDER BY date`, startDate)
+		 GROUP BY COALESCE(DATE(created_at), '') ORDER BY date`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("get daily trend: %w", err)
 	}
