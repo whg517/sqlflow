@@ -184,9 +184,6 @@ func (_c *WebVitalCreate) check() error {
 	if _, ok := _c.mutation.UserAgent(); !ok {
 		return &ValidationError{Name: "user_agent", err: errors.New(`ent: missing required field "WebVital.user_agent"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "WebVital.created_at"`)}
-	}
 	return nil
 }
 

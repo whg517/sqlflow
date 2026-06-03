@@ -53,6 +53,8 @@ const (
 	FieldEsIndexPattern = "es_index_pattern"
 	// FieldEsVerifyCerts holds the string denoting the es_verify_certs field in the database.
 	FieldEsVerifyCerts = "es_verify_certs"
+	// FieldExtraConfig holds the string denoting the extra_config field in the database.
+	FieldExtraConfig = "extra_config"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -84,6 +86,7 @@ var Columns = []string{
 	FieldEsAPIKey,
 	FieldEsIndexPattern,
 	FieldEsVerifyCerts,
+	FieldExtraConfig,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -137,6 +140,8 @@ var (
 	DefaultEsIndexPattern string
 	// DefaultEsVerifyCerts holds the default value on creation for the "es_verify_certs" field.
 	DefaultEsVerifyCerts bool
+	// DefaultExtraConfig holds the default value on creation for the "extra_config" field.
+	DefaultExtraConfig string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -251,6 +256,11 @@ func ByEsIndexPattern(opts ...sql.OrderTermOption) OrderOption {
 // ByEsVerifyCerts orders the results by the es_verify_certs field.
 func ByEsVerifyCerts(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEsVerifyCerts, opts...).ToFunc()
+}
+
+// ByExtraConfig orders the results by the extra_config field.
+func ByExtraConfig(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExtraConfig, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

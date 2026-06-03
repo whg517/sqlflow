@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +15,8 @@ import (
 
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	"github.com/whg517/sqlflow/internal/db/ent/datasource"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
@@ -34,6 +35,7 @@ var ValidDatasourceTypes = map[string]bool{"mysql": true, "postgresql": true, "m
 // DatasourceService handles datasource management logic.
 type DatasourceService struct {
 	database      *db.DB
+	client        *ent.Client
 	encryptionKey string
 	connMgr       *connpool.Manager
 	poolMgr       *driver.PoolManager
@@ -41,7 +43,7 @@ type DatasourceService struct {
 
 // NewDatasourceService creates a new DatasourceService.
 func NewDatasourceService(database *db.DB, encryptionKey string, connMgr *connpool.Manager, poolMgr *driver.PoolManager) *DatasourceService {
-	return &DatasourceService{database: database, encryptionKey: encryptionKey, connMgr: connMgr, poolMgr: poolMgr}
+	return &DatasourceService{database: database, client: database.Client(), encryptionKey: encryptionKey, connMgr: connMgr, poolMgr: poolMgr}
 }
 
 // PoolManager returns the driver PoolManager (may be nil if not configured).
@@ -94,73 +96,70 @@ func (s *DatasourceService) CreateDataSource(ctx context.Context, ds *model.Data
 		encryptedESApiKey = enc
 	}
 
-	result, err := s.database.DB.ExecContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_api_key, es_index_pattern, es_verify_certs, extra_config)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database, ds.SSLMode, ds.SchemaName,
-		ds.MaxOpen, ds.MaxIdle, ds.MaxLifetime, ds.MaxIdleTime, ds.Status,
-		ds.ESUrls, ds.ESVersion, ds.ESAuthType, encryptedESApiKey, ds.ESIndexPattern, ds.ESVerifyCerts,
-		ds.ExtraConfig,
-	)
+	created, err := s.client.DataSource.Create().
+		SetName(ds.Name).
+		SetType(ds.Type).
+		SetHost(ds.Host).
+		SetPort(ds.Port).
+		SetUsername(ds.Username).
+		SetPasswordEncrypted(encrypted).
+		SetDatabase(ds.Database).
+		SetSslmode(ds.SSLMode).
+		SetSchemaName(ds.SchemaName).
+		SetMaxOpen(ds.MaxOpen).
+		SetMaxIdle(ds.MaxIdle).
+		SetMaxLifetime(ds.MaxLifetime).
+		SetMaxIdleTime(ds.MaxIdleTime).
+		SetStatus(ds.Status).
+		SetEsUrls(ds.ESUrls).
+		SetEsVersion(ds.ESVersion).
+		SetEsAuthType(ds.ESAuthType).
+		SetEsAPIKey(encryptedESApiKey).
+		SetEsIndexPattern(ds.ESIndexPattern).
+		SetEsVerifyCerts(ds.ESVerifyCerts).
+		SetExtraConfig(ds.ExtraConfig).
+		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("insert datasource: %w", err)
 	}
 
-	id, _ := result.LastInsertId()
-	created, err := s.GetDataSource(ctx, id)
+	found, err := s.GetDataSource(ctx, int64(created.ID))
 	if err != nil {
 		return err
 	}
-	*ds = *created
+	*ds = *found
 	return nil
 }
 
 // ListDataSources returns all datasources without encrypted passwords.
 func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSource, error) {
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT id, name, type, host, port, username, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_index_pattern, es_verify_certs, extra_config, created_at, updated_at
-		 FROM datasources ORDER BY id`,
-	)
+	results, err := s.client.DataSource.Query().
+		Order(datasource.ByID()).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query datasources: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	var list []model.DataSource
-	for rows.Next() {
-		var ds model.DataSource
-		if err := rows.Scan(&ds.ID, &ds.Name, &ds.Type, &ds.Host, &ds.Port, &ds.Username, &ds.Database,
-			&ds.SSLMode, &ds.SchemaName,
-			&ds.MaxOpen, &ds.MaxIdle, &ds.MaxLifetime, &ds.MaxIdleTime, &ds.Status,
-			&ds.ESUrls, &ds.ESVersion, &ds.ESAuthType, &ds.ESIndexPattern, &ds.ESVerifyCerts,
-			&ds.ExtraConfig,
-			&ds.CreatedAt, &ds.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan datasource: %w", err)
-		}
-		list = append(list, ds)
+	for _, d := range results {
+		list = append(list, entDatasourceToModel(d))
 	}
-	return list, rows.Err()
+	return list, nil
 }
 
 // GetDataSource returns a single datasource by ID (password not decrypted).
 func (s *DatasourceService) GetDataSource(ctx context.Context, id int64) (*model.DataSource, error) {
-	ds := &model.DataSource{}
-	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT id, name, type, host, port, username, password_encrypted, database, sslmode, schema_name, max_open, max_idle, max_lifetime, max_idle_time, status, es_urls, es_version, es_auth_type, es_api_key, es_index_pattern, es_verify_certs, extra_config, created_at, updated_at
-		 FROM datasources WHERE id = ?`, id,
-	).Scan(&ds.ID, &ds.Name, &ds.Type, &ds.Host, &ds.Port, &ds.Username, &ds.PasswordEncrypted, &ds.Database,
-		&ds.SSLMode, &ds.SchemaName,
-		&ds.MaxOpen, &ds.MaxIdle, &ds.MaxLifetime, &ds.MaxIdleTime, &ds.Status,
-		&ds.ESUrls, &ds.ESVersion, &ds.ESAuthType, &ds.ESApiKey, &ds.ESIndexPattern, &ds.ESVerifyCerts,
-		&ds.ExtraConfig,
-		&ds.CreatedAt, &ds.UpdatedAt)
+	d, err := s.client.DataSource.Get(ctx, int(id))
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if ent.IsNotFound(err) {
 			return nil, ErrDatasourceNotFound
 		}
 		return nil, fmt.Errorf("query datasource: %w", err)
 	}
-	return ds, nil
+	result := entDatasourceToModel(d)
+	result.PasswordEncrypted = d.PasswordEncrypted
+	result.ESApiKey = d.EsAPIKey
+	return &result, nil
 }
 
 // UpdateDataSource updates an existing datasource.
@@ -206,22 +205,35 @@ func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *
 		encryptedESApiKey = existing.ESApiKey
 	}
 
-	result, err := s.database.DB.ExecContext(ctx,
-		`UPDATE datasources SET name=?, type=?, host=?, port=?, username=?, password_encrypted=?, database=?, sslmode=?, schema_name=?,
-		 max_open=?, max_idle=?, max_lifetime=?, max_idle_time=?, es_urls=?, es_version=?, es_auth_type=?, es_api_key=?, es_index_pattern=?, es_verify_certs=?, extra_config=?, updated_at=datetime('now') WHERE id=?`,
-		ds.Name, ds.Type, ds.Host, ds.Port, ds.Username, encrypted, ds.Database, ds.SSLMode, ds.SchemaName,
-		ds.MaxOpen, ds.MaxIdle, ds.MaxLifetime, ds.MaxIdleTime,
-		ds.ESUrls, ds.ESVersion, ds.ESAuthType, encryptedESApiKey, ds.ESIndexPattern, ds.ESVerifyCerts,
-		ds.ExtraConfig,
-		id,
-	)
+	n, err := s.client.DataSource.UpdateOneID(int(id)).
+		SetName(ds.Name).
+		SetType(ds.Type).
+		SetHost(ds.Host).
+		SetPort(ds.Port).
+		SetUsername(ds.Username).
+		SetPasswordEncrypted(encrypted).
+		SetDatabase(ds.Database).
+		SetSslmode(ds.SSLMode).
+		SetSchemaName(ds.SchemaName).
+		SetMaxOpen(ds.MaxOpen).
+		SetMaxIdle(ds.MaxIdle).
+		SetMaxLifetime(ds.MaxLifetime).
+		SetMaxIdleTime(ds.MaxIdleTime).
+		SetEsUrls(ds.ESUrls).
+		SetEsVersion(ds.ESVersion).
+		SetEsAuthType(ds.ESAuthType).
+		SetEsAPIKey(encryptedESApiKey).
+		SetEsIndexPattern(ds.ESIndexPattern).
+		SetEsVerifyCerts(ds.ESVerifyCerts).
+		SetExtraConfig(ds.ExtraConfig).
+		Save(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return ErrDatasourceNotFound
+		}
 		return fmt.Errorf("update datasource: %w", err)
 	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
-		return ErrDatasourceNotFound
-	}
+	_ = n
 
 	// Invalidate cached connection pool since config may have changed
 	// Use PoolManager (Driver) if available
@@ -258,15 +270,14 @@ func (s *DatasourceService) DisableDataSource(ctx context.Context, id int64) err
 		return err
 	}
 
-	result, err := s.database.DB.ExecContext(ctx,
-		`UPDATE datasources SET status='disabled', updated_at=datetime('now') WHERE id=?`, id,
-	)
+	err = s.client.DataSource.UpdateOneID(int(id)).
+		SetStatus("disabled").
+		Exec(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return ErrDatasourceNotFound
+		}
 		return fmt.Errorf("disable datasource: %w", err)
-	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
-		return ErrDatasourceNotFound
 	}
 
 	// Clean up cached connection pool
@@ -1112,5 +1123,34 @@ func mapArrayElementType(udtName string) string {
 		return "json[]"
 	default:
 		return elemType + "[]"
+	}
+}
+
+// entDatasourceToModel converts an ent DataSource entity to a model.DataSource.
+// Does NOT include sensitive fields (PasswordEncrypted, ESApiKey).
+func entDatasourceToModel(d *ent.DataSource) model.DataSource {
+	return model.DataSource{
+		ID:             int64(d.ID),
+		Name:           d.Name,
+		Type:           d.Type,
+		Host:           d.Host,
+		Port:           d.Port,
+		Username:       d.Username,
+		Database:       d.Database,
+		SSLMode:        d.Sslmode,
+		SchemaName:     d.SchemaName,
+		MaxOpen:        d.MaxOpen,
+		MaxIdle:        d.MaxIdle,
+		MaxLifetime:    d.MaxLifetime,
+		MaxIdleTime:    d.MaxIdleTime,
+		Status:         d.Status,
+		ESUrls:         d.EsUrls,
+		ESVersion:      d.EsVersion,
+		ESAuthType:     d.EsAuthType,
+		ESIndexPattern: d.EsIndexPattern,
+		ESVerifyCerts:  d.EsVerifyCerts,
+		ExtraConfig:    d.ExtraConfig,
+		CreatedAt:      d.CreatedAt,
+		UpdatedAt:      d.UpdatedAt,
 	}
 }

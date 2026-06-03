@@ -293,12 +293,16 @@ func init() {
 	datasourceDescEsVerifyCerts := datasourceFields[19].Descriptor()
 	// datasource.DefaultEsVerifyCerts holds the default value on creation for the es_verify_certs field.
 	datasource.DefaultEsVerifyCerts = datasourceDescEsVerifyCerts.Default.(bool)
+	// datasourceDescExtraConfig is the schema descriptor for extra_config field.
+	datasourceDescExtraConfig := datasourceFields[20].Descriptor()
+	// datasource.DefaultExtraConfig holds the default value on creation for the extra_config field.
+	datasource.DefaultExtraConfig = datasourceDescExtraConfig.Default.(string)
 	// datasourceDescCreatedAt is the schema descriptor for created_at field.
-	datasourceDescCreatedAt := datasourceFields[20].Descriptor()
+	datasourceDescCreatedAt := datasourceFields[21].Descriptor()
 	// datasource.DefaultCreatedAt holds the default value on creation for the created_at field.
 	datasource.DefaultCreatedAt = datasourceDescCreatedAt.Default.(func() time.Time)
 	// datasourceDescUpdatedAt is the schema descriptor for updated_at field.
-	datasourceDescUpdatedAt := datasourceFields[21].Descriptor()
+	datasourceDescUpdatedAt := datasourceFields[22].Descriptor()
 	// datasource.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	datasource.DefaultUpdatedAt = datasourceDescUpdatedAt.Default.(func() time.Time)
 	// datasource.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

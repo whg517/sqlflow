@@ -350,9 +350,6 @@ func (_c *GitLinkCreate) check() error {
 	if _, ok := _c.mutation.CreatedBy(); !ok {
 		return &ValidationError{Name: "created_by", err: errors.New(`ent: missing required field "GitLink.created_by"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "GitLink.created_at"`)}
-	}
 	return nil
 }
 

@@ -235,9 +235,6 @@ func (_c *QueryHistoryCreate) check() error {
 	if _, ok := _c.mutation.AffectedRows(); !ok {
 		return &ValidationError{Name: "affected_rows", err: errors.New(`ent: missing required field "QueryHistory.affected_rows"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "QueryHistory.created_at"`)}
-	}
 	return nil
 }
 

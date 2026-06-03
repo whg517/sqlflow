@@ -291,9 +291,6 @@ func (_c *SharedResultCreate) check() error {
 	if _, ok := _c.mutation.Revoked(); !ok {
 		return &ValidationError{Name: "revoked", err: errors.New(`ent: missing required field "SharedResult.revoked"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "SharedResult.created_at"`)}
-	}
 	return nil
 }
 

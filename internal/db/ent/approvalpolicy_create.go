@@ -263,12 +263,6 @@ func (_c *ApprovalPolicyCreate) check() error {
 	if _, ok := _c.mutation.IsDefault(); !ok {
 		return &ValidationError{Name: "is_default", err: errors.New(`ent: missing required field "ApprovalPolicy.is_default"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "ApprovalPolicy.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "ApprovalPolicy.updated_at"`)}
-	}
 	return nil
 }
 

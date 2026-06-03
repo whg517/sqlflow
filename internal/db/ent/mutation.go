@@ -5175,6 +5175,7 @@ type DataSourceMutation struct {
 	es_api_key         *string
 	es_index_pattern   *string
 	es_verify_certs    *bool
+	extra_config       *string
 	created_at         *time.Time
 	updated_at         *time.Time
 	clearedFields      map[string]struct{}
@@ -6101,6 +6102,55 @@ func (m *DataSourceMutation) ResetEsVerifyCerts() {
 	m.es_verify_certs = nil
 }
 
+// SetExtraConfig sets the "extra_config" field.
+func (m *DataSourceMutation) SetExtraConfig(s string) {
+	m.extra_config = &s
+}
+
+// ExtraConfig returns the value of the "extra_config" field in the mutation.
+func (m *DataSourceMutation) ExtraConfig() (r string, exists bool) {
+	v := m.extra_config
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExtraConfig returns the old "extra_config" field's value of the DataSource entity.
+// If the DataSource object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DataSourceMutation) OldExtraConfig(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExtraConfig is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExtraConfig requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExtraConfig: %w", err)
+	}
+	return oldValue.ExtraConfig, nil
+}
+
+// ClearExtraConfig clears the value of the "extra_config" field.
+func (m *DataSourceMutation) ClearExtraConfig() {
+	m.extra_config = nil
+	m.clearedFields[datasource.FieldExtraConfig] = struct{}{}
+}
+
+// ExtraConfigCleared returns if the "extra_config" field was cleared in this mutation.
+func (m *DataSourceMutation) ExtraConfigCleared() bool {
+	_, ok := m.clearedFields[datasource.FieldExtraConfig]
+	return ok
+}
+
+// ResetExtraConfig resets all changes to the "extra_config" field.
+func (m *DataSourceMutation) ResetExtraConfig() {
+	m.extra_config = nil
+	delete(m.clearedFields, datasource.FieldExtraConfig)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *DataSourceMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -6207,7 +6257,7 @@ func (m *DataSourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DataSourceMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 23)
 	if m.name != nil {
 		fields = append(fields, datasource.FieldName)
 	}
@@ -6268,6 +6318,9 @@ func (m *DataSourceMutation) Fields() []string {
 	if m.es_verify_certs != nil {
 		fields = append(fields, datasource.FieldEsVerifyCerts)
 	}
+	if m.extra_config != nil {
+		fields = append(fields, datasource.FieldExtraConfig)
+	}
 	if m.created_at != nil {
 		fields = append(fields, datasource.FieldCreatedAt)
 	}
@@ -6322,6 +6375,8 @@ func (m *DataSourceMutation) Field(name string) (ent.Value, bool) {
 		return m.EsIndexPattern()
 	case datasource.FieldEsVerifyCerts:
 		return m.EsVerifyCerts()
+	case datasource.FieldExtraConfig:
+		return m.ExtraConfig()
 	case datasource.FieldCreatedAt:
 		return m.CreatedAt()
 	case datasource.FieldUpdatedAt:
@@ -6375,6 +6430,8 @@ func (m *DataSourceMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldEsIndexPattern(ctx)
 	case datasource.FieldEsVerifyCerts:
 		return m.OldEsVerifyCerts(ctx)
+	case datasource.FieldExtraConfig:
+		return m.OldExtraConfig(ctx)
 	case datasource.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case datasource.FieldUpdatedAt:
@@ -6528,6 +6585,13 @@ func (m *DataSourceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetEsVerifyCerts(v)
 		return nil
+	case datasource.FieldExtraConfig:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExtraConfig(v)
+		return nil
 	case datasource.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -6634,7 +6698,11 @@ func (m *DataSourceMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *DataSourceMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(datasource.FieldExtraConfig) {
+		fields = append(fields, datasource.FieldExtraConfig)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -6647,6 +6715,11 @@ func (m *DataSourceMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *DataSourceMutation) ClearField(name string) error {
+	switch name {
+	case datasource.FieldExtraConfig:
+		m.ClearExtraConfig()
+		return nil
+	}
 	return fmt.Errorf("unknown DataSource nullable field %s", name)
 }
 
@@ -6713,6 +6786,9 @@ func (m *DataSourceMutation) ResetField(name string) error {
 		return nil
 	case datasource.FieldEsVerifyCerts:
 		m.ResetEsVerifyCerts()
+		return nil
+	case datasource.FieldExtraConfig:
+		m.ResetExtraConfig()
 		return nil
 	case datasource.FieldCreatedAt:
 		m.ResetCreatedAt()

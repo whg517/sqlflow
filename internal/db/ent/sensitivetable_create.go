@@ -179,12 +179,6 @@ func (_c *SensitiveTableCreate) check() error {
 	if _, ok := _c.mutation.SensitivityLevel(); !ok {
 		return &ValidationError{Name: "sensitivity_level", err: errors.New(`ent: missing required field "SensitiveTable.sensitivity_level"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "SensitiveTable.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "SensitiveTable.updated_at"`)}
-	}
 	return nil
 }
 

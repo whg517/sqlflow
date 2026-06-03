@@ -57,6 +57,8 @@ type DataSource struct {
 	EsIndexPattern string `json:"es_index_pattern,omitempty"`
 	// EsVerifyCerts holds the value of the "es_verify_certs" field.
 	EsVerifyCerts bool `json:"es_verify_certs,omitempty"`
+	// ExtraConfig holds the value of the "extra_config" field.
+	ExtraConfig string `json:"extra_config,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -73,7 +75,7 @@ func (*DataSource) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case datasource.FieldID, datasource.FieldPort, datasource.FieldMaxOpen, datasource.FieldMaxIdle, datasource.FieldMaxLifetime, datasource.FieldMaxIdleTime:
 			values[i] = new(sql.NullInt64)
-		case datasource.FieldName, datasource.FieldType, datasource.FieldHost, datasource.FieldUsername, datasource.FieldPasswordEncrypted, datasource.FieldDatabase, datasource.FieldStatus, datasource.FieldSslmode, datasource.FieldSchemaName, datasource.FieldEsUrls, datasource.FieldEsVersion, datasource.FieldEsAuthType, datasource.FieldEsAPIKey, datasource.FieldEsIndexPattern:
+		case datasource.FieldName, datasource.FieldType, datasource.FieldHost, datasource.FieldUsername, datasource.FieldPasswordEncrypted, datasource.FieldDatabase, datasource.FieldStatus, datasource.FieldSslmode, datasource.FieldSchemaName, datasource.FieldEsUrls, datasource.FieldEsVersion, datasource.FieldEsAuthType, datasource.FieldEsAPIKey, datasource.FieldEsIndexPattern, datasource.FieldExtraConfig:
 			values[i] = new(sql.NullString)
 		case datasource.FieldCreatedAt, datasource.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -218,6 +220,12 @@ func (_m *DataSource) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.EsVerifyCerts = value.Bool
 			}
+		case datasource.FieldExtraConfig:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field extra_config", values[i])
+			} else if value.Valid {
+				_m.ExtraConfig = value.String
+			}
 		case datasource.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -325,6 +333,9 @@ func (_m *DataSource) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("es_verify_certs=")
 	builder.WriteString(fmt.Sprintf("%v", _m.EsVerifyCerts))
+	builder.WriteString(", ")
+	builder.WriteString("extra_config=")
+	builder.WriteString(_m.ExtraConfig)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

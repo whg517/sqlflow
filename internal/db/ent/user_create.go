@@ -222,12 +222,6 @@ func (_c *UserCreate) check() error {
 	if _, ok := _c.mutation.OidcProvider(); !ok {
 		return &ValidationError{Name: "oidc_provider", err: errors.New(`ent: missing required field "User.oidc_provider"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "User.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "User.updated_at"`)}
-	}
 	return nil
 }
 

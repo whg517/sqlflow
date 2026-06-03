@@ -154,6 +154,11 @@ func EsVerifyCerts(v bool) predicate.DataSource {
 	return predicate.DataSource(sql.FieldEQ(FieldEsVerifyCerts, v))
 }
 
+// ExtraConfig applies equality check predicate on the "extra_config" field. It's identical to ExtraConfigEQ.
+func ExtraConfig(v string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldEQ(FieldExtraConfig, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.DataSource {
 	return predicate.DataSource(sql.FieldEQ(FieldCreatedAt, v))
@@ -1282,6 +1287,81 @@ func EsVerifyCertsEQ(v bool) predicate.DataSource {
 // EsVerifyCertsNEQ applies the NEQ predicate on the "es_verify_certs" field.
 func EsVerifyCertsNEQ(v bool) predicate.DataSource {
 	return predicate.DataSource(sql.FieldNEQ(FieldEsVerifyCerts, v))
+}
+
+// ExtraConfigEQ applies the EQ predicate on the "extra_config" field.
+func ExtraConfigEQ(v string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldEQ(FieldExtraConfig, v))
+}
+
+// ExtraConfigNEQ applies the NEQ predicate on the "extra_config" field.
+func ExtraConfigNEQ(v string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldNEQ(FieldExtraConfig, v))
+}
+
+// ExtraConfigIn applies the In predicate on the "extra_config" field.
+func ExtraConfigIn(vs ...string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldIn(FieldExtraConfig, vs...))
+}
+
+// ExtraConfigNotIn applies the NotIn predicate on the "extra_config" field.
+func ExtraConfigNotIn(vs ...string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldNotIn(FieldExtraConfig, vs...))
+}
+
+// ExtraConfigGT applies the GT predicate on the "extra_config" field.
+func ExtraConfigGT(v string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldGT(FieldExtraConfig, v))
+}
+
+// ExtraConfigGTE applies the GTE predicate on the "extra_config" field.
+func ExtraConfigGTE(v string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldGTE(FieldExtraConfig, v))
+}
+
+// ExtraConfigLT applies the LT predicate on the "extra_config" field.
+func ExtraConfigLT(v string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldLT(FieldExtraConfig, v))
+}
+
+// ExtraConfigLTE applies the LTE predicate on the "extra_config" field.
+func ExtraConfigLTE(v string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldLTE(FieldExtraConfig, v))
+}
+
+// ExtraConfigContains applies the Contains predicate on the "extra_config" field.
+func ExtraConfigContains(v string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldContains(FieldExtraConfig, v))
+}
+
+// ExtraConfigHasPrefix applies the HasPrefix predicate on the "extra_config" field.
+func ExtraConfigHasPrefix(v string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldHasPrefix(FieldExtraConfig, v))
+}
+
+// ExtraConfigHasSuffix applies the HasSuffix predicate on the "extra_config" field.
+func ExtraConfigHasSuffix(v string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldHasSuffix(FieldExtraConfig, v))
+}
+
+// ExtraConfigIsNil applies the IsNil predicate on the "extra_config" field.
+func ExtraConfigIsNil() predicate.DataSource {
+	return predicate.DataSource(sql.FieldIsNull(FieldExtraConfig))
+}
+
+// ExtraConfigNotNil applies the NotNil predicate on the "extra_config" field.
+func ExtraConfigNotNil() predicate.DataSource {
+	return predicate.DataSource(sql.FieldNotNull(FieldExtraConfig))
+}
+
+// ExtraConfigEqualFold applies the EqualFold predicate on the "extra_config" field.
+func ExtraConfigEqualFold(v string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldEqualFold(FieldExtraConfig, v))
+}
+
+// ExtraConfigContainsFold applies the ContainsFold predicate on the "extra_config" field.
+func ExtraConfigContainsFold(v string) predicate.DataSource {
+	return predicate.DataSource(sql.FieldContainsFold(FieldExtraConfig, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

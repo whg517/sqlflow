@@ -318,12 +318,6 @@ func (_c *PermissionRequestCreate) check() error {
 	if _, ok := _c.mutation.RevokeReason(); !ok {
 		return &ValidationError{Name: "revoke_reason", err: errors.New(`ent: missing required field "PermissionRequest.revoke_reason"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "PermissionRequest.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "PermissionRequest.updated_at"`)}
-	}
 	return nil
 }
 

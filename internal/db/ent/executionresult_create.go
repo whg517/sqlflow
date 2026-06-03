@@ -205,9 +205,6 @@ func (_c *ExecutionResultCreate) check() error {
 	if _, ok := _c.mutation.DurationMs(); !ok {
 		return &ValidationError{Name: "duration_ms", err: errors.New(`ent: missing required field "ExecutionResult.duration_ms"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "ExecutionResult.created_at"`)}
-	}
 	return nil
 }
 

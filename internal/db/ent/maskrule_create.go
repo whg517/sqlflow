@@ -242,12 +242,6 @@ func (_c *MaskRuleCreate) check() error {
 	if _, ok := _c.mutation.CustomTemplate(); !ok {
 		return &ValidationError{Name: "custom_template", err: errors.New(`ent: missing required field "MaskRule.custom_template"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "MaskRule.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "MaskRule.updated_at"`)}
-	}
 	return nil
 }
 

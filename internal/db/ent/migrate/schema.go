@@ -22,8 +22,8 @@ var (
 		{Name: "use_count", Type: field.TypeInt64, Default: 0},
 		{Name: "is_active", Type: field.TypeBool, Default: true},
 		{Name: "description", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// APITokensTable holds the schema information for the "api_tokens" table.
 	APITokensTable = &schema.Table{
@@ -55,8 +55,8 @@ var (
 		{Name: "auto_approve_enabled", Type: field.TypeBool, Default: false},
 		{Name: "auto_approve_reason", Type: field.TypeString, Nullable: true},
 		{Name: "is_default", Type: field.TypeBool, Default: false},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// ApprovalPoliciesTable holds the schema information for the "approval_policies" table.
 	ApprovalPoliciesTable = &schema.Table{
@@ -85,7 +85,7 @@ var (
 		{Name: "comment", Type: field.TypeString, Nullable: true},
 		{Name: "auto_approved", Type: field.TypeBool, Default: false},
 		{Name: "auto_reason", Type: field.TypeString, Nullable: true},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// ApprovalRecordsTable holds the schema information for the "approval_records" table.
 	ApprovalRecordsTable = &schema.Table{
@@ -122,7 +122,7 @@ var (
 		{Name: "ip_address", Type: field.TypeString, Default: ""},
 		{Name: "ai_review_result", Type: field.TypeString, Default: ""},
 		{Name: "ticket_id", Type: field.TypeInt64, Default: 0},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// AuditLogsTable holds the schema information for the "audit_logs" table.
 	AuditLogsTable = &schema.Table{
@@ -164,7 +164,7 @@ var (
 		{Name: "user_id", Type: field.TypeInt64},
 		{Name: "content", Type: field.TypeString},
 		{Name: "parent_id", Type: field.TypeInt64, Default: 0},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// CommentsTable holds the schema information for the "comments" table.
 	CommentsTable = &schema.Table{
@@ -207,8 +207,9 @@ var (
 		{Name: "es_api_key", Type: field.TypeString, Default: ""},
 		{Name: "es_index_pattern", Type: field.TypeString, Default: ""},
 		{Name: "es_verify_certs", Type: field.TypeBool, Default: true},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "extra_config", Type: field.TypeString, Nullable: true, Default: ""},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// DatasourcesTable holds the schema information for the "datasources" table.
 	DatasourcesTable = &schema.Table{
@@ -226,7 +227,7 @@ var (
 		{Name: "rows_affected", Type: field.TypeInt64, Default: 0},
 		{Name: "error", Type: field.TypeString, Default: ""},
 		{Name: "duration_ms", Type: field.TypeInt64, Default: 0},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// ExecutionResultsTable holds the schema information for the "execution_results" table.
 	ExecutionResultsTable = &schema.Table{
@@ -254,7 +255,7 @@ var (
 		{Name: "file_bytes", Type: field.TypeInt64, Default: 0},
 		{Name: "filters_json", Type: field.TypeString, Default: "{}"},
 		{Name: "error_msg", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 	}
 	// ExportTasksTable holds the schema information for the "export_tasks" table.
@@ -291,7 +292,7 @@ var (
 		{Name: "repo_url", Type: field.TypeString, Default: ""},
 		{Name: "branch", Type: field.TypeString, Default: ""},
 		{Name: "created_by", Type: field.TypeInt64, Default: 0},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// GitLinksTable holds the schema information for the "git_links" table.
 	GitLinksTable = &schema.Table{
@@ -316,8 +317,8 @@ var (
 		{Name: "mask_type", Type: field.TypeString, Default: ""},
 		{Name: "custom_regex", Type: field.TypeString, Default: ""},
 		{Name: "custom_template", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// MaskRulesTable holds the schema information for the "mask_rules" table.
 	MaskRulesTable = &schema.Table{
@@ -334,8 +335,8 @@ var (
 		{Name: "client_secret", Type: field.TypeString, Default: ""},
 		{Name: "scopes", Type: field.TypeString, Default: "openid profile email"},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// OidcProvidersTable holds the schema information for the "oidc_providers" table.
 	OidcProvidersTable = &schema.Table{
@@ -360,8 +361,8 @@ var (
 		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
 		{Name: "revoked_by", Type: field.TypeInt64, Nullable: true},
 		{Name: "revoke_reason", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// PermissionRequestsTable holds the schema information for the "permission_requests" table.
 	PermissionRequestsTable = &schema.Table{
@@ -398,7 +399,7 @@ var (
 		{Name: "execution_time", Type: field.TypeInt64, Default: 0},
 		{Name: "result_rows", Type: field.TypeInt64, Default: 0},
 		{Name: "affected_rows", Type: field.TypeInt64, Default: 0},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// QueryHistoryTable holds the schema information for the "query_history" table.
 	QueryHistoryTable = &schema.Table{
@@ -432,7 +433,7 @@ var (
 		{Name: "rows", Type: field.TypeString},
 		{Name: "row_count", Type: field.TypeInt64, Default: 0},
 		{Name: "query_history_id", Type: field.TypeInt64, Default: 0},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// QuerySnapshotsTable holds the schema information for the "query_snapshots" table.
 	QuerySnapshotsTable = &schema.Table{
@@ -454,7 +455,7 @@ var (
 		{Name: "token", Type: field.TypeString, Unique: true},
 		{Name: "expires_at", Type: field.TypeTime},
 		{Name: "revoked", Type: field.TypeBool, Default: false},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// RefreshTokensTable holds the schema information for the "refresh_tokens" table.
 	RefreshTokensTable = &schema.Table{
@@ -481,7 +482,7 @@ var (
 		{Name: "action_type", Type: field.TypeString},
 		{Name: "dedup_key", Type: field.TypeString, Unique: true},
 		{Name: "notified_user", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 		{Name: "sla_config_id", Type: field.TypeInt64, Nullable: true},
 	}
 	// SLAActionLogTable holds the schema information for the "sla_action_log" table.
@@ -511,8 +512,8 @@ var (
 		{Name: "escalate_to_role", Type: field.TypeString, Default: "admin"},
 		{Name: "escalate_to_user", Type: field.TypeString, Default: ""},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// SLAConfigTable holds the schema information for the "sla_config" table.
 	SLAConfigTable = &schema.Table{
@@ -538,8 +539,8 @@ var (
 		{Name: "category", Type: field.TypeString, Default: "general"},
 		{Name: "params_json", Type: field.TypeString, Default: "[]"},
 		{Name: "is_public", Type: field.TypeBool, Default: false},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// SQLTemplatesTable holds the schema information for the "sql_templates" table.
 	SQLTemplatesTable = &schema.Table{
@@ -571,8 +572,8 @@ var (
 		{Name: "database", Type: field.TypeString, Default: ""},
 		{Name: "table_name", Type: field.TypeString, Default: ""},
 		{Name: "sensitivity_level", Type: field.TypeString, Default: "medium"},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// SensitiveTablesTable holds the schema information for the "sensitive_tables" table.
 	SensitiveTablesTable = &schema.Table{
@@ -602,7 +603,7 @@ var (
 		{Name: "datasource_name", Type: field.TypeString, Default: ""},
 		{Name: "revoked", Type: field.TypeBool, Default: false},
 		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// SharedResultsTable holds the schema information for the "shared_results" table.
 	SharedResultsTable = &schema.Table{
@@ -635,7 +636,7 @@ var (
 		{Name: "obj", Type: field.TypeString},
 		{Name: "act", Type: field.TypeString},
 		{Name: "expires_at", Type: field.TypeTime},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// TempPoliciesTable holds the schema information for the "temp_policies" table.
 	TempPoliciesTable = &schema.Table{
@@ -683,8 +684,8 @@ var (
 		{Name: "executed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "sla_deadline", Type: field.TypeTime, Nullable: true},
 		{Name: "sla_status", Type: field.TypeString, Default: "normal"},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// TicketsTable holds the schema information for the "tickets" table.
 	TicketsTable = &schema.Table{
@@ -732,7 +733,7 @@ var (
 		{Name: "reviewer_id", Type: field.TypeInt64, Default: 0},
 		{Name: "review_comment", Type: field.TypeString, Default: ""},
 		{Name: "status", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// TicketRevisionsTable holds the schema information for the "ticket_revisions" table.
 	TicketRevisionsTable = &schema.Table{
@@ -762,8 +763,8 @@ var (
 		{Name: "dingtalk_union_id", Type: field.TypeString, Nullable: true, Default: ""},
 		{Name: "oidc_subject", Type: field.TypeString, Default: ""},
 		{Name: "oidc_provider", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// UsersTable holds the schema information for the "users" table.
 	UsersTable = &schema.Table{
@@ -787,7 +788,7 @@ var (
 		{Name: "path", Type: field.TypeString, Default: ""},
 		{Name: "navigation_type", Type: field.TypeString, Default: ""},
 		{Name: "user_agent", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
 	}
 	// WebVitalsTable holds the schema information for the "web_vitals" table.
 	WebVitalsTable = &schema.Table{

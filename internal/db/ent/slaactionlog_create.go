@@ -149,9 +149,6 @@ func (_c *SLAActionLogCreate) check() error {
 	if _, ok := _c.mutation.NotifiedUser(); !ok {
 		return &ValidationError{Name: "notified_user", err: errors.New(`ent: missing required field "SLAActionLog.notified_user"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "SLAActionLog.created_at"`)}
-	}
 	return nil
 }
 

@@ -177,9 +177,6 @@ func (_c *QuerySnapshotCreate) check() error {
 	if _, ok := _c.mutation.QueryHistoryID(); !ok {
 		return &ValidationError{Name: "query_history_id", err: errors.New(`ent: missing required field "QuerySnapshot.query_history_id"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "QuerySnapshot.created_at"`)}
-	}
 	return nil
 }
 

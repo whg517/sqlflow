@@ -289,9 +289,6 @@ func (_c *ExportTaskCreate) check() error {
 	if _, ok := _c.mutation.ErrorMsg(); !ok {
 		return &ValidationError{Name: "error_msg", err: errors.New(`ent: missing required field "ExportTask.error_msg"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "ExportTask.created_at"`)}
-	}
 	return nil
 }
 

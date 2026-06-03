@@ -268,6 +268,20 @@ func (_c *DataSourceCreate) SetNillableEsVerifyCerts(v *bool) *DataSourceCreate 
 	return _c
 }
 
+// SetExtraConfig sets the "extra_config" field.
+func (_c *DataSourceCreate) SetExtraConfig(v string) *DataSourceCreate {
+	_c.mutation.SetExtraConfig(v)
+	return _c
+}
+
+// SetNillableExtraConfig sets the "extra_config" field if the given value is not nil.
+func (_c *DataSourceCreate) SetNillableExtraConfig(v *string) *DataSourceCreate {
+	if v != nil {
+		_c.SetExtraConfig(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *DataSourceCreate) SetCreatedAt(v time.Time) *DataSourceCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -395,6 +409,10 @@ func (_c *DataSourceCreate) defaults() {
 		v := datasource.DefaultEsVerifyCerts
 		_c.mutation.SetEsVerifyCerts(v)
 	}
+	if _, ok := _c.mutation.ExtraConfig(); !ok {
+		v := datasource.DefaultExtraConfig
+		_c.mutation.SetExtraConfig(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := datasource.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -481,12 +499,6 @@ func (_c *DataSourceCreate) check() error {
 	}
 	if _, ok := _c.mutation.EsVerifyCerts(); !ok {
 		return &ValidationError{Name: "es_verify_certs", err: errors.New(`ent: missing required field "DataSource.es_verify_certs"`)}
-	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "DataSource.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "DataSource.updated_at"`)}
 	}
 	return nil
 }
@@ -593,6 +605,10 @@ func (_c *DataSourceCreate) createSpec() (*DataSource, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.EsVerifyCerts(); ok {
 		_spec.SetField(datasource.FieldEsVerifyCerts, field.TypeBool, value)
 		_node.EsVerifyCerts = value
+	}
+	if value, ok := _c.mutation.ExtraConfig(); ok {
+		_spec.SetField(datasource.FieldExtraConfig, field.TypeString, value)
+		_node.ExtraConfig = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(datasource.FieldCreatedAt, field.TypeTime, value)

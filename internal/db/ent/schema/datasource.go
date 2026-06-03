@@ -65,6 +65,9 @@ func (DataSource) Fields() []ent.Field {
 			Default(""),
 		field.Bool("es_verify_certs").
 			Default(true),
+		field.String("extra_config").
+			Default("").
+			Optional(),
 		field.Time("created_at").
 			Default(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
 		field.Time("updated_at").

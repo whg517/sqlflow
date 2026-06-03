@@ -256,9 +256,6 @@ func (_c *TicketRevisionCreate) check() error {
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "TicketRevision.status"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "TicketRevision.created_at"`)}
-	}
 	return nil
 }
 

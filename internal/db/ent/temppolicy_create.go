@@ -142,9 +142,6 @@ func (_c *TempPolicyCreate) check() error {
 	if _, ok := _c.mutation.ExpiresAt(); !ok {
 		return &ValidationError{Name: "expires_at", err: errors.New(`ent: missing required field "TempPolicy.expires_at"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "TempPolicy.created_at"`)}
-	}
 	return nil
 }
 

@@ -261,9 +261,6 @@ func (_c *ApprovalRecordCreate) check() error {
 	if _, ok := _c.mutation.AutoApproved(); !ok {
 		return &ValidationError{Name: "auto_approved", err: errors.New(`ent: missing required field "ApprovalRecord.auto_approved"`)}
 	}
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "ApprovalRecord.created_at"`)}
-	}
 	return nil
 }
 

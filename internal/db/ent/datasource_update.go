@@ -343,6 +343,26 @@ func (_u *DataSourceUpdate) SetNillableEsVerifyCerts(v *bool) *DataSourceUpdate 
 	return _u
 }
 
+// SetExtraConfig sets the "extra_config" field.
+func (_u *DataSourceUpdate) SetExtraConfig(v string) *DataSourceUpdate {
+	_u.mutation.SetExtraConfig(v)
+	return _u
+}
+
+// SetNillableExtraConfig sets the "extra_config" field if the given value is not nil.
+func (_u *DataSourceUpdate) SetNillableExtraConfig(v *string) *DataSourceUpdate {
+	if v != nil {
+		_u.SetExtraConfig(*v)
+	}
+	return _u
+}
+
+// ClearExtraConfig clears the value of the "extra_config" field.
+func (_u *DataSourceUpdate) ClearExtraConfig() *DataSourceUpdate {
+	_u.mutation.ClearExtraConfig()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *DataSourceUpdate) SetCreatedAt(v time.Time) *DataSourceUpdate {
 	_u.mutation.SetCreatedAt(v)
@@ -510,6 +530,12 @@ func (_u *DataSourceUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if value, ok := _u.mutation.EsVerifyCerts(); ok {
 		_spec.SetField(datasource.FieldEsVerifyCerts, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ExtraConfig(); ok {
+		_spec.SetField(datasource.FieldExtraConfig, field.TypeString, value)
+	}
+	if _u.mutation.ExtraConfigCleared() {
+		_spec.ClearField(datasource.FieldExtraConfig, field.TypeString)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(datasource.FieldCreatedAt, field.TypeTime, value)
@@ -852,6 +878,26 @@ func (_u *DataSourceUpdateOne) SetNillableEsVerifyCerts(v *bool) *DataSourceUpda
 	return _u
 }
 
+// SetExtraConfig sets the "extra_config" field.
+func (_u *DataSourceUpdateOne) SetExtraConfig(v string) *DataSourceUpdateOne {
+	_u.mutation.SetExtraConfig(v)
+	return _u
+}
+
+// SetNillableExtraConfig sets the "extra_config" field if the given value is not nil.
+func (_u *DataSourceUpdateOne) SetNillableExtraConfig(v *string) *DataSourceUpdateOne {
+	if v != nil {
+		_u.SetExtraConfig(*v)
+	}
+	return _u
+}
+
+// ClearExtraConfig clears the value of the "extra_config" field.
+func (_u *DataSourceUpdateOne) ClearExtraConfig() *DataSourceUpdateOne {
+	_u.mutation.ClearExtraConfig()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *DataSourceUpdateOne) SetCreatedAt(v time.Time) *DataSourceUpdateOne {
 	_u.mutation.SetCreatedAt(v)
@@ -1049,6 +1095,12 @@ func (_u *DataSourceUpdateOne) sqlSave(ctx context.Context) (_node *DataSource, 
 	}
 	if value, ok := _u.mutation.EsVerifyCerts(); ok {
 		_spec.SetField(datasource.FieldEsVerifyCerts, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ExtraConfig(); ok {
+		_spec.SetField(datasource.FieldExtraConfig, field.TypeString, value)
+	}
+	if _u.mutation.ExtraConfigCleared() {
+		_spec.ClearField(datasource.FieldExtraConfig, field.TypeString)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(datasource.FieldCreatedAt, field.TypeTime, value)
