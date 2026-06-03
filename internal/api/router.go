@@ -1,7 +1,7 @@
 package api
 
 import (
-	"database/sql"
+	"github.com/whg517/sqlflow/internal/db"
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/config"
@@ -17,7 +17,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, oidcSvc *service.OIDCService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, shareSvc *service.ShareService, vitalsSvc *service.WebVitalsService, snapshotSvc *service.SnapshotService, approvalEngine *service.ApprovalEngine, db *sql.DB, cfg *config.Config, connMgr *connpool.Manager, poolMgr *driver.PoolManager) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, oidcSvc *service.OIDCService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, shareSvc *service.ShareService, vitalsSvc *service.WebVitalsService, snapshotSvc *service.SnapshotService, approvalEngine *service.ApprovalEngine, database *db.DB, cfg *config.Config, connMgr *connpool.Manager, poolMgr *driver.PoolManager) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -31,7 +31,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	}
 
 	// Health check endpoints (public)
-	healthHandler := handler.NewHealthHandler(db)
+	healthHandler := handler.NewHealthHandler(database.DB)
 	healthHandler.SetConnPoolManager(connMgr)
 	healthHandler.SetPoolManager(poolMgr)
 	e.GET("/health", healthHandler.Health)
@@ -254,7 +254,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.DELETE("/api/admin/tokens/:id", tokenHandler.RevokeAnyToken)
 
 	// SLA configuration management (admin only)
-	slaSvc := service.NewSLAService(db, notifySvc)
+	slaSvc := service.NewSLAService(database, notifySvc)
 	slaHandler := handler.NewSLAHandler(slaSvc)
 
 	adminGroup.GET("/api/settings/sla", slaHandler.ListSLAConfigs)

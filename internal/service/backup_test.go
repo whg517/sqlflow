@@ -36,7 +36,7 @@ func setupBackupServiceTest(t *testing.T) (*BackupService, string, func()) {
 		Compress: false,
 	}
 
-	svc := NewBackupService(database.DB, dbPath, cfg)
+	svc := NewBackupService(mustWrapDB(database.DB), dbPath, cfg)
 	cleanup := func() {
 		database.Close()
 	}
@@ -95,7 +95,7 @@ func TestBackupService_RunBackup_Compressed(t *testing.T) {
 		Compress: true,
 	}
 
-	svc := NewBackupService(database.DB, dbPath, cfg)
+	svc := NewBackupService(mustWrapDB(database.DB), dbPath, cfg)
 
 	err = svc.RunBackup()
 	if err != nil {
@@ -247,7 +247,7 @@ func TestBackupService_Rotation(t *testing.T) {
 		Compress: false,
 	}
 
-	svc := NewBackupService(database.DB, dbPath, cfg)
+	svc := NewBackupService(mustWrapDB(database.DB), dbPath, cfg)
 
 	// Create 5 backups
 	for i := 0; i < 5; i++ {
@@ -298,7 +298,7 @@ func TestBackupService_Start_Disabled(t *testing.T) {
 		Compress: false,
 	}
 
-	svc := NewBackupService(database.DB, dbPath, cfg)
+	svc := NewBackupService(mustWrapDB(database.DB), dbPath, cfg)
 
 	// Start should return immediately when disabled
 	svc.Start()

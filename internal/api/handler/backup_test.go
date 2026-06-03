@@ -40,7 +40,8 @@ func setupBackupHandlerTest(t *testing.T) (*echo.Echo, *service.BackupService, *
 		Compress: false,
 	}
 
-	backupSvc := service.NewBackupService(database.DB, dbPath, cfg)
+	wrapped, _ := db.WrapSQL(database.DB)
+	backupSvc := service.NewBackupService(wrapped, dbPath, cfg)
 	handler := NewBackupHandler(backupSvc)
 	e := echo.New()
 

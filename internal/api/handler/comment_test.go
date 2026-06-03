@@ -54,7 +54,8 @@ func setupCommentHandlerTest(t *testing.T) (*echo.Echo, *service.CommentService,
 	}
 	ticketID, _ := ticketRes.LastInsertId()
 
-	commentSvc := service.NewCommentService(database.DB)
+	wrapped, _ := db.WrapSQL(database.DB)
+	commentSvc := service.NewCommentService(wrapped)
 	handler := NewCommentHandler(commentSvc)
 	e := echo.New()
 

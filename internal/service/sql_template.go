@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"database/sql"
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,12 +31,13 @@ var placeholderRegex = regexp.MustCompile(`\{\{(\w+)(?::([^}]*))?\}\}`)
 
 // TemplateService provides CRUD and render operations for SQL templates.
 type TemplateService struct {
-	db *sql.DB
+	database *db.DB
+	client   *ent.Client
 }
 
 // NewSQLTemplateService creates a new TemplateService.
-func NewSQLTemplateService(db *sql.DB) *TemplateService {
-	return &TemplateService{db: db}
+func NewSQLTemplateService(database *db.DB) *TemplateService {
+	return &TemplateService{database: database, client: database.Client()}
 }
 
 // CreateTemplate creates a new SQL template for the given user.
@@ -54,7 +57,7 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, userID int64, name
 		pub = 1
 	}
 
-	result, err := s.db.ExecContext(ctx,
+	result, err := s.database.ExecContext(ctx,
 		`INSERT INTO sql_templates (user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		userID, name, description, sqlContent, dbType, category, paramsJSON, pub, now, now,
@@ -86,7 +89,7 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, userID int64, name
 func (s *TemplateService) GetTemplate(ctx context.Context, id int64) (*model.SQLTemplate, error) {
 	t := &model.SQLTemplate{}
 	var pub int
-	err := s.db.QueryRowContext(ctx,
+	err := s.database.QueryRowContext(ctx,
 		`SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at
 		 FROM sql_templates WHERE id = ?`, id,
 	).Scan(&t.ID, &t.UserID, &t.Name, &t.Description, &t.SQLContent, &t.DBType, &t.Category, &t.ParamsJSON, &pub, &t.CreatedAt, &t.UpdatedAt)
@@ -126,13 +129,13 @@ func (s *TemplateService) ListTemplates(ctx context.Context, userID int64, categ
 		}
 		listQuery += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
 
-		err = s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+		err = s.database.QueryRowContext(ctx, countQuery, args...).Scan(&total)
 		if err != nil {
 			return nil, 0, fmt.Errorf("count templates: %w", err)
 		}
 
 		listArgs := append(args, pageSize, offset)
-		rows, err = s.db.QueryContext(ctx, listQuery, listArgs...)
+		rows, err = s.database.QueryContext(ctx, listQuery, listArgs...)
 	} else {
 		// User's own + all public
 		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE user_id = ? OR is_public = 1"
@@ -145,13 +148,13 @@ func (s *TemplateService) ListTemplates(ctx context.Context, userID int64, categ
 		}
 		listQuery += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
 
-		err = s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+		err = s.database.QueryRowContext(ctx, countQuery, args...).Scan(&total)
 		if err != nil {
 			return nil, 0, fmt.Errorf("count templates: %w", err)
 		}
 
 		listArgs := append(args, pageSize, offset)
-		rows, err = s.db.QueryContext(ctx, listQuery, listArgs...)
+		rows, err = s.database.QueryContext(ctx, listQuery, listArgs...)
 	}
 
 	if err != nil {
@@ -189,7 +192,7 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id, userID int64, 
 		pub = 1
 	}
 
-	result, err := s.db.ExecContext(ctx,
+	result, err := s.database.ExecContext(ctx,
 		`UPDATE sql_templates SET name=?, description=?, sql_content=?, db_type=?, category=?, params_json=?, is_public=?, updated_at=?
 		 WHERE id = ? AND user_id = ?`,
 		name, description, sqlContent, dbType, category, paramsJSON, pub, time.Now(), id, userID,
@@ -210,7 +213,7 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id, userID int64, 
 
 // DeleteTemplate deletes a template (only the creator can delete).
 func (s *TemplateService) DeleteTemplate(ctx context.Context, id, userID int64) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM sql_templates WHERE id = ? AND user_id = ?`, id, userID)
+	result, err := s.database.ExecContext(ctx, `DELETE FROM sql_templates WHERE id = ? AND user_id = ?`, id, userID)
 	if err != nil {
 		return fmt.Errorf("delete template: %w", err)
 	}

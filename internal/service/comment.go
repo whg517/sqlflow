@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	"github.com/whg517/sqlflow/internal/db/ent/comment"
+	"github.com/whg517/sqlflow/internal/db/ent/ticket"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -24,12 +27,13 @@ var (
 
 // CommentService handles comment CRUD logic.
 type CommentService struct {
-	db *sql.DB
+	database *db.DB
+	client   *ent.Client
 }
 
 // NewCommentService creates a new CommentService.
-func NewCommentService(db *sql.DB) *CommentService {
-	return &CommentService{db: db}
+func NewCommentService(database *db.DB) *CommentService {
+	return &CommentService{database: database, client: database.Client()}
 }
 
 // CreateComment adds a new comment to a ticket.
@@ -39,19 +43,17 @@ func (s *CommentService) CreateComment(ctx context.Context, orderID, userID int6
 	}
 
 	// Verify the ticket exists
-	var ticketExists bool
-	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM tickets WHERE id = ?)`, orderID).Scan(&ticketExists)
+	exists, err := s.client.Ticket.Query().Where(ticket.ID(int(orderID))).Exist(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("验证工单失败: %w", err)
 	}
-	if !ticketExists {
+	if !exists {
 		return nil, ErrOrderNotFound
 	}
 
 	// If replying to a comment, verify the parent comment exists
 	if parentID != 0 {
-		var parentExists bool
-		err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM comments WHERE id = ?)`, parentID).Scan(&parentExists)
+		parentExists, err := s.client.Comment.Query().Where(comment.ID(int(parentID))).Exist(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("验证父评论失败: %w", err)
 		}
@@ -61,18 +63,19 @@ func (s *CommentService) CreateComment(ctx context.Context, orderID, userID int6
 	}
 
 	now := time.Now()
-	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO comments (order_id, user_id, content, parent_id, created_at) VALUES (?, ?, ?, ?, ?)`,
-		orderID, userID, content, parentID, now,
-	)
+	saved, err := s.client.Comment.Create().
+		SetOrderID(orderID).
+		SetUserID(userID).
+		SetContent(content).
+		SetParentID(parentID).
+		SetCreatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("创建评论失败: %w", err)
 	}
 
-	id, _ := result.LastInsertId()
-
-	comment := &model.Comment{
-		ID:        id,
+	c := &model.Comment{
+		ID:        int64(saved.ID),
 		OrderID:   orderID,
 		UserID:    userID,
 		Content:   content,
@@ -80,50 +83,42 @@ func (s *CommentService) CreateComment(ctx context.Context, orderID, userID int6
 		CreatedAt: now,
 	}
 
-	s.populateCommentUsername(ctx, comment)
-	return comment, nil
+	s.populateCommentUsername(ctx, c)
+	return c, nil
 }
 
 // ListComments retrieves all comments for a ticket ordered by created_at.
 func (s *CommentService) ListComments(ctx context.Context, orderID int64) ([]model.Comment, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, order_id, user_id, content, parent_id, created_at
-		 FROM comments WHERE order_id = ? ORDER BY created_at ASC`,
-		orderID,
-	)
+	comments, err := s.client.Comment.Query().
+		Where(comment.OrderID(orderID)).
+		Order(comment.ByCreatedAt()).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询评论失败: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
-	var comments []model.Comment
-	for rows.Next() {
-		var c model.Comment
-		if err := rows.Scan(&c.ID, &c.OrderID, &c.UserID, &c.Content, &c.ParentID, &c.CreatedAt); err != nil {
-			return nil, fmt.Errorf("解析评论失败: %w", err)
+	var result []model.Comment
+	for _, c := range comments {
+		mc := model.Comment{
+			ID:        int64(c.ID),
+			OrderID:   c.OrderID,
+			UserID:    c.UserID,
+			Content:   c.Content,
+			ParentID:  c.ParentID,
+			CreatedAt: c.CreatedAt,
 		}
-		comments = append(comments, c)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("遍历评论失败: %w", err)
+		s.populateCommentUsername(ctx, &mc)
+		result = append(result, mc)
 	}
 
-	// Populate usernames
-	for i := range comments {
-		s.populateCommentUsername(ctx, &comments[i])
-	}
-
-	return comments, nil
+	return result, nil
 }
 
 // DeleteComment removes a comment. Only the comment owner can delete it.
 func (s *CommentService) DeleteComment(ctx context.Context, commentID, userID int64, userRole string) error {
-	var c model.Comment
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, user_id FROM comments WHERE id = ?`, commentID,
-	).Scan(&c.ID, &c.UserID)
+	c, err := s.client.Comment.Get(ctx, int(commentID))
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if ent.IsNotFound(err) {
 			return ErrCommentNotFound
 		}
 		return fmt.Errorf("查询评论失败: %w", err)
@@ -135,18 +130,25 @@ func (s *CommentService) DeleteComment(ctx context.Context, commentID, userID in
 	}
 
 	// Delete the comment and any child replies
-	_, err = s.db.ExecContext(ctx, `DELETE FROM comments WHERE id = ? OR parent_id = ?`, commentID, commentID)
+	_, err = s.client.Comment.Delete().
+		Where(comment.ID(int(commentID))).
+		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("删除评论失败: %w", err)
 	}
+
+	// Delete child replies
+	_, _ = s.client.Comment.Delete().
+		Where(comment.ParentID(commentID)).
+		Exec(ctx)
 
 	return nil
 }
 
 // populateCommentUsername fetches the username for a comment.
 func (s *CommentService) populateCommentUsername(ctx context.Context, c *model.Comment) {
-	var username string
-	if err := s.db.QueryRowContext(ctx, `SELECT username FROM users WHERE id = ?`, c.UserID).Scan(&username); err == nil {
-		c.Username = username
+	u, err := s.client.User.Get(ctx, int(c.UserID))
+	if err == nil {
+		c.Username = u.Username
 	}
 }

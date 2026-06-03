@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/mask"
 )
@@ -40,6 +41,7 @@ var validSensitivityLevels = map[string]bool{"low": true, "medium": true, "high"
 
 // MaskRuleService handles mask rule CRUD operations.
 type MaskRuleService struct {
+	client *ent.Client
 	database *db.DB
 	permSvc  *PermissionService
 	auditSvc *AuditService
@@ -47,7 +49,7 @@ type MaskRuleService struct {
 
 // NewMaskRuleService creates a new MaskRuleService.
 func NewMaskRuleService(database *db.DB, permSvc *PermissionService, auditSvc *AuditService) *MaskRuleService {
-	return &MaskRuleService{database: database, permSvc: permSvc, auditSvc: auditSvc}
+	return &MaskRuleService{database: database, client: database.Client(), permSvc: permSvc, auditSvc: auditSvc}
 }
 
 // --- Mask Rules CRUD ---

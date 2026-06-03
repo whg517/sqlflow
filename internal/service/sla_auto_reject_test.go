@@ -66,7 +66,7 @@ func TestSLAService_AutoReject_Breached(t *testing.T) {
 	d := setupSLATestDB(t)
 	notifySvc := NewNotifyService("", "")
 	notifySvc.SetDB(d)
-	slaSvc := NewSLAService(d, notifySvc)
+	slaSvc := NewSLAService(mustWrapDB(d), notifySvc)
 
 	submitterID := createTestUserForSLA(t, ctx, d, "submitter1")
 	dsID := createTestDatasourceForSLA(t, ctx, d)
@@ -134,7 +134,7 @@ func TestSLAService_AutoReject_Breached(t *testing.T) {
 func TestSLAService_AutoReject_Idempotent(t *testing.T) {
 	ctx := context.Background()
 	d := setupSLATestDB(t)
-	slaSvc := NewSLAService(d, nil)
+	slaSvc := NewSLAService(mustWrapDB(d), nil)
 
 	submitterID := createTestUserForSLA(t, ctx, d, "submitter2")
 	dsID := createTestDatasourceForSLA(t, ctx, d)
@@ -173,7 +173,7 @@ func TestSLAService_AutoReject_Idempotent(t *testing.T) {
 func TestSLAService_NoAutoReject_WhenDisabled(t *testing.T) {
 	ctx := context.Background()
 	d := setupSLATestDB(t)
-	slaSvc := NewSLAService(d, nil)
+	slaSvc := NewSLAService(mustWrapDB(d), nil)
 
 	submitterID := createTestUserForSLA(t, ctx, d, "submitter3")
 	dsID := createTestDatasourceForSLA(t, ctx, d)
@@ -219,7 +219,7 @@ func TestSLAService_NoAutoReject_WhenDisabled(t *testing.T) {
 func TestSLAService_NoAutoReject_WhenNotBreached(t *testing.T) {
 	ctx := context.Background()
 	d := setupSLATestDB(t)
-	slaSvc := NewSLAService(d, nil)
+	slaSvc := NewSLAService(mustWrapDB(d), nil)
 
 	submitterID := createTestUserForSLA(t, ctx, d, "submitter4")
 	dsID := createTestDatasourceForSLA(t, ctx, d)
@@ -265,7 +265,7 @@ func TestSLAService_NoAutoReject_WhenNotBreached(t *testing.T) {
 func TestSLAService_ConfigCRUD_WithAutoReject(t *testing.T) {
 	ctx := context.Background()
 	d := setupSLATestDB(t)
-	slaSvc := NewSLAService(d, nil)
+	slaSvc := NewSLAService(mustWrapDB(d), nil)
 
 	// Create config with auto_reject_enabled
 	cfg := &model.SLAConfig{

@@ -10,7 +10,7 @@ import (
 
 func TestGitService_CreateAndList(t *testing.T) {
 	db := setupTestDB(t)
-	gitSvc := NewGitService(db)
+	gitSvc := NewGitService(mustWrapDB(db))
 
 	ctx := context.Background()
 
@@ -63,7 +63,7 @@ func TestGitService_CreateAndList(t *testing.T) {
 
 func TestGitService_PRCreation(t *testing.T) {
 	db := setupTestDB(t)
-	gitSvc := NewGitService(db)
+	gitSvc := NewGitService(mustWrapDB(db))
 
 	ctx := context.Background()
 	userID := createTestUser(t, db, "git_pr_tester")
@@ -98,7 +98,7 @@ func TestGitService_PRCreation(t *testing.T) {
 
 func TestGitService_Delete(t *testing.T) {
 	db := setupTestDB(t)
-	gitSvc := NewGitService(db)
+	gitSvc := NewGitService(mustWrapDB(db))
 
 	ctx := context.Background()
 	userID := createTestUser(t, db, "git_delete_tester")
@@ -141,7 +141,7 @@ func TestGitService_Delete(t *testing.T) {
 
 func TestGitService_ValidationErrors(t *testing.T) {
 	db := setupTestDB(t)
-	gitSvc := NewGitService(db)
+	gitSvc := NewGitService(mustWrapDB(db))
 	ctx := context.Background()
 	userID := createTestUser(t, db, "git_valid_tester")
 
@@ -207,7 +207,7 @@ func TestGitService_ValidationErrors(t *testing.T) {
 
 func TestGitService_GetByID(t *testing.T) {
 	db := setupTestDB(t)
-	gitSvc := NewGitService(db)
+	gitSvc := NewGitService(mustWrapDB(db))
 
 	ctx := context.Background()
 	userID := createTestUser(t, db, "git_get_tester")
@@ -244,7 +244,7 @@ func TestGitService_GetByID(t *testing.T) {
 
 func TestGitService_PopulateGitLinks(t *testing.T) {
 	db := setupTestDB(t)
-	gitSvc := NewGitService(db)
+	gitSvc := NewGitService(mustWrapDB(db))
 
 	ctx := context.Background()
 	userID := createTestUser(t, db, "git_populate_tester")

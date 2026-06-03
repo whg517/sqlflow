@@ -113,7 +113,7 @@ func main() {
 	log.Println("dashboard service initialized")
 
 	// Initialize backup service
-	backupSvc := service.NewBackupService(database.DB, cfg.DB.Path, cfg.Backup)
+	backupSvc := service.NewBackupService(database, cfg.DB.Path, cfg.Backup)
 	log.Println("backup service initialized")
 
 	// Initialize audit report service
@@ -124,7 +124,7 @@ func main() {
 	permReqSvc := service.NewPermissionRequestService(database, permSvc, auditSvc)
 	log.Println("permission request service initialized")
 
-	commentSvc := service.NewCommentService(database.DB)
+	commentSvc := service.NewCommentService(database)
 	log.Println("comment service initialized")
 
 	// Initialize OIDC service
@@ -149,12 +149,12 @@ func main() {
 	log.Println("oidc service initialized")
 
 	// Initialize git service
-	gitSvc := service.NewGitService(database.DB)
+	gitSvc := service.NewGitService(database)
 	log.Println("git service initialized")
 	ticketSvc.SetGitService(gitSvc)
 
 	// Initialize SLA service and scheduler (single-instance, constructor injection)
-	slaSvc := service.NewSLAService(database.DB, notifySvc)
+	slaSvc := service.NewSLAService(database, notifySvc)
 	ticketSvc.SetSLAService(slaSvc)
 
 	slaScheduler := service.NewSLAScheduler(slaSvc, 10*time.Minute)
@@ -167,7 +167,7 @@ func main() {
 	log.Println("api token service initialized")
 
 	// Initialize SQL template service
-	templateSvc := service.NewSQLTemplateService(database.DB)
+	templateSvc := service.NewSQLTemplateService(database)
 	log.Println("sql template service initialized")
 
 	// Initialize snapshot service (SF-FEAT0041)
@@ -206,7 +206,7 @@ func main() {
 	approvalEngine.SetNotifyService(notifySvc)
 	_ = approvalEngine.EnsureDefaultPolicy(context.Background())
 
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, oidcSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, snapshotSvc, approvalEngine, database.DB, cfg, connMgr, poolMgr)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, oidcSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, snapshotSvc, approvalEngine, database, cfg, connMgr, poolMgr)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server

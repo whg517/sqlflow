@@ -3,7 +3,6 @@ package service
 import (
 	"compress/gzip"
 	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"log"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/whg517/sqlflow/config"
+	"github.com/whg517/sqlflow/internal/db"
 )
 
 // BackupInfo represents a single backup file's metadata.
@@ -29,7 +29,7 @@ type BackupInfo struct {
 // BackupService handles SQLite database backups with rotation and optional compression.
 type BackupService struct {
 	mu     sync.Mutex
-	db     *sql.DB
+	db     *db.DB
 	dbPath string
 	cfg    config.BackupConfig
 	cancel context.CancelFunc
@@ -37,7 +37,7 @@ type BackupService struct {
 }
 
 // NewBackupService creates a new BackupService.
-func NewBackupService(db *sql.DB, dbPath string, cfg config.BackupConfig) *BackupService {
+func NewBackupService(db *db.DB, dbPath string, cfg config.BackupConfig) *BackupService {
 	return &BackupService{
 		db:     db,
 		dbPath: dbPath,

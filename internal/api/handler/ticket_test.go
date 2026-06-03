@@ -34,7 +34,8 @@ func setupTicketHandlerTest(t *testing.T) (*echo.Echo, *TicketHandler, *db.DB) {
 	auditSvc := service.NewAuditService(database, 10, 5*time.Second)
 	t.Cleanup(func() { auditSvc.Close() })
 
-	ticketSvc := service.NewTicketService(database.DB, auditSvc, nil)
+	wrapped, _ := db.WrapSQL(database.DB)
+	ticketSvc := service.NewTicketService(wrapped, auditSvc, nil)
 	handler := NewTicketHandler(ticketSvc)
 
 	e := echo.New()

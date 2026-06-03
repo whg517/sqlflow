@@ -9,6 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	esql "entgo.io/ent/dialect/sql"
+	"github.com/whg517/sqlflow/internal/db/ent/gitlink"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -29,17 +33,18 @@ var (
 
 // GitService handles git link management — associating commits/PRs with tickets and audit logs.
 type GitService struct {
-	db *sql.DB
+	database *db.DB
+	client   *ent.Client
 }
 
 // NewGitService creates a new GitService.
-func NewGitService(db *sql.DB) *GitService {
-	return &GitService{db: db}
+func NewGitService(database *db.DB) *GitService {
+	return &GitService{database: database, client: database.Client()}
 }
 
 // CreateGitLinkInput holds the input parameters for creating a git link.
 type CreateGitLinkInput struct {
-	EntityType  string          // "ticket" or "audit_log"
+	EntityType  string            // "ticket" or "audit_log"
 	EntityID    int64
 	LinkType    model.GitLinkType // "commit" or "pr"
 	CommitHash  string
@@ -75,41 +80,48 @@ func (s *GitService) CreateGitLink(ctx context.Context, input CreateGitLinkInput
 	}
 
 	// Check for duplicates: same entity + link_type + commit_hash
-	var existingID int64
-	checkQuery := `SELECT id FROM git_links WHERE entity_type = ? AND entity_id = ? AND link_type = ? AND commit_hash = ? LIMIT 1`
-	checkArgs := []interface{}{input.EntityType, input.EntityID, string(input.LinkType), input.CommitHash}
-	if input.LinkType == model.GitLinkTypePR {
-		checkQuery = `SELECT id FROM git_links WHERE entity_type = ? AND entity_id = ? AND link_type = ? AND pr_number = ? LIMIT 1`
-		checkArgs = []interface{}{input.EntityType, input.EntityID, string(input.LinkType), input.PRNumber}
+	dupQuery := s.client.GitLink.Query().
+		Where(
+			gitlink.EntityType(input.EntityType),
+			gitlink.EntityID(input.EntityID),
+			gitlink.LinkType(string(input.LinkType)),
+		)
+	if input.LinkType == model.GitLinkTypeCommit {
+		dupQuery = dupQuery.Where(gitlink.CommitHash(input.CommitHash))
+	} else {
+		dupQuery = dupQuery.Where(gitlink.PrNumber(input.PRNumber))
 	}
-	err := s.db.QueryRowContext(ctx, checkQuery, checkArgs...).Scan(&existingID)
-	if err == nil {
-		// Duplicate found
-		return nil, ErrGitLinkDuplicate
-	}
-	if err != sql.ErrNoRows {
+	exists, err := dupQuery.Exist(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("check duplicate git link: %w", err)
+	}
+	if exists {
+		return nil, ErrGitLinkDuplicate
 	}
 
 	now := time.Now()
-	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO git_links (entity_type, entity_id, link_type, commit_hash, commit_msg, author_name, author_email, pr_number, pr_title, pr_url, repo_url, branch, created_by, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		input.EntityType, input.EntityID, string(input.LinkType),
-		input.CommitHash, input.CommitMsg, input.AuthorName, input.AuthorEmail,
-		input.PRNumber, input.PRTitle, input.PRURL, input.RepoURL, input.Branch,
-		input.CreatedBy, now,
-	)
+	saved, err := s.client.GitLink.Create().
+		SetEntityType(input.EntityType).
+		SetEntityID(input.EntityID).
+		SetLinkType(string(input.LinkType)).
+		SetCommitHash(input.CommitHash).
+		SetCommitMsg(input.CommitMsg).
+		SetAuthorName(input.AuthorName).
+		SetAuthorEmail(input.AuthorEmail).
+		SetPrNumber(input.PRNumber).
+		SetPrTitle(input.PRTitle).
+		SetPrURL(input.PRURL).
+		SetRepoURL(input.RepoURL).
+		SetBranch(input.Branch).
+		SetCreatedBy(input.CreatedBy).
+		SetCreatedAt(now).
+		Save(ctx)
 	if err != nil {
-		// Check for SQLite unique constraint violation (if any) — currently no unique constraint,
-		// but we check for duplicates at the application level.
 		return nil, fmt.Errorf("创建Git关联失败: %w", err)
 	}
 
-	id, _ := result.LastInsertId()
-
 	link := &model.GitLink{
-		ID:          id,
+		ID:          int64(saved.ID),
 		EntityType:  input.EntityType,
 		EntityID:    input.EntityID,
 		LinkType:    input.LinkType,
@@ -131,23 +143,14 @@ func (s *GitService) CreateGitLink(ctx context.Context, input CreateGitLinkInput
 
 // GetGitLink retrieves a git link by ID.
 func (s *GitService) GetGitLink(ctx context.Context, id int64) (*model.GitLink, error) {
-	link := &model.GitLink{}
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, entity_type, entity_id, link_type, commit_hash, commit_msg, author_name, author_email, pr_number, pr_title, pr_url, repo_url, branch, created_by, created_at
-		 FROM git_links WHERE id = ?`, id,
-	).Scan(
-		&link.ID, &link.EntityType, &link.EntityID, &link.LinkType,
-		&link.CommitHash, &link.CommitMsg, &link.AuthorName, &link.AuthorEmail,
-		&link.PRNumber, &link.PRTitle, &link.PRURL, &link.RepoURL, &link.Branch,
-		&link.CreatedBy, &link.CreatedAt,
-	)
+	gl, err := s.client.GitLink.Get(ctx, int(id))
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if ent.IsNotFound(err) {
 			return nil, ErrGitLinkNotFound
 		}
 		return nil, fmt.Errorf("获取Git关联失败: %w", err)
 	}
-	return link, nil
+	return entGitLinkToModel(gl), nil
 }
 
 // ListGitLinks retrieves all git links for a given entity (ticket or audit_log).
@@ -156,44 +159,28 @@ func (s *GitService) ListGitLinks(ctx context.Context, entityType string, entity
 		return nil, ErrGitLinkEntityTypeInvalid
 	}
 
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, entity_type, entity_id, link_type, commit_hash, commit_msg, author_name, author_email, pr_number, pr_title, pr_url, repo_url, branch, created_by, created_at
-		 FROM git_links WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC`,
-		entityType, entityID,
-	)
+	links, err := s.client.GitLink.Query().
+		Where(gitlink.EntityType(entityType), gitlink.EntityID(entityID)).
+		Order(gitlink.ByCreatedAt(esql.OrderDesc())).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询Git关联列表失败: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
-	links := make([]model.GitLink, 0)
-	for rows.Next() {
-		var link model.GitLink
-		if err := rows.Scan(
-			&link.ID, &link.EntityType, &link.EntityID, &link.LinkType,
-			&link.CommitHash, &link.CommitMsg, &link.AuthorName, &link.AuthorEmail,
-			&link.PRNumber, &link.PRTitle, &link.PRURL, &link.RepoURL, &link.Branch,
-			&link.CreatedBy, &link.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scan git link row: %w", err)
-		}
-		links = append(links, link)
+	var result []model.GitLink
+	for _, gl := range links {
+		result = append(result, *entGitLinkToModel(gl))
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("遍历Git关联列表失败: %w", err)
-	}
-
-	return links, nil
+	return result, nil
 }
 
 // DeleteGitLink deletes a git link by ID.
 func (s *GitService) DeleteGitLink(ctx context.Context, id int64) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM git_links WHERE id = ?`, id)
+	n, err := s.client.GitLink.Delete().Where(gitlink.ID(int(id))).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("删除Git关联失败: %w", err)
 	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
+	if n == 0 {
 		return ErrGitLinkNotFound
 	}
 	return nil
@@ -223,6 +210,7 @@ func (s *GitService) PopulateGitLinks(ctx context.Context, ticket *model.Ticket)
 }
 
 // BatchPopulateGitLinks fetches git links for multiple tickets in a single query.
+// Uses raw SQL for the IN clause — same pattern as Phase 3 ListTickets.
 func (s *GitService) BatchPopulateGitLinks(ctx context.Context, tickets []model.Ticket) {
 	if len(tickets) == 0 {
 		return
@@ -234,7 +222,7 @@ func (s *GitService) BatchPopulateGitLinks(ctx context.Context, tickets []model.
 		idMap[t.ID] = i
 	}
 
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.database.QueryContext(ctx,
 		`SELECT id, entity_type, entity_id, link_type, commit_hash, commit_msg, author_name, author_email, pr_number, pr_title, pr_url, repo_url, branch, created_by, created_at
 		 FROM git_links WHERE entity_type = 'ticket' AND entity_id IN (`+strings.Join(ids, ",")+`) ORDER BY created_at DESC`,
 	)
@@ -255,5 +243,26 @@ func (s *GitService) BatchPopulateGitLinks(ctx context.Context, tickets []model.
 		if idx, ok := idMap[link.EntityID]; ok {
 			tickets[idx].GitLinks = append(tickets[idx].GitLinks, link)
 		}
+	}
+}
+
+// entGitLinkToModel converts an ent GitLink to a model.GitLink.
+func entGitLinkToModel(gl *ent.GitLink) *model.GitLink {
+	return &model.GitLink{
+		ID:          int64(gl.ID),
+		EntityType:  gl.EntityType,
+		EntityID:    gl.EntityID,
+		LinkType:    model.GitLinkType(gl.LinkType),
+		CommitHash:  gl.CommitHash,
+		CommitMsg:   gl.CommitMsg,
+		AuthorName:  gl.AuthorName,
+		AuthorEmail: gl.AuthorEmail,
+		PRNumber:    gl.PrNumber,
+		PRTitle:     gl.PrTitle,
+		PRURL:       gl.PrURL,
+		RepoURL:     gl.RepoURL,
+		Branch:      gl.Branch,
+		CreatedBy:   gl.CreatedBy,
+		CreatedAt:   gl.CreatedAt,
 	}
 }

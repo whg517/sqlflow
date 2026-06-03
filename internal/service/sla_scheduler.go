@@ -80,7 +80,7 @@ func (s *SLAScheduler) loop() {
 
 // setMissingDeadlines sets SLA deadlines for PENDING_APPROVAL tickets that don't have one.
 func (s *SLAScheduler) setMissingDeadlines(ctx context.Context) error {
-	rows, err := s.slaSvc.db.QueryContext(ctx,
+	rows, err := s.slaSvc.database.QueryContext(ctx,
 		`SELECT id, risk_level FROM tickets WHERE status = 'PENDING_APPROVAL' AND sla_deadline IS NULL`)
 	if err != nil {
 		return err
