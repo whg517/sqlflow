@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"context"
 	"testing"
 
 	"github.com/whg517/sqlflow/internal/driver"
@@ -112,27 +113,27 @@ func TestMySQLDriver_NotConnected(t *testing.T) {
 	d := &MySQLDriver{}
 
 	// All methods should return error when not connected
-	if err := d.Ping(nil); err == nil {
+	if err := d.Ping(context.TODO()); err == nil {
 		t.Error("Ping should fail when not connected")
 	}
 
-	if _, err := d.ListDatabases(nil); err == nil {
+	if _, err := d.ListDatabases(context.TODO()); err == nil {
 		t.Error("ListDatabases should fail when not connected")
 	}
 
-	if _, err := d.ListTables(nil, "test"); err == nil {
+	if _, err := d.ListTables(context.TODO(), "test"); err == nil {
 		t.Error("ListTables should fail when not connected")
 	}
 
-	if _, err := d.GetColumns(nil, "test", "users"); err == nil {
+	if _, err := d.GetColumns(context.TODO(), "test", "users"); err == nil {
 		t.Error("GetColumns should fail when not connected")
 	}
 
-	if _, err := d.ExecuteQuery(nil, "test", "SELECT 1", 10); err == nil {
+	if _, err := d.ExecuteQuery(context.TODO(), "test", "SELECT 1", 10); err == nil {
 		t.Error("ExecuteQuery should fail when not connected")
 	}
 
-	if _, err := d.ExecuteStatement(nil, "test", "INSERT INTO t VALUES (1)"); err == nil {
+	if _, err := d.ExecuteStatement(context.TODO(), "test", "INSERT INTO t VALUES (1)"); err == nil {
 		t.Error("ExecuteStatement should fail when not connected")
 	}
 }

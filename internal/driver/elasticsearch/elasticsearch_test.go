@@ -1,6 +1,7 @@
 package elasticsearch
 
 import (
+	"context"
 	"testing"
 
 	"github.com/whg517/sqlflow/internal/driver"
@@ -117,29 +118,29 @@ func TestESDriver_Parse(t *testing.T) {
 func TestESDriver_NotConnected(t *testing.T) {
 	d := &ESDriver{}
 
-	if err := d.Ping(nil); err == nil {
+	if err := d.Ping(context.TODO()); err == nil {
 		t.Error("Ping() should fail when not connected")
 	}
-	if _, err := d.ListDatabases(nil); err == nil {
+	if _, err := d.ListDatabases(context.TODO()); err == nil {
 		t.Error("ListDatabases() should fail when not connected")
 	}
-	if _, err := d.ListTables(nil, ""); err == nil {
+	if _, err := d.ListTables(context.TODO(), ""); err == nil {
 		t.Error("ListTables() should fail when not connected")
 	}
-	if _, err := d.GetColumns(nil, "", "test"); err == nil {
+	if _, err := d.GetColumns(context.TODO(), "", "test"); err == nil {
 		t.Error("GetColumns() should fail when not connected")
 	}
-	if _, err := d.ExecuteQuery(nil, "", `{"index":"test","body":{"query":{"match_all":{}}}}`, 10); err == nil {
+	if _, err := d.ExecuteQuery(context.TODO(), "", `{"index":"test","body":{"query":{"match_all":{}}}}`, 10); err == nil {
 		t.Error("ExecuteQuery() should fail when not connected")
 	}
-	if _, err := d.ExecuteStatement(nil, "", ""); err == nil {
+	if _, err := d.ExecuteStatement(context.TODO(), "", ""); err == nil {
 		t.Error("ExecuteStatement() should fail (not supported)")
 	}
 }
 
 func TestESDriver_ExecuteStatement_NotSupported(t *testing.T) {
 	d := &ESDriver{}
-	_, err := d.ExecuteStatement(nil, "test", `{"operation":"delete","index":"test"}`)
+	_, err := d.ExecuteStatement(context.TODO(), "test", `{"operation":"delete","index":"test"}`)
 	if err == nil {
 		t.Error("ExecuteStatement should return error")
 	}
@@ -147,7 +148,7 @@ func TestESDriver_ExecuteStatement_NotSupported(t *testing.T) {
 
 func TestESDriver_ExecuteQuery_InvalidJSON(t *testing.T) {
 	d := &ESDriver{}
-	_, err := d.ExecuteQuery(nil, "", "not json", 10)
+	_, err := d.ExecuteQuery(context.TODO(), "", "not json", 10)
 	if err == nil {
 		t.Error("ExecuteQuery should fail for invalid JSON")
 	}
@@ -155,7 +156,7 @@ func TestESDriver_ExecuteQuery_InvalidJSON(t *testing.T) {
 
 func TestESDriver_ExecuteQuery_NoIndex(t *testing.T) {
 	d := &ESDriver{}
-	_, err := d.ExecuteQuery(nil, "", `{"body":{"query":{"match_all":{}}}}`, 10)
+	_, err := d.ExecuteQuery(context.TODO(), "", `{"body":{"query":{"match_all":{}}}}`, 10)
 	if err == nil {
 		t.Error("ExecuteQuery should fail without index")
 	}
@@ -163,7 +164,7 @@ func TestESDriver_ExecuteQuery_NoIndex(t *testing.T) {
 
 func TestESDriver_Connect_NoURLs(t *testing.T) {
 	d := &ESDriver{}
-	err := d.Connect(nil, &driver.Config{})
+	err := d.Connect(context.TODO(), &driver.Config{})
 	if err == nil {
 		t.Error("Connect() should fail without URLs")
 	}

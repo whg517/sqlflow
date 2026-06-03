@@ -1,6 +1,7 @@
 package mongodb
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -111,22 +112,22 @@ func TestMongoDBDriver_Parse(t *testing.T) {
 func TestMongoDBDriver_NotConnected(t *testing.T) {
 	d := &MongoDBDriver{}
 
-	if err := d.Ping(nil); err == nil {
+	if err := d.Ping(context.TODO()); err == nil {
 		t.Error("Ping() should fail when not connected")
 	}
-	if _, err := d.ListDatabases(nil); err == nil {
+	if _, err := d.ListDatabases(context.TODO()); err == nil {
 		t.Error("ListDatabases() should fail when not connected")
 	}
-	if _, err := d.ListTables(nil, "mydb"); err == nil {
+	if _, err := d.ListTables(context.TODO(), "mydb"); err == nil {
 		t.Error("ListTables() should fail when not connected")
 	}
-	if _, err := d.GetColumns(nil, "mydb", "mycoll"); err == nil {
+	if _, err := d.GetColumns(context.TODO(), "mydb", "mycoll"); err == nil {
 		t.Error("GetColumns() should fail when not connected")
 	}
-	if _, err := d.ExecuteQuery(nil, "mydb", `{"operation":"find","collection":"c"}`, 10); err == nil {
+	if _, err := d.ExecuteQuery(context.TODO(), "mydb", `{"operation":"find","collection":"c"}`, 10); err == nil {
 		t.Error("ExecuteQuery() should fail when not connected")
 	}
-	if _, err := d.ExecuteStatement(nil, "mydb", `{"operation":"insert","collection":"c","document":{}}`); err == nil {
+	if _, err := d.ExecuteStatement(context.TODO(), "mydb", `{"operation":"insert","collection":"c","document":{}}`); err == nil {
 		t.Error("ExecuteStatement() should fail when not connected")
 	}
 }
@@ -254,7 +255,7 @@ func TestIsURI(t *testing.T) {
 
 func TestMongoDBDriver_Connect_NoURI(t *testing.T) {
 	d := &MongoDBDriver{}
-	err := d.Connect(nil, &driver.Config{})
+	err := d.Connect(context.TODO(), &driver.Config{})
 	if err == nil {
 		t.Error("Connect() should fail without URI")
 	}
@@ -265,7 +266,7 @@ func TestMongoDBDriver_Connect_NoURI(t *testing.T) {
 
 func TestMongoDBDriver_ExecuteQuery_NoDatabase(t *testing.T) {
 	d := &MongoDBDriver{}
-	_, err := d.ExecuteQuery(nil, "", `{"operation":"find","collection":"c"}`, 10)
+	_, err := d.ExecuteQuery(context.TODO(), "", `{"operation":"find","collection":"c"}`, 10)
 	if err == nil {
 		t.Error("ExecuteQuery() should fail without database")
 	}
@@ -273,7 +274,7 @@ func TestMongoDBDriver_ExecuteQuery_NoDatabase(t *testing.T) {
 
 func TestMongoDBDriver_ExecuteStatement_InvalidJSON(t *testing.T) {
 	d := &MongoDBDriver{}
-	_, err := d.ExecuteStatement(nil, "mydb", "not json")
+	_, err := d.ExecuteStatement(context.TODO(), "mydb", "not json")
 	if err == nil {
 		t.Error("ExecuteStatement() should fail for invalid JSON")
 	}

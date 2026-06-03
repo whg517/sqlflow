@@ -1,6 +1,7 @@
 package postgresql
 
 import (
+	"context"
 	"testing"
 
 	"github.com/whg517/sqlflow/internal/driver"
@@ -74,32 +75,32 @@ func TestPostgreSQLDriver_NotConnected(t *testing.T) {
 	d := &PostgreSQLDriver{}
 
 	// All operations that require a connection should return "not connected" error.
-	err := d.Ping(nil)
+	err := d.Ping(context.TODO())
 	if err == nil {
 		t.Error("Ping() should fail when not connected")
 	}
 
-	_, err = d.ListDatabases(nil)
+	_, err = d.ListDatabases(context.TODO())
 	if err == nil {
 		t.Error("ListDatabases() should fail when not connected")
 	}
 
-	_, err = d.ListTables(nil, "public")
+	_, err = d.ListTables(context.TODO(), "public")
 	if err == nil {
 		t.Error("ListTables() should fail when not connected")
 	}
 
-	_, err = d.GetColumns(nil, "public", "users")
+	_, err = d.GetColumns(context.TODO(), "public", "users")
 	if err == nil {
 		t.Error("GetColumns() should fail when not connected")
 	}
 
-	_, err = d.ExecuteQuery(nil, "public", "SELECT 1", 10)
+	_, err = d.ExecuteQuery(context.TODO(), "public", "SELECT 1", 10)
 	if err == nil {
 		t.Error("ExecuteQuery() should fail when not connected")
 	}
 
-	_, err = d.ExecuteStatement(nil, "public", "SELECT 1")
+	_, err = d.ExecuteStatement(context.TODO(), "public", "SELECT 1")
 	if err == nil {
 		t.Error("ExecuteStatement() should fail when not connected")
 	}

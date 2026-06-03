@@ -105,8 +105,7 @@ func (s *QueryService) ExportQuery(ctx context.Context, userID int64, username, 
 		}
 		drvResult, err := d.ExecuteQuery(ctx, dbName, sqlContent, exportRowLimit+1)
 		if err != nil {
-			result = nil
-			err = fmt.Errorf("driver execute query: %w", err)
+			return nil, fmt.Errorf("driver execute query: %w", err)
 		} else {
 			result = &QueryResult{
 				Columns:       drvResult.Columns,
