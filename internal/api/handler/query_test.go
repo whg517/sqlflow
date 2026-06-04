@@ -362,7 +362,7 @@ func TestQueryHandler_ListHistory_WithRecords(t *testing.T) {
 			ExecutionTime: 10,
 			ResultRows:    1,
 		}
-		if err := historySvc.CreateHistory(ctx, history); err != nil {
+		if _, err := historySvc.CreateHistory(ctx, history); err != nil {
 			t.Fatalf("create history %d: %v", i, err)
 		}
 	}
@@ -412,7 +412,7 @@ func TestQueryHandler_ListHistory_Pagination(t *testing.T) {
 			ExecutionTime: int64(i * 10),
 			ResultRows:    1,
 		}
-		if err := historySvc.CreateHistory(ctx, history); err != nil {
+		if _, err := historySvc.CreateHistory(ctx, history); err != nil {
 			t.Fatalf("create history %d: %v", i, err)
 		}
 	}
@@ -481,7 +481,7 @@ func TestQueryHandler_ListHistory_UserIsolation(t *testing.T) {
 			UserID: userA, DatasourceID: ds.ID, Database: "db",
 			SQLContent: fmt.Sprintf("SELECT %d", i), SQLSummary: "s", DBType: "mysql",
 		}
-		if err := historySvc.CreateHistory(ctx, history); err != nil {
+		if _, err := historySvc.CreateHistory(ctx, history); err != nil {
 			t.Fatalf("create history: %v", err)
 		}
 	}
@@ -493,7 +493,7 @@ func TestQueryHandler_ListHistory_UserIsolation(t *testing.T) {
 			UserID: userB, DatasourceID: ds.ID, Database: "db",
 			SQLContent: "SELECT 999", SQLSummary: "s", DBType: "mysql",
 		}
-		if err := historySvc.CreateHistory(ctx, history); err != nil {
+		if _, err := historySvc.CreateHistory(ctx, history); err != nil {
 			t.Fatalf("create history: %v", err)
 		}
 	}
