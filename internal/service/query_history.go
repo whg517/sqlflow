@@ -25,8 +25,8 @@ func NewQueryHistoryService(database *db.DB) *QueryHistoryService {
 }
 
 // CreateHistory inserts a new query history record and auto-cleans old records.
-func (s *QueryHistoryService) CreateHistory(ctx context.Context, h *model.QueryHistory) error {
-	_, err := s.client.QueryHistory.Create().
+func (s *QueryHistoryService) CreateHistory(ctx context.Context, h *model.QueryHistory) (int64, error) {
+	saved, err := s.client.QueryHistory.Create().
 		SetUserID(h.UserID).
 		SetDatasourceID(h.DatasourceID).
 		SetDatabase(h.Database).
@@ -38,13 +38,15 @@ func (s *QueryHistoryService) CreateHistory(ctx context.Context, h *model.QueryH
 		SetAffectedRows(h.AffectedRows).
 		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("insert query history: %w", err)
+		return 0, fmt.Errorf("insert query history: %w", err)
 	}
+
+	h.ID = int64(saved.ID)
 
 	// Auto-cleanup: keep only the latest 200 records per user
 	go s.cleanupOldRecords(h.UserID)
 
-	return nil
+	return h.ID, nil
 }
 
 // ListHistory returns paginated query history for a user.

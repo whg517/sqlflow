@@ -52,6 +52,7 @@ type QueryResult struct {
 	Desensitized       bool                     `json:"desensitized"`
 	DesensitizedFields []string                 `json:"desensitized_fields,omitempty"`
 	Warnings           []string                 `json:"warnings,omitempty"`
+	HistoryID          int64                    `json:"history_id,omitempty"`
 }
 
 // AuditRecord holds data for writing an audit log entry.
@@ -268,7 +269,11 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 		ResultRows:    result.Total,
 		AffectedRows:  result.AffectedRows,
 	}
-	_ = s.historySvc.CreateHistory(ctx, history)
+	if historyID, err := s.historySvc.CreateHistory(ctx, history); err != nil {
+		log.Printf("create query history: %v", err)
+	} else {
+		result.HistoryID = historyID
+	}
 
 	// Write audit log for successful query
 	s.auditSvc.Write(ctx, AuditRecord{
@@ -740,18 +745,65 @@ func (s *QueryService) ExplainQuery(ctx context.Context, userID int64, role stri
 		}
 	}
 
-	// Build pool config
+	// Get database name
+	dbName := database
+	if dbName == "" {
+		dbName = ds.Database
+		if dbName == "" {
+			dbName = "information_schema"
+		}
+	}
+
+	// Execute EXPLAIN using the same connection path as ExecuteQuery
+	if s.poolMgr != nil {
+		// Use Driver abstraction (preferred path)
+		adapter := newDataSourceAdapter(ds)
+		cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+		if err != nil {
+			return nil, err
+		}
+		d, err := s.poolMgr.Get(ctx, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("connect mysql: %w", err)
+		}
+		drvResult, err := d.ExecuteQuery(ctx, dbName, "EXPLAIN "+explainSQL, 100)
+		if err != nil {
+			return nil, fmt.Errorf("执行 EXPLAIN 失败: %w", err)
+		}
+
+		// Convert generic rows to ExplainRow structs
+		plan := make([]ExplainRow, 0, len(drvResult.Rows))
+		for _, row := range drvResult.Rows {
+			plan = append(plan, explainRowFromMap(row))
+		}
+
+		explainColumns := []string{"id", "select_type", "table", "partitions", "type", "possible_keys", "key", "key_len", "ref", "rows", "filtered", "Extra"}
+		formatted := formatExplainTable(explainColumns, plan)
+
+		// Write audit log (best-effort)
+		s.auditSvc.Write(ctx, AuditRecord{
+			UserID:       userID,
+			Action:       "explain",
+			DatasourceID: datasourceID,
+			Database:     database,
+			SQLContent:   sqlContent,
+			SQLSummary:   truncateSQL(sqlContent),
+		})
+
+		return &ExplainResult{
+			Query:        sqlContent,
+			DatasourceID: datasourceID,
+			Plan:         plan,
+			Formatted:    formatted,
+		}, nil
+	}
+
+	// Legacy fallback using connMgr
 	poolCfg := connpool.MySQLPoolConfig{
 		MaxOpen:     ds.MaxOpen,
 		MaxIdle:     ds.MaxIdle,
 		MaxLifetime: ds.MaxLifetime,
 		MaxIdleTime: ds.MaxIdleTime,
-	}
-
-	// Get connection
-	dbName := database
-	if dbName == "" {
-		dbName = "information_schema"
 	}
 
 	targetDB, err := s.connMgr.GetMySQL(datasourceID, ds.Host, ds.Port, ds.Username, password, dbName, poolCfg)
@@ -805,7 +857,6 @@ func (s *QueryService) ExplainQuery(ctx context.Context, userID int64, role stri
 		return nil, fmt.Errorf("遍历 EXPLAIN 结果失败: %w", err)
 	}
 
-	// Build formatted text table
 	formatted := formatExplainTable(explainColumns, plan)
 
 	// Write audit log (best-effort)
@@ -911,6 +962,117 @@ func derefOrNull(s *string) string {
 		return "NULL"
 	}
 	return *s
+}
+
+// explainRowFromMap converts a map[string]interface{} (from driver.QueryResult) to ExplainRow.
+func explainRowFromMap(row map[string]interface{}) ExplainRow {
+	r := ExplainRow{}
+	if v, ok := row["id"]; ok {
+		r.ID = toInt64(v)
+	}
+	if v, ok := row["select_type"]; ok {
+		r.SelectType = toString(v)
+	}
+	if v, ok := row["table"]; ok {
+		if s := toString(v); s != "" && s != "NULL" {
+			r.Table = s
+		}
+	}
+	if v, ok := row["partitions"]; ok {
+		if s := toString(v); s != "" && s != "NULL" {
+			r.Partitions = &s
+		}
+	}
+	if v, ok := row["type"]; ok {
+		r.Type = toString(v)
+	}
+	if v, ok := row["possible_keys"]; ok {
+		if s := toString(v); s != "" && s != "NULL" {
+			r.PossibleKeys = &s
+		}
+	}
+	if v, ok := row["key"]; ok {
+		if s := toString(v); s != "" && s != "NULL" {
+			r.Key = &s
+		}
+	}
+	if v, ok := row["key_len"]; ok {
+		if s := toString(v); s != "" && s != "NULL" {
+			r.KeyLen = &s
+		}
+	}
+	if v, ok := row["ref"]; ok {
+		if s := toString(v); s != "" && s != "NULL" {
+			r.Ref = &s
+		}
+	}
+	if v, ok := row["rows"]; ok {
+		r.Rows = toInt64(v)
+	}
+	if v, ok := row["filtered"]; ok {
+		r.Filtered = toFloat64Val(v)
+	}
+	if v, ok := row["Extra"]; ok {
+		if s := toString(v); s != "" && s != "NULL" {
+			r.Extra = &s
+		}
+	}
+	return r
+}
+
+func toInt64(v interface{}) int64 {
+	switch n := v.(type) {
+	case int64:
+		return n
+	case int:
+		return int64(n)
+	case float64:
+		return int64(n)
+	case []byte:
+		var i int64
+		fmt.Sscanf(string(n), "%d", &i)
+		return i
+	case string:
+		var i int64
+		fmt.Sscanf(n, "%d", &i)
+		return i
+	default:
+		return 0
+	}
+}
+
+func toString(v interface{}) string {
+	switch s := v.(type) {
+	case string:
+		return s
+	case []byte:
+		return string(s)
+	case nil:
+		return ""
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func toFloat64Val(v interface{}) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case []byte:
+		var f float64
+		fmt.Sscanf(string(n), "%f", &f)
+		return f
+	case string:
+		var f float64
+		fmt.Sscanf(n, "%f", &f)
+		return f
+	default:
+		return 0
+	}
 }
 
 // truncateSQL returns the first 100 characters of a SQL string.

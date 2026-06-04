@@ -426,14 +426,31 @@ func (s *AuditReportService) GetPerformanceReport(ctx context.Context, params Re
 	}
 
 	// P95 execution time (approximate via subquery with LIMIT)
+	// First count qualifying rows to guard against negative OFFSET
+	var p95Count int64
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT execution_time_ms FROM audit_logs WHERE created_at >= ? AND execution_time_ms > 0 ORDER BY execution_time_ms ASC LIMIT 1 OFFSET (SELECT COUNT(*) FROM audit_logs WHERE created_at >= ? AND execution_time_ms > 0) * 95 / 100 - 1`, startDate, startDate,
-	).Scan(&stats.P95ExecutionMs)
+		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= ? AND execution_time_ms > 0`, startDate,
+	).Scan(&p95Count)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("P95 query failed: %v", err)
-		}
+		log.Printf("P95 count query failed: %v", err)
 		stats.P95ExecutionMs = 0
+	} else if p95Count < 2 {
+		// Not enough data for a meaningful percentile
+		stats.P95ExecutionMs = 0
+	} else {
+		offset := p95Count*95/100 - 1
+		if offset < 0 {
+			offset = 0
+		}
+		err = s.database.DB.QueryRowContext(ctx,
+			`SELECT execution_time_ms FROM audit_logs WHERE created_at >= ? AND execution_time_ms > 0 ORDER BY execution_time_ms ASC LIMIT 1 OFFSET ?`, startDate, offset,
+		).Scan(&stats.P95ExecutionMs)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				log.Printf("P95 query failed: %v", err)
+			}
+			stats.P95ExecutionMs = 0
+		}
 	}
 
 	// Total result rows

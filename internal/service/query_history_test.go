@@ -26,7 +26,7 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 			ResultRows:    10,
 			AffectedRows:  0,
 		}
-		if err := svc.CreateHistory(context.Background(), h); err != nil {
+		if _, err := svc.CreateHistory(context.Background(), h); err != nil {
 			t.Fatalf("CreateHistory: %v", err)
 		}
 
@@ -65,7 +65,7 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 				ResultRows:    1,
 				AffectedRows:  0,
 			}
-			if err := svc.CreateHistory(context.Background(), h); err != nil {
+			if _, err := svc.CreateHistory(context.Background(), h); err != nil {
 				t.Fatalf("CreateHistory %d: %v", i, err)
 			}
 		}
@@ -150,7 +150,7 @@ func TestQueryHistoryService_DeleteHistory(t *testing.T) {
 			UserID: userID, DatasourceID: dsID, Database: "db",
 			SQLContent: "SELECT 1", SQLSummary: "SELECT 1", DBType: "mysql",
 		}
-		if err := svc.CreateHistory(context.Background(), h); err != nil {
+		if _, err := svc.CreateHistory(context.Background(), h); err != nil {
 			t.Fatalf("CreateHistory: %v", err)
 		}
 
@@ -180,7 +180,7 @@ func TestQueryHistoryService_DeleteHistory(t *testing.T) {
 			UserID: userID, DatasourceID: dsID, Database: "db",
 			SQLContent: "SELECT 2", SQLSummary: "SELECT 2", DBType: "mysql",
 		}
-		svc.CreateHistory(context.Background(), h)
+		_, _ = svc.CreateHistory(context.Background(), h)
 
 		list, _, _ := svc.ListHistory(context.Background(), userID, 1, 10, "")
 		recordID := list[0].ID
@@ -212,7 +212,7 @@ func TestQueryHistoryService_ClearHistory(t *testing.T) {
 			UserID: userID, DatasourceID: dsID, Database: "db",
 			SQLContent: "SELECT 1", SQLSummary: "SELECT 1", DBType: "mysql",
 		}
-		if err := svc.CreateHistory(context.Background(), h); err != nil {
+		if _, err := svc.CreateHistory(context.Background(), h); err != nil {
 			t.Fatalf("CreateHistory %d: %v", i, err)
 		}
 	}
@@ -243,7 +243,7 @@ func TestQueryHistoryService_ClearHistory(t *testing.T) {
 				UserID: otherID, DatasourceID: dsID, Database: "db",
 				SQLContent: "SELECT 2", SQLSummary: "SELECT 2", DBType: "mysql",
 			}
-			svc.CreateHistory(context.Background(), h)
+			_, _ = svc.CreateHistory(context.Background(), h)
 		}
 
 		// Clear first user (already cleared, but idempotent)
@@ -275,7 +275,7 @@ func TestQueryHistoryService_CreateHistoryWithZeroValues(t *testing.T) {
 			ResultRows:    0,
 			AffectedRows:  0,
 		}
-		if err := svc.CreateHistory(context.Background(), h); err != nil {
+		if _, err := svc.CreateHistory(context.Background(), h); err != nil {
 			t.Fatalf("CreateHistory: %v", err)
 		}
 

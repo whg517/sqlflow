@@ -31,7 +31,7 @@ func TestPerformanceService_ListSlowQueries(t *testing.T) {
 			SQLContent: r.sql, SQLSummary: r.sql, DBType: "mysql",
 			ExecutionTime: r.executionTime,
 		}
-		if err := svc.CreateHistory(context.Background(), h); err != nil {
+		if _, err := svc.CreateHistory(context.Background(), h); err != nil {
 			t.Fatalf("CreateHistory: %v", err)
 		}
 	}
@@ -145,7 +145,7 @@ func TestPerformanceService_GetPerformanceStats(t *testing.T) {
 			SQLContent: r.sql, SQLSummary: r.sql, DBType: "mysql",
 			ExecutionTime: r.executionTime,
 		}
-		if err := svc.CreateHistory(context.Background(), h); err != nil {
+		if _, err := svc.CreateHistory(context.Background(), h); err != nil {
 			t.Fatalf("CreateHistory: %v", err)
 		}
 	}

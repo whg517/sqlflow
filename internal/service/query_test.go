@@ -952,7 +952,7 @@ func TestQueryHistory_CreateAndList(t *testing.T) {
 		DBType: "mysql", ExecutionTime: 42, ResultRows: 5, AffectedRows: 0,
 	}
 
-	if err := svc.CreateHistory(ctx, history); err != nil {
+	if _, err := svc.CreateHistory(ctx, history); err != nil {
 		t.Fatalf("CreateHistory() error: %v", err)
 	}
 
@@ -984,7 +984,7 @@ func TestQueryHistory_Delete(t *testing.T) {
 		UserID: 1, DatasourceID: 1, Database: "testdb",
 		SQLContent: "SELECT 1", SQLSummary: "SELECT 1", DBType: "mysql",
 	}
-	if err := svc.CreateHistory(ctx, history); err != nil {
+	if _, err := svc.CreateHistory(ctx, history); err != nil {
 		t.Fatalf("CreateHistory() error: %v", err)
 	}
 
@@ -1007,7 +1007,7 @@ func TestQueryHistory_Delete(t *testing.T) {
 			UserID: 1, DatasourceID: 1, Database: "testdb",
 			SQLContent: "SELECT 2", SQLSummary: "SELECT 2", DBType: "mysql",
 		}
-		svc.CreateHistory(ctx, history2)
+		_, _ = svc.CreateHistory(ctx, history2)
 		list2, _, _ := svc.ListHistory(ctx, 1, 1, 1, "")
 		if len(list2) == 0 {
 			t.Fatal("expected at least one history record")
@@ -1030,7 +1030,7 @@ func TestQueryHistory_Clear(t *testing.T) {
 			UserID: 1, DatasourceID: 1, Database: "testdb",
 			SQLContent: fmt.Sprintf("SELECT %d", i), SQLSummary: fmt.Sprintf("SELECT %d", i), DBType: "mysql",
 		}
-		if err := svc.CreateHistory(ctx, history); err != nil {
+		if _, err := svc.CreateHistory(ctx, history); err != nil {
 			t.Fatalf("CreateHistory() error: %v", err)
 		}
 	}
@@ -1059,7 +1059,7 @@ func TestQueryHistory_Pagination(t *testing.T) {
 			UserID: 1, DatasourceID: 1, Database: "testdb",
 			SQLContent: fmt.Sprintf("SELECT %d", i), SQLSummary: fmt.Sprintf("SELECT %d", i), DBType: "mysql",
 		}
-		if err := svc.CreateHistory(ctx, history); err != nil {
+		if _, err := svc.CreateHistory(ctx, history); err != nil {
 			t.Fatalf("CreateHistory() error: %v", err)
 		}
 	}
