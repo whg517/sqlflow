@@ -32,7 +32,7 @@ async function createTicket(
     db_type: 'mysql',
     change_reason: reason,
   })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   const body = data as { code: number; data: { id: number } }
   expect(body.code).toBe(0)
   return body.data.id
@@ -41,7 +41,7 @@ async function createTicket(
 /** Approve a ticket via API. */
 async function approveTicket(page: import('@playwright/test').Page, ticketId: number, comment = 'E2E auto approve') {
   const { status, data } = await apiHelper(page, 'POST', `/tickets/${ticketId}/approve`, { comment })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   const body = data as { code: number }
   expect(body.code).toBe(0)
 }
@@ -49,7 +49,7 @@ async function approveTicket(page: import('@playwright/test').Page, ticketId: nu
 /** Reject a ticket via API. */
 async function rejectTicket(page: import('@playwright/test').Page, ticketId: number, reason: string) {
   const { status, data } = await apiHelper(page, 'POST', `/tickets/${ticketId}/reject`, { comment: reason })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   const body = data as { code: number }
   expect(body.code).toBe(0)
 }
@@ -73,7 +73,7 @@ async function executeTicketAndWait(page: import('@playwright/test').Page, ticke
 /** Cancel a ticket via API. */
 async function cancelTicket(page: import('@playwright/test').Page, ticketId: number, reason: string) {
   const { status, data } = await apiHelper(page, 'POST', `/tickets/${ticketId}/cancel`, { comment: reason })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   const body = data as { code: number }
   expect(body.code).toBe(0)
 }

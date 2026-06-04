@@ -33,7 +33,7 @@ test.describe('数据源切换后查询（真实后端）', () => {
     await editor.click()
     await page.keyboard.type('SELECT 1', { delay: 30 })
 
-    const executeBtn = page.getByRole('button', { name: '执行' })
+    const executeBtn = page.getByRole('button', { name: '执行' }).first()
     await executeBtn.click()
 
     await Promise.race([

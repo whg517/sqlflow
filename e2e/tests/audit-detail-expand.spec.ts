@@ -6,12 +6,35 @@ import { test, expect, loginViaUI, apiHelper, getFirstDatasourceId } from '../su
 
 test.describe.configure({ timeout: 45_000 })
 
+/** Execute a query to ensure audit log has data */
+async function ensureAuditData(page: import('@playwright/test').Page) {
+  const token = await page.evaluate(() => localStorage.getItem('token') ?? '')
+  const ds = await page.evaluate(async ({ baseUrl, token }) => {
+    const r = await fetch(`${baseUrl}/api/datasources`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const body = await r.json()
+    const list = body.data ?? []
+    return list.find((d: { type: string; status: string }) => d.type === 'mysql' && d.status === 'active')
+      ?? list.find((d: { status: string }) => d.status === 'active')
+  }, { baseUrl: process.env.E2E_BASE_URL ?? 'http://localhost:8080', token })
+  if (!ds) return
+  await page.evaluate(async ({ baseUrl, token, dsId }) => {
+    await fetch(`${baseUrl}/api/query/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ datasource_id: dsId, database: 'testdb', sql: 'SELECT 1 AS e2e_audit_seed' }),
+    })
+  }, { baseUrl: process.env.E2E_BASE_URL ?? 'http://localhost:8080', token, dsId: ds.id })
+}
+
 test.describe('审计展开详情 + 关联跳转（真实后端）', () => {
   test.beforeEach(async ({ page }) => {
     await loginViaUI(page)
   })
 
   test('展开详情面板 - 显示完整 SQL、执行耗时、影响行数', async ({ page }) => {
+    await ensureAuditData(page)
     await page.goto('/audit')
     await page.waitForURL('**/audit')
 
@@ -52,6 +75,7 @@ test.describe('审计展开详情 + 关联跳转（真实后端）', () => {
   })
 
   test('展开详情面板 - 显示 IP 地址', async ({ page }) => {
+    await ensureAuditData(page)
     await page.goto('/audit')
     await page.waitForURL('**/audit')
 
@@ -80,6 +104,7 @@ test.describe('审计展开详情 + 关联跳转（真实后端）', () => {
   })
 
   test('复制 SQL 按钮功能', async ({ page }) => {
+    await ensureAuditData(page)
     await page.goto('/audit')
     await page.waitForURL('**/audit')
 
@@ -128,6 +153,7 @@ test.describe('审计展开详情 + 关联跳转（真实后端）', () => {
   })
 
   test('切换展开项 - 只显示一个详情面板', async ({ page }) => {
+    await ensureAuditData(page)
     await page.goto('/audit')
     await page.waitForURL('**/audit')
 
@@ -157,6 +183,7 @@ test.describe('审计展开详情 + 关联跳转（真实后端）', () => {
   })
 
   test('关联工单 - 有 ticket_id 的记录显示工单链接', async ({ page }) => {
+    await ensureAuditData(page)
     await page.goto('/audit')
     await page.waitForURL('**/audit')
 

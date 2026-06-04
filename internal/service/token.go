@@ -183,10 +183,9 @@ func (s *TokenService) ListAllTokens(ctx context.Context, page, pageSize int) ([
 	querySQL := PaginatedQuerySQL(
 		`SELECT t.id, t.user_id, COALESCE(u.username, ''), t.name, t.token_hash, t.token_prefix,
 		        t.scopes, t.expires_at, t.last_used_at, t.use_count, t.is_active,
-		        COALESCE(t.description, ''), t.created_at, t.updated_at
-		 FROM api_tokens t
-		 LEFT JOIN users u ON u.id = t.user_id`,
-		"", "", "t.id", p,
+		        COALESCE(t.description, ''), t.created_at, t.updated_at`,
+		"api_tokens t LEFT JOIN users u ON u.id = t.user_id",
+		"", "t.id", p,
 	)
 	queryArgs := AppendLimitArgs(nil, p)
 	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)

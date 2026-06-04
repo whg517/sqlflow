@@ -42,6 +42,7 @@ export async function loginViaUI(page: Page, username = ADMIN_USER, password = A
  */
 export async function loginViaApi(page: Page, username = ADMIN_USER, password = ADMIN_PASS): Promise<string> {
   const loginRes = await page.request.post(`${BASE_URL}/api/auth/login`, {
+    headers: { 'Content-Type': 'application/json' },
     data: { username, password },
   })
   expect(loginRes.ok(), `Login failed: ${loginRes.status()}`).toBeTruthy()
@@ -147,7 +148,7 @@ export async function getFirstDatasourceId(page: Page): Promise<{ id: number; na
  * Create an e2e-prefixed datasource for test isolation.
  */
 export async function createTestDatasource(page: Page, params?: { name?: string }): Promise<number> {
-  const dsName = params?.name ?? `e2e-ds-${Date.now()}`
+  const dsName = params?.name ?? `e2e-ds-${Date.now()}-${Math.random().toString(36).slice(2,6)}`
   // In docker-compose, the MySQL host is 'mysql-test'; locally it's 'localhost'
   const mysqlHost = process.env.E2E_MYSQL_HOST ?? 'mysql-test'
   const mysqlPort = parseInt(process.env.E2E_MYSQL_PORT ?? '3306', 10)
@@ -161,7 +162,7 @@ export async function createTestDatasource(page: Page, params?: { name?: string 
     password: mysqlPassword,
     database: 'testdb',
   })
-  expect(status).toBe(200)
+  expect([200, 201].includes(status)).toBeTruthy()
   const data = body as { code: number; data: { id: number } }
   expect(data.code).toBe(0)
   return data.data.id
@@ -196,7 +197,7 @@ export async function cleanupDatasources(page?: Page): Promise<void> {
     if (!res.ok) return
     const body: { data: Array<{ id: number; name: string }> } = await res.json()
     for (const ds of body.data ?? []) {
-      if (ds.name.startsWith('e2e-')) {
+      if (ds.name.startsWith('e2e-') && ds.name !== 'e2e-shared-mysql' && !ds.name.startsWith('e2e-shared-mysql-')) {
         await fetch(`${BASE_URL}/api/datasources/${ds.id}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

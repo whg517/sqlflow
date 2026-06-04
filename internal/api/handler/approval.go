@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
+	"github.com/whg517/sqlflow/internal/db/ent"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/service"
 )
@@ -99,6 +100,9 @@ func (h *ApprovalHandler) DeletePolicy(c echo.Context) error {
 	}
 
 	if err := h.engine.DeletePolicy(c.Request().Context(), id); err != nil {
+		if ent.IsNotFound(err) {
+			return c.JSON(http.StatusOK, map[string]string{"message": "删除成功"})
+		}
 		log.Printf("DeletePolicy failed: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

@@ -135,15 +135,15 @@ test.describe('全局交互验证', () => {
     await goToApp(page)
 
     // 点击权限管理
-    await page.getByRole('link', { name: '权限' }).click()
+    await page.getByRole('link', { name: '权限' }).first().click()
     await expect(page).toHaveURL(/\/permissions/)
 
     // 点击审计日志
-    await page.getByRole('link', { name: '审计' }).click()
+    await page.getByRole('link', { name: '审计' }).first().click()
     await expect(page).toHaveURL(/\/audit/)
 
     // 点击查询
-    await page.getByRole('link', { name: '查询' }).click()
+    await page.getByRole('link', { name: '查询' }).first().click()
     await expect(page).toHaveURL(/\/query/)
   })
 

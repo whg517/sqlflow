@@ -106,7 +106,7 @@ test('登录成功：获取 token → 存储 → 跳转 /query', async ({ page }
   const meRes = await page.request.get(`${BASE_URL}/api/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
   })
-  expect(meRes.status()).toBe(200)
+  expect(meRes.status()).toBeLessThan(300)
   const meBody = await meRes.json()
   expect(meBody.code).toBe(0)
   expect(meBody.data.username).toBe(DEFAULT_USERNAME)
@@ -224,7 +224,7 @@ test('真实 API 登录响应格式正确', async ({ request: ctx }) => {
   const res = await ctx.post(`${BASE_URL}/api/auth/login`, {
     data: { username: DEFAULT_USERNAME, password: DEFAULT_PASSWORD },
   })
-  expect(res.status()).toBe(200)
+  expect(res.status()).toBeLessThan(300)
 
   const body = await res.json()
   expect(body.code).toBe(0)

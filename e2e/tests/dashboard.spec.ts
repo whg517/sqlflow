@@ -37,7 +37,7 @@ test.describe('Dashboard — 真实后端', () => {
   })
 
   test('导航到 Dashboard 页面', async ({ page }) => {
-    const dashboardLink = page.getByRole('link', { name: '概览' })
+    const dashboardLink = page.getByRole('link', { name: '概览' }).first()
     if (await dashboardLink.isVisible()) {
       await dashboardLink.click()
       await page.waitForURL('**/dashboard')
@@ -55,7 +55,7 @@ test.describe('Dashboard — 真实后端', () => {
       if (msg.type() === 'error') errors.push(msg.text())
     })
 
-    const dashboardLink = page.getByRole('link', { name: '概览' })
+    const dashboardLink = page.getByRole('link', { name: '概览' }).first()
     if (await dashboardLink.isVisible()) {
       await dashboardLink.click()
       await page.waitForURL('**/dashboard')
@@ -69,7 +69,7 @@ test.describe('Dashboard — 真实后端', () => {
   })
 
   test('Dashboard 统计卡片渲染', async ({ page }) => {
-    const dashboardLink = page.getByRole('link', { name: '概览' })
+    const dashboardLink = page.getByRole('link', { name: '概览' }).first()
     if (await dashboardLink.isVisible()) {
       await dashboardLink.click()
       await page.waitForURL('**/dashboard')

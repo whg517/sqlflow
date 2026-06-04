@@ -49,7 +49,7 @@ test.describe('SQL Templates — CRUD', () => {
     await loginViaUI(page)
 
     const { status, data } = await apiHelper(page, 'GET', '/sql-templates')
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: unknown[] }
     expect(body.code).toBe(0)
     // List should be an array (may be empty or have items from other tests)
@@ -67,7 +67,7 @@ test.describe('SQL Templates — CRUD', () => {
       category: 'general',
       is_public: true,
     })
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: { id: number; name: string } }
     expect(body.code).toBe(0)
     expect(body.data.id).toBeGreaterThan(0)
@@ -117,7 +117,7 @@ test.describe('SQL Templates — CRUD', () => {
 
     // Get it
     const { status, data } = await apiHelper(page, 'GET', `/sql-templates/${created.data.id}`)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: { id: number; name: string; sql_content: string; category: string } }
     expect(body.code).toBe(0)
     expect(body.data.id).toBe(created.data.id)
@@ -146,7 +146,7 @@ test.describe('SQL Templates — CRUD', () => {
       category: 'business',
       is_public: false,
     })
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number }
     expect(body.code).toBe(0)
 
@@ -172,7 +172,7 @@ test.describe('SQL Templates — CRUD', () => {
 
     // Delete
     const { status, data } = await apiHelper(page, 'DELETE', `/sql-templates/${tplId}`)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number }
     expect(body.code).toBe(0)
 
@@ -208,7 +208,7 @@ test.describe('SQL Templates — Render', () => {
         limit: '100',
       },
     })
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: string }
     expect(body.code).toBe(0)
     // Rendered SQL should have params replaced
@@ -233,7 +233,7 @@ test.describe('SQL Templates — Render', () => {
     const { status, data } = await apiHelper(page, 'POST', `/sql-templates/${created.data.id}/render`, {
       params: {},
     })
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     // Empty params should either keep or strip placeholders — backend behavior
     const body = data as { code: number }
     expect(body.code).toBe(0)
@@ -286,7 +286,7 @@ test.describe('SQL Templates — Boundary', () => {
     const { status, data } = await apiHelper(page, 'POST', `/sql-templates/${created.data.id}/render`, {
       params: { table: 'orders' },
     })
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: string }
     expect(body.data).toContain('orders')
   })

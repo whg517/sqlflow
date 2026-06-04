@@ -16,10 +16,8 @@ test.describe('用户管理 CRUD', () => {
 
   test('导航到用户管理页并验证列表渲染', async ({ page }) => {
     // 导航到用户管理页
-    await page.getByRole('button', { name: '设置' }).click()
-    const nav = page.locator('nav')
-    await nav.getByRole('link', { name: '用户管理' }).click()
-    await page.waitForURL('**/admin/users**')
+    await page.getByRole('link', { name: '用户管理' }).first().click()
+    await page.waitForURL('**/users**')
 
     // 验证页面标题
     await expect(page.getByText('用户管理')).toBeVisible()
@@ -39,7 +37,7 @@ test.describe('用户管理 CRUD', () => {
   test('用户列表显示角色信息', async ({ page }) => {
     await page.getByRole('button', { name: '设置' }).click()
     await page.locator('nav').getByRole('link', { name: '用户管理' }).click()
-    await page.waitForURL('**/admin/users**')
+    await page.waitForURL('**/users**')
 
     // 验证角色标签（真实后端可能有多种角色）
     const adminLabel = page.getByText('管理员').first()
@@ -53,7 +51,7 @@ test.describe('用户管理 CRUD', () => {
   test('创建新用户', async ({ page }) => {
     await page.getByRole('button', { name: '设置' }).click()
     await page.locator('nav').getByRole('link', { name: '用户管理' }).click()
-    await page.waitForURL('**/admin/users**')
+    await page.waitForURL('**/users**')
 
     // 获取创建前的行数
     const dataRowsBefore = page.getByRole('row').filter({ hasNot: page.getByRole('columnheader') })
@@ -89,7 +87,7 @@ test.describe('用户管理 CRUD', () => {
   test('编辑用户信息', async ({ page }) => {
     await page.getByRole('button', { name: '设置' }).click()
     await page.locator('nav').getByRole('link', { name: '用户管理' }).click()
-    await page.waitForURL('**/admin/users**')
+    await page.waitForURL('**/users**')
 
     // 先创建一个测试用户
     const editUsername = `e2e_editme_${Date.now()}`
@@ -102,7 +100,7 @@ test.describe('用户管理 CRUD', () => {
 
     // 刷新页面
     await page.reload()
-    await page.waitForURL('**/admin/users**')
+    await page.waitForURL('**/users**')
 
     // 找到用户行，点击编辑
     const targetRow = page.getByRole('row', { name: new RegExp(editUsername) })
@@ -137,7 +135,7 @@ test.describe('用户管理 CRUD', () => {
 
     await page.getByRole('button', { name: '设置' }).click()
     await page.locator('nav').getByRole('link', { name: '用户管理' }).click()
-    await page.waitForURL('**/admin/users**')
+    await page.waitForURL('**/users**')
 
     // 验证用户存在
     await expect(page.getByText(deleteUsername)).toBeVisible()
@@ -161,7 +159,7 @@ test.describe('用户管理 CRUD', () => {
   test('角色分配 - 创建用户时选择 DBA 角色', async ({ page }) => {
     await page.getByRole('button', { name: '设置' }).click()
     await page.locator('nav').getByRole('link', { name: '用户管理' }).click()
-    await page.waitForURL('**/admin/users**')
+    await page.waitForURL('**/users**')
 
     // 创建新用户
     await page.getByRole('button', { name: /新建|创建|添加/ }).click()
@@ -199,7 +197,7 @@ test.describe('用户管理 CRUD', () => {
     await page.evaluate((t) => localStorage.setItem('token', t), devToken)
 
     // 尝试直接导航到用户管理页
-    await page.goto('/admin/users')
+    await page.goto('**/users**')
 
     // 应该被重定向或显示 403
     await page.waitForURL(/\/403|\/login/, { timeout: 5000 }).catch(() => {})

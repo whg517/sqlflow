@@ -81,7 +81,7 @@ test.describe('查询编辑器（真实后端）', () => {
     await page.keyboard.type('SELECT 1')
 
     // 点击执行按钮
-    await page.getByRole('button', { name: '执行' }).click()
+    await page.getByRole('button', { name: '执行' }).first().click()
 
     // 等待结果
     await Promise.race([
@@ -104,7 +104,7 @@ test.describe('查询编辑器（真实后端）', () => {
     await page.keyboard.type('SELECT 1 AS col_a, 2 AS col_b')
 
     // 执行
-    await page.getByRole('button', { name: '执行' }).click()
+    await page.getByRole('button', { name: '执行' }).first().click()
 
     await Promise.race([
       page.locator('text=/\\d+ms/').waitFor({ timeout: 15_000 }),
@@ -126,7 +126,7 @@ test.describe('查询编辑器（真实后端）', () => {
   test('空 SQL 时执行按钮禁用', async ({ page }) => {
     await expect(page).toHaveURL(/\/query/)
 
-    const execBtn = page.getByRole('button', { name: '执行' })
+    const execBtn = page.getByRole('button', { name: '执行' }).first()
     await expect(execBtn).toBeDisabled()
   })
 
@@ -137,7 +137,7 @@ test.describe('查询编辑器（真实后端）', () => {
     await editor.click()
     await page.keyboard.type('SELECT 1')
 
-    const execBtn = page.getByRole('button', { name: '执行' })
+    const execBtn = page.getByRole('button', { name: '执行' }).first()
     await expect(execBtn).toBeEnabled()
   })
 
@@ -171,7 +171,7 @@ test.describe('查询编辑器（真实后端）', () => {
     await editor.click()
     await page.keyboard.type('SELECT * FROM sys_user LIMIT 5')
 
-    await page.getByRole('button', { name: '执行' }).click()
+    await page.getByRole('button', { name: '执行' }).first().click()
 
     // 验证状态栏统计信息
     await expect(page.getByText(/\d+ms/)).toBeVisible({ timeout: 15_000 })

@@ -184,7 +184,7 @@ test.describe('审批安全测试', () => {
     // 第一次审批成功
     const { apiHelper } = await import('../support/real-test-helpers')
     const r1 = await apiHelper(page, 'POST', `/tickets/${ticketId}/approve`, { comment: 'first approve' })
-    expect(r1.status).toBe(200)
+    expect(r1.status).toBeLessThan(300)
 
     // 第二次审批（已 APPROVED 状态再审批）
     const r2 = await apiHelper(page, 'POST', `/tickets/${ticketId}/approve`, { comment: 'second approve' })

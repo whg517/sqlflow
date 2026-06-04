@@ -151,35 +151,61 @@ async function cleanupTable(page: Page, datasourceId: number) {
 
 test.describe('工单全流程 E2E（真实数据库操作）', () => {
   let datasourceId: number
-  let page: Page
 
-  test.beforeAll(async ({ browser }) => {
-    const context = await browser.newContext()
-    page = await context.newPage()
+  test.beforeAll(async () => {
+    // Get datasource ID via direct fetch (no page needed)
+    const loginRes = await fetch(`${BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
+    })
+    const { data: loginData } = await loginRes.json()
+    const token = loginData.access_token
 
-    // Login once for the entire suite
-    await loginReal(page)
-
-    // Get datasource ID
-    datasourceId = await getMysqlDatasourceId(page)
+    const dsRes = await fetch(`${BASE_URL}/api/datasources`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const dsBody = await dsRes.json()
+    const ds = dsBody.data.find((d: { type: string; status: string }) => d.type === 'mysql' && d.status === 'active')
+    if (!ds) throw new Error('No active MySQL datasource found')
+    datasourceId = ds.id
 
     // Cleanup any leftover table
-    await cleanupTable(page, datasourceId)
+    try {
+      await fetch(`${BASE_URL}/api/query/execute`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ datasource_id: datasourceId, database: DB_NAME, sql: `DROP TABLE IF EXISTS ${E2E_TABLE}` }),
+      })
+    } catch {
+      // Table may not exist
+    }
   })
 
   test.afterAll(async () => {
-    // Best-effort cleanup
+    // Best-effort cleanup — use fresh login
     try {
-      await cleanupTable(page, datasourceId)
+      const loginRes = await fetch(`${BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
+      })
+      const { data: loginData } = await loginRes.json()
+      const token = loginData.access_token
+      await fetch(`${BASE_URL}/api/query/execute`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ datasource_id: datasourceId, database: DB_NAME, sql: `DROP TABLE IF EXISTS ${E2E_TABLE}` }),
+      })
     } catch {
       // Ignore cleanup failures
     }
-    await page.close()
   })
 
   // ── 1. Create DDL ticket (CREATE TABLE) ──────────────────────────────────
 
-  test('1. 创建 CREATE TABLE 工单 — 验证工单提交成功且状态为待审批', async () => {
+  test('1. 创建 CREATE TABLE 工单 — 验证工单提交成功且状态为待审批', async ({ page }) => {
+    await loginReal(page)
     const ticket = await createTicketViaApi(
       page,
       datasourceId,
@@ -195,7 +221,8 @@ test.describe('工单全流程 E2E（真实数据库操作）', () => {
 
   // ── 2. AI review ─────────────────────────────────────────────────────────
 
-  test('2. AI 审查流程 — 验证审查调用不报错', async () => {
+  test('2. AI 审查流程 — 验证审查调用不报错', async ({ page }) => {
+    await loginReal(page)
     // The AI review is triggered when creating tickets from the UI.
     // Since we create tickets via API, we verify the review endpoint responds
     // without crashing (it may return a fallback result when no AI key is configured).
@@ -263,7 +290,8 @@ test.describe('工单全流程 E2E（真实数据库操作）', () => {
 
   // ── 3. Approve and execute the CREATE TABLE ticket ───────────────────────
 
-  test('3. 审批并执行 CREATE TABLE 工单 — 验证状态变为已完成', async () => {
+  test('3. 审批并执行 CREATE TABLE 工单 — 验证状态变为已完成', async ({ page }) => {
+    await loginReal(page)
     // Create a fresh CREATE TABLE ticket
     const ticket = await createTicketViaApi(
       page,
@@ -287,7 +315,8 @@ test.describe('工单全流程 E2E（真实数据库操作）', () => {
 
   // ── 4. Verify table actually exists in MySQL ─────────────────────────────
 
-  test('4. 查询验证 — SELECT 确认 e2e_test 表已创建', async () => {
+  test('4. 查询验证 — SELECT 确认 e2e_test 表已创建', async ({ page }) => {
+    await loginReal(page)
     const result = await executeRealQuery(page, datasourceId, `SELECT * FROM ${E2E_TABLE}`)
     expect(result.columns).toContain('id')
     expect(result.columns).toContain('name')
@@ -297,7 +326,8 @@ test.describe('工单全流程 E2E（真实数据库操作）', () => {
 
   // ── 5. DDL ticket (ALTER TABLE) ──────────────────────────────────────────
 
-  test('5. DDL 工单 — ALTER TABLE 添加列 → 审批 → 执行 → 验证结构变更', async () => {
+  test('5. DDL 工单 — ALTER TABLE 添加列 → 审批 → 执行 → 验证结构变更', async ({ page }) => {
+    await loginReal(page)
     const alterSql = `ALTER TABLE ${E2E_TABLE} ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP`
 
     const ticket = await createTicketViaApi(page, datasourceId, alterSql, 'E2E test: ALTER TABLE add created_at column')
@@ -318,7 +348,8 @@ test.describe('工单全流程 E2E（真实数据库操作）', () => {
 
   // ── 6. DML ticket (INSERT) ───────────────────────────────────────────────
 
-  test('6. DML 工单 — INSERT 数据 → 审批 → 执行 → 查询验证数据存在', async () => {
+  test('6. DML 工单 — INSERT 数据 → 审批 → 执行 → 查询验证数据存在', async ({ page }) => {
+    await loginReal(page)
     const insertSql = `INSERT INTO ${E2E_TABLE} (id, name) VALUES (1, 'hello'), (2, 'world')`
 
     const ticket = await createTicketViaApi(page, datasourceId, insertSql, 'E2E test: INSERT test data into e2e_test')
@@ -340,7 +371,8 @@ test.describe('工单全流程 E2E（真实数据库操作）', () => {
 
   // ── 7. Query via UI page ─────────────────────────────────────────────────
 
-  test('7. 通过 UI 查询页面验证数据可见', async () => {
+  test('7. 通过 UI 查询页面验证数据可见', async ({ page }) => {
+    await loginReal(page)
     await page.goto(`${BASE_URL}/query`)
     await page.waitForURL('**/query**', { timeout: 10_000 })
 
@@ -380,7 +412,8 @@ test.describe('工单全流程 E2E（真实数据库操作）', () => {
 
   // ── 8. Drop table cleanup ────────────────────────────────────────────────
 
-  test('8. 删除清理 — DROP TABLE 工单 → 审批 → 执行 → 验证表已删除', async () => {
+  test('8. 删除清理 — DROP TABLE 工单 → 审批 → 执行 → 验证表已删除', async ({ page }) => {
+    await loginReal(page)
     const dropSql = `DROP TABLE ${E2E_TABLE}`
 
     const ticket = await createTicketViaApi(page, datasourceId, dropSql, 'E2E test: cleanup DROP TABLE e2e_test')
@@ -408,7 +441,8 @@ test.describe('工单全流程 E2E（真实数据库操作）', () => {
 
   // ── 9. Verify full lifecycle on UI ───────────────────────────────────────
 
-  test('9. UI 工单列表可见 — 验证所有工单在工单页面展示', async () => {
+  test('9. UI 工单列表可见 — 验证所有工单在工单页面展示', async ({ page }) => {
+    await loginReal(page)
     await page.goto(`${BASE_URL}/tickets`)
     await page.waitForURL('**/tickets**', { timeout: 10_000 })
 
@@ -425,7 +459,8 @@ test.describe('工单全流程 E2E（真实数据库操作）', () => {
 
   // ── 10. Ticket detail drawer via UI ──────────────────────────────────────
 
-  test('10. UI 工单详情抽屉 — 验证能打开工单详情并查看信息', async () => {
+  test('10. UI 工单详情抽屉 — 验证能打开工单详情并查看信息', async ({ page }) => {
+    await loginReal(page)
     await page.goto(`${BASE_URL}/tickets`)
     await page.waitForURL('**/tickets**', { timeout: 10_000 })
 

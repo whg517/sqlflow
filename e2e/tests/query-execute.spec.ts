@@ -26,7 +26,7 @@ test.describe('SQL 编辑器输入并执行查询（真实后端）', () => {
     await page.keyboard.type('SELECT * FROM sys_user LIMIT 10', { delay: 30 })
 
     // 点击执行按钮
-    const executeBtn = page.getByRole('button', { name: '执行' })
+    const executeBtn = page.getByRole('button', { name: '执行' }).first()
     await expect(executeBtn).toBeEnabled()
     await executeBtn.click()
 
@@ -60,7 +60,7 @@ test.describe('SQL 编辑器输入并执行查询（真实后端）', () => {
 
   test('空 SQL 不能执行', async ({ page }) => {
     // 未输入 SQL，验证执行按钮禁用
-    const executeBtn = page.getByRole('button', { name: '执行' })
+    const executeBtn = page.getByRole('button', { name: '执行' }).first()
     await expect(executeBtn).toBeDisabled()
   })
 
@@ -74,7 +74,7 @@ test.describe('SQL 编辑器输入并执行查询（真实后端）', () => {
     await editor.click()
     await page.keyboard.type('SELECT 1')
 
-    const execBtn = page.getByRole('button', { name: '执行' })
+    const execBtn = page.getByRole('button', { name: '执行' }).first()
     await expect(execBtn).toBeEnabled()
   })
 
@@ -88,7 +88,7 @@ test.describe('SQL 编辑器输入并执行查询（真实后端）', () => {
     await editor.click()
     await page.keyboard.type('SELECT * FROM sys_user LIMIT 10', { delay: 30 })
 
-    const executeBtn = page.getByRole('button', { name: '执行' })
+    const executeBtn = page.getByRole('button', { name: '执行' }).first()
     await executeBtn.click()
 
     await Promise.race([

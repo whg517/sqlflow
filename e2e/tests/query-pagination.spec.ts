@@ -23,7 +23,7 @@ test.describe('查询结果分页（真实后端）', () => {
     await editor.click()
     await page.keyboard.type(sql, { delay: 5 })
 
-    await page.getByRole('button', { name: '执行' }).click()
+    await page.getByRole('button', { name: '执行' }).first().click()
     await expect(page.getByRole('table')).toBeVisible({ timeout: 15_000 })
   }
 

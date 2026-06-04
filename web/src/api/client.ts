@@ -150,6 +150,11 @@ async function request<T>(
       handleUnauthorized();
       throw new Error("Unauthorized");
     }
+    // Don't intercept login failure — 401 on login is expected
+    if (path === "/auth/login") {
+      const msg = await extractErrorMessage(res);
+      throw new Error(msg || "用户名或密码错误");
+    }
 
     // If another request is already refreshing, queue this one
     if (isRefreshing) {

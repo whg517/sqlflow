@@ -26,14 +26,15 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   forbidOnly: !!process.env.CI,
 
-  // Serial execution — E2E tests share database state
+  // Serial execution for now — will evaluate parallelism after baseline stability
+  // TODO(SF-QA0041): Enable parallel once cleanup races are addressed
   workers: 1,
   fullyParallel: false,
 
   // Reporter
   reporter: [
     ['list'],
-    ['html', { open: 'never', outputFolder: 'test-results/playwright-report' }],
+    ['html', { open: 'never', outputFolder: '../playwright-report' }],
   ],
 
   // Global config

@@ -6,9 +6,32 @@ import { test, expect, loginViaUI } from '../support/real-test-helpers'
 
 test.describe.configure({ timeout: 45_000 })
 
+/** Execute a query to ensure audit log has data */
+async function ensureAuditData(page: import('@playwright/test').Page) {
+  const token = await page.evaluate(() => localStorage.getItem('token') ?? '')
+  const ds = await page.evaluate(async ({ baseUrl, token }) => {
+    const r = await fetch(`${baseUrl}/api/datasources`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const body = await r.json()
+    const list = body.data ?? []
+    return list.find((d: { type: string; status: string }) => d.type === 'mysql' && d.status === 'active')
+      ?? list.find((d: { status: string }) => d.status === 'active')
+  }, { baseUrl: process.env.E2E_BASE_URL ?? 'http://localhost:8080', token })
+  if (!ds) return
+  await page.evaluate(async ({ baseUrl, token, dsId }) => {
+    await fetch(`${baseUrl}/api/query/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ datasource_id: dsId, database: 'testdb', sql: 'SELECT 1 AS e2e_audit_seed' }),
+    })
+  }, { baseUrl: process.env.E2E_BASE_URL ?? 'http://localhost:8080', token, dsId: ds.id })
+}
+
 /** 导航到审计页面并等待加载 */
 async function gotoAudit(page: import('@playwright/test').Page) {
-  await page.getByRole('link', { name: '审计' }).click()
+  await ensureAuditData(page)
+  await page.getByRole('link', { name: '审计' }).first().click()
   await page.waitForURL('**/audit')
   await Promise.race([
     page.locator('table tbody tr').first().waitFor({ timeout: 10_000 }),

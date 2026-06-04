@@ -133,7 +133,7 @@ test.describe('工单生命周期状态转换 UI', () => {
 
     // 应该看到执行按钮
     const sheet = page.locator('[data-slot="sheet-content"]')
-    const execBtn = sheet.getByRole('button', { name: '执行' })
+    const execBtn = sheet.getByRole('button', { name: '执行' }).first()
     await expect(execBtn).toBeVisible()
 
     // 点击执行
@@ -188,7 +188,7 @@ test.describe('工单生命周期状态转换 UI', () => {
 
     // 通过按钮和执行按钮应该不可见
     await expect(sheet.getByRole('button', { name: '通过' })).not.toBeVisible()
-    await expect(sheet.getByRole('button', { name: '执行' })).not.toBeVisible()
+    await expect(sheet.getByRole('button', { name: '执行' }).first()).not.toBeVisible()
   })
 
   // ── 取消链路 ──────────────────────────────────────────────────────────

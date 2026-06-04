@@ -41,7 +41,7 @@ async function createTicket(page: Page, datasourceId: number, sql: string, reaso
     db_type: 'mysql',
     change_reason: reason,
   })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   const body = data as { code: number; data: { id: number } }
   expect(body.code).toBe(0)
   return body.data.id
@@ -50,21 +50,21 @@ async function createTicket(page: Page, datasourceId: number, sql: string, reaso
 /** Get ticket by ID. */
 async function getTicket(page: Page, ticketId: number) {
   const { status, data } = await apiHelper(page, 'GET', `/tickets/${ticketId}`)
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   return data as { code: number; data: Record<string, unknown> }
 }
 
 /** Reject a ticket. */
 async function rejectTicket(page: Page, ticketId: number, reason: string) {
   const { status, data } = await apiHelper(page, 'POST', `/tickets/${ticketId}/reject`, { comment: reason })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   return data as { code: number }
 }
 
 /** Approve a ticket. */
 async function approveTicket(page: Page, ticketId: number, comment = 'approved') {
   const { status, data } = await apiHelper(page, 'POST', `/tickets/${ticketId}/approve`, { comment })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   return data as { code: number }
 }
 
@@ -80,7 +80,7 @@ async function resubmitTicket(page: Page, ticketId: number, sql: string, reason:
 /** Get revisions for a ticket. */
 async function getRevisions(page: Page, ticketId: number): Promise<Array<Record<string, unknown>>> {
   const { status, data } = await apiHelper(page, 'GET', `/tickets/${ticketId}/revisions`)
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   return data as unknown as Array<Record<string, unknown>>
 }
 

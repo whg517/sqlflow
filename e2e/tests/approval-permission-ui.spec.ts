@@ -195,7 +195,7 @@ test.describe('审批→执行权限边界 UI', () => {
 
     const sheet = page.locator('[data-slot="sheet-content"]')
     // 已通过后应显示执行按钮
-    await expect(sheet.getByRole('button', { name: '执行' })).toBeVisible({ timeout: 5_000 })
+    await expect(sheet.getByRole('button', { name: '执行' }).first()).toBeVisible({ timeout: 5_000 })
     // 通过/拒绝按钮应消失
     await expect(sheet.getByRole('button', { name: '通过' })).not.toBeVisible({ timeout: 3_000 })
     await expect(sheet.getByRole('button', { name: '拒绝' })).not.toBeVisible({ timeout: 3_000 })

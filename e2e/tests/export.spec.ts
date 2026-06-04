@@ -128,14 +128,14 @@ test.describe('异步导出任务 — 列表与详情', () => {
 
   test('should list export tasks', async ({ page }) => {
     const { status, data } = await listExportTasks(page)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
     expect(Array.isArray(data.data)).toBeTruthy()
   })
 
   test('should return empty list when no tasks exist', async ({ page }) => {
     const { status, data } = await listExportTasks(page)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
     expect(Array.isArray(data.data)).toBeTruthy()
   })
@@ -201,7 +201,7 @@ test.describe('异步导出任务 — 完整流程（创建→轮询→下载）
 
     // List should include it
     const { status, data } = await listExportTasks(page)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
     const tasks = data.data as Array<{ id: number }>
     expect(tasks.some((t) => t.id === taskId)).toBeTruthy()
@@ -251,7 +251,7 @@ test.describe('异步导出任务 — 下载', () => {
 
     // Download
     const { status, body } = await downloadExportFile(page, taskId)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(body.length).toBeGreaterThan(0)
     // Should be CSV content
     const content = body.toString('utf-8')

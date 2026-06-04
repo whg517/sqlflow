@@ -24,13 +24,13 @@ test.describe('Login → Query → Ticket 完整流程', () => {
     // ========== 2. 查询页 ==========
     // 验证侧边栏导航
     await expect(page.getByText('SQLFlow', { exact: false }).first()).toBeVisible()
-    await expect(page.getByRole('link', { name: '查询' })).toBeVisible()
+    await expect(page.getByRole('link', { name: '查询' }).first()).toBeVisible()
 
     // 验证顶部搜索框
     await expect(page.getByText('搜索...')).toBeVisible()
 
     // ========== 3. 导航到工单页 ==========
-    await page.getByRole('link', { name: '工单' }).click()
+    await page.getByRole('link', { name: '工单' }).first().click()
     await page.waitForURL('**/tickets**')
     await expect(page).toHaveURL(/\/tickets/)
 

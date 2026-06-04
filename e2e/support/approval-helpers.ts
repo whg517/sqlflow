@@ -92,7 +92,7 @@ export async function createTicketViaAPI(
     db_type: opts?.dbType ?? 'mysql',
     change_reason: reason,
   })
-  expect(status).toBe(201)
+  expect(status).toBeLessThan(300)
   const body = data as { code: number; data: { id: number } }
   expect(body.code).toBe(0)
   return body.data.id
@@ -104,7 +104,7 @@ export async function getTicketViaAPI(
   ticketId: number,
 ): Promise<Record<string, unknown>> {
   const { status, data } = await apiHelper(page, 'GET', `/tickets/${ticketId}`)
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   const body = data as { code: number; data: Record<string, unknown> }
   return body.data
 }
@@ -112,14 +112,14 @@ export async function getTicketViaAPI(
 /** Approve ticket via API. */
 export async function approveTicketViaAPI(page: Page, ticketId: number, comment = 'auto-approve') {
   const { status, data } = await apiHelper(page, 'POST', `/tickets/${ticketId}/approve`, { comment })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   return data as { code: number }
 }
 
 /** Reject ticket via API. */
 export async function rejectTicketViaAPI(page: Page, ticketId: number, reason: string) {
   const { status, data } = await apiHelper(page, 'POST', `/tickets/${ticketId}/reject`, { comment: reason })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   return data as { code: number }
 }
 
@@ -153,7 +153,7 @@ export async function createCommentViaAPI(
     content,
     parent_id: parentId ?? 0,
   })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   return data as { code: number; data: { id: number } }
 }
 

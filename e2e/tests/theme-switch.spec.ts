@@ -126,7 +126,7 @@ test.describe('主题切换（真实后端）', () => {
     await expect(editor).toContainText('SELECT 1')
 
     // 验证执行按钮仍然可用
-    const executeBtn = page.getByRole('button', { name: '执行' })
+    const executeBtn = page.getByRole('button', { name: '执行' }).first()
     await expect(executeBtn).toBeEnabled()
   })
 

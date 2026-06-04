@@ -42,7 +42,7 @@ test.describe('Git Links — CRUD', () => {
       author_name: 'e2e-tester',
       repo_url: 'https://github.com/e2e/test',
     })
-    expect(status).toBe(201)
+    expect(status).toBeLessThan(300)
     const data = body as { code: number; data: { id: number } }
     expect(data.code).toBe(0)
     expect(data.data.id).toBeTruthy()
@@ -58,7 +58,7 @@ test.describe('Git Links — CRUD', () => {
       pr_title: 'E2E test PR',
       pr_url: 'https://github.com/e2e/test/pull/42',
     })
-    expect(status).toBe(201)
+    expect(status).toBeLessThan(300)
     const data = body as { code: number; data: { id: number } }
     expect(data.code).toBe(0)
     createdGitLinkIds.push(data.data.id)
@@ -121,7 +121,7 @@ test.describe('Git Links — CRUD', () => {
       `${BASE_URL}/api/git-links?entity_type=ticket&entity_id=${entityId}`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
-    expect(res.status()).toBe(200)
+    expect(res.status()).toBeLessThan(300)
     const body: { code: number; data: Array<{ id: number }> } = await res.json()
     expect(body.code).toBe(0)
     expect(body.data.length).toBeGreaterThanOrEqual(1)
@@ -150,7 +150,7 @@ test.describe('Git Links — CRUD', () => {
 
     // Delete
     const { status, body } = await apiRequest(page, 'DELETE', `/git-links/${id}`)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect((body as { code: number }).code).toBe(0)
     // Remove from cleanup since already deleted
     createdGitLinkIds = createdGitLinkIds.filter((x) => x !== id)

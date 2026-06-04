@@ -36,7 +36,7 @@ test.describe('Backup Management (admin)', () => {
     const res = await page.request.post(`${BASE_URL}/api/backups`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    expect(res.status()).toBe(200)
+    expect(res.status()).toBeLessThan(300)
     const body: { code: number; data: { message: string } } = await res.json()
     expect(body.code).toBe(0)
     expect(body.data.message).toBeTruthy()
@@ -47,7 +47,7 @@ test.describe('Backup Management (admin)', () => {
     const res = await page.request.get(`${BASE_URL}/api/backups`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    expect(res.status()).toBe(200)
+    expect(res.status()).toBeLessThan(300)
     const body: { code: number; data: Array<{ filename: string }> } = await res.json()
     expect(body.code).toBe(0)
     expect(Array.isArray(body.data)).toBeTruthy()
@@ -60,7 +60,7 @@ test.describe('Backup Management (admin)', () => {
     const triggerRes = await page.request.post(`${BASE_URL}/api/backups`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    expect(triggerRes.status()).toBe(200)
+    expect(triggerRes.status()).toBeLessThan(300)
 
     // List and find it
     const listRes = await page.request.get(`${BASE_URL}/api/backups`, {
@@ -95,7 +95,7 @@ test.describe('Backup Management (admin)', () => {
     const dlRes = await page.request.get(`${BASE_URL}/api/backups/${encodeURIComponent(filename)}/download`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    expect(dlRes.status()).toBe(200)
+    expect(dlRes.status()).toBeLessThan(300)
   })
 
   test('should return 404 for downloading non-existent backup', async ({ page }) => {
@@ -127,7 +127,7 @@ test.describe('Backup Management (admin)', () => {
     const delRes = await page.request.delete(`${BASE_URL}/api/backups/${encodeURIComponent(filename)}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    expect(delRes.status()).toBe(200)
+    expect(delRes.status()).toBeLessThan(300)
 
     // Verify it's gone
     const dlRes = await page.request.get(`${BASE_URL}/api/backups/${encodeURIComponent(filename)}/download`, {

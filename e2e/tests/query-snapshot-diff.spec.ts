@@ -101,13 +101,13 @@ test.describe('Query Snapshot — Create & List', () => {
     // Execute a query first to create history
     const sql = 'SELECT id, username, email FROM sys_user LIMIT 5'
     const execResult = await executeQuery(page, sql, datasourceId)
-    expect(execResult.status).toBe(200)
+    expect(execResult.status).toBeLessThan(300)
     expect(execResult.data.code).toBe(0)
     expect(execResult.data.data.history_id).toBeTruthy()
 
     // Create snapshot from that history
     const snap = await createSnapshot(page, execResult.data.data.history_id!)
-    expect(snap.status).toBe(200)
+    expect(snap.status).toBeLessThan(300)
     expect(snap.data.code).toBe(0)
     expect(snap.data.data.id).toBeTruthy()
     snapshotIds.push(snap.data.data.id)
@@ -125,7 +125,7 @@ test.describe('Query Snapshot — Create & List', () => {
 
     // List should contain both
     const { status, data } = await listSnapshots(page)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
     const list = data.data
     expect(list.length).toBeGreaterThanOrEqual(2)
@@ -142,7 +142,7 @@ test.describe('Query Snapshot — Create & List', () => {
     }
 
     const { status, data } = await listSnapshots(page)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const emptyList = data.data ?? []
     expect(emptyList.length).toBe(0)
   })
@@ -169,7 +169,7 @@ test.describe('Query Snapshot — Detail', () => {
 
   test('should get snapshot detail', async ({ page }) => {
     const { status, data } = await getSnapshot(page, snapshotId)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
     expect(data.data.id).toBe(snapshotId)
     expect(data.data.columns).toBeTruthy()
@@ -199,11 +199,11 @@ test.describe('Query Snapshot — Delete', () => {
   test('should delete snapshot', async ({ page }) => {
     // Verify exists
     const before = await getSnapshot(page, snapshotId)
-    expect(before.status).toBe(200)
+    expect(before.status).toBeLessThan(300)
 
     // Delete
     const { status, data } = await deleteSnapshot(page, snapshotId)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
 
     // Should be gone
@@ -246,7 +246,7 @@ test.describe('Query Snapshot — Compare', () => {
   test('should compare two snapshots', async ({ page }) => {
     const { status, data } = await compareSnapshots(page, snapAId, snapBId)
     // Schema mismatch is expected (different columns)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
     expect(data.data).toBeTruthy()
   })

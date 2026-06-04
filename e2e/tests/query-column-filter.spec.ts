@@ -26,7 +26,7 @@ test.describe('列筛选功能（真实后端）', () => {
     await editor.click()
     await page.keyboard.type('SELECT * FROM sys_user', { delay: 30 })
 
-    const executeBtn = page.getByRole('button', { name: '执行' })
+    const executeBtn = page.getByRole('button', { name: '执行' }).first()
     await executeBtn.click()
     await expect(page.getByRole('table')).toBeVisible({ timeout: 15_000 })
   }

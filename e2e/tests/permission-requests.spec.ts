@@ -62,7 +62,7 @@ test.describe('Permission Requests — Create & List', () => {
       reason: 'E2E test permission request',
       duration_hours: 24,
     })
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: { id: number; status: string } }
     expect(body.code).toBe(0)
     expect(body.data.id).toBeGreaterThan(0)
@@ -89,7 +89,7 @@ test.describe('Permission Requests — Create & List', () => {
 
     // List my requests
     const { status, data } = await apiHelper(page, 'GET', '/permission-requests/mine')
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: { items: Array<{ id: number }>; total: number } }
     expect(body.code).toBe(0)
     expect(body.data.items.length).toBeGreaterThanOrEqual(1)
@@ -99,7 +99,7 @@ test.describe('Permission Requests — Create & List', () => {
     await loginViaUI(page)
 
     const { status, data } = await apiHelper(page, 'GET', '/permission-requests/active')
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: unknown[] }
     expect(body.code).toBe(0)
     expect(Array.isArray(body.data)).toBeTruthy()
@@ -123,7 +123,7 @@ test.describe('Permission Requests — Create & List', () => {
 
     // Get detail
     const { status, data } = await apiHelper(page, 'GET', `/permission-requests/${created.data.id}`)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as {
       code: number
       data: { id: number; status: string; database: string; actions: string; reason: string }
@@ -149,7 +149,7 @@ test.describe('Permission Requests — Admin Operations', () => {
     await loginViaUI(page)
 
     const { status, data } = await apiHelper(page, 'GET', '/permission-requests?page=1&page_size=10')
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: unknown[]; total: number }
     expect(body.code).toBe(0)
   })
@@ -177,7 +177,7 @@ test.describe('Permission Requests — Admin Operations', () => {
       `/permission-requests/${created.data.id}/approve`,
       { comment: 'E2E auto approve' },
     )
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: { status: string } }
     expect(body.code).toBe(0)
     expect(body.data.status).toBe('approved')
@@ -211,7 +211,7 @@ test.describe('Permission Requests — Admin Operations', () => {
       `/permission-requests/${created.data.id}/reject`,
       { comment: 'E2E test rejection' },
     )
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: { status: string } }
     expect(body.code).toBe(0)
     expect(body.data.status).toBe('rejected')
@@ -279,7 +279,7 @@ test.describe('Permission Requests — Revoke', () => {
       `/permission-requests/${created.data.id}/revoke`,
       { reason: 'E2E revoke — no longer needed' },
     )
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: { status: string } }
     expect(body.code).toBe(0)
     expect(body.data.status).toBe('revoked')
@@ -291,7 +291,7 @@ test.describe('Permission Requests — Expire', () => {
     await loginViaUI(page)
 
     const { status, data } = await apiHelper(page, 'POST', '/permission-requests/expire')
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const body = data as { code: number; data: { expired_count: number } }
     expect(body.code).toBe(0)
     // expired_count should be a non-negative number

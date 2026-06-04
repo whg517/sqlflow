@@ -59,7 +59,7 @@ test.describe('权限隔离 — 不同角色验证', () => {
     await page.evaluate((t) => localStorage.setItem('token', t), devToken)
     await page.goto('/query')
     await expect(page).toHaveURL(/\/query/)
-    await expect(page.getByRole('link', { name: '查询' })).toBeVisible()
+    await expect(page.getByRole('link', { name: '查询' }).first()).toBeVisible()
 
     // 访问工单页
     await page.goto('/tickets')

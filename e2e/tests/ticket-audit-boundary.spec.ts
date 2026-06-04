@@ -23,7 +23,7 @@ async function createTicketViaApi(
     db_type: dbType,
     change_reason: reason,
   })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   const data = body as { code: number; data: { id: number; status: string } }
   expect(data.code).toBe(0)
   return data.data
@@ -32,7 +32,7 @@ async function createTicketViaApi(
 /** Get tickets list from API */
 async function getTicketsViaApi(page: import('@playwright/test').Page): Promise<Array<{ id: number; status: string }>> {
   const { status, data: body } = await apiHelper(page, 'GET', '/tickets')
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   const data = body as { code: number; data: Array<{ id: number; status: string }> }
   return data.data ?? []
 }

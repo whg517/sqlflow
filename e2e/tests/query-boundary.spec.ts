@@ -27,10 +27,10 @@ test.describe('查询边界 — SQL 注入防御', () => {
     await page.keyboard.type('DROP TABLE sys_user', { delay: 30 })
 
     // Click execute
-    await page.getByRole('button', { name: '执行' }).click()
+    await page.getByRole('button', { name: '执行' }).first().click()
 
     // AI review should flag this as high risk → ticket required or risk warning shown
-    await expect(page.getByText(/高风险|危险|工单|risk/i)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/高风险|危险|工单|risk/i).first()).toBeVisible({ timeout: 15_000 })
   })
 
   test('SQL 编辑器接受 SELECT 语句正常执行', async ({ page }) => {
@@ -44,7 +44,7 @@ test.describe('查询边界 — SQL 注入防御', () => {
     await editor.click()
     await page.keyboard.type('SELECT 1', { delay: 30 })
 
-    await page.getByRole('button', { name: '执行' }).click()
+    await page.getByRole('button', { name: '执行' }).first().click()
 
     // Result should appear
     await Promise.race([
@@ -71,7 +71,7 @@ test.describe('查询边界 — 大结果集', () => {
     // 查询一个不存在的条件
     await page.keyboard.type("SELECT * FROM sys_user WHERE id = -999999", { delay: 30 })
 
-    await page.getByRole('button', { name: '执行' }).click()
+    await page.getByRole('button', { name: '执行' }).first().click()
 
     // Should show empty result or 0 rows
     await Promise.race([
@@ -96,7 +96,7 @@ test.describe('查询边界 — 大结果集', () => {
       { delay: 5 },
     )
 
-    await page.getByRole('button', { name: '执行' }).click()
+    await page.getByRole('button', { name: '执行' }).first().click()
 
     await expect(page.getByRole('table')).toBeVisible({ timeout: 15_000 })
 
@@ -121,7 +121,7 @@ test.describe('查询边界 — 执行时间与超时', () => {
     await editor.click()
     await page.keyboard.type('SELECT 1', { delay: 30 })
 
-    await page.getByRole('button', { name: '执行' }).click()
+    await page.getByRole('button', { name: '执行' }).first().click()
 
     await expect(page.getByRole('table')).toBeVisible({ timeout: 15_000 })
     // 验证执行耗时显示（数字 + ms）
@@ -139,7 +139,7 @@ test.describe('查询边界 — 执行时间与超时', () => {
     await editor.click()
     await page.keyboard.type('SELECTT * FROMM nonexistent', { delay: 30 })
 
-    await page.getByRole('button', { name: '执行' }).click()
+    await page.getByRole('button', { name: '执行' }).first().click()
 
     // Error message should appear
     await expect(page.getByText(/语法|error|错误|syntax/i)).toBeVisible({ timeout: 15_000 })

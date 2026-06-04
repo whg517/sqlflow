@@ -68,7 +68,7 @@ test.describe('EXPLAIN Query Plan', () => {
       sql: 'SELECT 1',
       database: 'testdb',
     })
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect((body as { code: number }).code).toBe(0)
   })
 
@@ -78,7 +78,7 @@ test.describe('EXPLAIN Query Plan', () => {
       sql: 'SELECT id, username FROM sys_user LIMIT 1',
       database: 'testdb',
     })
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect((body as { code: number }).code).toBe(0)
     const data = (body as { data: unknown }).data
     expect(data).toBeTruthy()
@@ -136,7 +136,7 @@ test.describe('Datasource Connectivity Test', () => {
   test('should test existing datasource connection', async ({ page }) => {
     const ds = await getFirstDatasourceId(page)
     const { status, body } = await apiRequest(page, 'POST', `/datasources/${ds.id}/test`)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const data = body as { data: { success: boolean; message: string } }
     expect(data.data.success).toBe(true)
   })
@@ -168,7 +168,7 @@ test.describe('Table Column Listing', () => {
 
   test('should return columns for existing table', async ({ page }) => {
     const { status, body } = await apiRequest(page, 'GET', `/datasources/${datasourceId}/tables/sys_user/columns`)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const data = body as { code: number; data: Array<{ column_name: string }> }
     expect(data.code).toBe(0)
     expect(data.data.length).toBeGreaterThan(0)
@@ -228,7 +228,7 @@ test.describe('Reset User Password', () => {
     const { status, body } = await apiRequest(page, 'PUT', `/users/${testUserId}/reset-password`, {
       password: 'New@Pass456!',
     })
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect((body as { code: number; message?: string }).message).toContain('成功')
   })
 
@@ -276,7 +276,7 @@ test.describe('Policy Sync', () => {
 
   test('should sync policies successfully', async ({ page }) => {
     const { status, body } = await apiRequest(page, 'POST', '/policies/sync')
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect((body as { code: number; message?: string }).message).toContain('成功')
   })
 

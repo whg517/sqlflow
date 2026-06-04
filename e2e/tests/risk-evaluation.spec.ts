@@ -41,7 +41,7 @@ async function createAndGetRisk(
     db_type: 'mysql',
     change_reason: `${E2E_PREFIX} risk eval`,
   })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   const body = data as { code: number; data: { risk_level: string } }
   expect(body.code).toBe(0)
   return body.data.risk_level

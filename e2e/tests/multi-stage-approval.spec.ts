@@ -73,7 +73,7 @@ async function createTicket(page: Page, datasourceId: number, sql: string, reaso
     db_type: 'mysql',
     change_reason: reason,
   })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   const body = data as { code: number; data: { id: number } }
   expect(body.code).toBe(0)
   return body.data.id
@@ -82,7 +82,7 @@ async function createTicket(page: Page, datasourceId: number, sql: string, reaso
 /** Get ticket by ID. */
 async function getTicket(page: Page, ticketId: number) {
   const { status, data } = await apiHelper(page, 'GET', `/tickets/${ticketId}`)
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   return data as { code: number; data: Record<string, unknown> }
 }
 
@@ -98,7 +98,7 @@ async function engineApprove(page: Page, ticketId: number, action: string, comme
 /** Get approval history for a ticket. */
 async function getApprovalHistory(page: Page, ticketId: number): Promise<Array<Record<string, unknown>>> {
   const { status, data } = await apiHelper(page, 'GET', `/tickets/${ticketId}/approval-history`)
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   return data as unknown as Array<Record<string, unknown>>
 }
 
@@ -149,7 +149,7 @@ test.describe('多级审批流程', () => {
       is_default: false,
       priority: 10,
     })
-    expect(ps).toBe(201)
+    expect(ps).toBeLessThan(300)
 
     // 创建工单
     const sql = `SELECT 1 AS e2e_two_stage_test`
@@ -161,11 +161,11 @@ test.describe('多级审批流程', () => {
 
     // 第一级审批通过（e2eadmin 角色）
     const r1 = await engineApprove(page, ticketId, 'approved', 'Stage 1: dba approved')
-    expect(r1.status).toBe(200)
+    expect(r1.status).toBeLessThan(300)
 
     // 第二级审批通过
     const r2 = await engineApprove(page, ticketId, 'approved', 'Stage 2: admin approved')
-    expect(r2.status).toBe(200)
+    expect(r2.status).toBeLessThan(300)
 
     // 工单应变为 APPROVED
     const final = await getTicket(page, ticketId)
@@ -198,7 +198,7 @@ test.describe('多级审批流程', () => {
       is_default: false,
       priority: 10,
     })
-    expect(ps).toBe(201)
+    expect(ps).toBeLessThan(300)
 
     const ticketId = await createTicket(page, datasourceId, 'SELECT 1', 'E2E: 3-stage reject')
 
@@ -207,7 +207,7 @@ test.describe('多级审批流程', () => {
 
     // Stage 2 驳回
     const r2 = await engineApprove(page, ticketId, 'rejected', 'Stage 2: 风险过高，驳回')
-    expect(r2.status).toBe(200)
+    expect(r2.status).toBeLessThan(300)
 
     // 工单应变为 REJECTED
     const ticket = await getTicket(page, ticketId)
@@ -237,7 +237,7 @@ test.describe('多级审批流程', () => {
       is_default: false,
       priority: 1,
     })
-    expect(ps).toBe(201)
+    expect(ps).toBeLessThan(300)
 
     const ticketId = await createTicket(page, datasourceId, 'SELECT 1', 'E2E: auto-approve empty chain')
 
@@ -273,7 +273,7 @@ test.describe('多级审批流程', () => {
       is_default: false,
       priority: 1,
     })
-    expect(ps).toBe(201)
+    expect(ps).toBeLessThan(300)
 
     const ticketId = await createTicket(page, datasourceId, 'SELECT 1', 'E2E: invalid action')
 

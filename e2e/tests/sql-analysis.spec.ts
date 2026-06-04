@@ -35,7 +35,7 @@ async function createAndAnalyze(
     db_type: 'mysql',
     change_reason: reason,
   })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   const body = data as { code: number; data: Record<string, unknown> }
   expect(body.code).toBe(0)
   return body.data

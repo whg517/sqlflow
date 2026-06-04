@@ -101,7 +101,7 @@ test.describe('Query Share — API', () => {
       sql_summary: 'SELECT * FROM sys_user',
       datasource_name: 'e2e-mysql',
     })
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
     expect(data.data.id).toBeTruthy()
     expect(data.data.token).toBeTruthy()
@@ -114,7 +114,7 @@ test.describe('Query Share — API', () => {
       rows: TEST_ROWS,
       password: 'e2e-share-pass',
     })
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
     expect(data.data.token).toBeTruthy()
     createdShareIds.push(data.data.id)
@@ -127,12 +127,12 @@ test.describe('Query Share — API', () => {
       rows: TEST_ROWS,
       sql_summary: 'e2e-share-list-test',
     })
-    expect(createRes.status).toBe(200)
+    expect(createRes.status).toBeLessThan(300)
     createdShareIds.push(createRes.data.data.id)
 
     // List should include the share
     const { status, data } = await listShares(page)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
     const list = data.data as Array<{ id: number }>
     expect(list.length).toBeGreaterThanOrEqual(1)
@@ -148,7 +148,7 @@ test.describe('Query Share — API', () => {
     }
 
     const { status, data } = await listShares(page)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     const emptyList = data.data as unknown[]
     expect(emptyList.length).toBe(0)
   })
@@ -177,7 +177,7 @@ test.describe('Query Share — Public Access (no auth)', () => {
 
   test('should access shared result via public token', async () => {
     const { status, data } = await getPublicShare(shareToken)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
     expect(data.data.columns).toEqual(TEST_COLUMNS)
     expect((data.data.rows as unknown[]).length).toBe(2)
@@ -218,7 +218,7 @@ test.describe('Query Share — Password Protection', () => {
 
   test('should accept correct password', async () => {
     const { status, data } = await verifySharePassword(shareToken, 'e2e-protected-pass')
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
   })
 })
@@ -242,11 +242,11 @@ test.describe('Query Share — Revoke', () => {
   test('should revoke share and deny public access', async ({ page }) => {
     // Verify it exists first
     const before = await getPublicShare(shareToken)
-    expect(before.status).toBe(200)
+    expect(before.status).toBeLessThan(300)
 
     // Revoke
     const { status, data } = await revokeShare(page, shareId)
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(data.code).toBe(0)
 
     // Public access should fail

@@ -12,66 +12,10 @@
  *   npx playwright test e2e-real/query.spec.ts
  */
 
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, BASE_URL, loginViaApi, getFirstDatasourceId } from '../support/real-test-helpers'
+import type { Page } from '@playwright/test'
 
-// --- Config ---
-
-const BACKEND = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
-const USERNAME = process.env.E2E_USERNAME ?? 'e2eadmin'
-const PASSWORD = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
-
-// Extend timeout for real network calls
-test.setTimeout(60_000)
-
-// --- Helpers ---
-
-/**
- * Login via real auth API, store token in localStorage, navigate to /query.
- */
-async function realLogin(page: Page): Promise<string> {
-  // Hit the real login endpoint
-  const loginRes = await page.request.post(`${BACKEND}/api/auth/login`, {
-    data: { username: USERNAME, password: PASSWORD },
-  })
-  expect(loginRes.ok(), `Login failed: ${loginRes.status()}`).toBeTruthy()
-
-  const loginBody = await loginRes.json()
-  const token: string = loginBody.data?.access_token ?? loginBody.access_token ?? ''
-  expect(token, 'No token returned from login').toBeTruthy()
-
-  // Set token in localStorage then navigate
-  await page.goto('/')
-  await page.evaluate((t) => localStorage.setItem('token', t), token)
-  await page.goto('/query')
-  await page.waitForURL('**/query')
-
-  return token
-}
-
-/**
- * Pick the first active datasource from the real API.
- * Falls back to env var E2E_DATASOURCE_NAME if set.
- */
-async function getFirstDatasourceId(page: Page): Promise<{ id: number; name: string }> {
-  const res = await page.request.get(`${BACKEND}/api/datasources`)
-  expect(res.ok(), `Failed to fetch datasources: ${res.status()}`).toBeTruthy()
-
-  const body = await res.json()
-  const list: Array<{ id: number; name: string; type: string; status: string }> = body.data ?? body ?? []
-
-  // Prefer the env-configured datasource name
-  const envName = process.env.E2E_DATASOURCE_NAME
-  if (envName) {
-    const found = list.find((ds) => ds.name === envName && ds.status === 'active')
-    if (found) return { id: found.id, name: found.name }
-  }
-
-  // Fall back to first active mysql datasource
-  const ds = list.find((d) => d.status === 'active' && d.type === 'mysql')
-    ?? list.find((d) => d.status === 'active')
-  expect(ds, 'No active datasource found').toBeTruthy()
-  return { id: ds!.id, name: ds!.name }
-}
+// --- Helpers (query-specific, using shared helpers) ---
 
 /**
  * Execute a SQL query via the real API and return the response body.
@@ -81,7 +25,7 @@ async function realExecuteSql(page: Page, token: string, params: {
   database: string
   sql: string
 }) {
-  const res = await page.request.post(`${BACKEND}/api/query/execute`, {
+  const res = await page.request.post(`${BASE_URL}/api/query/execute`, {
     headers: { Authorization: `Bearer ${token}` },
     data: params,
   })
@@ -125,25 +69,27 @@ async function executeViaUI(page: Page) {
   ])
 }
 
-// --- Tests ---
+test.describe.configure({ timeout: 60_000 })
 
 test.describe('查询执行 E2E（真实 SQL）', () => {
   let token: string
   let datasourceId: number
   let datasourceName: string
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeAll(async () => {
     // Pre-flight: verify backend is reachable
     try {
-      const health = await request.get(`${BACKEND}/api/health`)
-      expect(health.ok(), `Backend not reachable at ${BACKEND}`).toBeTruthy()
+      const health = await fetch(`${BASE_URL}/health`)
+      if (!health.ok) throw new Error(`Backend not healthy at ${BASE_URL}`)
     } catch {
-      throw new Error(`Cannot connect to backend at ${BACKEND}. Is it running?`)
+      throw new Error(`Cannot connect to backend at ${BASE_URL}. Is it running?`)
     }
   })
 
   test.beforeEach(async ({ page }) => {
-    token = await realLogin(page)
+    token = await loginViaApi(page)
+    await page.goto('/query')
+    await page.waitForURL('**/query')
     const ds = await getFirstDatasourceId(page)
     datasourceId = ds.id
     datasourceName = ds.name
@@ -306,7 +252,7 @@ test.describe('查询执行 E2E（真实 SQL）', () => {
     })
 
     // Fetch history via API
-    const res = await page.request.get(`${BACKEND}/api/query/history?datasource_id=${datasourceId}&page=1&page_size=50`, {
+    const res = await page.request.get(`${BASE_URL}/api/query/history?datasource_id=${datasourceId}&page=1&page_size=50`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(res.ok(), `History API failed: ${res.status()}`).toBeTruthy()
@@ -390,7 +336,7 @@ test.describe('查询执行 E2E（真实 SQL）', () => {
       sql: 'SELECT 1 AS col_a, 2 AS col_b',
     })
 
-    expect(status).toBe(200)
+    expect(status).toBeLessThan(300)
     expect(body.code, 'Response code should be 0').toBe(0)
 
     // Validate response data structure

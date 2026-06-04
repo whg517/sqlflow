@@ -23,7 +23,7 @@ async function realLogin(page: Page): Promise<void> {
 
 /** Navigate to audit log page */
 async function gotoAudit(page: Page): Promise<void> {
-  await page.getByRole('link', { name: '审计' }).click()
+  await page.getByRole('link', { name: '审计' }).first().click()
   await page.waitForURL('**/audit**')
   // Wait for the table or empty state to appear
   await Promise.race([
@@ -90,7 +90,7 @@ test.describe.serial('审计日志 E2E（真实后端 · FTS5 搜索验证）', 
   // ============================================================
   test('2. 执行查询后审计日志记录操作', async ({ page }) => {
     // Step 1: Navigate to query page
-    await page.getByRole('link', { name: '查询' }).click()
+    await page.getByRole('link', { name: '查询' }).first().click()
     await page.waitForURL('**/query**')
 
     // Step 2: Execute a SELECT query (mark with a unique timestamp for identification)
@@ -200,7 +200,7 @@ test.describe.serial('审计日志 E2E（真实后端 · FTS5 搜索验证）', 
 
     // First, try to create audit data with Chinese content by executing a query
     // Navigate to query page
-    await page.getByRole('link', { name: '查询' }).click()
+    await page.getByRole('link', { name: '查询' }).first().click()
     await page.waitForURL('**/query**')
 
     const chineseMarker = `中文测试_${Date.now()}`

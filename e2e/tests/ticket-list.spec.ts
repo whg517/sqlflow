@@ -11,7 +11,7 @@ test.describe('工单操作', () => {
   })
 
   test('工单列表页面正确渲染', async ({ page }) => {
-    await page.getByRole('link', { name: '工单' }).click()
+    await page.getByRole('link', { name: '工单' }).first().click()
     await page.waitForURL('**/tickets**')
 
     // 验证页面标题
@@ -63,7 +63,7 @@ test.describe('工单操作', () => {
 
   test('新建工单页面导航', async ({ page }) => {
     // 从工单列表点击"提交新工单"按钮
-    await page.getByRole('link', { name: '工单' }).click()
+    await page.getByRole('link', { name: '工单' }).first().click()
     await page.waitForURL('**/tickets**')
     await page.getByRole('button', { name: '提交新工单' }).click()
 
@@ -263,7 +263,7 @@ test.describe('工单操作', () => {
 
   test('工单列表从查询页导航到达', async ({ page }) => {
     // 从侧边栏点击工单
-    await page.getByRole('link', { name: '工单' }).click()
+    await page.getByRole('link', { name: '工单' }).first().click()
     await page.waitForURL('**/tickets**')
     await expect(page).toHaveURL(/\/tickets/)
   })

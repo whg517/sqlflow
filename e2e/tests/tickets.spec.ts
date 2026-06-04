@@ -76,7 +76,7 @@ test.describe('工单列表 — 真实后端', () => {
   })
 
   test('工单列表页面正确渲染', async ({ page }) => {
-    await page.getByRole('link', { name: '工单' }).click()
+    await page.getByRole('link', { name: '工单' }).first().click()
     await page.waitForURL('**/tickets**')
 
     await expect(page.getByText('变更工单')).toBeVisible()
@@ -107,7 +107,7 @@ test.describe('工单列表 — 真实后端', () => {
   })
 
   test('新建工单页面导航', async ({ page }) => {
-    await page.getByRole('link', { name: '工单' }).click()
+    await page.getByRole('link', { name: '工单' }).first().click()
     await page.waitForURL('**/tickets**')
     await page.getByRole('button', { name: '提交新工单' }).click()
 

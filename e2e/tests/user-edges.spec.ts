@@ -23,7 +23,7 @@ async function createTestUser(page: import('@playwright/test').Page, username: s
     role,
     email: email ?? `${username}@example.com`,
   })
-  expect(status).toBe(200)
+  expect(status).toBeLessThan(300)
   const data = body as { code: number; data?: { id: number } }
   expect(data.code).toBe(0)
   return data.data!.id

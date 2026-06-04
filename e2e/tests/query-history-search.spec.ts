@@ -28,7 +28,7 @@ test.describe('查询历史列表 + keyword 搜索（真实后端）', () => {
     await page.keyboard.press('Control+a')
     await page.keyboard.press('Delete')
     await page.keyboard.type(sql, { delay: 20 })
-    await page.getByRole('button', { name: '执行' }).click()
+    await page.getByRole('button', { name: '执行' }).first().click()
     await Promise.race([
       page.locator('text=/\\d+ms/').waitFor({ timeout: 15_000 }),
       page.locator('text=/\\d+ 行/').waitFor({ timeout: 15_000 }),

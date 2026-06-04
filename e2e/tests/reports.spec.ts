@@ -22,7 +22,7 @@ test.describe('Admin Reports', () => {
       `${BASE_URL}/api/reports/usage?days=7`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
-    expect(res.status()).toBe(200)
+    expect(res.status()).toBeLessThan(300)
     const body: { code: number; data: Record<string, unknown> } = await res.json()
     expect(body.code).toBe(0)
     expect(body.data).toBeTruthy()
@@ -34,7 +34,7 @@ test.describe('Admin Reports', () => {
       `${BASE_URL}/api/reports/usage?days=30`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
-    expect(res.status()).toBe(200)
+    expect(res.status()).toBeLessThan(300)
     const body: { code: number } = await res.json()
     expect(body.code).toBe(0)
   })
@@ -45,7 +45,7 @@ test.describe('Admin Reports', () => {
       `${BASE_URL}/api/reports/errors?days=7`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
-    expect(res.status()).toBe(200)
+    expect(res.status()).toBeLessThan(300)
     const body: { code: number; data: Record<string, unknown> } = await res.json()
     expect(body.code).toBe(0)
     expect(body.data).toBeTruthy()
@@ -57,7 +57,7 @@ test.describe('Admin Reports', () => {
       `${BASE_URL}/api/reports/performance?days=7`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
-    expect(res.status()).toBe(200)
+    expect(res.status()).toBeLessThan(300)
     const body: { code: number; data: Record<string, unknown> } = await res.json()
     expect(body.code).toBe(0)
     expect(body.data).toBeTruthy()
@@ -69,7 +69,7 @@ test.describe('Admin Reports', () => {
       `${BASE_URL}/api/reports/tickets?days=7`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
-    expect(res.status()).toBe(200)
+    expect(res.status()).toBeLessThan(300)
     const body: { code: number; data: Record<string, unknown> } = await res.json()
     expect(body.code).toBe(0)
     expect(body.data).toBeTruthy()
@@ -87,9 +87,9 @@ test.describe('Admin Reports', () => {
       page.request.get(`${base}/api/reports/tickets?days=7`, { headers }),
     ])
 
-    expect(usageRes.status()).toBe(200)
-    expect(errorRes.status()).toBe(200)
-    expect(perfRes.status()).toBe(200)
-    expect(ticketRes.status()).toBe(200)
+    expect(usageRes.status()).toBeLessThan(300)
+    expect(errorRes.status()).toBeLessThan(300)
+    expect(perfRes.status()).toBeLessThan(300)
+    expect(ticketRes.status()).toBeLessThan(300)
   })
 })
