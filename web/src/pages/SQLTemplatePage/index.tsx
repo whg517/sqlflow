@@ -407,8 +407,8 @@ export default function SQLTemplatePage() {
     setLoading(true);
     try {
       const res = await listTemplates(category, page, pageSize);
-      setTemplates(res.items);
-      setTotal(res.total);
+      setTemplates(Array.isArray(res.items) ? res.items : []);
+      setTotal(res.total ?? 0);
     } catch (err) {
       console.error("Failed to fetch templates:", err);
     } finally {
