@@ -579,9 +579,10 @@ export default function AuditPage() {
       })
       .catch((err) => { console.error("Failed to fetch datasources:", err); });
     api
-      .get<{ code: number; data: UserOption[] }>("/users")
+      .get<{ code: number; data: { users: UserOption[] } | UserOption[] }>("/users")
       .then((res) => {
-        setUsers(res.data ?? []);
+        const d = res.data
+        setUsers(Array.isArray(d) ? d : (d as { users: UserOption[] }).users ?? []);
       })
       .catch((err) => { console.error("Failed to fetch users:", err); });
   }, []);
