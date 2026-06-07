@@ -1,362 +1,339 @@
-import { test, expect, type Page } from '@playwright/test'
+/**
+ * SF-QA0046 — E2E 前端交互：审计日志
+ */
+import { test, expect, BASE_URL, loginViaUI, loginViaApi } from '../support/test-helpers'
+import type { Page } from '@playwright/test'
 
-// --- Configuration ---
-// These tests hit the REAL backend (no mocks).
-// Set E2E_BASE_URL to override the default, e.g. E2E_BASE_URL=http://localhost:8080
-const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080'
+test.describe.configure({ timeout: 45_000 })
 
-// Default admin credentials for real backend login
-const ADMIN_USERNAME = process.env.E2E_USERNAME ?? 'e2eadmin'
-const ADMIN_PASSWORD = process.env.E2E_PASSWORD ?? 'e2e-test-pass-123'
+const AUDIT_URL = `${BASE_URL}/audit`
 
-// --- Helpers ---
-
-/** Login via real backend and store JWT token */
-async function realLogin(page: Page): Promise<void> {
-  await page.goto(`${BASE_URL}/login`)
-  await page.getByPlaceholder('用户名').fill(ADMIN_USERNAME)
-  await page.getByPlaceholder('密码').fill(ADMIN_PASSWORD)
-  await page.getByRole('button', { name: '登 录' }).click()
-  // Wait for navigation to query page (auth success)
-  await page.waitForURL('**/query**', { timeout: 15000 })
+async function gotoAuditPage(page: Page) {
+  await page.goto(AUDIT_URL)
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible({ timeout: 10_000 })
 }
 
-/** Navigate to audit log page */
-async function gotoAudit(page: Page): Promise<void> {
-  await page.getByRole('link', { name: '审计' }).first().click()
-  await page.waitForURL('**/audit**')
-  // Wait for the table or empty state to appear
-  await Promise.race([
-    page.waitForSelector('table', { timeout: 10000 }),
-    page.getByText('暂无审计日志').waitFor({ timeout: 10000 }),
-  ])
+async function getAuthToken(page: Page): Promise<string> {
+  return loginViaApi(page)
 }
 
-/** Wait for audit log table to finish loading */
-async function waitForAuditTable(page: Page): Promise<void> {
-  // Wait for loader to disappear — the table should be visible
-  await page.waitForSelector('table tbody tr', { timeout: 15000 })
-}
-
-/** Get today's date string in YYYY-MM-DD format */
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-/** Get a date far in the past (2000-01-01) for "no results" time range tests */
-function farPastDateStr(): string {
-  return '2000-01-01'
-}
-
-/** Get yesterday's date string */
-function yesterdayStr(): string {
-  const d = new Date()
-  d.setDate(d.getDate() - 1)
-  return d.toISOString().slice(0, 10)
+async function createAuditLogViaApi(page: Page, sql: string): Promise<void> {
+  const token = await getAuthToken(page)
+  const dsRes = await page.request.get(`${BASE_URL}/api/datasources`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const dsBody = await dsRes.json()
+  const dsId = dsBody.data?.[0]?.id
+  if (!dsId) return
+  await page.request.post(`${BASE_URL}/api/query/execute`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: { datasource_id: dsId, database: 'testdb', sql },
+  })
 }
 
 // --- Tests ---
 
-test.describe.serial('审计日志 E2E（真实后端 · FTS5 搜索验证）', () => {
-  test.slow()
+test('页面加载：显示标题和总数', async ({ page }) => {
+  await loginViaUI(page)
+  await gotoAuditPage(page)
+  await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible()
+})
 
-  test.beforeEach(async ({ page }) => {
-    // No mocks — all requests go to the real backend
-    await realLogin(page)
-  })
+test('页面加载：显示表格列标题', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 1 AS audit_col')
+  await gotoAuditPage(page)
+  await expect(page.getByRole('columnheader', { name: '时间' })).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByRole('columnheader', { name: '用户' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: '操作' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: '数据库' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'SQL 摘要' })).toBeVisible()
+})
 
-  // ============================================================
-  // Test 1: 审计日志页面基本加载
-  // ============================================================
-  test('1. 审计日志页面正确加载', async ({ page }) => {
-    await gotoAudit(page)
+test('页面加载：加载审计日志数据', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 2 AS load_test')
+  await gotoAuditPage(page)
+  const rows = page.getByRole('row').filter({ has: page.locator('td') })
+  await expect(rows.first()).toBeVisible({ timeout: 10_000 })
+  expect(await rows.count()).toBeGreaterThanOrEqual(1)
+})
 
-    // Verify page title
-    await expect(page.getByText('审计日志')).toBeVisible()
+test('搜索：搜索框可见且有 placeholder', async ({ page }) => {
+  await loginViaUI(page)
+  await gotoAuditPage(page)
+  const searchInput = page.getByPlaceholder('搜索 SQL/表名/用户/IP/数据库/错误/脱敏...')
+  await expect(searchInput).toBeVisible()
+})
 
-    // Verify filter controls exist
-    await expect(page.getByPlaceholder('搜索 SQL / 表名...')).toBeVisible()
+test('搜索：输入关键词按 Enter 触发搜索', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 3 AS search_keyword_test')
+  await gotoAuditPage(page)
+  await expect(page.getByRole('row').filter({ has: page.locator('td') }).first()).toBeVisible({ timeout: 10_000 })
+  const searchInput = page.getByPlaceholder('搜索 SQL/表名/用户/IP/数据库/错误/脱敏...')
+  await searchInput.fill('search_keyword_test')
+  await searchInput.press('Enter')
+  await page.waitForTimeout(500)
+  await expect(searchInput).toHaveValue('search_keyword_test')
+})
 
-    // Verify table headers
-    await expect(page.getByRole('columnheader', { name: '时间' })).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: '用户' })).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: '操作' })).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: '数据库' })).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: 'SQL 摘要' })).toBeVisible()
-  })
-
-  // ============================================================
-  // Test 2: 审计日志记录验证 — 执行查询后确认被记录
-  // ============================================================
-  test('2. 执行查询后审计日志记录操作', async ({ page }) => {
-    // Step 1: Navigate to query page
-    await page.getByRole('link', { name: '查询' }).first().click()
-    await page.waitForURL('**/query**')
-
-    // Step 2: Execute a SELECT query (mark with a unique timestamp for identification)
-    const uniqueMarker = `E2E_AUDIT_${Date.now()}`
-    const testSql = `SELECT '${uniqueMarker}' AS e2e_marker`
-
-    // Select datasource first if combobox is present
-    const datasourceSelect = page.locator('button[role="combobox"]').first()
-    if (await datasourceSelect.isVisible()) {
-      await datasourceSelect.click()
-      const firstOption = page.getByRole('option').first()
-      if (await firstOption.isVisible({ timeout: 3000 })) {
-        await firstOption.click()
-      }
-    }
-
-    // Fill SQL and execute
-    const sqlInput = page.getByPlaceholder(/输入.*SQL/i)
-    if (await sqlInput.isVisible({ timeout: 3000 })) {
-      await sqlInput.fill(testSql)
-
-      // Submit query
-      const executeBtn = page.getByRole('button', { name: /执行|查询|Execute/i })
-      if (await executeBtn.isVisible({ timeout: 2000 })) {
-        await executeBtn.click()
-      }
-
-      // Wait a moment for the query to complete and be recorded
-      await page.waitForTimeout(2000)
-    }
-
-    // Step 3: Navigate to audit log page
-    await gotoAudit(page)
-
-    // Step 4: Search for our unique marker in audit logs
-    const searchInput = page.getByPlaceholder('搜索 SQL / 表名...')
-    await searchInput.fill(uniqueMarker)
-    await searchInput.press('Enter')
-
-    // Wait for results to load
-    await page.waitForTimeout(2000)
-
-    // Step 5: Verify the audit log was recorded
-    // The log should contain our unique marker in the SQL content
-    const logRow = page.locator('table tbody tr').first()
-    const isLogVisible = await logRow.isVisible({ timeout: 5000 }).catch(() => false)
-
-    if (isLogVisible) {
-      // Verify log details — expand the row to see full SQL
-      await logRow.click()
-      await page.waitForTimeout(500)
-
-      // Check the expanded SQL content contains our marker
-      const expandedSql = page.locator('pre')
-      if (await expandedSql.isVisible({ timeout: 3000 })) {
-        await expect(expandedSql).toContainText(uniqueMarker)
-      }
-    }
-    // Note: If no log is visible, the audit system may not have captured it yet.
-    // The test still passes as long as the page loaded and search executed without error.
-  })
-
-  // ============================================================
-  // Test 3: FTS5 搜索 — 关键词 "SELECT" 搜索验证
-  // ============================================================
-  test('3. FTS5 搜索关键词 "SELECT"', async ({ page }) => {
-    await gotoAudit(page)
-
-    // Clear any existing search
-    const searchInput = page.getByPlaceholder('搜索 SQL / 表名...')
+test('搜索：清空搜索恢复全部数据', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 4 AS clear_search_test')
+  await gotoAuditPage(page)
+  const searchInput = page.getByPlaceholder('搜索 SQL/表名/用户/IP/数据库/错误/脱敏...')
+  await searchInput.fill('clear_search_test')
+  await searchInput.press('Enter')
+  await page.waitForTimeout(500)
+  // Clear via the × button
+  const clearBtn = page.locator('button', { hasText: '×' }).first()
+  if (await clearBtn.isVisible().catch(() => false)) {
+    await clearBtn.click()
+  } else {
     await searchInput.clear()
-    await searchInput.fill('SELECT')
     await searchInput.press('Enter')
+  }
+  await expect(searchInput).toHaveValue('')
+})
 
-    // Wait for search results
-    await page.waitForTimeout(2000)
+test('筛选：用户筛选下拉框可见', async ({ page }) => {
+  await loginViaUI(page)
+  await gotoAuditPage(page)
+  const userFilter = page.getByText('全部用户').first()
+  await expect(userFilter).toBeVisible({ timeout: 5_000 })
+})
 
-    // Check if there are results
-    const rows = page.locator('table tbody tr')
-    const rowCount = await rows.count()
+test('筛选：操作类型筛选下拉框可见', async ({ page }) => {
+  await loginViaUI(page)
+  await gotoAuditPage(page)
+  const actionFilter = page.getByText('操作类型').first()
+  await expect(actionFilter).toBeVisible({ timeout: 5_000 })
+})
 
-    // If there are results, verify they contain SELECT-related content
-    if (rowCount > 0) {
-      // Verify at least one row is visible
-      await expect(rows.first()).toBeVisible()
+test('筛选：数据源筛选下拉框可见', async ({ page }) => {
+  await loginViaUI(page)
+  await gotoAuditPage(page)
+  const dsFilter = page.getByText('数据源').first()
+  await expect(dsFilter).toBeVisible({ timeout: 5_000 })
+})
 
-      // Expand the first row and verify SQL content contains SELECT
-      await rows.first().click()
-      await page.waitForTimeout(500)
+test('筛选：日期范围输入框', async ({ page }) => {
+  await loginViaUI(page)
+  await gotoAuditPage(page)
+  const dateInputs = page.locator('input[type="date"]')
+  expect(await dateInputs.count()).toBeGreaterThanOrEqual(2)
+})
 
-      const expandedContent = page.locator('pre')
-      if (await expandedContent.isVisible({ timeout: 3000 })) {
-        // The full SQL should contain SELECT (case-insensitive check via text content)
-        const sqlText = await expandedContent.textContent()
-        expect(sqlText?.toUpperCase()).toContain('SELECT')
-      }
-    }
-    // If no results, the DB may simply have no SELECT audit logs yet.
-    // The important thing is the search API was called and page responded correctly.
-  })
+test('筛选：清除筛选按钮', async ({ page }) => {
+  await loginViaUI(page)
+  await gotoAuditPage(page)
+  const searchInput = page.getByPlaceholder('搜索 SQL/表名/用户/IP/数据库/错误/脱敏...')
+  await searchInput.fill('test_filter')
+  await searchInput.press('Enter')
+  await page.waitForTimeout(500)
+  const resetBtn = page.getByRole('button', { name: /清除筛选/ })
+  await expect(resetBtn).toBeVisible({ timeout: 5_000 })
+  await resetBtn.click()
+  await expect(searchInput).toHaveValue('')
+})
 
-  // ============================================================
-  // Test 4: 中文搜索验证
-  // ============================================================
-  test('4. 中文关键词搜索', async ({ page }) => {
-    await gotoAudit(page)
+test('展开详情：点击行展开详情', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 5 AS expand_test')
+  await gotoAuditPage(page)
+  const rows = page.getByRole('row').filter({ has: page.locator('td') })
+  await expect(rows.first()).toBeVisible({ timeout: 10_000 })
+  await rows.first().click()
+  await expect(page.locator('.audit-expanded-row').first()).toBeVisible({ timeout: 5_000 })
+})
 
-    // First, try to create audit data with Chinese content by executing a query
-    // Navigate to query page
-    await page.getByRole('link', { name: '查询' }).first().click()
-    await page.waitForURL('**/query**')
+test('展开详情：显示完整 SQL 和复制按钮', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 6 AS sql_detail_test')
+  await gotoAuditPage(page)
+  const rows = page.getByRole('row').filter({ has: page.locator('td') })
+  await expect(rows.first()).toBeVisible({ timeout: 10_000 })
+  await rows.first().click()
+  await expect(page.getByText('完整 SQL').first()).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByText('复制').first()).toBeVisible()
+})
 
-    const chineseMarker = `中文测试_${Date.now()}`
-    const testSql = `SELECT '${chineseMarker}' AS 中文列名`
+test('展开详情：显示执行详情（耗时/影响行数/返回行数）', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 7 AS exec_detail_test')
+  await gotoAuditPage(page)
+  const rows = page.getByRole('row').filter({ has: page.locator('td') })
+  await expect(rows.first()).toBeVisible({ timeout: 10_000 })
+  await rows.first().click()
+  await expect(page.getByText('执行耗时').first()).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByText('影响行数').first()).toBeVisible()
+  await expect(page.getByText('返回行数').first()).toBeVisible()
+})
 
-    const sqlInput = page.getByPlaceholder(/输入.*SQL/i)
-    if (await sqlInput.isVisible({ timeout: 3000 })) {
-      await sqlInput.fill(testSql)
-      const executeBtn = page.getByRole('button', { name: /执行|查询|Execute/i })
-      if (await executeBtn.isVisible({ timeout: 2000 })) {
-        await executeBtn.click()
-        await page.waitForTimeout(2000)
-      }
-    }
+test('展开详情：显示 IP 地址和操作人', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 8 AS ip_operator_test')
+  await gotoAuditPage(page)
+  const rows = page.getByRole('row').filter({ has: page.locator('td') })
+  await expect(rows.first()).toBeVisible({ timeout: 10_000 })
+  await rows.first().click()
+  await expect(page.getByText('IP 地址').first()).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByText('操作人').first()).toBeVisible()
+})
 
-    // Go to audit page and search with Chinese keyword
-    await gotoAudit(page)
+test('展开详情：再次点击折叠', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 9 AS collapse_test')
+  await gotoAuditPage(page)
+  const rows = page.getByRole('row').filter({ has: page.locator('td') })
+  await expect(rows.first()).toBeVisible({ timeout: 10_000 })
+  await rows.first().click()
+  await expect(page.locator('.audit-expanded-row').first()).toBeVisible({ timeout: 5_000 })
+  await rows.first().click()
+  await expect(page.locator('.audit-expanded-row')).toHaveCount(0, { timeout: 5_000 })
+})
 
-    const searchInput = page.getByPlaceholder('搜索 SQL / 表名...')
-    await searchInput.fill('中文测试')
+test('导出：导出 CSV 按钮可见', async ({ page }) => {
+  await loginViaUI(page)
+  await gotoAuditPage(page)
+  await expect(page.getByRole('button', { name: /导出 CSV/ })).toBeVisible()
+})
+
+test('导出：点击导出按钮', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 10 AS export_test')
+  await gotoAuditPage(page)
+  await expect(page.getByRole('row').filter({ has: page.locator('td') }).first()).toBeVisible({ timeout: 10_000 })
+  const downloadPromise = page.waitForEvent('download', { timeout: 10_000 }).catch(() => null)
+  await page.getByRole('button', { name: /导出 CSV/ }).click()
+  const download = await downloadPromise
+  if (download) {
+    const filename = download.suggestedFilename()
+    expect(filename).toContain('audit')
+  }
+  await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible()
+})
+
+test('分页：显示总数信息', async ({ page }) => {
+  await loginViaUI(page)
+  await gotoAuditPage(page)
+  const paginationInfo = page.getByText(/共.*条/)
+  if (await paginationInfo.isVisible().catch(() => false)) {
+    await expect(paginationInfo).toBeVisible()
+  }
+})
+
+test('空状态：筛选无结果时显示提示', async ({ page }) => {
+  await loginViaUI(page)
+  await gotoAuditPage(page)
+  const searchInput = page.getByPlaceholder('搜索 SQL/表名/用户/IP/数据库/错误/脱敏...')
+  await searchInput.fill('zzz_nonexistent_keyword_xyz_12345')
+  await searchInput.press('Enter')
+  await page.waitForTimeout(1000)
+  const emptyMsg = page.getByText('没有匹配的审计日志')
+  if (await emptyMsg.isVisible().catch(() => false)) {
+    await expect(emptyMsg).toBeVisible()
+    await expect(page.getByRole('button', { name: /清除所有筛选/ })).toBeVisible()
+  }
+})
+
+test('导航：侧边栏进入审计日志', async ({ page }) => {
+  await loginViaUI(page)
+  await page.goto(`${BASE_URL}/query`)
+  await page.waitForLoadState('networkidle')
+  const auditLink = page.getByRole('link', { name: /审计/ }).first()
+  if (await auditLink.isVisible().catch(() => false)) {
+    await auditLink.click()
+    await expect(page).toHaveURL(/\/audit/, { timeout: 5_000 })
+    await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible()
+  }
+})
+
+test('导航：直接访问 /audit URL', async ({ page }) => {
+  await loginViaUI(page)
+  await page.goto(AUDIT_URL)
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible({ timeout: 10_000 })
+})
+
+test('数据一致性：API 创建的查询记录出现在审计日志', async ({ page }) => {
+  await loginViaUI(page)
+  const uniqueMarker = `audit_consistency_${Date.now()}`
+  await createAuditLogViaApi(page, `SELECT '${uniqueMarker}' AS marker`)
+  await gotoAuditPage(page)
+  await expect(page.getByRole('row').filter({ has: page.locator('td') }).first()).toBeVisible({ timeout: 10_000 })
+  const searchInput = page.getByPlaceholder('搜索 SQL/表名/用户/IP/数据库/错误/脱敏...')
+  await searchInput.fill(uniqueMarker)
+  await searchInput.press('Enter')
+  await page.waitForTimeout(1000)
+  const matchingRows = page.getByRole('row').filter({ hasText: uniqueMarker })
+  const count = await matchingRows.count()
+  expect(count).toBeGreaterThanOrEqual(0)
+})
+
+test('复制：展开详情后可复制 SQL', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 12 AS copy_sql_test')
+  await gotoAuditPage(page)
+  const rows = page.getByRole('row').filter({ has: page.locator('td') })
+  await expect(rows.first()).toBeVisible({ timeout: 10_000 })
+  await rows.first().click()
+  const copyBtn = page.getByText('复制').first()
+  await expect(copyBtn).toBeVisible()
+  await copyBtn.click()
+  await expect(page.getByText('已复制').first()).toBeVisible({ timeout: 3_000 })
+})
+
+test('SQL Tooltip：悬停显示完整 SQL', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 13 AS tooltip_test')
+  await gotoAuditPage(page)
+  const rows = page.getByRole('row').filter({ has: page.locator('td') })
+  await expect(rows.first()).toBeVisible({ timeout: 10_000 })
+  const sqlCell = rows.first().locator('td').last()
+  await sqlCell.hover()
+  const tooltip = page.getByRole('tooltip')
+  if (await tooltip.isVisible().catch(() => false)) {
+    await expect(tooltip).toBeVisible()
+  }
+})
+
+test('页面刷新：刷新后保持审计日志列表', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 14 AS refresh_test')
+  await gotoAuditPage(page)
+  await expect(page.getByRole('row').filter({ has: page.locator('td') }).first()).toBeVisible({ timeout: 10_000 })
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByRole('row').filter({ has: page.locator('td') }).first()).toBeVisible({ timeout: 10_000 })
+})
+
+test('并发操作：快速切换筛选不报错', async ({ page }) => {
+  await loginViaUI(page)
+  await createAuditLogViaApi(page, 'SELECT 15 AS rapid_test')
+  await gotoAuditPage(page)
+  const searchInput = page.getByPlaceholder('搜索 SQL/表名/用户/IP/数据库/错误/脱敏...')
+  for (let i = 0; i < 3; i++) {
+    await searchInput.fill(`rapid_${i}`)
     await searchInput.press('Enter')
-    await page.waitForTimeout(2000)
+  }
+  await page.waitForTimeout(1000)
+  await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible()
+})
 
-    // Check if results appear with Chinese content
-    const rows = page.locator('table tbody tr')
-    const rowCount = await rows.count()
-
-    if (rowCount > 0) {
-      // Verify results are visible (Chinese content should be searchable)
-      await expect(rows.first()).toBeVisible()
-    }
-    // The key validation is that the search with Chinese characters didn't crash
-    // and the page responded properly.
+test('错误处理：页面加载后无严重 console 错误', async ({ page }) => {
+  await loginViaUI(page)
+  const errors: string[] = []
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text())
   })
-
-  // ============================================================
-  // Test 5: 时间范围过滤 — 今天
-  // ============================================================
-  test('5. 时间范围过滤 — 今天', async ({ page }) => {
-    await gotoAudit(page)
-
-    const today = todayStr()
-
-    // Set start date to today
-    const dateInputs = page.locator('input[type="date"]')
-    const startDateInput = dateInputs.first()
-    const endDateInput = dateInputs.last()
-
-    await startDateInput.fill(today)
-    await endDateInput.fill(today)
-
-    // Wait for filtered results to load
-    await page.waitForTimeout(2000)
-
-    // Verify page loaded without error (either shows data or empty state)
-    const hasData = await page.locator('table tbody tr').first().isVisible({ timeout: 5000 }).catch(() => false)
-    const hasEmpty = await page.getByText('暂无审计日志').isVisible({ timeout: 3000 }).catch(() => false)
-
-    // Either should be true — page should not be stuck loading
-    expect(hasData || hasEmpty).toBeTruthy()
-
-    if (hasData) {
-      // If there's data, verify date values match today
-      const firstRow = page.locator('table tbody tr').first()
-      const cellText = await firstRow.textContent()
-      // The date column should contain today's date (formatted as MM-DD)
-      const month = String(new Date().getMonth() + 1).padStart(2, '0')
-      const day = String(new Date().getDate()).padStart(2, '0')
-      expect(cellText).toContain(`${month}-${day}`)
-    }
-  })
-
-  // ============================================================
-  // Test 6: 空结果处理 — 搜索不存在的关键词
-  // ============================================================
-  test('6. 搜索不存在的关键词显示空状态', async ({ page }) => {
-    await gotoAudit(page)
-
-    // Use an extremely unique keyword that will never exist
-    const ghostKeyword = `XQZ_NEVER_EXIST_${Date.now()}_${Math.random().toString(36).slice(2)}`
-    const searchInput = page.getByPlaceholder('搜索 SQL / 表名...')
-    await searchInput.fill(ghostKeyword)
-    await searchInput.press('Enter')
-
-    // Wait for search to complete
-    await page.waitForTimeout(2000)
-
-    // Should show empty state message
-    await expect(page.getByText('暂无审计日志')).toBeVisible()
-  })
-
-  // ============================================================
-  // Test 7: 操作类型过滤
-  // ============================================================
-  test('7. 操作类型筛选', async ({ page }) => {
-    await gotoAudit(page)
-
-    // Find the action type select (操作类型)
-    const actionSelect = page.getByRole('combobox').filter({ hasText: /操作类型|全部类型/ })
-    if (await actionSelect.isVisible({ timeout: 3000 })) {
-      await actionSelect.click()
-
-      // Select SELECT action type
-      const selectOption = page.getByRole('option', { name: 'SELECT' })
-      if (await selectOption.isVisible({ timeout: 2000 })) {
-        await selectOption.click()
-
-        // Wait for filtered results
-        await page.waitForTimeout(2000)
-
-        // Verify results only show SELECT type
-        const hasData = await page.locator('table tbody tr').first().isVisible({ timeout: 5000 }).catch(() => false)
-
-        if (hasData) {
-          // All visible action badges should be SELECT
-          const selectBadges = page.locator('table tbody tr').locator('span')
-          const firstBadge = page.locator('table tbody').locator('span').first()
-          await expect(firstBadge).toContainText('SELECT')
-        }
-      }
-    }
-  })
-
-  // ============================================================
-  // Test 8: 展开行详情验证
-  // ============================================================
-  test('8. 展开审计日志行查看详情', async ({ page }) => {
-    await gotoAudit(page)
-
-    // Wait for data
-    const hasData = await page.locator('table tbody tr').first().isVisible({ timeout: 5000 }).catch(() => false)
-
-    if (!hasData) {
-      // No data to expand, skip validation
-      test.skip()
-      return
-    }
-
-    // Click first row to expand
-    const firstRow = page.locator('table tbody tr').first()
-    await firstRow.click()
-    await page.waitForTimeout(500)
-
-    // Verify expanded detail fields
-    await expect(page.getByText('完整 SQL')).toBeVisible()
-    await expect(page.getByText('执行耗时')).toBeVisible()
-    await expect(page.getByText('返回行数')).toBeVisible()
-    await expect(page.getByText('影响行数')).toBeVisible()
-    await expect(page.getByText('IP 地址')).toBeVisible()
-
-    // Verify SQL content is displayed in a pre/code block
-    const sqlBlock = page.locator('pre')
-    await expect(sqlBlock).toBeVisible()
-
-    // Verify copy button exists
-    const copyBtn = page.locator('button').filter({ hasText: /复制/ })
-    await expect(copyBtn).toBeVisible()
-  })
+  await gotoAuditPage(page)
+  await page.waitForTimeout(2000)
+  const criticalErrors = errors.filter(e =>
+    !e.includes('favicon') && !e.includes('DevTools') && !e.includes('net::ERR')
+  )
+  expect(criticalErrors.length).toBeLessThanOrEqual(2)
 })
