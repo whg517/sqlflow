@@ -274,8 +274,10 @@ func (s *AuditReportService) queryTopDatabases(ctx context.Context, startDate st
 }
 
 func (s *AuditReportService) queryDailyAuditTrend(ctx context.Context, startDate string) ([]DailyAuditTrend, error) {
+	// Use SUBSTR instead of DATE() because ent writes RFC3339Nano timestamps (e.g.
+	// "2026-06-07T02:52:43.128063513Z") which SQLite DATE() cannot parse, returning NULL.
 	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT DATE(created_at) as date, COUNT(*) as count FROM audit_logs WHERE created_at >= ? GROUP BY DATE(created_at) ORDER BY date`, startDate)
+		`SELECT SUBSTR(created_at, 1, 10) as date, COUNT(*) as count FROM audit_logs WHERE created_at >= ? GROUP BY SUBSTR(created_at, 1, 10) ORDER BY date`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query daily audit trend: %w", err)
 	}
@@ -382,8 +384,9 @@ func (s *AuditReportService) queryRecentErrors(ctx context.Context, startDate st
 }
 
 func (s *AuditReportService) queryDailyErrorTrend(ctx context.Context, startDate string) ([]DailyAuditTrend, error) {
+	// Use SUBSTR instead of DATE() — see queryDailyAuditTrend for rationale.
 	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT DATE(created_at) as date, COUNT(*) as count FROM audit_logs WHERE created_at >= ? AND error_message != '' GROUP BY DATE(created_at) ORDER BY date`, startDate)
+		`SELECT SUBSTR(created_at, 1, 10) as date, COUNT(*) as count FROM audit_logs WHERE created_at >= ? AND error_message != '' GROUP BY SUBSTR(created_at, 1, 10) ORDER BY date`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query daily error trend: %w", err)
 	}
@@ -479,14 +482,15 @@ func (s *AuditReportService) GetPerformanceReport(ctx context.Context, params Re
 }
 
 func (s *AuditReportService) queryDailyPerfTrend(ctx context.Context, startDate string) ([]DailyPerfTrend, error) {
+	// Use SUBSTR instead of DATE() — see queryDailyAuditTrend for rationale.
 	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT DATE(created_at) as date,
+		`SELECT SUBSTR(created_at, 1, 10) as date,
 		        CAST(COALESCE(AVG(execution_time_ms), 0) AS REAL) as avg_time_ms,
 		        COALESCE(MAX(execution_time_ms), 0) as max_time_ms,
 		        COUNT(*) as query_count,
 		        COALESCE(SUM(result_rows), 0) as result_rows
 		 FROM audit_logs WHERE created_at >= ?
-		 GROUP BY DATE(created_at) ORDER BY date`, startDate)
+		 GROUP BY SUBSTR(created_at, 1, 10) ORDER BY date`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query daily perf trend: %w", err)
 	}
@@ -581,13 +585,14 @@ func (s *AuditReportService) GetTicketReport(ctx context.Context, params ReportP
 }
 
 func (s *AuditReportService) queryDailyTicketTrend(ctx context.Context, startDate string) ([]DailyTicketTrend, error) {
+	// Use SUBSTR instead of DATE() — see queryDailyAuditTrend for rationale.
 	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT DATE(created_at) as date,
+		`SELECT SUBSTR(created_at, 1, 10) as date,
 		        SUM(CASE WHEN 1=1 THEN 1 ELSE 0 END) as created,
 		        SUM(CASE WHEN status IN ('APPROVED', 'DONE') THEN 1 ELSE 0 END) as approved,
 		        SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as rejected
 		 FROM tickets WHERE created_at >= ?
-		 GROUP BY DATE(created_at) ORDER BY date`, startDate)
+		 GROUP BY SUBSTR(created_at, 1, 10) ORDER BY date`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query daily ticket trend: %w", err)
 	}
