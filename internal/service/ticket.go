@@ -65,16 +65,17 @@ var validTransitions = map[model.TicketStatus][]model.TicketStatus{
 
 // TicketService handles ticket management logic.
 type TicketService struct {
-	database      *db.DB
-	client        *ent.Client
-	auditSvc      *AuditService
-	notifySvc     *NotifyService
-	gitSvc        *GitService
-	slaSvc        *SLAService
-	dsSvc         *DatasourceService
-	connMgr       *connpool.Manager
-	encryptionKey string
-	permSvc       *PermissionService
+	database        *db.DB
+	client          *ent.Client
+	auditSvc        *AuditService
+	notifySvc       *NotifyService
+	gitSvc          *GitService
+	slaSvc          *SLAService
+	dsSvc           *DatasourceService
+	connMgr         *connpool.Manager
+	encryptionKey   string
+	permSvc         *PermissionService
+	approvalEngine  *ApprovalEngine
 }
 
 // NewTicketService creates a new TicketService.
@@ -102,6 +103,11 @@ func (s *TicketService) SetSLAService(slaSvc *SLAService) {
 // SetPermissionService injects the permission service for MongoDB collection-level permission checks.
 func (s *TicketService) SetPermissionService(permSvc *PermissionService) {
 	s.permSvc = permSvc
+}
+
+// SetApprovalEngine injects the approval engine for automatic policy-based approval.
+func (s *TicketService) SetApprovalEngine(engine *ApprovalEngine) {
+	s.approvalEngine = engine
 }
 
 // SetDatasourceService injects the datasource service and connection manager
@@ -242,6 +248,28 @@ func (s *TicketService) CreateTicket(ctx context.Context, submitterID int64, sub
 		UpdatedAt:      now,
 	}
 	s.populateTicketNames(ctx, t)
+
+	// Apply approval policy if engine is available
+	if s.approvalEngine != nil {
+		policy, err := s.approvalEngine.MatchPolicy(ctx, t)
+		if err != nil {
+			log.Printf("ticket: match approval policy failed for ticket %d: %v", id, err)
+			// Policy matching failure should not block ticket creation.
+			// Ticket stays in SUBMITTED status for manual review.
+		} else {
+			result, err := s.approvalEngine.ApplyPolicy(ctx, id, policy, submitterID)
+			if err != nil {
+				log.Printf("ticket: apply approval policy failed for ticket %d: %v", id, err)
+			} else {
+				if result.AutoApproved {
+					t.Status = model.TicketStatusApproved
+				} else {
+					t.Status = model.TicketStatusPendingApproval
+				}
+				log.Printf("ticket: approval policy applied for ticket %d, auto_approved=%v, policy_id=%d", id, result.AutoApproved, result.PolicyID)
+			}
+		}
+	}
 
 	// Send notification for ticket creation
 	if s.notifySvc != nil {

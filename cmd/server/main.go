@@ -201,10 +201,11 @@ func main() {
 	backupSvc.Start()
 	defer backupSvc.Stop()
 
-	// Start server
 	approvalEngine := service.NewApprovalEngine(database)
 	approvalEngine.SetNotifyService(notifySvc)
 	_ = approvalEngine.EnsureDefaultPolicy(context.Background())
+
+	ticketSvc.SetApprovalEngine(approvalEngine)
 
 	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, oidcSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, snapshotSvc, approvalEngine, database, cfg, connMgr, poolMgr)
 
