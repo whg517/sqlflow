@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FileText,
@@ -242,10 +242,26 @@ export default function DashboardPage() {
     [range],
   );
 
-  // Initial fetch (triggers on mount via loading state)
-  if (loading && !error && !data) {
-    void fetchData();
-  }
+  // Fetch data on mount and when range changes
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+
+    getDashboardOverview(range)
+      .then((res) => {
+        if (res.code === 0) {
+          setData(res.data);
+        } else {
+          setError("获取概览数据失败");
+        }
+      })
+      .catch(() => {
+        setError("获取概览数据失败");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [range]);
 
   // Error state
   if (error && !data) {
@@ -278,8 +294,8 @@ export default function DashboardPage() {
     );
   }
 
-  // Loading state
-  if (loading) {
+  // Loading state (data is null and no error yet)
+  if (loading && !data) {
     return (
       <div className="mx-auto max-w-[1200px]">
         <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-6">
