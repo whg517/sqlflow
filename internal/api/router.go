@@ -106,6 +106,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.POST("/api/query/review", aiReviewHandler.ReviewStream)
 	authGroup.POST("/api/query/export", queryHandler.ExportQuery)
 	authGroup.GET("/api/query/history", queryHandler.ListHistory)
+	authGroup.GET("/api/query/history/frequent", queryHandler.GetFrequentQueries)
 	authGroup.DELETE("/api/query/history/:id", queryHandler.DeleteHistory)
 	authGroup.DELETE("/api/query/history", queryHandler.ClearHistory)
 

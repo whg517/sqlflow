@@ -394,6 +394,7 @@ var (
 		{Name: "datasource_id", Type: field.TypeInt64},
 		{Name: "database", Type: field.TypeString, Default: ""},
 		{Name: "sql_content", Type: field.TypeString},
+		{Name: "sql_hash", Type: field.TypeString, Default: ""},
 		{Name: "sql_summary", Type: field.TypeString, Default: ""},
 		{Name: "db_type", Type: field.TypeString, Default: "mysql"},
 		{Name: "execution_time", Type: field.TypeInt64, Default: 0},
@@ -415,12 +416,17 @@ var (
 			{
 				Name:    "queryhistory_execution_time",
 				Unique:  false,
-				Columns: []*schema.Column{QueryHistoryColumns[7]},
+				Columns: []*schema.Column{QueryHistoryColumns[8]},
 			},
 			{
 				Name:    "queryhistory_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{QueryHistoryColumns[10]},
+				Columns: []*schema.Column{QueryHistoryColumns[11]},
+			},
+			{
+				Name:    "queryhistory_user_id_sql_hash",
+				Unique:  false,
+				Columns: []*schema.Column{QueryHistoryColumns[1], QueryHistoryColumns[5]},
 			},
 		},
 	}

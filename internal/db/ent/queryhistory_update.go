@@ -98,6 +98,20 @@ func (_u *QueryHistoryUpdate) SetNillableSQLContent(v *string) *QueryHistoryUpda
 	return _u
 }
 
+// SetSQLHash sets the "sql_hash" field.
+func (_u *QueryHistoryUpdate) SetSQLHash(v string) *QueryHistoryUpdate {
+	_u.mutation.SetSQLHash(v)
+	return _u
+}
+
+// SetNillableSQLHash sets the "sql_hash" field if the given value is not nil.
+func (_u *QueryHistoryUpdate) SetNillableSQLHash(v *string) *QueryHistoryUpdate {
+	if v != nil {
+		_u.SetSQLHash(*v)
+	}
+	return _u
+}
+
 // SetSQLSummary sets the "sql_summary" field.
 func (_u *QueryHistoryUpdate) SetSQLSummary(v string) *QueryHistoryUpdate {
 	_u.mutation.SetSQLSummary(v)
@@ -275,6 +289,9 @@ func (_u *QueryHistoryUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.SQLContent(); ok {
 		_spec.SetField(queryhistory.FieldSQLContent, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.SQLHash(); ok {
+		_spec.SetField(queryhistory.FieldSQLHash, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.SQLSummary(); ok {
 		_spec.SetField(queryhistory.FieldSQLSummary, field.TypeString, value)
 	}
@@ -388,6 +405,20 @@ func (_u *QueryHistoryUpdateOne) SetSQLContent(v string) *QueryHistoryUpdateOne 
 func (_u *QueryHistoryUpdateOne) SetNillableSQLContent(v *string) *QueryHistoryUpdateOne {
 	if v != nil {
 		_u.SetSQLContent(*v)
+	}
+	return _u
+}
+
+// SetSQLHash sets the "sql_hash" field.
+func (_u *QueryHistoryUpdateOne) SetSQLHash(v string) *QueryHistoryUpdateOne {
+	_u.mutation.SetSQLHash(v)
+	return _u
+}
+
+// SetNillableSQLHash sets the "sql_hash" field if the given value is not nil.
+func (_u *QueryHistoryUpdateOne) SetNillableSQLHash(v *string) *QueryHistoryUpdateOne {
+	if v != nil {
+		_u.SetSQLHash(*v)
 	}
 	return _u
 }
@@ -598,6 +629,9 @@ func (_u *QueryHistoryUpdateOne) sqlSave(ctx context.Context) (_node *QueryHisto
 	}
 	if value, ok := _u.mutation.SQLContent(); ok {
 		_spec.SetField(queryhistory.FieldSQLContent, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SQLHash(); ok {
+		_spec.SetField(queryhistory.FieldSQLHash, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.SQLSummary(); ok {
 		_spec.SetField(queryhistory.FieldSQLSummary, field.TypeString, value)

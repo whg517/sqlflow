@@ -61,6 +61,7 @@ type QueryHistory struct {
 	DatasourceID  int64     `json:"datasource_id"`
 	Database      string    `json:"database"`
 	SQLContent    string    `json:"sql_content"`
+	SQLHash       string    `json:"sql_hash"`
 	SQLSummary    string    `json:"sql_summary"`
 	DBType        string    `json:"db_type"`
 	ExecutionTime int64     `json:"execution_time"` // ms

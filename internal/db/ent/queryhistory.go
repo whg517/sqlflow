@@ -25,6 +25,8 @@ type QueryHistory struct {
 	Database string `json:"database,omitempty"`
 	// SQLContent holds the value of the "sql_content" field.
 	SQLContent string `json:"sql_content,omitempty"`
+	// SQLHash holds the value of the "sql_hash" field.
+	SQLHash string `json:"sql_hash,omitempty"`
 	// SQLSummary holds the value of the "sql_summary" field.
 	SQLSummary string `json:"sql_summary,omitempty"`
 	// DbType holds the value of the "db_type" field.
@@ -47,7 +49,7 @@ func (*QueryHistory) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case queryhistory.FieldID, queryhistory.FieldUserID, queryhistory.FieldDatasourceID, queryhistory.FieldExecutionTime, queryhistory.FieldResultRows, queryhistory.FieldAffectedRows:
 			values[i] = new(sql.NullInt64)
-		case queryhistory.FieldDatabase, queryhistory.FieldSQLContent, queryhistory.FieldSQLSummary, queryhistory.FieldDbType:
+		case queryhistory.FieldDatabase, queryhistory.FieldSQLContent, queryhistory.FieldSQLHash, queryhistory.FieldSQLSummary, queryhistory.FieldDbType:
 			values[i] = new(sql.NullString)
 		case queryhistory.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -95,6 +97,12 @@ func (_m *QueryHistory) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field sql_content", values[i])
 			} else if value.Valid {
 				_m.SQLContent = value.String
+			}
+		case queryhistory.FieldSQLHash:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field sql_hash", values[i])
+			} else if value.Valid {
+				_m.SQLHash = value.String
 			}
 		case queryhistory.FieldSQLSummary:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -179,6 +187,9 @@ func (_m *QueryHistory) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("sql_content=")
 	builder.WriteString(_m.SQLContent)
+	builder.WriteString(", ")
+	builder.WriteString("sql_hash=")
+	builder.WriteString(_m.SQLHash)
 	builder.WriteString(", ")
 	builder.WriteString("sql_summary=")
 	builder.WriteString(_m.SQLSummary)

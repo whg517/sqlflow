@@ -28,6 +28,8 @@ func (QueryHistory) Fields() []ent.Field {
 			Default(""),
 		field.String("sql_content").
 			NotEmpty(),
+	field.String("sql_hash").
+			Default(""),
 		field.String("sql_summary").
 			Default(""),
 		field.String("db_type").
@@ -52,5 +54,6 @@ func (QueryHistory) Indexes() []ent.Index {
 		index.Fields("user_id"),
 		index.Fields("execution_time"),
 		index.Fields("created_at"),
+		index.Fields("user_id", "sql_hash"),
 	}
 }

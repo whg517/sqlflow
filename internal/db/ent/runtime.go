@@ -562,28 +562,32 @@ func init() {
 	queryhistoryDescSQLContent := queryhistoryFields[3].Descriptor()
 	// queryhistory.SQLContentValidator is a validator for the "sql_content" field. It is called by the builders before save.
 	queryhistory.SQLContentValidator = queryhistoryDescSQLContent.Validators[0].(func(string) error)
+	// queryhistoryDescSQLHash is the schema descriptor for sql_hash field.
+	queryhistoryDescSQLHash := queryhistoryFields[4].Descriptor()
+	// queryhistory.DefaultSQLHash holds the default value on creation for the sql_hash field.
+	queryhistory.DefaultSQLHash = queryhistoryDescSQLHash.Default.(string)
 	// queryhistoryDescSQLSummary is the schema descriptor for sql_summary field.
-	queryhistoryDescSQLSummary := queryhistoryFields[4].Descriptor()
+	queryhistoryDescSQLSummary := queryhistoryFields[5].Descriptor()
 	// queryhistory.DefaultSQLSummary holds the default value on creation for the sql_summary field.
 	queryhistory.DefaultSQLSummary = queryhistoryDescSQLSummary.Default.(string)
 	// queryhistoryDescDbType is the schema descriptor for db_type field.
-	queryhistoryDescDbType := queryhistoryFields[5].Descriptor()
+	queryhistoryDescDbType := queryhistoryFields[6].Descriptor()
 	// queryhistory.DefaultDbType holds the default value on creation for the db_type field.
 	queryhistory.DefaultDbType = queryhistoryDescDbType.Default.(string)
 	// queryhistoryDescExecutionTime is the schema descriptor for execution_time field.
-	queryhistoryDescExecutionTime := queryhistoryFields[6].Descriptor()
+	queryhistoryDescExecutionTime := queryhistoryFields[7].Descriptor()
 	// queryhistory.DefaultExecutionTime holds the default value on creation for the execution_time field.
 	queryhistory.DefaultExecutionTime = queryhistoryDescExecutionTime.Default.(int64)
 	// queryhistoryDescResultRows is the schema descriptor for result_rows field.
-	queryhistoryDescResultRows := queryhistoryFields[7].Descriptor()
+	queryhistoryDescResultRows := queryhistoryFields[8].Descriptor()
 	// queryhistory.DefaultResultRows holds the default value on creation for the result_rows field.
 	queryhistory.DefaultResultRows = queryhistoryDescResultRows.Default.(int64)
 	// queryhistoryDescAffectedRows is the schema descriptor for affected_rows field.
-	queryhistoryDescAffectedRows := queryhistoryFields[8].Descriptor()
+	queryhistoryDescAffectedRows := queryhistoryFields[9].Descriptor()
 	// queryhistory.DefaultAffectedRows holds the default value on creation for the affected_rows field.
 	queryhistory.DefaultAffectedRows = queryhistoryDescAffectedRows.Default.(int64)
 	// queryhistoryDescCreatedAt is the schema descriptor for created_at field.
-	queryhistoryDescCreatedAt := queryhistoryFields[9].Descriptor()
+	queryhistoryDescCreatedAt := queryhistoryFields[10].Descriptor()
 	// queryhistory.DefaultCreatedAt holds the default value on creation for the created_at field.
 	queryhistory.DefaultCreatedAt = queryhistoryDescCreatedAt.Default.(func() time.Time)
 	refreshtokenFields := schema.RefreshToken{}.Fields()

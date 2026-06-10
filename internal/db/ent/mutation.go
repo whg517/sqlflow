@@ -12721,6 +12721,7 @@ type QueryHistoryMutation struct {
 	adddatasource_id  *int64
 	database          *string
 	sql_content       *string
+	sql_hash          *string
 	sql_summary       *string
 	db_type           *string
 	execution_time    *int64
@@ -13016,6 +13017,42 @@ func (m *QueryHistoryMutation) OldSQLContent(ctx context.Context) (v string, err
 // ResetSQLContent resets all changes to the "sql_content" field.
 func (m *QueryHistoryMutation) ResetSQLContent() {
 	m.sql_content = nil
+}
+
+// SetSQLHash sets the "sql_hash" field.
+func (m *QueryHistoryMutation) SetSQLHash(s string) {
+	m.sql_hash = &s
+}
+
+// SQLHash returns the value of the "sql_hash" field in the mutation.
+func (m *QueryHistoryMutation) SQLHash() (r string, exists bool) {
+	v := m.sql_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSQLHash returns the old "sql_hash" field's value of the QueryHistory entity.
+// If the QueryHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *QueryHistoryMutation) OldSQLHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSQLHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSQLHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSQLHash: %w", err)
+	}
+	return oldValue.SQLHash, nil
+}
+
+// ResetSQLHash resets all changes to the "sql_hash" field.
+func (m *QueryHistoryMutation) ResetSQLHash() {
+	m.sql_hash = nil
 }
 
 // SetSQLSummary sets the "sql_summary" field.
@@ -13328,7 +13365,7 @@ func (m *QueryHistoryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *QueryHistoryMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.user_id != nil {
 		fields = append(fields, queryhistory.FieldUserID)
 	}
@@ -13340,6 +13377,9 @@ func (m *QueryHistoryMutation) Fields() []string {
 	}
 	if m.sql_content != nil {
 		fields = append(fields, queryhistory.FieldSQLContent)
+	}
+	if m.sql_hash != nil {
+		fields = append(fields, queryhistory.FieldSQLHash)
 	}
 	if m.sql_summary != nil {
 		fields = append(fields, queryhistory.FieldSQLSummary)
@@ -13375,6 +13415,8 @@ func (m *QueryHistoryMutation) Field(name string) (ent.Value, bool) {
 		return m.Database()
 	case queryhistory.FieldSQLContent:
 		return m.SQLContent()
+	case queryhistory.FieldSQLHash:
+		return m.SQLHash()
 	case queryhistory.FieldSQLSummary:
 		return m.SQLSummary()
 	case queryhistory.FieldDbType:
@@ -13404,6 +13446,8 @@ func (m *QueryHistoryMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldDatabase(ctx)
 	case queryhistory.FieldSQLContent:
 		return m.OldSQLContent(ctx)
+	case queryhistory.FieldSQLHash:
+		return m.OldSQLHash(ctx)
 	case queryhistory.FieldSQLSummary:
 		return m.OldSQLSummary(ctx)
 	case queryhistory.FieldDbType:
@@ -13452,6 +13496,13 @@ func (m *QueryHistoryMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSQLContent(v)
+		return nil
+	case queryhistory.FieldSQLHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSQLHash(v)
 		return nil
 	case queryhistory.FieldSQLSummary:
 		v, ok := value.(string)
@@ -13618,6 +13669,9 @@ func (m *QueryHistoryMutation) ResetField(name string) error {
 		return nil
 	case queryhistory.FieldSQLContent:
 		m.ResetSQLContent()
+		return nil
+	case queryhistory.FieldSQLHash:
+		m.ResetSQLHash()
 		return nil
 	case queryhistory.FieldSQLSummary:
 		m.ResetSQLSummary()

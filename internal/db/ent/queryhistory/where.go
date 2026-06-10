@@ -74,6 +74,11 @@ func SQLContent(v string) predicate.QueryHistory {
 	return predicate.QueryHistory(sql.FieldEQ(FieldSQLContent, v))
 }
 
+// SQLHash applies equality check predicate on the "sql_hash" field. It's identical to SQLHashEQ.
+func SQLHash(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldEQ(FieldSQLHash, v))
+}
+
 // SQLSummary applies equality check predicate on the "sql_summary" field. It's identical to SQLSummaryEQ.
 func SQLSummary(v string) predicate.QueryHistory {
 	return predicate.QueryHistory(sql.FieldEQ(FieldSQLSummary, v))
@@ -312,6 +317,71 @@ func SQLContentEqualFold(v string) predicate.QueryHistory {
 // SQLContentContainsFold applies the ContainsFold predicate on the "sql_content" field.
 func SQLContentContainsFold(v string) predicate.QueryHistory {
 	return predicate.QueryHistory(sql.FieldContainsFold(FieldSQLContent, v))
+}
+
+// SQLHashEQ applies the EQ predicate on the "sql_hash" field.
+func SQLHashEQ(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldEQ(FieldSQLHash, v))
+}
+
+// SQLHashNEQ applies the NEQ predicate on the "sql_hash" field.
+func SQLHashNEQ(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldNEQ(FieldSQLHash, v))
+}
+
+// SQLHashIn applies the In predicate on the "sql_hash" field.
+func SQLHashIn(vs ...string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldIn(FieldSQLHash, vs...))
+}
+
+// SQLHashNotIn applies the NotIn predicate on the "sql_hash" field.
+func SQLHashNotIn(vs ...string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldNotIn(FieldSQLHash, vs...))
+}
+
+// SQLHashGT applies the GT predicate on the "sql_hash" field.
+func SQLHashGT(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldGT(FieldSQLHash, v))
+}
+
+// SQLHashGTE applies the GTE predicate on the "sql_hash" field.
+func SQLHashGTE(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldGTE(FieldSQLHash, v))
+}
+
+// SQLHashLT applies the LT predicate on the "sql_hash" field.
+func SQLHashLT(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldLT(FieldSQLHash, v))
+}
+
+// SQLHashLTE applies the LTE predicate on the "sql_hash" field.
+func SQLHashLTE(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldLTE(FieldSQLHash, v))
+}
+
+// SQLHashContains applies the Contains predicate on the "sql_hash" field.
+func SQLHashContains(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldContains(FieldSQLHash, v))
+}
+
+// SQLHashHasPrefix applies the HasPrefix predicate on the "sql_hash" field.
+func SQLHashHasPrefix(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldHasPrefix(FieldSQLHash, v))
+}
+
+// SQLHashHasSuffix applies the HasSuffix predicate on the "sql_hash" field.
+func SQLHashHasSuffix(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldHasSuffix(FieldSQLHash, v))
+}
+
+// SQLHashEqualFold applies the EqualFold predicate on the "sql_hash" field.
+func SQLHashEqualFold(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldEqualFold(FieldSQLHash, v))
+}
+
+// SQLHashContainsFold applies the ContainsFold predicate on the "sql_hash" field.
+func SQLHashContainsFold(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldContainsFold(FieldSQLHash, v))
 }
 
 // SQLSummaryEQ applies the EQ predicate on the "sql_summary" field.

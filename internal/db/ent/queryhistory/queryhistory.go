@@ -21,6 +21,8 @@ const (
 	FieldDatabase = "database"
 	// FieldSQLContent holds the string denoting the sql_content field in the database.
 	FieldSQLContent = "sql_content"
+	// FieldSQLHash holds the string denoting the sql_hash field in the database.
+	FieldSQLHash = "sql_hash"
 	// FieldSQLSummary holds the string denoting the sql_summary field in the database.
 	FieldSQLSummary = "sql_summary"
 	// FieldDbType holds the string denoting the db_type field in the database.
@@ -44,6 +46,7 @@ var Columns = []string{
 	FieldDatasourceID,
 	FieldDatabase,
 	FieldSQLContent,
+	FieldSQLHash,
 	FieldSQLSummary,
 	FieldDbType,
 	FieldExecutionTime,
@@ -67,6 +70,8 @@ var (
 	DefaultDatabase string
 	// SQLContentValidator is a validator for the "sql_content" field. It is called by the builders before save.
 	SQLContentValidator func(string) error
+	// DefaultSQLHash holds the default value on creation for the "sql_hash" field.
+	DefaultSQLHash string
 	// DefaultSQLSummary holds the default value on creation for the "sql_summary" field.
 	DefaultSQLSummary string
 	// DefaultDbType holds the default value on creation for the "db_type" field.
@@ -107,6 +112,11 @@ func ByDatabase(opts ...sql.OrderTermOption) OrderOption {
 // BySQLContent orders the results by the sql_content field.
 func BySQLContent(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSQLContent, opts...).ToFunc()
+}
+
+// BySQLHash orders the results by the sql_hash field.
+func BySQLHash(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSQLHash, opts...).ToFunc()
 }
 
 // BySQLSummary orders the results by the sql_summary field.

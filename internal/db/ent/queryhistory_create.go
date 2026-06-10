@@ -52,6 +52,20 @@ func (_c *QueryHistoryCreate) SetSQLContent(v string) *QueryHistoryCreate {
 	return _c
 }
 
+// SetSQLHash sets the "sql_hash" field.
+func (_c *QueryHistoryCreate) SetSQLHash(v string) *QueryHistoryCreate {
+	_c.mutation.SetSQLHash(v)
+	return _c
+}
+
+// SetNillableSQLHash sets the "sql_hash" field if the given value is not nil.
+func (_c *QueryHistoryCreate) SetNillableSQLHash(v *string) *QueryHistoryCreate {
+	if v != nil {
+		_c.SetSQLHash(*v)
+	}
+	return _c
+}
+
 // SetSQLSummary sets the "sql_summary" field.
 func (_c *QueryHistoryCreate) SetSQLSummary(v string) *QueryHistoryCreate {
 	_c.mutation.SetSQLSummary(v)
@@ -175,6 +189,10 @@ func (_c *QueryHistoryCreate) defaults() {
 		v := queryhistory.DefaultDatabase
 		_c.mutation.SetDatabase(v)
 	}
+	if _, ok := _c.mutation.SQLHash(); !ok {
+		v := queryhistory.DefaultSQLHash
+		_c.mutation.SetSQLHash(v)
+	}
 	if _, ok := _c.mutation.SQLSummary(); !ok {
 		v := queryhistory.DefaultSQLSummary
 		_c.mutation.SetSQLSummary(v)
@@ -219,6 +237,9 @@ func (_c *QueryHistoryCreate) check() error {
 		if err := queryhistory.SQLContentValidator(v); err != nil {
 			return &ValidationError{Name: "sql_content", err: fmt.Errorf(`ent: validator failed for field "QueryHistory.sql_content": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.SQLHash(); !ok {
+		return &ValidationError{Name: "sql_hash", err: errors.New(`ent: missing required field "QueryHistory.sql_hash"`)}
 	}
 	if _, ok := _c.mutation.SQLSummary(); !ok {
 		return &ValidationError{Name: "sql_summary", err: errors.New(`ent: missing required field "QueryHistory.sql_summary"`)}
@@ -276,6 +297,10 @@ func (_c *QueryHistoryCreate) createSpec() (*QueryHistory, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.SQLContent(); ok {
 		_spec.SetField(queryhistory.FieldSQLContent, field.TypeString, value)
 		_node.SQLContent = value
+	}
+	if value, ok := _c.mutation.SQLHash(); ok {
+		_spec.SetField(queryhistory.FieldSQLHash, field.TypeString, value)
+		_node.SQLHash = value
 	}
 	if value, ok := _c.mutation.SQLSummary(); ok {
 		_spec.SetField(queryhistory.FieldSQLSummary, field.TypeString, value)

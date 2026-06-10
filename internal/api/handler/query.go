@@ -337,3 +337,19 @@ func writeExportJSON(c echo.Context, result *service.QueryResult) error {
 
 	return json.NewEncoder(c.Response().Writer).Encode(result.Rows)
 }
+
+// GetFrequentQueries handles GET /api/query/history/frequent.
+// Returns top 20 frequent SQL templates for the current user.
+func (h *QueryHandler) GetFrequentQueries(c echo.Context) error {
+	userID := getContextUserID(c)
+
+	results, err := h.historySvc.GetFrequentQueries(c.Request().Context(), userID)
+	if err != nil {
+		log.Printf("GetFrequentQueries failed: %v", err)
+		return resp.BadRequest(c, err.Error())
+	}
+	if results == nil {
+		results = []service.FrequentQuery{}
+	}
+	return resp.OK(c, results)
+}
