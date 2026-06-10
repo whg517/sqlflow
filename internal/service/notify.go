@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -22,14 +23,15 @@ import (
 
 // NotifyService handles webhook (DingTalk-compatible) and Feishu notification logic.
 type NotifyService struct {
-	webhookURL    string // webhook
-	secret        string // webhook secret
-	enabled       bool   // webhook enabled
-	feishuURL     string // Feishu webhook
-	feishuEnabled bool   // Feishu
-	db            *sql.DB // notification log (nil = no dedup)
-	client        *http.Client
-	mu            sync.RWMutex
+	webhookURL       string // webhook
+	secret           string // webhook secret
+	enabled          bool   // webhook enabled
+	feishuURL        string // Feishu webhook (legacy single-URL mode)
+	feishuEnabled    bool   // Feishu
+	db               *sql.DB // notification log (nil = no dedup)
+	client           *http.Client
+	feishuWebhookSvc *FeishuWebhookService // multi-webhook DB-backed service
+	mu               sync.RWMutex
 }
 
 // NewNotifyService creates a new NotifyService.
@@ -48,6 +50,13 @@ func (s *NotifyService) SetDB(db *sql.DB) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db = db
+}
+
+// SetFeishuWebhookService sets the DB-backed multi-webhook service.
+func (s *NotifyService) SetFeishuWebhookService(svc *FeishuWebhookService) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.feishuWebhookSvc = svc
 }
 
 // SetFeishuWebhook sets the Feishu webhook URL.
@@ -733,6 +742,12 @@ type feishuCardHeader struct {
 	Template string `json:"template,omitempty"`
 }
 
+// escapeFeishuContent escapes user-generated content for safe display in Feishu cards.
+// Prevents injection of Feishu card markup.
+func escapeFeishuContent(s string) string {
+	return html.EscapeString(s)
+}
+
 // feishuCardField creates a card element with a key-value field.
 func feishuCardField(label, value string) feishuCardElement {
 	return feishuCardElement{
@@ -742,7 +757,7 @@ func feishuCardField(label, value string) feishuCardElement {
 			Content string `json:"content"`
 		}{
 			Tag:     "lark_md",
-			Content: fmt.Sprintf("**%s**: %s", label, value),
+			Content: fmt.Sprintf("**%s**: %s", escapeFeishuContent(label), escapeFeishuContent(value)),
 		},
 	}
 }
@@ -754,8 +769,42 @@ func (s *NotifyService) isFeishuEnabled() bool {
 	return s.feishuEnabled
 }
 
-// sendFeishuCard sends an Interactive Card message to Feishu webhook.
+// sendFeishuCard sends an Interactive Card message to Feishu webhook(s).
+// If feishuWebhookSvc is set, sends to all enabled DB-backed webhooks.
+// Otherwise falls back to the legacy single-URL mode.
 func (s *NotifyService) sendFeishuCard(title, summary string, elements []feishuCardElement) {
+	// Try DB-backed multi-webhook first
+	s.mu.RLock()
+	svc := s.feishuWebhookSvc
+	s.mu.RUnlock()
+
+	if svc != nil {
+		ctx := context.Background()
+		webhooks, err := svc.GetEnabledWebhooks(ctx)
+		if err != nil {
+			log.Printf("feishu: load webhooks from DB: %v", err)
+		} else if len(webhooks) > 0 {
+			for _, wh := range webhooks {
+				// Rate limit check
+				if !svc.CheckRateLimit(wh.ID, 1.0) {
+					log.Printf("feishu: rate limited for webhook %d", wh.ID)
+					continue
+				}
+
+				reqBody := s.buildFeishuCardRequest(title, summary, elements)
+				bodyBytes, err := json.Marshal(reqBody)
+				if err != nil {
+					log.Printf("feishu: marshal request: %v", err)
+					continue
+				}
+
+				s.doSendFeishuRawWithDeadLetter(wh.ID, wh.URL, bodyBytes, svc)
+			}
+			return
+		}
+	}
+
+	// Fallback: legacy single URL
 	s.mu.RLock()
 	webhookURL := s.feishuURL
 	s.mu.RUnlock()
@@ -764,32 +813,7 @@ func (s *NotifyService) sendFeishuCard(title, summary string, elements []feishuC
 		return
 	}
 
-	// Prepend summary element
-	allElements := append([]feishuCardElement{{
-		Tag: "div",
-		Text: &struct {
-			Tag     string `json:"tag"`
-			Content string `json:"content"`
-		}{
-			Tag:     "lark_md",
-			Content: summary,
-		},
-	}}, elements...)
-
-	reqBody := feishuRequest{
-		MsgType: "interactive",
-	}
-	reqBody.Card.Header = &feishuCardHeader{
-		Title: &struct {
-			Tag     string `json:"tag"`
-			Content string `json:"content"`
-		}{
-			Tag:     "plain_text",
-			Content: title,
-		},
-	}
-	reqBody.Card.Elements = allElements
-
+	reqBody := s.buildFeishuCardRequest(title, summary, elements)
 	s.doSendFeishu(webhookURL, reqBody)
 }
 
@@ -842,6 +866,92 @@ func (s *NotifyService) doSendFeishu(webhookURL string, reqBody feishuRequest) {
 	}
 
 	log.Printf("feishu: failed after %d retries", maxRetries)
+}
+
+// buildFeishuCardRequest constructs a feishuRequest with header, summary, and field elements.
+func (s *NotifyService) buildFeishuCardRequest(title, summary string, elements []feishuCardElement) feishuRequest {
+	allElements := []feishuCardElement{{
+		Tag: "div",
+		Text: &struct {
+			Tag     string `json:"tag"`
+			Content string `json:"content"`
+		}{
+			Tag:     "lark_md",
+			Content: escapeFeishuContent(summary),
+		},
+	}}
+	allElements = append(allElements, elements...)
+
+	reqBody := feishuRequest{
+		MsgType: "interactive",
+	}
+	reqBody.Card.Header = &feishuCardHeader{
+		Title: &struct {
+			Tag     string `json:"tag"`
+			Content string `json:"content"`
+		}{
+			Tag:     "plain_text",
+			Content: title,
+		},
+	}
+	reqBody.Card.Elements = allElements
+	return reqBody
+}
+
+// doSendFeishuRawWithDeadLetter sends raw bytes to a Feishu webhook URL with retry and dead letter recording.
+func (s *NotifyService) doSendFeishuRawWithDeadLetter(webhookID int64, webhookURL string, body []byte, svc *FeishuWebhookService) {
+	maxRetries := 3
+	var lastErr string
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(attempt*attempt) * time.Second
+			log.Printf("feishu: retry %d/%d webhook %d after %v", attempt+1, maxRetries, webhookID, backoff)
+			time.Sleep(backoff)
+		}
+
+		httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, webhookURL, bytes.NewReader(body))
+		if err != nil {
+			log.Printf("feishu: create request webhook %d: %v", webhookID, err)
+			return
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		resp, err := s.client.Do(httpReq)
+		if err != nil {
+			lastErr = err.Error()
+			log.Printf("feishu: send webhook %d (attempt %d): %v", webhookID, attempt+1, err)
+			continue
+		}
+
+		respBody, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK {
+			var feishuResp struct {
+				Code int    `json:"code"`
+				Msg  string `json:"msg"`
+			}
+			if err := json.Unmarshal(respBody, &feishuResp); err == nil && feishuResp.Code != 0 {
+				log.Printf("feishu: api error webhook %d: code=%d msg=%s", webhookID, feishuResp.Code, feishuResp.Msg)
+				// Record to dead letter
+				if svc != nil {
+					_ = svc.RecordDeadLetter(context.Background(), webhookID, string(body), fmt.Sprintf("api error: code=%d msg=%s", feishuResp.Code, feishuResp.Msg))
+				}
+				return
+			}
+			return // success
+		}
+
+		lastErr = fmt.Sprintf("status %d: %s", resp.StatusCode, string(respBody))
+		log.Printf("feishu: unexpected status %d webhook %d: %s", resp.StatusCode, webhookID, string(respBody))
+	}
+
+	// All retries failed — record to dead letter
+	log.Printf("feishu: failed after %d retries for webhook %d", maxRetries, webhookID)
+	if svc != nil {
+		_ = svc.RecordDeadLetter(context.Background(), webhookID, string(body), lastErr)
+	}
 }
 
 // SendFeishuTestMessage sends a test message to verify the Feishu configuration.
