@@ -242,12 +242,26 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 
 	// Notification & Settings (admin)
 	notifyHandler := handler.NewNotifyHandler(notifySvc, aiReviewSvc)
+
+	// Feishu webhook CRUD (admin)
+	feishuWebhookSvc := service.NewFeishuWebhookService(database.DB, cfg.EncryptionKey)
+	feishuWebhookHandler := handler.NewFeishuWebhookHandler(feishuWebhookSvc)
+	notifySvc.SetFeishuWebhookService(feishuWebhookSvc)
+
 	adminGroup.GET("/api/settings", notifyHandler.GetSettings)
 	adminGroup.PUT("/api/settings/notify/webhook", notifyHandler.UpdateNotifyConfig)
 	adminGroup.POST("/api/settings/notify/webhook/test", notifyHandler.TestNotify)
 	adminGroup.PUT("/api/settings/ai", notifyHandler.UpdateAIConfig)
 	adminGroup.PUT("/api/settings/feishu", notifyHandler.UpdateFeishuConfig)
 	adminGroup.POST("/api/settings/feishu/test", notifyHandler.TestFeishuNotify)
+
+	// Feishu webhook CRUD API
+	adminGroup.POST("/api/settings/feishu/webhooks", feishuWebhookHandler.Create)
+	adminGroup.GET("/api/settings/feishu/webhooks", feishuWebhookHandler.List)
+	adminGroup.GET("/api/settings/feishu/webhooks/:id", feishuWebhookHandler.Get)
+	adminGroup.PUT("/api/settings/feishu/webhooks/:id", feishuWebhookHandler.Update)
+	adminGroup.DELETE("/api/settings/feishu/webhooks/:id", feishuWebhookHandler.Delete)
+	adminGroup.GET("/api/settings/feishu/webhooks/dead-letters", feishuWebhookHandler.ListDeadLetters)
 
 	// API Token admin management
 	adminGroup.GET("/api/admin/tokens", tokenHandler.ListAllTokens)
