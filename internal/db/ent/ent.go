@@ -25,7 +25,6 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent/oidcprovider"
 	"github.com/whg517/sqlflow/internal/db/ent/permissionrequest"
 	"github.com/whg517/sqlflow/internal/db/ent/queryhistory"
-	"github.com/whg517/sqlflow/internal/db/ent/querysnapshot"
 	"github.com/whg517/sqlflow/internal/db/ent/refreshtoken"
 	"github.com/whg517/sqlflow/internal/db/ent/sensitivetable"
 	"github.com/whg517/sqlflow/internal/db/ent/sharedresult"
@@ -110,7 +109,6 @@ func checkColumn(t, c string) error {
 			oidcprovider.Table:      oidcprovider.ValidColumn,
 			permissionrequest.Table: permissionrequest.ValidColumn,
 			queryhistory.Table:      queryhistory.ValidColumn,
-			querysnapshot.Table:     querysnapshot.ValidColumn,
 			refreshtoken.Table:      refreshtoken.ValidColumn,
 			slaactionlog.Table:      slaactionlog.ValidColumn,
 			slaconfig.Table:         slaconfig.ValidColumn,

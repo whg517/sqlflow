@@ -424,30 +424,6 @@ var (
 			},
 		},
 	}
-	// QuerySnapshotsColumns holds the columns for the "query_snapshots" table.
-	QuerySnapshotsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "user_id", Type: field.TypeInt64},
-		{Name: "label", Type: field.TypeString, Default: ""},
-		{Name: "columns", Type: field.TypeString},
-		{Name: "rows", Type: field.TypeString},
-		{Name: "row_count", Type: field.TypeInt64, Default: 0},
-		{Name: "query_history_id", Type: field.TypeInt64, Default: 0},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
-	}
-	// QuerySnapshotsTable holds the schema information for the "query_snapshots" table.
-	QuerySnapshotsTable = &schema.Table{
-		Name:       "query_snapshots",
-		Columns:    QuerySnapshotsColumns,
-		PrimaryKey: []*schema.Column{QuerySnapshotsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "querysnapshot_user_id",
-				Unique:  false,
-				Columns: []*schema.Column{QuerySnapshotsColumns[1]},
-			},
-		},
-	}
 	// RefreshTokensColumns holds the columns for the "refresh_tokens" table.
 	RefreshTokensColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -823,7 +799,6 @@ var (
 		OidcProvidersTable,
 		PermissionRequestsTable,
 		QueryHistoryTable,
-		QuerySnapshotsTable,
 		RefreshTokensTable,
 		SLAActionLogTable,
 		SLAConfigTable,
@@ -877,9 +852,6 @@ func init() {
 	}
 	QueryHistoryTable.Annotation = &entsql.Annotation{
 		Table: "query_history",
-	}
-	QuerySnapshotsTable.Annotation = &entsql.Annotation{
-		Table: "query_snapshots",
 	}
 	RefreshTokensTable.Annotation = &entsql.Annotation{
 		Table: "refresh_tokens",

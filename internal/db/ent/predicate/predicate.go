@@ -45,9 +45,6 @@ type PermissionRequest func(*sql.Selector)
 // QueryHistory is the predicate function for queryhistory builders.
 type QueryHistory func(*sql.Selector)
 
-// QuerySnapshot is the predicate function for querysnapshot builders.
-type QuerySnapshot func(*sql.Selector)
-
 // RefreshToken is the predicate function for refreshtoken builders.
 type RefreshToken func(*sql.Selector)
 

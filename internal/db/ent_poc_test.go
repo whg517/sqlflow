@@ -212,7 +212,7 @@ func TestAllSchemasCreated(t *testing.T) {
 		"mask_rules", "sensitive_tables", "tickets", "refresh_tokens",
 		"comments", "git_links", "api_tokens", "permission_requests",
 		"temp_policies", "sla_config", "sla_action_log", "export_tasks",
-		"sql_templates", "web_vitals", "query_snapshots", "shared_results",
+		"sql_templates", "web_vitals", "shared_results",
 		"approval_policies", "approval_records", "ticket_revisions",
 		"oidc_providers", "execution_results",
 		// casbin_rule is also expected (from migration 000001)
@@ -465,18 +465,6 @@ func TestCRUDAllEntities(t *testing.T) {
 		t.Fatalf("WebVital CRUD: %v", err)
 	}
 	t.Logf("✓ WebVital CRUD ok (id=%d)", wv.ID)
-
-	// QuerySnapshots
-	qs, err := client.QuerySnapshot.Create().
-		SetUserID(int64(user.ID)).
-		SetColumnsJSON("[\"id\",\"name\"]").
-		SetRowsJSON("[{\"id\":1,\"name\":\"test\"}]").
-		SetQueryHistoryID(int64(qh.ID)).
-		Save(ctx)
-	if err != nil {
-		t.Fatalf("QuerySnapshot CRUD: %v", err)
-	}
-	t.Logf("✓ QuerySnapshot CRUD ok (id=%d)", qs.ID)
 
 	// SharedResults
 	sr, err := client.SharedResult.Create().

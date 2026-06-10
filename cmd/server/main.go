@@ -170,10 +170,6 @@ func main() {
 	templateSvc := service.NewSQLTemplateService(database)
 	log.Println("sql template service initialized")
 
-	// Initialize snapshot service (SF-FEAT0041)
-	snapshotSvc := service.NewSnapshotService(database, querySvc)
-	log.Println("snapshot service initialized")
-
 	// Initialize share service (SF-FEAT0038)
 	shareSvc := service.NewShareService(database)
 	log.Println("share service initialized")
@@ -207,7 +203,7 @@ func main() {
 
 	ticketSvc.SetApprovalEngine(approvalEngine)
 
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, oidcSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, snapshotSvc, approvalEngine, database, cfg, connMgr, poolMgr)
+	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, oidcSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, approvalEngine, database, cfg, connMgr, poolMgr)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server

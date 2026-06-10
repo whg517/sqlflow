@@ -38,8 +38,6 @@ type Tx struct {
 	PermissionRequest *PermissionRequestClient
 	// QueryHistory is the client for interacting with the QueryHistory builders.
 	QueryHistory *QueryHistoryClient
-	// QuerySnapshot is the client for interacting with the QuerySnapshot builders.
-	QuerySnapshot *QuerySnapshotClient
 	// RefreshToken is the client for interacting with the RefreshToken builders.
 	RefreshToken *RefreshTokenClient
 	// SLAActionLog is the client for interacting with the SLAActionLog builders.
@@ -206,7 +204,6 @@ func (tx *Tx) init() {
 	tx.OIDCProvider = NewOIDCProviderClient(tx.config)
 	tx.PermissionRequest = NewPermissionRequestClient(tx.config)
 	tx.QueryHistory = NewQueryHistoryClient(tx.config)
-	tx.QuerySnapshot = NewQuerySnapshotClient(tx.config)
 	tx.RefreshToken = NewRefreshTokenClient(tx.config)
 	tx.SLAActionLog = NewSLAActionLogClient(tx.config)
 	tx.SLAConfig = NewSLAConfigClient(tx.config)

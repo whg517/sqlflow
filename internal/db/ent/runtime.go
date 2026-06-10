@@ -18,7 +18,6 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent/oidcprovider"
 	"github.com/whg517/sqlflow/internal/db/ent/permissionrequest"
 	"github.com/whg517/sqlflow/internal/db/ent/queryhistory"
-	"github.com/whg517/sqlflow/internal/db/ent/querysnapshot"
 	"github.com/whg517/sqlflow/internal/db/ent/refreshtoken"
 	"github.com/whg517/sqlflow/internal/db/ent/schema"
 	"github.com/whg517/sqlflow/internal/db/ent/sensitivetable"
@@ -587,32 +586,6 @@ func init() {
 	queryhistoryDescCreatedAt := queryhistoryFields[9].Descriptor()
 	// queryhistory.DefaultCreatedAt holds the default value on creation for the created_at field.
 	queryhistory.DefaultCreatedAt = queryhistoryDescCreatedAt.Default.(func() time.Time)
-	querysnapshotFields := schema.QuerySnapshot{}.Fields()
-	_ = querysnapshotFields
-	// querysnapshotDescLabel is the schema descriptor for label field.
-	querysnapshotDescLabel := querysnapshotFields[1].Descriptor()
-	// querysnapshot.DefaultLabel holds the default value on creation for the label field.
-	querysnapshot.DefaultLabel = querysnapshotDescLabel.Default.(string)
-	// querysnapshotDescColumnsJSON is the schema descriptor for columns_json field.
-	querysnapshotDescColumnsJSON := querysnapshotFields[2].Descriptor()
-	// querysnapshot.ColumnsJSONValidator is a validator for the "columns_json" field. It is called by the builders before save.
-	querysnapshot.ColumnsJSONValidator = querysnapshotDescColumnsJSON.Validators[0].(func(string) error)
-	// querysnapshotDescRowsJSON is the schema descriptor for rows_json field.
-	querysnapshotDescRowsJSON := querysnapshotFields[3].Descriptor()
-	// querysnapshot.RowsJSONValidator is a validator for the "rows_json" field. It is called by the builders before save.
-	querysnapshot.RowsJSONValidator = querysnapshotDescRowsJSON.Validators[0].(func(string) error)
-	// querysnapshotDescRowCount is the schema descriptor for row_count field.
-	querysnapshotDescRowCount := querysnapshotFields[4].Descriptor()
-	// querysnapshot.DefaultRowCount holds the default value on creation for the row_count field.
-	querysnapshot.DefaultRowCount = querysnapshotDescRowCount.Default.(int64)
-	// querysnapshotDescQueryHistoryID is the schema descriptor for query_history_id field.
-	querysnapshotDescQueryHistoryID := querysnapshotFields[5].Descriptor()
-	// querysnapshot.DefaultQueryHistoryID holds the default value on creation for the query_history_id field.
-	querysnapshot.DefaultQueryHistoryID = querysnapshotDescQueryHistoryID.Default.(int64)
-	// querysnapshotDescCreatedAt is the schema descriptor for created_at field.
-	querysnapshotDescCreatedAt := querysnapshotFields[6].Descriptor()
-	// querysnapshot.DefaultCreatedAt holds the default value on creation for the created_at field.
-	querysnapshot.DefaultCreatedAt = querysnapshotDescCreatedAt.Default.(func() time.Time)
 	refreshtokenFields := schema.RefreshToken{}.Fields()
 	_ = refreshtokenFields
 	// refreshtokenDescToken is the schema descriptor for token field.

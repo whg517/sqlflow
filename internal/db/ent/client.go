@@ -27,7 +27,6 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent/oidcprovider"
 	"github.com/whg517/sqlflow/internal/db/ent/permissionrequest"
 	"github.com/whg517/sqlflow/internal/db/ent/queryhistory"
-	"github.com/whg517/sqlflow/internal/db/ent/querysnapshot"
 	"github.com/whg517/sqlflow/internal/db/ent/refreshtoken"
 	"github.com/whg517/sqlflow/internal/db/ent/sensitivetable"
 	"github.com/whg517/sqlflow/internal/db/ent/sharedresult"
@@ -72,8 +71,6 @@ type Client struct {
 	PermissionRequest *PermissionRequestClient
 	// QueryHistory is the client for interacting with the QueryHistory builders.
 	QueryHistory *QueryHistoryClient
-	// QuerySnapshot is the client for interacting with the QuerySnapshot builders.
-	QuerySnapshot *QuerySnapshotClient
 	// RefreshToken is the client for interacting with the RefreshToken builders.
 	RefreshToken *RefreshTokenClient
 	// SLAActionLog is the client for interacting with the SLAActionLog builders.
@@ -120,7 +117,6 @@ func (c *Client) init() {
 	c.OIDCProvider = NewOIDCProviderClient(c.config)
 	c.PermissionRequest = NewPermissionRequestClient(c.config)
 	c.QueryHistory = NewQueryHistoryClient(c.config)
-	c.QuerySnapshot = NewQuerySnapshotClient(c.config)
 	c.RefreshToken = NewRefreshTokenClient(c.config)
 	c.SLAActionLog = NewSLAActionLogClient(c.config)
 	c.SLAConfig = NewSLAConfigClient(c.config)
@@ -237,7 +233,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		OIDCProvider:      NewOIDCProviderClient(cfg),
 		PermissionRequest: NewPermissionRequestClient(cfg),
 		QueryHistory:      NewQueryHistoryClient(cfg),
-		QuerySnapshot:     NewQuerySnapshotClient(cfg),
 		RefreshToken:      NewRefreshTokenClient(cfg),
 		SLAActionLog:      NewSLAActionLogClient(cfg),
 		SLAConfig:         NewSLAConfigClient(cfg),
@@ -281,7 +276,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		OIDCProvider:      NewOIDCProviderClient(cfg),
 		PermissionRequest: NewPermissionRequestClient(cfg),
 		QueryHistory:      NewQueryHistoryClient(cfg),
-		QuerySnapshot:     NewQuerySnapshotClient(cfg),
 		RefreshToken:      NewRefreshTokenClient(cfg),
 		SLAActionLog:      NewSLAActionLogClient(cfg),
 		SLAConfig:         NewSLAConfigClient(cfg),
@@ -324,9 +318,9 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIToken, c.ApprovalPolicy, c.ApprovalRecord, c.AuditLog, c.Comment,
 		c.DataSource, c.ExecutionResult, c.ExportTask, c.GitLink, c.MaskRule,
-		c.OIDCProvider, c.PermissionRequest, c.QueryHistory, c.QuerySnapshot,
-		c.RefreshToken, c.SLAActionLog, c.SLAConfig, c.SQLTemplate, c.SensitiveTable,
-		c.SharedResult, c.TempPolicy, c.Ticket, c.TicketRevision, c.User, c.WebVital,
+		c.OIDCProvider, c.PermissionRequest, c.QueryHistory, c.RefreshToken,
+		c.SLAActionLog, c.SLAConfig, c.SQLTemplate, c.SensitiveTable, c.SharedResult,
+		c.TempPolicy, c.Ticket, c.TicketRevision, c.User, c.WebVital,
 	} {
 		n.Use(hooks...)
 	}
@@ -338,9 +332,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIToken, c.ApprovalPolicy, c.ApprovalRecord, c.AuditLog, c.Comment,
 		c.DataSource, c.ExecutionResult, c.ExportTask, c.GitLink, c.MaskRule,
-		c.OIDCProvider, c.PermissionRequest, c.QueryHistory, c.QuerySnapshot,
-		c.RefreshToken, c.SLAActionLog, c.SLAConfig, c.SQLTemplate, c.SensitiveTable,
-		c.SharedResult, c.TempPolicy, c.Ticket, c.TicketRevision, c.User, c.WebVital,
+		c.OIDCProvider, c.PermissionRequest, c.QueryHistory, c.RefreshToken,
+		c.SLAActionLog, c.SLAConfig, c.SQLTemplate, c.SensitiveTable, c.SharedResult,
+		c.TempPolicy, c.Ticket, c.TicketRevision, c.User, c.WebVital,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -375,8 +369,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.PermissionRequest.mutate(ctx, m)
 	case *QueryHistoryMutation:
 		return c.QueryHistory.mutate(ctx, m)
-	case *QuerySnapshotMutation:
-		return c.QuerySnapshot.mutate(ctx, m)
 	case *RefreshTokenMutation:
 		return c.RefreshToken.mutate(ctx, m)
 	case *SLAActionLogMutation:
@@ -2133,139 +2125,6 @@ func (c *QueryHistoryClient) mutate(ctx context.Context, m *QueryHistoryMutation
 	}
 }
 
-// QuerySnapshotClient is a client for the QuerySnapshot schema.
-type QuerySnapshotClient struct {
-	config
-}
-
-// NewQuerySnapshotClient returns a client for the QuerySnapshot from the given config.
-func NewQuerySnapshotClient(c config) *QuerySnapshotClient {
-	return &QuerySnapshotClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `querysnapshot.Hooks(f(g(h())))`.
-func (c *QuerySnapshotClient) Use(hooks ...Hook) {
-	c.hooks.QuerySnapshot = append(c.hooks.QuerySnapshot, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `querysnapshot.Intercept(f(g(h())))`.
-func (c *QuerySnapshotClient) Intercept(interceptors ...Interceptor) {
-	c.inters.QuerySnapshot = append(c.inters.QuerySnapshot, interceptors...)
-}
-
-// Create returns a builder for creating a QuerySnapshot entity.
-func (c *QuerySnapshotClient) Create() *QuerySnapshotCreate {
-	mutation := newQuerySnapshotMutation(c.config, OpCreate)
-	return &QuerySnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of QuerySnapshot entities.
-func (c *QuerySnapshotClient) CreateBulk(builders ...*QuerySnapshotCreate) *QuerySnapshotCreateBulk {
-	return &QuerySnapshotCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *QuerySnapshotClient) MapCreateBulk(slice any, setFunc func(*QuerySnapshotCreate, int)) *QuerySnapshotCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &QuerySnapshotCreateBulk{err: fmt.Errorf("calling to QuerySnapshotClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*QuerySnapshotCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &QuerySnapshotCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for QuerySnapshot.
-func (c *QuerySnapshotClient) Update() *QuerySnapshotUpdate {
-	mutation := newQuerySnapshotMutation(c.config, OpUpdate)
-	return &QuerySnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *QuerySnapshotClient) UpdateOne(_m *QuerySnapshot) *QuerySnapshotUpdateOne {
-	mutation := newQuerySnapshotMutation(c.config, OpUpdateOne, withQuerySnapshot(_m))
-	return &QuerySnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *QuerySnapshotClient) UpdateOneID(id int) *QuerySnapshotUpdateOne {
-	mutation := newQuerySnapshotMutation(c.config, OpUpdateOne, withQuerySnapshotID(id))
-	return &QuerySnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for QuerySnapshot.
-func (c *QuerySnapshotClient) Delete() *QuerySnapshotDelete {
-	mutation := newQuerySnapshotMutation(c.config, OpDelete)
-	return &QuerySnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *QuerySnapshotClient) DeleteOne(_m *QuerySnapshot) *QuerySnapshotDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *QuerySnapshotClient) DeleteOneID(id int) *QuerySnapshotDeleteOne {
-	builder := c.Delete().Where(querysnapshot.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &QuerySnapshotDeleteOne{builder}
-}
-
-// Query returns a query builder for QuerySnapshot.
-func (c *QuerySnapshotClient) Query() *QuerySnapshotQuery {
-	return &QuerySnapshotQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeQuerySnapshot},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a QuerySnapshot entity by its id.
-func (c *QuerySnapshotClient) Get(ctx context.Context, id int) (*QuerySnapshot, error) {
-	return c.Query().Where(querysnapshot.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *QuerySnapshotClient) GetX(ctx context.Context, id int) *QuerySnapshot {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *QuerySnapshotClient) Hooks() []Hook {
-	return c.hooks.QuerySnapshot
-}
-
-// Interceptors returns the client interceptors.
-func (c *QuerySnapshotClient) Interceptors() []Interceptor {
-	return c.inters.QuerySnapshot
-}
-
-func (c *QuerySnapshotClient) mutate(ctx context.Context, m *QuerySnapshotMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&QuerySnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&QuerySnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&QuerySnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&QuerySnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown QuerySnapshot mutation op: %q", m.Op())
-	}
-}
-
 // RefreshTokenClient is a client for the RefreshToken schema.
 type RefreshTokenClient struct {
 	config
@@ -3734,15 +3593,15 @@ type (
 	hooks struct {
 		APIToken, ApprovalPolicy, ApprovalRecord, AuditLog, Comment, DataSource,
 		ExecutionResult, ExportTask, GitLink, MaskRule, OIDCProvider,
-		PermissionRequest, QueryHistory, QuerySnapshot, RefreshToken, SLAActionLog,
-		SLAConfig, SQLTemplate, SensitiveTable, SharedResult, TempPolicy, Ticket,
-		TicketRevision, User, WebVital []ent.Hook
+		PermissionRequest, QueryHistory, RefreshToken, SLAActionLog, SLAConfig,
+		SQLTemplate, SensitiveTable, SharedResult, TempPolicy, Ticket, TicketRevision,
+		User, WebVital []ent.Hook
 	}
 	inters struct {
 		APIToken, ApprovalPolicy, ApprovalRecord, AuditLog, Comment, DataSource,
 		ExecutionResult, ExportTask, GitLink, MaskRule, OIDCProvider,
-		PermissionRequest, QueryHistory, QuerySnapshot, RefreshToken, SLAActionLog,
-		SLAConfig, SQLTemplate, SensitiveTable, SharedResult, TempPolicy, Ticket,
-		TicketRevision, User, WebVital []ent.Interceptor
+		PermissionRequest, QueryHistory, RefreshToken, SLAActionLog, SLAConfig,
+		SQLTemplate, SensitiveTable, SharedResult, TempPolicy, Ticket, TicketRevision,
+		User, WebVital []ent.Interceptor
 	}
 )

@@ -17,7 +17,7 @@ import (
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, oidcSvc *service.OIDCService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, shareSvc *service.ShareService, vitalsSvc *service.WebVitalsService, snapshotSvc *service.SnapshotService, approvalEngine *service.ApprovalEngine, database *db.DB, cfg *config.Config, connMgr *connpool.Manager, poolMgr *driver.PoolManager) *echo.Echo {
+func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, oidcSvc *service.OIDCService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, shareSvc *service.ShareService, vitalsSvc *service.WebVitalsService, approvalEngine *service.ApprovalEngine, database *db.DB, cfg *config.Config, connMgr *connpool.Manager, poolMgr *driver.PoolManager) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -117,14 +117,6 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	// Performance analysis (authenticated users)
 	authGroup.GET("/api/query/performance/slow", performanceHandler.ListSlowQueries)
 	authGroup.GET("/api/query/performance/stats", performanceHandler.GetPerformanceStats)
-
-	// Query snapshot & diff (SF-FEAT0041)
-	snapshotHandler := handler.NewSnapshotHandler(snapshotSvc)
-	authGroup.GET("/api/query/snapshots", snapshotHandler.ListSnapshots)
-	authGroup.POST("/api/query/snapshots", snapshotHandler.CreateSnapshot)
-	authGroup.GET("/api/query/snapshots/:id", snapshotHandler.GetSnapshot)
-	authGroup.DELETE("/api/query/snapshots/:id", snapshotHandler.DeleteSnapshot)
-	authGroup.POST("/api/query/compare", snapshotHandler.CompareSnapshots)
 
 	// Ticket routes (authenticated users can create/list/view; approve/reject/execute restricted by role)
 	authGroup.POST("/api/tickets", ticketHandler.CreateTicket)
