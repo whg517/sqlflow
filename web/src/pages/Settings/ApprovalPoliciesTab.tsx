@@ -10,6 +10,8 @@ import {
   ToggleLeft,
   ToggleRight,
   Search,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -74,8 +76,10 @@ interface ConditionRow {
 const CONDITION_FIELDS = [
   { value: "risk_level", label: "风险等级", operators: ["equals", "not_equals", "in"], valueOptions: ["HIGH", "MODERATE", "LOW"] },
   { value: "sql_type", label: "SQL 类型", operators: ["equals", "not_equals", "in"], valueOptions: ["DDL", "DML", "SELECT"] },
-  { value: "datasource_environment", label: "环境", operators: ["equals", "not_equals"], valueOptions: ["dev", "staging", "prod"] },
-  { value: "has_sensitive_tables", label: "包含敏感表", operators: ["equals"], valueOptions: ["true", "false"] },
+  { value: "environment", label: "环境", operators: ["equals", "not_equals"], valueOptions: ["dev", "staging", "prod"] },
+  { value: "database", label: "目标数据库", operators: ["equals", "not_equals", "in", "contains"], valueOptions: undefined },
+  { value: "affected_tables", label: "影响表", operators: ["equals", "not_equals", "in", "contains"], valueOptions: undefined },
+  { value: "affected_rows", label: "影响行数", operators: ["gt", "gte", "lt", "lte", "equals"] },
   { value: "submitter_role", label: "提交人角色", operators: ["equals", "not_equals"], valueOptions: ["admin", "dba", "developer"] },
 ];
 
@@ -103,6 +107,14 @@ function ConditionBuilder({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [conditions, setConditions] = useState<ConditionRow[]>(initialConditions);
+  const [logic, setLogic] = useState<"and" | "or">(() => {
+    try {
+      const parsed = JSON.parse(conditionsJson);
+      return parsed.logic === "or" ? "or" : "and";
+    } catch {
+      return "and";
+    }
+  });
 
   // Sync from external changes (policy switch)
   const [prevJson, setPrevJson] = useState(conditionsJson);
@@ -118,6 +130,7 @@ function ConditionBuilder({
             value: c.value || "",
           })),
         );
+        if (parsed.logic === "or") setLogic("or");
       } else {
         setConditions([]);
       }
@@ -134,7 +147,25 @@ function ConditionBuilder({
     } else {
       onChange(
         JSON.stringify({
-          logic: "and",
+          logic,
+          conditions: filtered.map((r) => ({
+            field: r.field,
+            operator: r.operator,
+            value: r.value,
+          })),
+        }),
+      );
+    }
+  }
+
+  function toggleLogic() {
+    const next = logic === "and" ? "or" : "and";
+    setLogic(next);
+    const filtered = conditions.filter((r) => r.field && r.value);
+    if (filtered.length > 0) {
+      onChange(
+        JSON.stringify({
+          logic: next,
           conditions: filtered.map((r) => ({
             field: r.field,
             operator: r.operator,
@@ -204,7 +235,17 @@ function ConditionBuilder({
                         ? "不等于"
                         : op === "in"
                           ? "属于"
-                          : op}
+                          : op === "contains"
+                            ? "包含"
+                            : op === "gt"
+                              ? ">"
+                              : op === "gte"
+                                ? "≥"
+                                : op === "lt"
+                                  ? "<"
+                                  : op === "lte"
+                                    ? "≤"
+                                    : op}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -246,15 +287,31 @@ function ConditionBuilder({
           </div>
         );
       })}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-7 gap-1 text-xs text-zinc-400 hover:text-[var(--text-primary)]"
-        onClick={addCondition}
-      >
-        <Plus size={12} />
-        添加条件
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 text-xs text-zinc-400 hover:text-[var(--text-primary)]"
+          onClick={addCondition}
+        >
+          <Plus size={12} />
+          添加条件
+        </Button>
+        {conditions.filter((r) => r.field && r.value).length > 1 && (
+          <button
+            type="button"
+            onClick={toggleLogic}
+            className={cn(
+              "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
+              logic === "and"
+                ? "bg-emerald-500/20 text-emerald-400"
+                : "bg-blue-500/20 text-blue-400",
+            )}
+          >
+            {logic === "and" ? "AND（所有条件满足）" : "OR（任一条件满足）"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -702,6 +759,28 @@ export default function ApprovalPoliciesTab() {
     }
   }
 
+  async function handleReorder(policyId: number, direction: "up" | "down") {
+    const sorted = [...filteredPolicies].sort((a, b) => a.priority - b.priority);
+    const idx = sorted.findIndex((p) => p.id === policyId);
+    if (idx < 0) return;
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+
+    // Swap priorities
+    const a = sorted[idx];
+    const b = sorted[swapIdx];
+    try {
+      await Promise.all([
+        updatePolicy(a.id, { priority: b.priority }),
+        updatePolicy(b.id, { priority: a.priority }),
+      ]);
+      toast.success("排序已更新");
+      fetchPolicies();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "排序更新失败");
+    }
+  }
+
   function openCreate() {
     setEditingPolicy(null);
     setEditorOpen(true);
@@ -871,6 +950,26 @@ export default function ApprovalPoliciesTab() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                          disabled={filteredPolicies.sort((a, b) => a.priority - b.priority).findIndex((fp) => fp.id === p.id) === 0}
+                          onClick={() => handleReorder(p.id, "up")}
+                          title="上移"
+                        >
+                          <ArrowUp size={13} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                          disabled={filteredPolicies.sort((a, b) => a.priority - b.priority).findIndex((fp) => fp.id === p.id) === filteredPolicies.length - 1}
+                          onClick={() => handleReorder(p.id, "down")}
+                          title="下移"
+                        >
+                          <ArrowDown size={13} />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
