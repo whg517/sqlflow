@@ -248,6 +248,12 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.PUT("/api/settings/feishu", notifyHandler.UpdateFeishuConfig)
 	adminGroup.POST("/api/settings/feishu/test", notifyHandler.TestFeishuNotify)
 
+	// Notification preferences (auth)
+	notifPrefSvc := service.NewNotificationPreferenceService(database)
+	notifPrefHandler := handler.NewNotificationPreferenceHandler(notifPrefSvc)
+	authGroup.GET("/api/notifications/preferences", notifPrefHandler.GetPreferences)
+	authGroup.PUT("/api/notifications/preferences", notifPrefHandler.UpdatePreferences)
+
 	// Feishu webhook CRUD API
 	adminGroup.POST("/api/settings/feishu/webhooks", feishuWebhookHandler.Create)
 	adminGroup.GET("/api/settings/feishu/webhooks", feishuWebhookHandler.List)
