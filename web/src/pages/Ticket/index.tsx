@@ -66,8 +66,9 @@ import {
   createAsyncTicketExport,
   getExportTask,
   downloadExportFile,
-  type ExportTask,
 } from "@/api/export";
+import { ExportDialog, type ExportTaskLike } from "@/components/ExportDialog";
+import type { ExportColumn, ExportFormat } from "@/lib/export-utils";
 import TicketDetailDrawer from "./components/TicketDetailDrawer";
 import {
   getTicketSLAStatuses,
@@ -77,6 +78,28 @@ import {
   formatSLARemaining,
   type SLATicketStatus,
 } from "@/api/sla";
+
+// --- Ticket Export Columns ---
+
+/** Ticket columns available for export — must match backend whitelist. */
+const TICKET_EXPORT_COLUMNS: ExportColumn[] = [
+  { key: "id", label: "ID" },
+  { key: "submitter_name", label: "提交人" },
+  { key: "datasource_id", label: "数据源 ID" },
+  { key: "database", label: "数据库" },
+  { key: "sql_content", label: "SQL 内容" },
+  { key: "sql_summary", label: "SQL 摘要" },
+  { key: "sql_type", label: "SQL 类型" },
+  { key: "status", label: "状态" },
+  { key: "risk_level", label: "风险等级" },
+  { key: "reviewer_name", label: "审批人" },
+  { key: "review_comment", label: "审批意见" },
+  { key: "change_reason", label: "变更原因" },
+  { key: "revision", label: "版本号" },
+  { key: "auto_approved", label: "自动审批" },
+  { key: "created_at", label: "创建时间" },
+  { key: "updated_at", label: "更新时间" },
+];
 
 // --- Status Tab Config ---
 
@@ -145,9 +168,7 @@ export default function TicketPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
 
   // Export state
-  const [exporting, setExporting] = useState(false);
-  const [asyncExportTask, setAsyncExportTask] = useState<ExportTask | null>(null);
-  const [exportPolling, setExportPolling] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   // SLA status
   const [slaStatuses, setSlaStatuses] = useState<Record<number, SLATicketStatus>>({});
@@ -336,87 +357,48 @@ export default function TicketPage() {
   }
 
   // Export handler — tries sync first, falls back to async for large datasets
-  async function handleExport() {
-    setExporting(true);
-    setAsyncExportTask(null);
-    const params = {
+  // ExportDialog callbacks — build params from current filters
+  const buildTicketExportParams = useCallback(
+    (format: ExportFormat, columns: string[]) => ({
       status: activeTab !== "all" ? activeTab : undefined,
       datasource_id: datasourceFilter || undefined,
       risk_level: riskFilter || undefined,
       keyword: keyword || undefined,
-    };
-    try {
-      const blob = await exportTickets(params);
-      if (blob.size === 0) {
-        toast.info("没有可导出的数据");
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `tickets_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success("工单导出成功（含水印）");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "导出失败";
-      if (msg.includes("10000") || msg.includes("超过")) {
-        try {
-          toast.info("数据量较大，正在后台生成导出文件...");
-          const task = await createAsyncTicketExport(params);
-          setAsyncExportTask(task);
-          startTicketExportPolling(task.id);
-        } catch {
-          toast.error("创建异步导出任务失败");
-        }
-        return;
-      }
-      toast.error(msg);
-    } finally {
-      setExporting(false);
-    }
-  }
+      format,
+      columns: columns.length < TICKET_EXPORT_COLUMNS.length ? columns : undefined,
+    }),
+    [activeTab, datasourceFilter, riskFilter, keyword],
+  );
 
-  // Poll async export task until completed
-  function startTicketExportPolling(taskId: number) {
-    setExportPolling(true);
-    const poll = async () => {
-      try {
-        const task = await getExportTask(taskId);
-        setAsyncExportTask(task);
-        if (task.status === "completed") {
-          setExportPolling(false);
-          toast.success(`导出完成！共 ${task.total_rows} 条数据`);
-          try {
-            const blob = await downloadExportFile(taskId);
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = task.filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-          } catch {
-            toast.error("下载导出文件失败，请稍后重试");
-          }
-          return;
-        }
-        if (task.status === "failed") {
-          setExportPolling(false);
-          toast.error(task.error_msg || "导出任务失败");
-          return;
-        }
-        setTimeout(poll, 2000);
-      } catch {
-        setExportPolling(false);
-        toast.error("查询导出状态失败");
-      }
-    };
-    setTimeout(poll, 1500);
-  }
+  const handleSyncExport = useCallback(
+    async (format: ExportFormat, columns: string[]) => {
+      const params = buildTicketExportParams(format, columns);
+      return exportTickets(params);
+    },
+    [buildTicketExportParams],
+  );
+
+  const handleAsyncExport = useCallback(
+    async (format: ExportFormat, columns: string[]) => {
+      const params = buildTicketExportParams(format, columns);
+      const task = await createAsyncTicketExport(params);
+      return task as unknown as ExportTaskLike;
+    },
+    [buildTicketExportParams],
+  );
+
+  const handleGetTask = useCallback(
+    async (taskId: number) => {
+      const task = await getExportTask(taskId);
+      return task as unknown as ExportTaskLike;
+    },
+    [],
+  );
+
+  const handleDownloadTask = useCallback(
+    async (taskId: number) => downloadExportFile(taskId),
+    [],
+  );
 
   const totalPages = Math.ceil(total / pageSize);
 
@@ -432,45 +414,12 @@ export default function TicketPage() {
             size="sm"
             variant="outline"
             className="h-8 gap-1.5 border-[var(--border-default)] px-3 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
-            onClick={handleExport}
-            disabled={exporting || loading || exportPolling}
+            onClick={() => setExportDialogOpen(true)}
+            disabled={loading}
           >
-            {exporting || exportPolling ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Download size={14} />
-            )}
-            {exportPolling
-              ? "后台生成中..."
-              : exporting
-                ? "导出中..."
-                : "导出 CSV"}
+            <Download size={14} />
+            导出
           </Button>
-          {asyncExportTask && asyncExportTask.status === "completed" && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1.5 border-[var(--border-default)] px-3 text-xs text-green-600 hover:bg-[var(--bg-elevated)]"
-              onClick={async () => {
-                try {
-                  const blob = await downloadExportFile(asyncExportTask.id);
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = asyncExportTask.filename;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                } catch {
-                  toast.error("下载失败，文件可能已过期");
-                }
-              }}
-            >
-              <Download size={14} />
-              下载导出文件
-            </Button>
-          )}
           <Button
             size="sm"
             className="h-8 gap-1.5 bg-[var(--accent-primary)] px-3 text-xs text-white hover:bg-[var(--accent-hover)]"
@@ -481,6 +430,20 @@ export default function TicketPage() {
           </Button>
         </div>
       </div>
+
+      {/* Export Dialog */}
+      <ExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        exportType="ticket"
+        columns={TICKET_EXPORT_COLUMNS}
+        filenamePrefix="tickets"
+        syncExport={handleSyncExport}
+        asyncExport={handleAsyncExport}
+        getTask={handleGetTask}
+        downloadTask={handleDownloadTask}
+        disabled={loading}
+      />
 
       {/* Tabs + Filters + Table — all inside a card */}
       <div className="flex-1 overflow-hidden rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] flex flex-col">

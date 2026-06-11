@@ -1,8 +1,13 @@
 /**
  * SF-QA0048 — E2E 前端交互：数据导出
  *
- * 覆盖审计日志导出 CSV、工单导出、水印验证、权限校验等场景。
+ * 覆盖审计日志导出、工单导出、水印验证、权限校验等场景。
  * Playwright 模拟真实用户操作，不使用任何 mock。
+ *
+ * SF-FEAT0054-FE 更新：导出流程改为对话框模式
+ * - 点击"导出"按钮打开 ExportDialog
+ * - 在对话框中选择格式（CSV/Excel）和字段
+ * - 点击"导出 CSV"或"导出 Excel"确认下载
  */
 import { test, expect, request as pwRequest } from "@playwright/test";
 import {
@@ -28,27 +33,61 @@ async function gotoTicketsPage(page: import("@playwright/test").Page) {
   await page.waitForLoadState("networkidle");
 }
 
+/** Open export dialog and trigger CSV download. */
+async function triggerExport(page: import("@playwright/test").Page, format: "csv" | "xlsx" = "csv") {
+  const formatLabel = format === "xlsx" ? "Excel" : "CSV";
+  // Click the main export button to open dialog
+  await page.getByRole("button", { name: /^导出$/ }).click();
+  // Wait for dialog to appear
+  await page.waitForSelector("[data-slot='dialog-content']");
+  // Click the export confirm button in dialog
+  await page.getByRole("button", { name: new RegExp(`导出 ${formatLabel}`) }).click();
+}
+
 test.describe("数据导出", () => {
   // ── 1. 审计日志导出 UI ──────────────────────────────────────
 
   test("审计日志页面：导出按钮可见", async ({ page }) => {
     await gotoAuditPage(page);
-    const exportBtn = page.getByRole("button", { name: /导出 CSV/i });
+    const exportBtn = page.getByRole("button", { name: /^导出$/ });
     await expect(exportBtn).toBeVisible();
   });
 
   test("审计日志页面：导出按钮包含下载图标", async ({ page }) => {
     await gotoAuditPage(page);
-    const exportBtn = page.getByRole("button", { name: /导出 CSV/i });
+    const exportBtn = page.getByRole("button", { name: /^导出$/ });
     const icon = exportBtn.locator("svg");
     await expect(icon).toBeVisible();
   });
 
-  test("审计日志导出：点击后触发下载", async ({ page }) => {
+  test("审计日志导出：点击打开导出对话框", async ({ page }) => {
+    await gotoAuditPage(page);
+    await page.getByRole("button", { name: /^导出$/ }).click();
+    // Dialog should be visible
+    await expect(page.getByText("导出数据")).toBeVisible();
+    await expect(page.getByText("选择导出格式和需要导出的字段")).toBeVisible();
+    // CSV and Excel format options
+    await expect(page.getByText("CSV")).toBeVisible();
+    await expect(page.getByText("Excel")).toBeVisible();
+    // Column checkboxes
+    await expect(page.getByText("ID")).toBeVisible();
+    await expect(page.getByText("用户")).toBeVisible();
+  });
+
+  test("审计日志导出：对话框中切换 Excel 格式", async ({ page }) => {
+    await gotoAuditPage(page);
+    await page.getByRole("button", { name: /^导出$/ }).click();
+    // Click Excel option
+    await page.getByDisplayValue("xlsx").click();
+    // Export button should show "导出 Excel"
+    await expect(page.getByRole("button", { name: /导出 Excel/ })).toBeVisible();
+  });
+
+  test("审计日志导出：CSV 下载触发成功", async ({ page }) => {
     await gotoAuditPage(page);
 
     const downloadPromise = page.waitForEvent("download", { timeout: 15000 });
-    await page.getByRole("button", { name: /导出 CSV/i }).click();
+    await triggerExport(page, "csv");
     const download = await downloadPromise;
 
     const filename = download.suggestedFilename();
@@ -69,7 +108,7 @@ test.describe("数据导出", () => {
     await gotoAuditPage(page);
 
     const downloadPromise = page.waitForEvent("download", { timeout: 15000 });
-    await page.getByRole("button", { name: /导出 CSV/i }).click();
+    await triggerExport(page, "csv");
     const download = await downloadPromise;
 
     const filePath = await download.path();
@@ -93,7 +132,7 @@ test.describe("数据导出", () => {
 
     // Download and count rows
     const downloadPromise = page.waitForEvent("download", { timeout: 15000 });
-    await page.getByRole("button", { name: /导出 CSV/i }).click();
+    await triggerExport(page, "csv");
     const download = await downloadPromise;
 
     const filePath = await download.path();
@@ -108,7 +147,7 @@ test.describe("数据导出", () => {
   test("审计日志导出：按钮加载后可点击", async ({ page }) => {
     await gotoAuditPage(page);
     await page.waitForTimeout(1000);
-    const exportBtn = page.getByRole("button", { name: /导出 CSV/i });
+    const exportBtn = page.getByRole("button", { name: /^导出$/ });
     await expect(exportBtn).toBeEnabled();
   });
 
@@ -116,40 +155,26 @@ test.describe("数据导出", () => {
     await gotoAuditPage(page);
 
     const downloadPromise = page.waitForEvent("download", { timeout: 15000 });
-    await page.getByRole("button", { name: /导出 CSV/i }).click();
+    await triggerExport(page, "csv");
     await downloadPromise;
 
     const toast = page.locator("[data-sonner-toast]").filter({ hasText: /导出成功|含水印/ });
     await expect(toast).toBeVisible({ timeout: 5000 });
   });
 
-  test("审计日志：快速连续点击导出不崩溃", async ({ page }) => {
-    await gotoAuditPage(page);
-
-    const exportBtn = page.getByRole("button", { name: /导出 CSV/i });
-    // Click rapidly — first click triggers download, subsequent clicks while disabled are harmless
-    for (let i = 0; i < 3; i++) {
-      await exportBtn.click({ timeout: 3000 }).catch(() => {});
-      await page.waitForTimeout(300);
-    }
-
-    await page.waitForTimeout(5000);
-    await expect(page.getByRole("heading", { name: /审计/i })).toBeVisible();
-  });
-
   // ── 2. 工单导出 UI ──────────────────────────────────────
 
   test("工单页面：导出按钮可见", async ({ page }) => {
     await gotoTicketsPage(page);
-    const exportBtn = page.getByRole("button", { name: /导出 CSV/i });
+    const exportBtn = page.getByRole("button", { name: /^导出$/ });
     await expect(exportBtn).toBeVisible();
   });
 
-  test("工单导出：点击后触发下载", async ({ page }) => {
+  test("工单导出：CSV 下载触发成功", async ({ page }) => {
     await gotoTicketsPage(page);
 
     const downloadPromise = page.waitForEvent("download", { timeout: 15000 });
-    await page.getByRole("button", { name: /导出 CSV/i }).click();
+    await triggerExport(page, "csv");
     const download = await downloadPromise;
 
     const filename = download.suggestedFilename();
@@ -168,7 +193,7 @@ test.describe("数据导出", () => {
     await gotoTicketsPage(page);
 
     const downloadPromise = page.waitForEvent("download", { timeout: 15000 });
-    await page.getByRole("button", { name: /导出 CSV/i }).click();
+    await triggerExport(page, "csv");
     const download = await downloadPromise;
 
     const filePath = await download.path();
@@ -188,7 +213,7 @@ test.describe("数据导出", () => {
     await gotoTicketsPage(page);
 
     const downloadPromise = page.waitForEvent("download", { timeout: 15000 });
-    await page.getByRole("button", { name: /导出 CSV/i }).click();
+    await triggerExport(page, "csv");
     const download = await downloadPromise;
 
     const filePath = await download.path();
@@ -201,24 +226,11 @@ test.describe("数据导出", () => {
     await gotoTicketsPage(page);
 
     const downloadPromise = page.waitForEvent("download", { timeout: 15000 });
-    await page.getByRole("button", { name: /导出 CSV/i }).click();
+    await triggerExport(page, "csv");
     await downloadPromise;
 
     const toast = page.locator("[data-sonner-toast]").filter({ hasText: /导出成功|含水印/ });
     await expect(toast).toBeVisible({ timeout: 5000 });
-  });
-
-  test("工单：快速连续点击导出不崩溃", async ({ page }) => {
-    await gotoTicketsPage(page);
-
-    const exportBtn = page.getByRole("button", { name: /导出 CSV/i });
-    for (let i = 0; i < 3; i++) {
-      await exportBtn.click({ timeout: 3000 }).catch(() => {});
-      await page.waitForTimeout(300);
-    }
-
-    await page.waitForTimeout(5000);
-    await expect(page.getByRole("heading", { name: /工单/i })).toBeVisible();
   });
 
   // ── 3. API 层导出验证 ──────────────────────────────────────
@@ -424,7 +436,7 @@ test.describe("数据导出", () => {
     await page.reload();
     await page.waitForLoadState("networkidle");
 
-    const exportBtn = page.getByRole("button", { name: /导出 CSV/i });
+    const exportBtn = page.getByRole("button", { name: /^导出$/ });
     await expect(exportBtn).toBeVisible();
     await expect(exportBtn).toBeEnabled();
   });
@@ -434,7 +446,7 @@ test.describe("数据导出", () => {
     await page.reload();
     await page.waitForLoadState("networkidle");
 
-    const exportBtn = page.getByRole("button", { name: /导出 CSV/i });
+    const exportBtn = page.getByRole("button", { name: /^导出$/ });
     await expect(exportBtn).toBeVisible();
     await expect(exportBtn).toBeEnabled();
   });

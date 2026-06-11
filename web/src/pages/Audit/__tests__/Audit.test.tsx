@@ -41,10 +41,14 @@ vi.mock("@/api/audit", () => ({
 
 const mockExportAuditLogs = vi.fn();
 const mockCreateAsyncAuditExport = vi.fn();
+const mockGetExportTask = vi.fn();
+const mockDownloadExportFile = vi.fn();
 vi.mock("@/api/export", () => ({
   exportAuditLogs: (...args: unknown[]) => mockExportAuditLogs(...args),
   createAsyncAuditExport: (...args: unknown[]) =>
     mockCreateAsyncAuditExport(...args),
+  getExportTask: (...args: unknown[]) => mockGetExportTask(...args),
+  downloadExportFile: (...args: unknown[]) => mockDownloadExportFile(...args),
 }));
 
 const mockListTickets = vi.fn();
@@ -112,6 +116,51 @@ vi.mock("@/components/ui/tooltip", () => ({
   TooltipContent: ({ children }: { children: React.ReactNode }) => (
     <span>{children}</span>
   ),
+}));
+
+// Mock ExportDialog — simplified mock for testing
+vi.mock("@/components/ExportDialog", () => ({
+  ExportDialog: ({
+    open,
+    onOpenChange,
+    syncExport,
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    syncExport: (format: string, columns: string[]) => Promise<Blob>;
+    exportType: string;
+    columns: unknown[];
+    filenamePrefix: string;
+    asyncExport: unknown;
+    getTask: unknown;
+    downloadTask: unknown;
+    disabled?: boolean;
+  }) => {
+    if (!open) return null;
+    return (
+      <div data-testid="export-dialog">
+        <button
+          data-testid="export-dialog-confirm"
+          onClick={async () => {
+            try {
+              await syncExport("csv", []);
+            } catch {
+              // noop
+            }
+            onOpenChange(false);
+          }}
+        >
+          确认导出
+        </button>
+        <button
+          data-testid="export-dialog-cancel"
+          onClick={() => onOpenChange(false)}
+        >
+          取消
+        </button>
+      </div>
+    );
+  },
 }));
 
 import AuditPage from "@/pages/Audit";
@@ -222,7 +271,7 @@ describe("AuditPage", () => {
     it("renders filter bar elements", () => {
       renderAuditPage();
       expect(screen.getByPlaceholderText(/搜索 SQL/)).toBeInTheDocument();
-      expect(screen.getByText("导出 CSV")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /导出/ })).toBeInTheDocument();
     });
 
     it("renders search input", () => {
@@ -230,9 +279,9 @@ describe("AuditPage", () => {
       expect(screen.getByPlaceholderText(/搜索 SQL/)).toBeInTheDocument();
     });
 
-    it("renders export CSV button", () => {
+    it("renders export button", () => {
       renderAuditPage();
-      expect(screen.getByText("导出 CSV")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /导出/ })).toBeInTheDocument();
     });
   });
 
@@ -373,17 +422,26 @@ describe("AuditPage", () => {
 
   // --- Export CSV ---
 
-  describe("export CSV", () => {
-    it("calls exportAuditLogs on export click", async () => {
+  describe("export", () => {
+    it("opens export dialog on export click, then triggers export on confirm", async () => {
       mockExportAuditLogs.mockResolvedValueOnce(
         new Blob(["id,user,action\n1,admin,SELECT"], {
           type: "text/csv",
         }),
       );
       renderAuditPage();
-      await waitFor(() => screen.getByText("导出 CSV"));
+      await waitFor(() => screen.getByRole("button", { name: /导出/ }));
 
-      await userEvent.click(screen.getByText("导出 CSV"));
+      // Click the export button to open the dialog
+      await userEvent.click(screen.getByRole("button", { name: /导出/ }));
+
+      // Dialog should be visible
+      await waitFor(() => {
+        expect(screen.getByTestId("export-dialog")).toBeInTheDocument();
+      });
+
+      // Click confirm in the dialog
+      await userEvent.click(screen.getByTestId("export-dialog-confirm"));
 
       await waitFor(() => {
         expect(mockExportAuditLogs).toHaveBeenCalled();

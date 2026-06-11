@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { ExportFormat } from "@/lib/export-utils";
 
 // --- Types ---
 
@@ -9,6 +10,10 @@ export interface AuditExportParams {
   start?: string;
   end?: string;
   keyword?: string;
+  /** Export format — csv (default) or xlsx. */
+  format?: ExportFormat;
+  /** Selected columns to export. Empty/undefined = all columns. */
+  columns?: string[];
 }
 
 export interface TicketExportParams {
@@ -16,6 +21,10 @@ export interface TicketExportParams {
   datasource_id?: string;
   risk_level?: string;
   keyword?: string;
+  /** Export format — csv (default) or xlsx. */
+  format?: ExportFormat;
+  /** Selected columns to export. Empty/undefined = all columns. */
+  columns?: string[];
 }
 
 export type ExportTaskStatus =
@@ -56,46 +65,48 @@ interface ApiResponse<T> {
   data: T;
 }
 
+// --- Internal: build query string with shared export params ---
+
+function buildExportQuery(params: Record<string, unknown>): string {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    if (Array.isArray(value) && value.length > 0) {
+      qs.set(key, value.join(","));
+    } else if (!Array.isArray(value)) {
+      qs.set(key, String(value));
+    }
+  }
+  const query = qs.toString();
+  return query ? `?${query}` : "";
+}
+
 // --- Sync Export API Functions ---
 
 /**
- * Export audit logs as CSV via the backend export API.
- * Returns the CSV Blob for download.
+ * Export audit logs via the backend export API.
+ * Returns the Blob (CSV or XLSX) for download.
  * Backend adds BOM header and user watermark for audit compliance.
  * Requires admin or dba role.
  */
 export async function exportAuditLogs(
   params: AuditExportParams = {},
 ): Promise<Blob> {
-  const qs = new URLSearchParams();
-  if (params.user_id) qs.set("user_id", params.user_id);
-  if (params.action) qs.set("action", params.action);
-  if (params.datasource_id) qs.set("datasource_id", params.datasource_id);
-  if (params.start) qs.set("start", params.start);
-  if (params.end) qs.set("end", params.end);
-  if (params.keyword) qs.set("keyword", params.keyword);
-  const query = qs.toString();
-  const url = `/export/audit${query ? `?${query}` : ""}`;
-  return api.getBlob(url);
+  const query = buildExportQuery(params);
+  return api.getBlob(`/export/audit${query}`);
 }
 
 /**
- * Export tickets as CSV via the backend export API.
- * Returns the CSV Blob for download.
+ * Export tickets via the backend export API.
+ * Returns the Blob (CSV or XLSX) for download.
  * Backend adds BOM header and user watermark for audit compliance.
  * All authenticated users can export tickets.
  */
 export async function exportTickets(
   params: TicketExportParams = {},
 ): Promise<Blob> {
-  const qs = new URLSearchParams();
-  if (params.status) qs.set("status", params.status);
-  if (params.datasource_id) qs.set("datasource_id", params.datasource_id);
-  if (params.risk_level) qs.set("risk_level", params.risk_level);
-  if (params.keyword) qs.set("keyword", params.keyword);
-  const query = qs.toString();
-  const url = `/export/tickets${query ? `?${query}` : ""}`;
-  return api.getBlob(url);
+  const query = buildExportQuery(params);
+  return api.getBlob(`/export/tickets${query}`);
 }
 
 // --- Async Export API Functions ---
@@ -107,16 +118,9 @@ export async function exportTickets(
 export async function createAsyncAuditExport(
   params: AuditExportParams = {},
 ): Promise<ExportTask> {
-  const qs = new URLSearchParams();
-  qs.set("async", "1");
-  if (params.user_id) qs.set("user_id", params.user_id);
-  if (params.action) qs.set("action", params.action);
-  if (params.datasource_id) qs.set("datasource_id", params.datasource_id);
-  if (params.start) qs.set("start", params.start);
-  if (params.end) qs.set("end", params.end);
-  if (params.keyword) qs.set("keyword", params.keyword);
+  const query = buildExportQuery({ ...params, async: "1" });
   const res = await api.get<ApiResponse<ExportTask>>(
-    `/export/audit?${qs.toString()}`,
+    `/export/audit${query}`,
   );
   return res.data;
 }
@@ -128,14 +132,9 @@ export async function createAsyncAuditExport(
 export async function createAsyncTicketExport(
   params: TicketExportParams = {},
 ): Promise<ExportTask> {
-  const qs = new URLSearchParams();
-  qs.set("async", "1");
-  if (params.status) qs.set("status", params.status);
-  if (params.datasource_id) qs.set("datasource_id", params.datasource_id);
-  if (params.risk_level) qs.set("risk_level", params.risk_level);
-  if (params.keyword) qs.set("keyword", params.keyword);
+  const query = buildExportQuery({ ...params, async: "1" });
   const res = await api.get<ApiResponse<ExportTask>>(
-    `/export/tickets?${qs.toString()}`,
+    `/export/tickets${query}`,
   );
   return res.data;
 }
