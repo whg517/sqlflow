@@ -1,4 +1,4 @@
-import { useState, useCallback, type FormEvent } from "react";
+import { useState, useEffect, useCallback, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   Plus,
@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   Clock,
   EyeOff,
+  Webhook as WebhookIcon,
 } from "lucide-react";
 import { api } from "@/api/client";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,7 @@ import MaskRulesTab from "./MaskRulesTab";
 import AIConfigTab from "./AIConfigTab";
 import SLATab from "./SLATab";
 import ApprovalPoliciesTab from "./ApprovalPoliciesTab";
+import IntegrationsTab from "./IntegrationsTab";
 import { listSensitiveTables } from "@/api/maskRule";
 
 // --- Types ---
@@ -91,7 +93,7 @@ interface ApiResponse {
   message: string;
 }
 
-type SettingsTab = "datasource" | "mask-rules" | "ai-config" | "sla" | "approval-policies";
+type SettingsTab = "datasource" | "mask-rules" | "ai-config" | "sla" | "approval-policies" | "integrations";
 
 // --- Constants ---
 
@@ -101,6 +103,7 @@ const NAV_ITEMS: { key: SettingsTab; label: string; icon: typeof Database }[] =
     { key: "approval-policies", label: "审批策略", icon: ShieldCheck },
     { key: "mask-rules", label: "脱敏规则", icon: EyeOff },
     { key: "sla", label: "SLA 告警", icon: Clock },
+    { key: "integrations", label: "集成", icon: WebhookIcon },
     { key: "ai-config", label: "AI 配置", icon: Brain },
   ];
 
@@ -800,6 +803,16 @@ function DataSourceTab() {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("datasource");
+  const [user, setUser] = useState<{ id: number; username: string; role: string } | null>(null);
+
+  useEffect(() => {
+    api
+      .get<{ code: number; data: { id: number; username: string; role: string } }>("/auth/me")
+      .then((res) => {
+        if (res.code === 0) setUser(res.data);
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="flex h-full">
@@ -837,6 +850,7 @@ export default function SettingsPage() {
         {activeTab === "mask-rules" && <MaskRulesTab />}
         {activeTab === "sla" && <SLATab />}
         {activeTab === "ai-config" && <AIConfigTab />}
+        {activeTab === "integrations" && <IntegrationsTab user={user} />}
       </div>
     </div>
   );
