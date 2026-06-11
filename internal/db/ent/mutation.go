@@ -7696,6 +7696,7 @@ type ExportTaskMutation struct {
 	username      *string
 	export_type   *string
 	status        *string
+	file_format   *string
 	filename      *string
 	file_path     *string
 	total_rows    *int64
@@ -7972,6 +7973,42 @@ func (m *ExportTaskMutation) OldStatus(ctx context.Context) (v string, err error
 // ResetStatus resets all changes to the "status" field.
 func (m *ExportTaskMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetFileFormat sets the "file_format" field.
+func (m *ExportTaskMutation) SetFileFormat(s string) {
+	m.file_format = &s
+}
+
+// FileFormat returns the value of the "file_format" field in the mutation.
+func (m *ExportTaskMutation) FileFormat() (r string, exists bool) {
+	v := m.file_format
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFileFormat returns the old "file_format" field's value of the ExportTask entity.
+// If the ExportTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ExportTaskMutation) OldFileFormat(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFileFormat is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFileFormat requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFileFormat: %w", err)
+	}
+	return oldValue.FileFormat, nil
+}
+
+// ResetFileFormat resets all changes to the "file_format" field.
+func (m *ExportTaskMutation) ResetFileFormat() {
+	m.file_format = nil
 }
 
 // SetFilename sets the "filename" field.
@@ -8349,7 +8386,7 @@ func (m *ExportTaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ExportTaskMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.user_id != nil {
 		fields = append(fields, exporttask.FieldUserID)
 	}
@@ -8361,6 +8398,9 @@ func (m *ExportTaskMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, exporttask.FieldStatus)
+	}
+	if m.file_format != nil {
+		fields = append(fields, exporttask.FieldFileFormat)
 	}
 	if m.filename != nil {
 		fields = append(fields, exporttask.FieldFilename)
@@ -8402,6 +8442,8 @@ func (m *ExportTaskMutation) Field(name string) (ent.Value, bool) {
 		return m.ExportType()
 	case exporttask.FieldStatus:
 		return m.Status()
+	case exporttask.FieldFileFormat:
+		return m.FileFormat()
 	case exporttask.FieldFilename:
 		return m.Filename()
 	case exporttask.FieldFilePath:
@@ -8435,6 +8477,8 @@ func (m *ExportTaskMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldExportType(ctx)
 	case exporttask.FieldStatus:
 		return m.OldStatus(ctx)
+	case exporttask.FieldFileFormat:
+		return m.OldFileFormat(ctx)
 	case exporttask.FieldFilename:
 		return m.OldFilename(ctx)
 	case exporttask.FieldFilePath:
@@ -8487,6 +8531,13 @@ func (m *ExportTaskMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case exporttask.FieldFileFormat:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFileFormat(v)
 		return nil
 	case exporttask.FieldFilename:
 		v, ok := value.(string)
@@ -8652,6 +8703,9 @@ func (m *ExportTaskMutation) ResetField(name string) error {
 		return nil
 	case exporttask.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case exporttask.FieldFileFormat:
+		m.ResetFileFormat()
 		return nil
 	case exporttask.FieldFilename:
 		m.ResetFilename()

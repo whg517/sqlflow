@@ -25,6 +25,8 @@ type ExportTask struct {
 	ExportType string `json:"export_type,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
+	// FileFormat holds the value of the "file_format" field.
+	FileFormat string `json:"file_format,omitempty"`
 	// Filename holds the value of the "filename" field.
 	Filename string `json:"filename,omitempty"`
 	// FilePath holds the value of the "file_path" field.
@@ -51,7 +53,7 @@ func (*ExportTask) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case exporttask.FieldID, exporttask.FieldUserID, exporttask.FieldTotalRows, exporttask.FieldFileBytes:
 			values[i] = new(sql.NullInt64)
-		case exporttask.FieldUsername, exporttask.FieldExportType, exporttask.FieldStatus, exporttask.FieldFilename, exporttask.FieldFilePath, exporttask.FieldFiltersJSON, exporttask.FieldErrorMsg:
+		case exporttask.FieldUsername, exporttask.FieldExportType, exporttask.FieldStatus, exporttask.FieldFileFormat, exporttask.FieldFilename, exporttask.FieldFilePath, exporttask.FieldFiltersJSON, exporttask.FieldErrorMsg:
 			values[i] = new(sql.NullString)
 		case exporttask.FieldCreatedAt, exporttask.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
@@ -99,6 +101,12 @@ func (_m *ExportTask) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
+			}
+		case exporttask.FieldFileFormat:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field file_format", values[i])
+			} else if value.Valid {
+				_m.FileFormat = value.String
 			}
 		case exporttask.FieldFilename:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -196,6 +204,9 @@ func (_m *ExportTask) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
+	builder.WriteString(", ")
+	builder.WriteString("file_format=")
+	builder.WriteString(_m.FileFormat)
 	builder.WriteString(", ")
 	builder.WriteString("filename=")
 	builder.WriteString(_m.Filename)

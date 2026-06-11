@@ -249,6 +249,7 @@ var (
 		{Name: "username", Type: field.TypeString, Default: ""},
 		{Name: "export_type", Type: field.TypeString, Default: ""},
 		{Name: "status", Type: field.TypeString, Default: "pending"},
+		{Name: "file_format", Type: field.TypeString, Default: "csv"},
 		{Name: "filename", Type: field.TypeString, Default: ""},
 		{Name: "file_path", Type: field.TypeString, Default: ""},
 		{Name: "total_rows", Type: field.TypeInt64, Default: 0},
