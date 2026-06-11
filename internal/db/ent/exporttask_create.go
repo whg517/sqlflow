@@ -68,6 +68,20 @@ func (_c *ExportTaskCreate) SetNillableStatus(v *string) *ExportTaskCreate {
 	return _c
 }
 
+// SetFileFormat sets the "file_format" field.
+func (_c *ExportTaskCreate) SetFileFormat(v string) *ExportTaskCreate {
+	_c.mutation.SetFileFormat(v)
+	return _c
+}
+
+// SetNillableFileFormat sets the "file_format" field if the given value is not nil.
+func (_c *ExportTaskCreate) SetNillableFileFormat(v *string) *ExportTaskCreate {
+	if v != nil {
+		_c.SetFileFormat(*v)
+	}
+	return _c
+}
+
 // SetFilename sets the "filename" field.
 func (_c *ExportTaskCreate) SetFilename(v string) *ExportTaskCreate {
 	_c.mutation.SetFilename(v)
@@ -227,6 +241,10 @@ func (_c *ExportTaskCreate) defaults() {
 		v := exporttask.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.FileFormat(); !ok {
+		v := exporttask.DefaultFileFormat
+		_c.mutation.SetFileFormat(v)
+	}
 	if _, ok := _c.mutation.Filename(); !ok {
 		v := exporttask.DefaultFilename
 		_c.mutation.SetFilename(v)
@@ -270,6 +288,9 @@ func (_c *ExportTaskCreate) check() error {
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "ExportTask.status"`)}
+	}
+	if _, ok := _c.mutation.FileFormat(); !ok {
+		return &ValidationError{Name: "file_format", err: errors.New(`ent: missing required field "ExportTask.file_format"`)}
 	}
 	if _, ok := _c.mutation.Filename(); !ok {
 		return &ValidationError{Name: "filename", err: errors.New(`ent: missing required field "ExportTask.filename"`)}
@@ -330,6 +351,10 @@ func (_c *ExportTaskCreate) createSpec() (*ExportTask, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(exporttask.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.FileFormat(); ok {
+		_spec.SetField(exporttask.FieldFileFormat, field.TypeString, value)
+		_node.FileFormat = value
 	}
 	if value, ok := _c.mutation.Filename(); ok {
 		_spec.SetField(exporttask.FieldFilename, field.TypeString, value)

@@ -91,6 +91,20 @@ func (_u *ExportTaskUpdate) SetNillableStatus(v *string) *ExportTaskUpdate {
 	return _u
 }
 
+// SetFileFormat sets the "file_format" field.
+func (_u *ExportTaskUpdate) SetFileFormat(v string) *ExportTaskUpdate {
+	_u.mutation.SetFileFormat(v)
+	return _u
+}
+
+// SetNillableFileFormat sets the "file_format" field if the given value is not nil.
+func (_u *ExportTaskUpdate) SetNillableFileFormat(v *string) *ExportTaskUpdate {
+	if v != nil {
+		_u.SetFileFormat(*v)
+	}
+	return _u
+}
+
 // SetFilename sets the "filename" field.
 func (_u *ExportTaskUpdate) SetFilename(v string) *ExportTaskUpdate {
 	_u.mutation.SetFilename(v)
@@ -279,6 +293,9 @@ func (_u *ExportTaskUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(exporttask.FieldStatus, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.FileFormat(); ok {
+		_spec.SetField(exporttask.FieldFileFormat, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Filename(); ok {
 		_spec.SetField(exporttask.FieldFilename, field.TypeString, value)
 	}
@@ -391,6 +408,20 @@ func (_u *ExportTaskUpdateOne) SetStatus(v string) *ExportTaskUpdateOne {
 func (_u *ExportTaskUpdateOne) SetNillableStatus(v *string) *ExportTaskUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
+	}
+	return _u
+}
+
+// SetFileFormat sets the "file_format" field.
+func (_u *ExportTaskUpdateOne) SetFileFormat(v string) *ExportTaskUpdateOne {
+	_u.mutation.SetFileFormat(v)
+	return _u
+}
+
+// SetNillableFileFormat sets the "file_format" field if the given value is not nil.
+func (_u *ExportTaskUpdateOne) SetNillableFileFormat(v *string) *ExportTaskUpdateOne {
+	if v != nil {
+		_u.SetFileFormat(*v)
 	}
 	return _u
 }
@@ -612,6 +643,9 @@ func (_u *ExportTaskUpdateOne) sqlSave(ctx context.Context) (_node *ExportTask, 
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(exporttask.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.FileFormat(); ok {
+		_spec.SetField(exporttask.FieldFileFormat, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Filename(); ok {
 		_spec.SetField(exporttask.FieldFilename, field.TypeString, value)

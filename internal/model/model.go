@@ -18,6 +18,7 @@ type ExportTask struct {
 	UserID      int64            `json:"user_id"`
 	Username    string           `json:"username"`
 	ExportType  string           `json:"export_type"` // "audit" or "ticket"
+	FileFormat  string           `json:"file_format"` // "csv" or "xlsx"
 	Status      ExportTaskStatus `json:"status"`
 	Filename    string           `json:"filename"`
 	FilePath    string           `json:"-"` // server-local file path, never exposed

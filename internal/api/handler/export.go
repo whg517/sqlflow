@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -34,7 +35,9 @@ type exportAuditRequest struct {
 	Start        string `query:"start"`
 	End          string `query:"end"`
 	Keyword      string `query:"keyword"`
-	Async        string `query:"async"` // "1" to force async
+	Async        string `query:"async"`    // "1" to force async
+	Format       string `query:"format"`   // "csv" or "xlsx" (default: csv)
+	Columns      string `query:"columns"`  // JSON array of column names (e.g. ["ID","操作"])
 }
 
 // ExportAuditLogs handles GET /api/export/audit.
@@ -70,17 +73,30 @@ func (h *ExportHandler) ExportAuditLogs(c echo.Context) error {
 		Keyword:      req.Keyword,
 	}
 
+	// Parse format and columns
+	exportFormat := service.ParseExportFormat(req.Format)
+	var columns []string
+	if req.Columns != "" {
+		if err := json.Unmarshal([]byte(req.Columns), &columns); err != nil {
+			return resp.BadRequest(c, "columns 参数格式错误，应为 JSON 数组")
+		}
+		if _, err := service.ValidateExportColumns(columns, service.ExportTypeAudit); err != nil {
+			return resp.BadRequest(c, err.Error())
+		}
+	}
+	columnsMap, _ := service.ValidateExportColumns(columns, service.ExportTypeAudit)
+
 	forceAsync := req.Async == "1"
 
 	if forceAsync {
-		return h.createAsyncExport(c, userID, username, role, "audit", filters)
+		return h.createAsyncExport(c, userID, username, role, "audit", filters, exportFormat, columnsMap)
 	}
 
 	// Validate: check permission + row count
 	total, err := h.exportSvc.ValidateExport(c.Request().Context(), role, service.ExportTypeAudit, filters)
 	if err != nil {
 		if err == service.ErrExportExceedsLimit {
-			return h.createAsyncExport(c, userID, username, role, "audit", filters)
+			return h.createAsyncExport(c, userID, username, role, "audit", filters, exportFormat, columnsMap)
 		}
 		switch err {
 		case service.ErrExportNoPermission:
@@ -91,8 +107,13 @@ func (h *ExportHandler) ExportAuditLogs(c echo.Context) error {
 		}
 	}
 
-	// Stream CSV response
-	return h.streamAuditCSVResponse(c, userID, username, filters, total)
+	// Stream response based on format
+	switch exportFormat {
+	case service.ExportFormatExcel:
+		return h.streamAuditExcelResponse(c, userID, username, filters, columnsMap, total)
+	default:
+		return h.streamAuditCSVResponse(c, userID, username, filters, total)
+	}
 }
 
 type exportTicketRequest struct {
@@ -101,6 +122,8 @@ type exportTicketRequest struct {
 	RiskLevel    string `query:"risk_level"`
 	Keyword      string `query:"keyword"`
 	Async        string `query:"async"`
+	Format       string `query:"format"`   // "csv" or "xlsx" (default: csv)
+	Columns      string `query:"columns"`  // JSON array of column names
 }
 
 // ExportTickets handles GET /api/export/tickets.
@@ -133,17 +156,30 @@ func (h *ExportHandler) ExportTickets(c echo.Context) error {
 		Keyword:      req.Keyword,
 	}
 
+	// Parse format and columns
+	exportFormat := service.ParseExportFormat(req.Format)
+	var columns []string
+	if req.Columns != "" {
+		if err := json.Unmarshal([]byte(req.Columns), &columns); err != nil {
+			return resp.BadRequest(c, "columns 参数格式错误，应为 JSON 数组")
+		}
+		if _, err := service.ValidateExportColumns(columns, service.ExportTypeTicket); err != nil {
+			return resp.BadRequest(c, err.Error())
+		}
+	}
+	columnsMap, _ := service.ValidateExportColumns(columns, service.ExportTypeTicket)
+
 	forceAsync := req.Async == "1"
 
 	if forceAsync {
-		return h.createAsyncExport(c, userID, username, role, "ticket", filters)
+		return h.createAsyncExport(c, userID, username, role, "ticket", filters, exportFormat, columnsMap)
 	}
 
 	// Validate: check permission + row count
 	total, err := h.exportSvc.ValidateExport(c.Request().Context(), role, service.ExportTypeTicket, filters)
 	if err != nil {
 		if err == service.ErrExportExceedsLimit {
-			return h.createAsyncExport(c, userID, username, role, "ticket", filters)
+			return h.createAsyncExport(c, userID, username, role, "ticket", filters, exportFormat, columnsMap)
 		}
 		switch err {
 		case service.ErrExportNoPermission:
@@ -154,8 +190,13 @@ func (h *ExportHandler) ExportTickets(c echo.Context) error {
 		}
 	}
 
-	// Stream CSV response
-	return h.streamTicketCSVResponse(c, userID, username, filters, total)
+	// Stream response based on format
+	switch exportFormat {
+	case service.ExportFormatExcel:
+		return h.streamTicketExcelResponse(c, userID, username, filters, columnsMap, total)
+	default:
+		return h.streamTicketCSVResponse(c, userID, username, filters, total)
+	}
 }
 
 // streamAuditCSVResponse writes streaming CSV response for audit logs.
@@ -184,6 +225,22 @@ func (h *ExportHandler) streamAuditCSVResponse(c echo.Context, userID int64, use
 	return nil
 }
 
+// streamAuditExcelResponse writes streaming Excel (.xlsx) response for audit logs.
+func (h *ExportHandler) streamAuditExcelResponse(c echo.Context, userID int64, username string, filters service.AuditExportFilters, columns map[string]int, total int64) error {
+	filename := fmt.Sprintf("audit_logs_%s.xlsx", time.Now().Format("2006-01-02"))
+	setStreamingExcelHeaders(c, filename, total)
+
+	written, err := h.exportSvc.StreamExportAuditLogsExcel(c.Request().Context(), c.Response(), username, filters, columns)
+	if err != nil {
+		log.Printf("StreamExportAuditLogsExcel error after %d rows: %v", written, err)
+		return nil // headers already sent
+	}
+
+	h.exportSvc.WriteAuditExportLog(c.Request().Context(), userID, written)
+
+	return nil
+}
+
 // streamTicketCSVResponse writes streaming CSV response for tickets.
 func (h *ExportHandler) streamTicketCSVResponse(c echo.Context, userID int64, username string, filters service.TicketExportFilters, total int64) error {
 	filename := fmt.Sprintf("tickets_%s.csv", time.Now().Format("2006-01-02"))
@@ -207,6 +264,22 @@ func (h *ExportHandler) streamTicketCSVResponse(c echo.Context, userID int64, us
 	return nil
 }
 
+// streamTicketExcelResponse writes streaming Excel (.xlsx) response for tickets.
+func (h *ExportHandler) streamTicketExcelResponse(c echo.Context, userID int64, username string, filters service.TicketExportFilters, columns map[string]int, total int64) error {
+	filename := fmt.Sprintf("tickets_%s.xlsx", time.Now().Format("2006-01-02"))
+	setStreamingExcelHeaders(c, filename, total)
+
+	written, err := h.exportSvc.StreamExportTicketsExcel(c.Request().Context(), c.Response(), username, filters, columns)
+	if err != nil {
+		log.Printf("StreamExportTicketsExcel error after %d rows: %v", written, err)
+		return nil
+	}
+
+	h.exportSvc.WriteTicketExportLog(c.Request().Context(), userID, written)
+
+	return nil
+}
+
 // setStreamingCSVHeaders sets the HTTP headers for a streaming CSV download.
 func setStreamingCSVHeaders(c echo.Context, filename string, totalRows int64) {
 	safeFilename := filepath.Base(filename)
@@ -218,8 +291,19 @@ func setStreamingCSVHeaders(c echo.Context, filename string, totalRows int64) {
 	c.Response().WriteHeader(http.StatusOK)
 }
 
+// setStreamingExcelHeaders sets the HTTP headers for a streaming Excel (.xlsx) download.
+func setStreamingExcelHeaders(c echo.Context, filename string, totalRows int64) {
+	safeFilename := filepath.Base(filename)
+	c.Response().Header().Set(echo.HeaderContentType, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Response().Header().Set(echo.HeaderContentDisposition,
+		fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, safeFilename, url.PathEscape(safeFilename)))
+	c.Response().Header().Set("X-Export-Rows", fmt.Sprintf("%d", totalRows))
+	c.Response().Header().Set("X-Export-Timestamp", time.Now().UTC().Format(http.TimeFormat))
+	c.Response().WriteHeader(http.StatusOK)
+}
+
 // createAsyncExport creates an async export task and returns 202 with task info.
-func (h *ExportHandler) createAsyncExport(c echo.Context, userID int64, username, role, exportType string, filters interface{}) error {
+func (h *ExportHandler) createAsyncExport(c echo.Context, userID int64, username, role, exportType string, filters interface{}, exportFormat service.ExportFormat, columns map[string]int) error {
 	if h.exportAsyncSvc == nil {
 		return resp.InternalError(c, "异步导出服务未启用")
 	}
@@ -229,7 +313,7 @@ func (h *ExportHandler) createAsyncExport(c echo.Context, userID int64, username
 		return resp.BadRequest(c, "序列化筛选参数失败")
 	}
 
-	task, err := h.exportAsyncSvc.CreateAsyncExport(c.Request().Context(), userID, username, role, exportType, string(filtersJSON))
+	task, err := h.exportAsyncSvc.CreateAsyncExport(c.Request().Context(), userID, username, role, exportType, string(filtersJSON), string(exportFormat))
 	if err != nil {
 		switch err {
 		case service.ErrExportNoPermission:
@@ -350,7 +434,12 @@ func (h *ExportHandler) DownloadExportFile(c echo.Context) error {
 	defer reader.Close()
 
 	safeFilename := filepath.Base(filename)
-	c.Response().Header().Set(echo.HeaderContentType, "text/csv; charset=utf-8")
+	// Determine content type from file extension
+	contentType := "text/csv; charset=utf-8"
+	if strings.HasSuffix(strings.ToLower(filename), ".xlsx") {
+		contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	}
+	c.Response().Header().Set(echo.HeaderContentType, contentType)
 	c.Response().Header().Set(echo.HeaderContentDisposition,
 		fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, safeFilename, url.PathEscape(safeFilename)))
 	c.Response().WriteHeader(http.StatusOK)

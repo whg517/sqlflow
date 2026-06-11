@@ -21,6 +21,8 @@ const (
 	FieldExportType = "export_type"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldFileFormat holds the string denoting the file_format field in the database.
+	FieldFileFormat = "file_format"
 	// FieldFilename holds the string denoting the filename field in the database.
 	FieldFilename = "filename"
 	// FieldFilePath holds the string denoting the file_path field in the database.
@@ -48,6 +50,7 @@ var Columns = []string{
 	FieldUsername,
 	FieldExportType,
 	FieldStatus,
+	FieldFileFormat,
 	FieldFilename,
 	FieldFilePath,
 	FieldTotalRows,
@@ -75,6 +78,8 @@ var (
 	DefaultExportType string
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
+	// DefaultFileFormat holds the default value on creation for the "file_format" field.
+	DefaultFileFormat string
 	// DefaultFilename holds the default value on creation for the "filename" field.
 	DefaultFilename string
 	// DefaultFilePath holds the default value on creation for the "file_path" field.
@@ -117,6 +122,11 @@ func ByExportType(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByFileFormat orders the results by the file_format field.
+func ByFileFormat(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFileFormat, opts...).ToFunc()
 }
 
 // ByFilename orders the results by the filename field.
