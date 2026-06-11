@@ -56,7 +56,7 @@ import {
   getExportTask,
   downloadExportFile,
 } from "@/api/export";
-import { ExportDialog, type ExportTaskLike } from "@/components/ExportDialog";
+import { ExportDialog } from "@/components/ExportDialog";
 import type { ExportColumn, ExportFormat } from "@/lib/export-utils";
 import {
   getStatusLabel,
@@ -683,7 +683,7 @@ export default function AuditPage() {
       end: endDate || undefined,
       keyword: keyword || undefined,
       format,
-      columns: columns.length < AUDIT_EXPORT_COLUMNS.length ? columns : undefined,
+      columns,
     }),
     [userFilter, actionFilter, datasourceFilter, startDate, endDate, keyword],
   );
@@ -699,17 +699,13 @@ export default function AuditPage() {
   const handleAsyncExport = useCallback(
     async (format: ExportFormat, columns: string[]) => {
       const params = buildAuditExportParams(format, columns);
-      const task = await createAsyncAuditExport(params);
-      return task as unknown as ExportTaskLike;
+      return createAsyncAuditExport(params);
     },
     [buildAuditExportParams],
   );
 
   const handleGetTask = useCallback(
-    async (taskId: number) => {
-      const task = await getExportTask(taskId);
-      return task as unknown as ExportTaskLike;
-    },
+    (taskId: number) => getExportTask(taskId),
     [],
   );
 

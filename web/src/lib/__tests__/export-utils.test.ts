@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   downloadBlob,
   formatFileSize,
@@ -76,6 +76,3 @@ describe("export-utils", () => {
     });
   });
 });
-
-// Need to import vi for the downloadBlob test
-import { vi } from "vitest";

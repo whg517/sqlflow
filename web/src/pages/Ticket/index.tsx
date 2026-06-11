@@ -67,7 +67,7 @@ import {
   getExportTask,
   downloadExportFile,
 } from "@/api/export";
-import { ExportDialog, type ExportTaskLike } from "@/components/ExportDialog";
+import { ExportDialog } from "@/components/ExportDialog";
 import type { ExportColumn, ExportFormat } from "@/lib/export-utils";
 import TicketDetailDrawer from "./components/TicketDetailDrawer";
 import {
@@ -365,7 +365,7 @@ export default function TicketPage() {
       risk_level: riskFilter || undefined,
       keyword: keyword || undefined,
       format,
-      columns: columns.length < TICKET_EXPORT_COLUMNS.length ? columns : undefined,
+      columns,
     }),
     [activeTab, datasourceFilter, riskFilter, keyword],
   );
@@ -381,17 +381,13 @@ export default function TicketPage() {
   const handleAsyncExport = useCallback(
     async (format: ExportFormat, columns: string[]) => {
       const params = buildTicketExportParams(format, columns);
-      const task = await createAsyncTicketExport(params);
-      return task as unknown as ExportTaskLike;
+      return createAsyncTicketExport(params);
     },
     [buildTicketExportParams],
   );
 
   const handleGetTask = useCallback(
-    async (taskId: number) => {
-      const task = await getExportTask(taskId);
-      return task as unknown as ExportTaskLike;
-    },
+    (taskId: number) => getExportTask(taskId),
     [],
   );
 

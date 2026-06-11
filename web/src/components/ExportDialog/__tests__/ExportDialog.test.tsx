@@ -3,8 +3,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 
-import { ExportDialog, type ExportTaskLike } from "../ExportDialog";
+import { ExportDialog } from "../ExportDialog";
 import type { ExportColumn } from "@/lib/export-utils";
+import type { ExportTask } from "@/api/export";
 
 // --- Mocks ---
 
@@ -206,20 +207,20 @@ describe("ExportDialog", () => {
     it("triggers async export when sync fails with size limit error", async () => {
       const { toast } = await import("sonner");
       mockSyncExport.mockRejectedValueOnce(new Error("超过10000行限制"));
-      const asyncTask: ExportTaskLike = {
+      const asyncTask: Partial<ExportTask> & Pick<ExportTask, "id" | "status" | "filename" | "total_rows" | "file_bytes"> = {
         id: 42,
         status: "processing",
         filename: "audit_logs.csv",
         total_rows: 0,
         file_bytes: 0,
       };
-      mockAsyncExport.mockResolvedValueOnce(asyncTask);
+      mockAsyncExport.mockResolvedValueOnce(asyncTask as ExportTask);
       mockGetTask.mockResolvedValueOnce({
         ...asyncTask,
         status: "completed",
         total_rows: 15000,
         file_bytes: 1024000,
-      } as ExportTaskLike);
+      } as ExportTask);
       mockDownloadTask.mockResolvedValueOnce(new Blob(["data"], { type: "text/csv" }));
 
       renderDialog();

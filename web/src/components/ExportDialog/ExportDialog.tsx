@@ -28,6 +28,7 @@ import type {
   ExportColumn,
   ExportFormat,
 } from "@/lib/export-utils";
+import type { ExportTask } from "@/api/export";
 import {
   buildExportFilename,
   downloadBlob,
@@ -52,24 +53,18 @@ export interface ExportDialogProps {
   /** Perform sync export — returns a Blob. */
   syncExport: (format: ExportFormat, columns: string[]) => Promise<Blob>;
   /** Create async export task — returns the task object. */
-  asyncExport: (format: ExportFormat, columns: string[]) => Promise<ExportTaskLike>;
+  asyncExport: (format: ExportFormat, columns: string[]) => Promise<ExportTask>;
   /** Get export task status for polling. */
-  getTask: (taskId: number) => Promise<ExportTaskLike>;
+  getTask: (taskId: number) => Promise<ExportTask>;
   /** Download completed async export file. */
   downloadTask: (taskId: number) => Promise<Blob>;
   /** Whether the parent page is still loading data. */
   disabled?: boolean;
 }
 
-/** Minimal task shape needed for async polling. */
-export interface ExportTaskLike {
-  id: number;
-  status: "pending" | "processing" | "completed" | "failed";
-  filename: string;
-  total_rows: number;
-  file_bytes: number;
-  error_msg?: string;
-}
+// Re-export types for consumer convenience
+export type { ExportFormat, ExportColumn } from "@/lib/export-utils";
+export type { ExportTask } from "@/api/export";
 
 // --- Component ---
 
@@ -93,7 +88,7 @@ export function ExportDialog({
   );
   // Export progress state
   const [exporting, setExporting] = useState(false);
-  const [asyncTask, setAsyncTask] = useState<ExportTaskLike | null>(null);
+  const [asyncTask, setAsyncTask] = useState<ExportTask | null>(null);
   const [polling, setPolling] = useState(false);
   const pollingRef = useRef(false);
 
@@ -214,7 +209,7 @@ export function ExportDialog({
   }, [format, columnList, filenamePrefix, exportType, syncExport, asyncExport, onOpenChange, startPolling]);
 
   // Download completed async export
-  const handleDownloadAsync = useCallback(async (task: ExportTaskLike) => {
+  const handleDownloadAsync = useCallback(async (task: ExportTask) => {
     try {
       const blob = await downloadTask(task.id);
       downloadBlob(blob, task.filename);
