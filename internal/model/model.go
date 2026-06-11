@@ -453,6 +453,21 @@ type OIDCProvider struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// WebhookSubscription represents an outbound webhook event subscription.
+type WebhookSubscription struct {
+	ID              int64      `json:"id"`
+	Name            string     `json:"name"`
+	URL             string     `json:"url"`
+	Secret          string     `json:"secret,omitempty"` // only exposed on create
+	Events          string     `json:"events"` // JSON array
+	Enabled         bool       `json:"enabled"`
+	FailureCount    int        `json:"failure_count"`
+	LastTriggeredAt *time.Time `json:"last_triggered_at,omitempty"`
+	CreatedBy       string     `json:"created_by"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
 // ExecutionResult represents the result of executing a single SQL statement within a ticket.
 type ExecutionResult struct {
 	ID             int64     `json:"id"`

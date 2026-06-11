@@ -287,6 +287,17 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.GET("/api/tickets/:id/approval-history", approvalHandler.GetApprovalHistory)
 	adminGroup.GET("/api/sla-notifications", slaHandler.ListSLANotifications)
 
+	// Webhook subscription management (admin)
+	webhookSubSvc := service.NewWebhookSubscriptionService(database.DB, cfg.EncryptionKey)
+	webhookSubHandler := handler.NewWebhookSubscriptionHandler(webhookSubSvc)
+	adminGroup.GET("/api/admin/webhooks/subscriptions", webhookSubHandler.List)
+	adminGroup.POST("/api/admin/webhooks/subscriptions", webhookSubHandler.Create)
+	adminGroup.GET("/api/admin/webhooks/subscriptions/:id", webhookSubHandler.Get)
+	adminGroup.PUT("/api/admin/webhooks/subscriptions/:id", webhookSubHandler.Update)
+	adminGroup.DELETE("/api/admin/webhooks/subscriptions/:id", webhookSubHandler.Delete)
+	adminGroup.POST("/api/admin/webhooks/subscriptions/:id/toggle", webhookSubHandler.Toggle)
+	adminGroup.POST("/api/admin/webhooks/subscriptions/:id/test", webhookSubHandler.TestSend)
+
 	// Ticket SLA status query (authenticated users)
 	authGroup.GET("/api/tickets/sla-status", slaHandler.GetTicketSLAStatuses)
 
