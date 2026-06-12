@@ -18,6 +18,7 @@ import {
 } from "@codemirror/language";
 import {
   autocompletion,
+  startCompletion,
   type CompletionContext,
   type CompletionResult,
   type Completion,
@@ -25,6 +26,10 @@ import {
   completionKeymap,
 } from "@codemirror/autocomplete";
 import type { SchemaData } from "@/hooks/useSchemaCompletion";
+import {
+  getFrequentQueries,
+  type FrequentQuery,
+} from "@/api/queryHistory";
 
 interface SqlEditorProps {
   value: string;
@@ -35,7 +40,86 @@ interface SqlEditorProps {
   onFetchColumns?: (tableName: string) => Promise<string[]>;
 }
 
-// --- SQL Keyword Completions ---
+// ==========================================
+// SQL Context Detection (SF-FEAT0051)
+// ==========================================
+
+type SqlClause =
+  | "select"
+  | "from"
+  | "where"
+  | "join"
+  | "groupby"
+  | "orderby"
+  | "having"
+  | "limit"
+  | "unknown";
+
+/**
+ * Detect the current SQL clause by scanning backwards from the cursor position.
+ * Uses a lightweight regex-based approach — no full AST parsing.
+ */
+function detectSqlClause(textBeforeCursor: string): SqlClause {
+  // Normalize: remove string literals and comments to avoid false matches
+  const cleaned = textBeforeCursor
+    .replace(/'[^']*'/g, "''") // string literals
+    .replace(/--[^\n]*/g, "") // single-line comments
+    .replace(/\/\*[\s\S]*?\*\//g, ""); // multi-line comments
+
+  const upper = cleaned.toUpperCase().trimEnd();
+
+  // Match the last major clause keyword (order matters — longer first)
+  const clausePatterns: { pattern: RegExp; clause: SqlClause }[] = [
+    { pattern: /\bORDER\s+BY\s*$/i, clause: "orderby" },
+    { pattern: /\bGROUP\s+BY\s*$/i, clause: "groupby" },
+    { pattern: /\bLEFT\s+OUTER\s+JOIN\s*$/i, clause: "join" },
+    { pattern: /\bRIGHT\s+OUTER\s+JOIN\s*$/i, clause: "join" },
+    { pattern: /\bINNER\s+JOIN\s*$/i, clause: "join" },
+    { pattern: /\bLEFT\s+JOIN\s*$/i, clause: "join" },
+    { pattern: /\bRIGHT\s+JOIN\s*$/i, clause: "join" },
+    { pattern: /\bCROSS\s+JOIN\s*$/i, clause: "join" },
+    { pattern: /\bJOIN\s*$/i, clause: "join" },
+    { pattern: /\bHAVING\s*$/i, clause: "having" },
+    { pattern: /\bWHERE\s*$/i, clause: "where" },
+    { pattern: /\bFROM\s*$/i, clause: "from" },
+    { pattern: /\bSELECT\s+DISTINCT\s*$/i, clause: "select" },
+    { pattern: /\bSELECT\s+ALL\s*$/i, clause: "select" },
+    { pattern: /\bSELECT\s*$/i, clause: "select" },
+    { pattern: /\bLIMIT\s*$/i, clause: "limit" },
+    // ON after JOIN — treat as WHERE-like (column conditions)
+    { pattern: /\bON\s*$/i, clause: "where" },
+    // SET after UPDATE — treat like WHERE (column assignments)
+    { pattern: /\bSET\s*$/i, clause: "where" },
+  ];
+
+  for (const { pattern, clause } of clausePatterns) {
+    if (pattern.test(upper)) return clause;
+  }
+
+  // Fallback: check if inside a clause by looking at the last keyword before cursor
+  // Walk backwards through the text looking for top-level clause boundaries
+  const lastClauseMatch = upper.match(
+    /\b(SELECT|FROM|WHERE|JOIN|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|ON|SET)\s[^\s]*$/i,
+  );
+  if (lastClauseMatch) {
+    const kw = lastClauseMatch[1].toUpperCase();
+    if (kw === "SELECT") return "select";
+    if (kw === "FROM") return "from";
+    if (kw === "WHERE") return "where";
+    if (kw === "HAVING") return "having";
+    if (kw === "LIMIT") return "limit";
+    if (kw === "ON") return "where";
+    if (kw === "SET") return "where";
+    if (kw.includes("JOIN")) return "join";
+    if (kw === "GROUP BY" || kw === "ORDER BY") return kw.includes("GROUP") ? "groupby" : "orderby";
+  }
+
+  return "unknown";
+}
+
+// ==========================================
+// SQL Keyword Completions
+// ==========================================
 
 const SQL_KEYWORDS: Completion[] = [
   // DML
@@ -109,7 +193,9 @@ const SQL_KEYWORDS: Completion[] = [
   { label: "END", type: "keyword", detail: "keyword" },
 ];
 
-// --- SQL Function Completions ---
+// ==========================================
+// SQL Function Completions
+// ==========================================
 
 const SQL_FUNCTIONS: Completion[] = [
   { label: "COUNT", type: "function", detail: "function", apply: "COUNT(" },
@@ -201,7 +287,139 @@ const SQL_FUNCTIONS: Completion[] = [
   },
 ];
 
-// --- Custom completion icon styling ---
+// ==========================================
+// Context-Aware Completion Filtering (SF-FEAT0051)
+// ==========================================
+
+/**
+ * Keywords relevant in WHERE-like contexts (WHERE, ON, SET, HAVING)
+ */
+const WHERE_KEYWORDS = new Set([
+  "AND", "OR", "NOT", "IN", "EXISTS", "BETWEEN", "LIKE",
+  "IS", "NULL", "AS", "CASE", "WHEN", "THEN", "ELSE", "END",
+]);
+
+/**
+ * Keywords relevant in SELECT context
+ */
+const SELECT_KEYWORDS = new Set([
+  "AS", "DISTINCT", "CASE", "WHEN", "THEN", "ELSE", "END",
+  "FROM", "WHERE", "GROUP BY", "ORDER BY", "HAVING", "LIMIT",
+  "JOIN", "INNER JOIN", "LEFT JOIN", "RIGHT JOIN",
+  "CROSS JOIN", "LEFT OUTER JOIN", "RIGHT OUTER JOIN",
+]);
+
+/**
+ * Keywords relevant in ORDER BY context
+ */
+const ORDERBY_KEYWORDS = new Set(["ASC", "DESC", "LIMIT", "NULL"]);
+
+/**
+ * Keywords relevant in GROUP BY context
+ */
+const GROUPBY_KEYWORDS = new Set(["HAVING", "LIMIT", "ORDER BY"]);
+
+/**
+ * Filter completions based on the detected SQL clause context.
+ */
+function filterByContext(
+  clause: SqlClause,
+  keywords: Completion[],
+  functions: Completion[],
+  tableCompletions: Completion[],
+  columnCompletions: Completion[],
+): Completion[] {
+  const result: Completion[] = [];
+
+  switch (clause) {
+    case "select":
+      // Columns + functions + SELECT-relevant keywords
+      result.push(...columnCompletions);
+      result.push(...functions);
+      for (const kw of keywords) {
+        if (SELECT_KEYWORDS.has(kw.label)) result.push(kw);
+      }
+      break;
+
+    case "from":
+      // Tables + aliases (AS)
+      result.push(...tableCompletions);
+      for (const kw of keywords) {
+        if (kw.label === "AS" || kw.label === "JOIN" || kw.label === "INNER JOIN" ||
+            kw.label === "LEFT JOIN" || kw.label === "RIGHT JOIN" ||
+            kw.label === "WHERE" || kw.label === "GROUP BY" || kw.label === "ORDER BY" ||
+            kw.label === "HAVING" || kw.label === "LIMIT") {
+          result.push(kw);
+        }
+      }
+      break;
+
+    case "where":
+      // Columns + WHERE-relevant keywords + functions
+      result.push(...columnCompletions);
+      result.push(...functions);
+      for (const kw of keywords) {
+        if (WHERE_KEYWORDS.has(kw.label)) result.push(kw);
+      }
+      break;
+
+    case "join":
+      // Tables + ON
+      result.push(...tableCompletions);
+      for (const kw of keywords) {
+        if (kw.label === "ON" || kw.label === "AS") result.push(kw);
+      }
+      break;
+
+    case "groupby":
+      // Columns + GROUP BY-relevant keywords
+      result.push(...columnCompletions);
+      for (const kw of keywords) {
+        if (GROUPBY_KEYWORDS.has(kw.label)) result.push(kw);
+      }
+      break;
+
+    case "orderby":
+      // Columns + ASC/DESC
+      result.push(...columnCompletions);
+      for (const kw of keywords) {
+        if (ORDERBY_KEYWORDS.has(kw.label)) result.push(kw);
+      }
+      break;
+
+    case "having":
+      // Columns + functions + condition keywords
+      result.push(...columnCompletions);
+      result.push(...functions);
+      for (const kw of keywords) {
+        if (WHERE_KEYWORDS.has(kw.label)) result.push(kw);
+      }
+      break;
+
+    case "limit":
+      // After LIMIT, just number-like keywords
+      result.push(...columnCompletions);
+      for (const kw of keywords) {
+        if (kw.label === "OFFSET") result.push(kw);
+      }
+      break;
+
+    case "unknown":
+    default:
+      // Fallback: show everything (original behavior)
+      result.push(...keywords);
+      result.push(...functions);
+      result.push(...tableCompletions);
+      result.push(...columnCompletions);
+      break;
+  }
+
+  return result;
+}
+
+// ==========================================
+// Custom Completion Icon Styling
+// ==========================================
 
 const completionTheme = EditorView.baseTheme({
   ".cm-tooltip.cm-tooltip-autocomplete": {
@@ -231,11 +449,21 @@ const completionTheme = EditorView.baseTheme({
   },
 });
 
-// --- Completion Sources ---
+const completionIcons: Record<string, { icon: string; label: string }> = {
+  keyword: { icon: "💡", label: "keyword" },
+  function: { icon: "💡", label: "function" },
+  class: { icon: "📋", label: "table" },
+  property: { icon: "📊", label: "column" },
+  text: { icon: "🕐", label: "history" },
+};
+
+// ==========================================
+// Completion Sources
+// ==========================================
 
 /**
- * Create a completion source that combines keywords, functions, tables, and columns.
- * Uses a ref to access the latest schema data so the closure always sees current data.
+ * Context-aware SQL completion source (SF-FEAT0051).
+ * Detects current SQL clause and filters completions accordingly.
  */
 function createSqlCompletionSource(
   schemaRef: React.MutableRefObject<SchemaData | null | undefined>,
@@ -286,21 +514,50 @@ function createSqlCompletionSource(
       };
     }
 
-    // Regular completions (keywords, functions, tables)
-    for (const kw of SQL_KEYWORDS) options.push(kw);
-    for (const fn of SQL_FUNCTIONS) options.push(fn);
+    // --- Context-aware filtering (SF-FEAT0051) ---
 
-    // Tables from schema
+    // Get text before cursor for clause detection
+    const fullText = context.state.doc.toString();
+    const cursorPos = context.pos;
+    const textBeforeCursor = fullText.slice(0, cursorPos - text.length);
+
+    const clause = detectSqlClause(textBeforeCursor);
+
+    // Build completions by category
+    const tableCompletions: Completion[] = [];
+    const columnCompletions: Completion[] = [];
+
     if (schemaData) {
       for (const table of schemaData.tables) {
-        options.push({
+        tableCompletions.push({
           label: table,
           type: "class",
           detail: "table",
           boost: 3,
         });
       }
+      // Add all columns from all tables for column context
+      for (const [table, cols] of schemaData.columns.entries()) {
+        for (const col of cols) {
+          columnCompletions.push({
+            label: col,
+            type: "property",
+            detail: `${table}`,
+            boost: 4,
+          });
+        }
+      }
     }
+
+    const contextOptions = filterByContext(
+      clause,
+      SQL_KEYWORDS,
+      SQL_FUNCTIONS,
+      tableCompletions,
+      columnCompletions,
+    );
+
+    options.push(...contextOptions);
 
     // Filter based on prefix match
     const lowerText = text.toLowerCase();
@@ -319,7 +576,51 @@ function createSqlCompletionSource(
   };
 }
 
-// --- Theme ---
+/**
+ * History-based completion source (SF-FEAT0052-FE).
+ * Shows top 5 frequent queries from user history.
+ * Triggered by Ctrl+Shift+H or explicit invocation.
+ */
+function createHistoryCompletionSource(
+  historyRef: React.MutableRefObject<FrequentQuery[]>,
+): CompletionSource {
+  return function historyCompletions(
+    context: CompletionContext,
+  ): CompletionResult | null {
+    // Only show on explicit trigger or when typing with a special prefix
+    if (!context.explicit) return null;
+
+    const queries = historyRef.current;
+    if (queries.length === 0) return null;
+
+    const options: Completion[] = queries.slice(0, 5).map((q, idx) => {
+      const snippet = q.snippet || q.sql_content.slice(0, 80);
+      const countLabel = q.execution_count > 0 ? `${q.execution_count}次` : "";
+      const timeLabel = q.last_executed_at
+        ? new Date(q.last_executed_at).toLocaleDateString("zh-CN")
+        : "";
+
+      return {
+        label: snippet.length > 60 ? snippet.slice(0, 57) + "..." : snippet,
+        type: "text",
+        detail: `常用SQL #${idx + 1}`,
+        info: `${countLabel}${countLabel && timeLabel ? " · " : ""}${timeLabel}`,
+        apply: q.sql_content,
+        boost: 10 - idx, // Higher ranked = higher boost
+      };
+    });
+
+    return {
+      from: context.pos,
+      options,
+      filter: false, // Don't filter — show all 5 results
+    };
+  };
+}
+
+// ==========================================
+// Theme
+// ==========================================
 
 const sqlTheme = EditorView.theme({
   "&": {
@@ -368,16 +669,9 @@ const sqlTheme = EditorView.theme({
   },
 });
 
-// --- Completion icon renderer ---
-
-const completionIcons: Record<string, { icon: string; label: string }> = {
-  keyword: { icon: "💡", label: "keyword" },
-  function: { icon: "💡", label: "function" },
-  class: { icon: "📋", label: "table" },
-  property: { icon: "📊", label: "column" },
-};
-
-// --- Component ---
+// ==========================================
+// Component
+// ==========================================
 
 export default function SqlEditor({
   value,
@@ -396,6 +690,10 @@ export default function SqlEditor({
   const autocompleteCompartment = useRef(new Compartment());
   const isExternalUpdate = useRef(false);
 
+  // History state (SF-FEAT0052-FE)
+  const historyRef = useRef<FrequentQuery[]>([]);
+  const historyLoadingRef = useRef(false);
+
   // Keep refs in sync with props
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -403,6 +701,23 @@ export default function SqlEditor({
     onFetchColumnsRef.current = onFetchColumns;
     schemaDataRef.current = schemaData;
   });
+
+  // Fetch frequent queries on mount (SF-FEAT0052-FE)
+  useEffect(() => {
+    if (historyLoadingRef.current) return;
+    historyLoadingRef.current = true;
+    getFrequentQueries()
+      .then((res) => {
+        historyRef.current = res.data ?? [];
+      })
+      .catch(() => {
+        // Silently fail — history is supplementary, not critical
+        historyRef.current = [];
+      })
+      .finally(() => {
+        historyLoadingRef.current = false;
+      });
+  }, []);
 
   // Reconfigure autocomplete when schemaData changes
   useEffect(() => {
@@ -418,6 +733,7 @@ export default function SqlEditor({
               schemaDataRef,
               () => onFetchColumnsRef.current,
             ),
+            createHistoryCompletionSource(historyRef),
           ],
           activateOnTyping: true,
           icons: false,
@@ -460,6 +776,7 @@ export default function SqlEditor({
               schemaDataRef,
               () => onFetchColumnsRef.current,
             ),
+            createHistoryCompletionSource(historyRef),
           ],
           activateOnTyping: true,
           icons: false,
@@ -496,6 +813,14 @@ export default function SqlEditor({
           key: "Cmd-Enter",
           run: () => {
             onExecuteRef.current();
+            return true;
+          },
+        },
+        // SF-FEAT0052-FE: Ctrl+Shift+H triggers history completion
+        {
+          key: "Ctrl-Shift-h",
+          run: (view) => {
+            startCompletion(view);
             return true;
           },
         },
