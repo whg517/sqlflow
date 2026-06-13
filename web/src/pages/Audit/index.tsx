@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
   Download,
+  BarChart3,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -58,6 +59,8 @@ import {
 } from "@/api/export";
 import { ExportDialog } from "@/components/ExportDialog";
 import type { ExportColumn, ExportFormat } from "@/lib/export-utils";
+import { cn } from "@/lib/utils";
+import UserAnalyticsTab from "./UserAnalyticsTab";
 import {
   getStatusLabel,
   getStatusColor,
@@ -532,6 +535,21 @@ function ExpandedRow({
 export default function AuditPage() {
   const [searchParams] = useSearchParams();
 
+  // Tab
+  const [activeTab, setActiveTab] = useState<"logs" | "analytics">("logs");
+  const [userRole, setUserRole] = useState<string>("");
+
+  useEffect(() => {
+    api
+      .get<{ code: number; data: { role: string } }>("/auth/me")
+      .then((res) => {
+        if (res.code === 0) setUserRole(res.data.role);
+      })
+      .catch(() => {});
+  }, []);
+
+  const isAdmin = userRole === "admin";
+
   // Data
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
@@ -719,13 +737,43 @@ export default function AuditPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-5 px-5 py-3">
+      <div className="flex items-center justify-between mb-3 px-5 py-3">
         <div className="flex items-center gap-2.5">
           <FileText size={18} className="text-[var(--accent-primary)]" />
           <h1 className="text-base font-semibold text-[var(--text-primary)]">
-            审计日志
+            审计
           </h1>
-          {total > 0 && (
+          {/* Tab Switcher */}
+          <div className="ml-3 flex items-center gap-1">
+            <button
+              type="button"
+              className={cn(
+                "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                activeTab === "logs"
+                  ? "bg-[var(--accent-primary)]/15 text-[var(--accent-primary)]"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
+              )}
+              onClick={() => setActiveTab("logs")}
+            >
+              操作日志
+            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                className={cn(
+                  "flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                  activeTab === "analytics"
+                    ? "bg-[var(--accent-primary)]/15 text-[var(--accent-primary)]"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]",
+                )}
+                onClick={() => setActiveTab("analytics")}
+              >
+                <BarChart3 size={12} />
+                用户分析
+              </button>
+            )}
+          </div>
+          {activeTab === "logs" && total > 0 && (
             <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5 text-xs text-[var(--text-muted)]">
               {total} 条
             </span>
@@ -756,6 +804,7 @@ export default function AuditPage() {
         </div>
       </div>
 
+      {activeTab === "logs" && (<>
       {/* Export Dialog */}
       <ExportDialog
         open={exportDialogOpen}
@@ -1078,6 +1127,13 @@ export default function AuditPage() {
               <ChevronRight size={14} />
             </Button>
           </div>
+        </div>
+      )}
+      </>)}
+
+      {activeTab === "analytics" && (
+        <div className="flex-1 overflow-auto px-5 pb-5">
+          <UserAnalyticsTab isAdmin={isAdmin} />
         </div>
       )}
     </div>
