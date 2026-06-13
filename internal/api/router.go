@@ -207,6 +207,9 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.GET("/api/reports/performance", reportHandler.GetPerformanceReport)
 	adminGroup.GET("/api/reports/tickets", reportHandler.GetTicketReport)
 
+	// User behavior analytics (admin only)
+	adminGroup.GET("/api/audit/user-analytics", reportHandler.GetUserAnalytics)
+
 	// Permission request management
 	authGroup.POST("/api/permission-requests", permReqHandler.CreateRequest)
 	authGroup.GET("/api/permission-requests/mine", permReqHandler.MyRequests)

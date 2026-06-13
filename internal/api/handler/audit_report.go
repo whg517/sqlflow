@@ -110,3 +110,45 @@ func (h *AuditReportHandler) GetTicketReport(c echo.Context) error {
 
 	return resp.OK(c, stats)
 }
+
+// GetUserAnalytics handles GET /api/audit/user-analytics.
+//
+// @Summary 用户行为分析
+// @Description 获取用户行为分析聚合数据（活跃度 TOP 10、查询频率、操作类型占比、异常行为）
+// @Tags 审计
+// @Produce json
+// @Security BearerAuth
+// @Param time_range query string false "时间范围 (7d/30d/90d/custom)" default(7d)
+// @Param start_date query string false "自定义开始日期 (YYYY-MM-DD，time_range=custom 时必填)"
+// @Param end_date query string false "自定义结束日期 (YYYY-MM-DD，time_range=custom 时必填)"
+// @Param user_id query int false "特定用户 ID（下钻，必须为正整数）"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Failure 400 {object} resp.ErrorResponse "参数错误"
+// @Failure 500 {object} resp.ErrorResponse "查询失败"
+// @Router /audit/user-analytics [get]
+func (h *AuditReportHandler) GetUserAnalytics(c echo.Context) error {
+	timeRange := c.QueryParam("time_range")
+	if timeRange == "" {
+		timeRange = "7d"
+	}
+
+	userID, err := service.ParseAnalyticsUserID(c.QueryParam("user_id"))
+	if err != nil {
+		return resp.BadRequest(c, err.Error())
+	}
+
+	params := service.AnalyticsParams{
+		TimeRange: timeRange,
+		StartDate: c.QueryParam("start_date"),
+		EndDate:   c.QueryParam("end_date"),
+		UserID:    userID,
+	}
+
+	analytics, err := h.reportSvc.GetUserAnalytics(c.Request().Context(), params)
+	if err != nil {
+		log.Printf("GetUserAnalytics failed: %v", err)
+		return resp.BadRequest(c, err.Error())
+	}
+
+	return resp.OK(c, analytics)
+}
