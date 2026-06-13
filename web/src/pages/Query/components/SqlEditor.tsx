@@ -364,7 +364,8 @@ function filterByContext(
       break;
 
     case "join":
-      // Tables + ON
+      // Tables + JOIN suggestions (SF-FEAT0053) + ON
+      // JOIN suggestions will be injected via joinSuggestionsRef if available
       result.push(...tableCompletions);
       for (const kw of keywords) {
         if (kw.label === "ON" || kw.label === "AS") result.push(kw);
@@ -457,6 +458,115 @@ const completionIcons: Record<string, { icon: string; label: string }> = {
   text: { icon: "🕐", label: "history" },
 };
 
+
+// ==========================================
+// JOIN Suggestion Helpers (SF-FEAT0053)
+// ==========================================
+
+/**
+ * Extract table names from the FROM clause of the SQL text.
+ * Looks for FROM keyword and captures comma-separated or JOINed table names.
+ */
+function extractFromTables(fullText: string, cursorPos: number): string[] {
+  const textBefore = fullText.slice(0, cursorPos);
+  const tables: string[] = [];
+
+  // Match FROM <table> [alias] patterns
+  const fromRegex = /\bFROM\s+([\w.]+)(?:\s+(?:AS\s+)?(\w+))?/gi;
+  let match: RegExpExecArray | null;
+  while ((match = fromRegex.exec(textBefore)) !== null) {
+    if (match[1]) tables.push(match[1].toLowerCase());
+  }
+
+  // Match JOIN <table> [alias] patterns
+  const joinRegex = /\b(?:INNER\s+JOIN|LEFT\s+(?:OUTER\s+)?JOIN|RIGHT\s+(?:OUTER\s+)?JOIN|CROSS\s+JOIN|JOIN)\s+([\w.]+)(?:\s+(?:AS\s+)?(\w+))?/gi;
+  while ((match = joinRegex.exec(textBefore)) !== null) {
+    if (match[1]) tables.push(match[1].toLowerCase());
+  }
+
+  return tables;
+}
+
+/**
+ * Find common column names between a source table and a target table.
+ */
+function findCommonColumns(
+  sourceTable: string,
+  targetTable: string,
+  schemaData: SchemaData,
+): string[] {
+  const sourceCols = schemaData.columns.get(sourceTable.toLowerCase()) ?? [];
+  const targetCols = schemaData.columns.get(targetTable.toLowerCase()) ?? [];
+  const targetSet = new Set(targetCols.map((c) => c.toLowerCase()));
+  return sourceCols.filter((c) => targetSet.has(c.toLowerCase()));
+}
+
+/**
+ * Generate JOIN suggestion completions based on common column matching.
+ * Sort by: match count DESC → table name ASC.
+ */
+function generateJoinSuggestions(
+  fromTables: string[],
+  schemaData: SchemaData,
+  prefix: string,
+): Completion[] {
+  if (fromTables.length === 0) return [];
+
+  const suggestions: Completion[] = [];
+
+  for (const targetTable of schemaData.tables) {
+    if (fromTables.includes(targetTable.toLowerCase())) continue;
+
+    let bestMatch: { fromTable: string; commonCols: string[] } | null = null;
+    for (const fromTable of fromTables) {
+      const common = findCommonColumns(fromTable, targetTable, schemaData);
+      if (common.length > 0) {
+        if (!bestMatch || common.length > bestMatch.commonCols.length) {
+          bestMatch = { fromTable, commonCols: common };
+        }
+      }
+    }
+
+    if (prefix && !targetTable.toLowerCase().startsWith(prefix) && !targetTable.toLowerCase().includes(prefix)) {
+      continue;
+    }
+
+    if (bestMatch && bestMatch.commonCols.length > 0) {
+      const firstCol = bestMatch.commonCols[0];
+      const onCondition = `ON ${bestMatch.fromTable}.${firstCol} = ${targetTable}.${firstCol}`;
+      const displayCols = bestMatch.commonCols.slice(0, 3);
+      const extraCount = bestMatch.commonCols.length - 3;
+      const detailParts = displayCols.join(", ");
+      const detail = extraCount > 0 ? `匹配: ${detailParts} +${extraCount}` : `匹配: ${detailParts}`;
+
+      suggestions.push({
+        label: `🔗 ${targetTable}`,
+        type: "class",
+        detail,
+        info: onCondition,
+        apply: `${targetTable} ${onCondition}`,
+        boost: 10 + bestMatch.commonCols.length,
+      });
+    } else {
+      suggestions.push({
+        label: `🔗 ${targetTable}`,
+        type: "class",
+        detail: "无自动关联条件",
+        apply: targetTable,
+        boost: 1,
+      });
+    }
+  }
+
+  suggestions.sort((a, b) => {
+    const boostDiff = (b.boost ?? 0) - (a.boost ?? 0);
+    if (boostDiff !== 0) return boostDiff;
+    return a.label.localeCompare(b.label);
+  });
+
+  return suggestions;
+}
+
 // ==========================================
 // Completion Sources
 // ==========================================
@@ -546,6 +656,21 @@ function createSqlCompletionSource(
             boost: 4,
           });
         }
+      }
+    }
+
+    // --- JOIN Suggestions (SF-FEAT0053) ---
+    // When in JOIN context, replace table completions with JOIN-aware suggestions
+    if (clause === "join" && schemaData) {
+      const fromTables = extractFromTables(fullText, cursorPos);
+      const joinSuggestions = generateJoinSuggestions(
+        fromTables,
+        schemaData,
+        text.toLowerCase(),
+      );
+      if (joinSuggestions.length > 0) {
+        // Prepend JOIN suggestions (higher boost) before regular table completions
+        tableCompletions.unshift(...joinSuggestions);
       }
     }
 
