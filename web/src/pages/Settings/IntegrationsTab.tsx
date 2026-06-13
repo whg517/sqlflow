@@ -184,13 +184,13 @@ function SubscriptionList() {
   const [subs, setSubs] = useState<WebhookSubscription[]>([]);
   const [staleIds, setStaleIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [inited, setInited] = useState(false);
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ name: "", url: "", events: [] as string[] });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [urlWarning, setUrlWarning] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Secret reveal (only after creation)
@@ -224,12 +224,11 @@ function SubscriptionList() {
     } catch {
       toast.error("获取订阅列表失败");
     } finally {
-      setInited(true);
       setLoading(false);
     }
   }, []);
 
-  if (loading && !inited) {
+  if (loading && subs.length === 0) {
     void fetchSubs();
   }
 
@@ -239,6 +238,7 @@ function SubscriptionList() {
     setEditingId(null);
     setForm({ name: "", url: "", events: [] });
     setErrors({});
+    setUrlWarning(null);
     setCreatedSecret(null);
     setSecretCopied(false);
     setDialogOpen(true);
@@ -252,28 +252,33 @@ function SubscriptionList() {
       events: sub.events ?? [],
     });
     setErrors({});
+    setUrlWarning(null);
     setCreatedSecret(null);
     setDialogOpen(true);
   }
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
+    let warning: string | null = null;
     if (!form.name.trim()) errs.name = "请输入名称";
     else if (form.name.trim().length < 2 || form.name.trim().length > 50)
       errs.name = "名称需 2-50 个字符";
 
     if (!editingId) {
-      const urlErr = validateWebhookURL(form.url);
-      if (urlErr && urlErr.includes("必须")) errs.url = urlErr;
+      const result = validateWebhookURL(form.url);
+      if (result.error) errs.url = result.error;
+      else warning = result.warning;
     } else if (form.url) {
-      const urlErr = validateWebhookURL(form.url);
-      if (urlErr && urlErr.includes("必须")) errs.url = urlErr;
+      const result = validateWebhookURL(form.url);
+      if (result.error) errs.url = result.error;
+      else warning = result.warning;
     }
 
     if (!form.events || form.events.length === 0)
       errs.events = "请至少选择一个事件";
 
     setErrors(errs);
+    setUrlWarning(warning);
     return Object.keys(errs).length === 0;
   }
 
@@ -319,11 +324,14 @@ function SubscriptionList() {
     }
   }
 
-  function handleSecretCopy() {
-    if (createdSecret) {
-      navigator.clipboard.writeText(createdSecret);
+  async function handleSecretCopy() {
+    if (!createdSecret) return;
+    try {
+      await navigator.clipboard.writeText(createdSecret);
       setSecretCopied(true);
       toast.success("Secret 已复制到剪贴板");
+    } catch {
+      toast.error("复制失败，请手动选中复制");
     }
   }
 
@@ -403,7 +411,7 @@ function SubscriptionList() {
 
   // --- Render ---
 
-  if (loading && !inited) {
+  if (loading && subs.length === 0) {
     return (
       <div className="flex h-32 items-center justify-center">
         <Loader2 className="h-5 w-5 animate-spin text-[var(--text-muted)]" />
@@ -726,9 +734,9 @@ function SubscriptionList() {
                 {errors.url && (
                   <p className="text-xs text-red-400">{errors.url}</p>
                 )}
-                {!errors.url && form.url && !form.url.startsWith("https://") && (
+                {!errors.url && urlWarning && (
                   <p className="text-xs text-amber-400">
-                    ⚠️ 建议使用 HTTPS
+                    ⚠️ {urlWarning}
                   </p>
                 )}
               </div>

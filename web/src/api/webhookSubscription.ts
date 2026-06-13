@@ -100,21 +100,26 @@ export async function testSubscription(
 const HTTPS_PREFIX = "https://";
 const HTTP_PREFIX = "http://";
 
-export function validateWebhookURL(url: string): string | null {
-  if (!url.trim()) return "请输入 Webhook URL";
+export interface UrlValidationResult {
+  error: string | null;
+  warning: string | null;
+}
+
+export function validateWebhookURL(url: string): UrlValidationResult {
+  if (!url.trim()) return { error: "请输入 Webhook URL", warning: null };
   if (!url.startsWith(HTTP_PREFIX) && !url.startsWith(HTTPS_PREFIX)) {
-    return "URL 必须以 http:// 或 https:// 开头";
+    return { error: "URL 必须以 http:// 或 https:// 开头", warning: null };
   }
   try {
     new URL(url);
   } catch {
-    return "URL 格式无效";
+    return { error: "URL 格式无效", warning: null };
   }
-  if (url.length > 2048) return "URL 长度不能超过 2048 个字符";
+  if (url.length > 2048) return { error: "URL 长度不能超过 2048 个字符", warning: null };
   if (!url.startsWith(HTTPS_PREFIX)) {
-    return "建议使用 HTTPS 以确保安全性";
+    return { error: null, warning: "建议使用 HTTPS 以确保安全性" };
   }
-  return null;
+  return { error: null, warning: null };
 }
 
 // --- Failure Status Helpers ---
