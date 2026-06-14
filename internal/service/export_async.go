@@ -81,12 +81,12 @@ func (s *ExportAsyncService) Close() {
 
 // CreateAsyncExport creates an async export task and starts it in a goroutine.
 // It returns the task ID immediately.
-func (s *ExportAsyncService) CreateAsyncExport(ctx context.Context, userID int64, username, role, exportType string, filtersJSON string) (*model.ExportTask, error) {
+func (s *ExportAsyncService) CreateAsyncExport(ctx context.Context, userID int64, username, role, exportType string, filtersJSON string, fileFormat string) (*model.ExportTask, error) {
 	if !s.exportSvc.hasExportPermission(role, ExportType(exportType)) {
 		return nil, ErrExportNoPermission
 	}
 
-	filename := generateExportFilename(exportType)
+	filename := generateExportFilename(exportType, fileFormat)
 	filePath := filepath.Join(s.exportDir, filename)
 
 	saved, err := s.client.ExportTask.Create().
@@ -117,7 +117,7 @@ func (s *ExportAsyncService) CreateAsyncExport(ctx context.Context, userID int64
 	s.tasks.Store(task.ID, task)
 
 	// Launch async export in goroutine
-	go s.executeExport(task, username, role)
+	go s.executeExport(task, username, role, fileFormat)
 
 	return task, nil
 }
@@ -205,7 +205,7 @@ func (s *ExportAsyncService) DownloadFile(ctx context.Context, taskID int64, use
 }
 
 // executeExport runs the actual export in a background goroutine.
-func (s *ExportAsyncService) executeExport(task *model.ExportTask, username, role string) {
+func (s *ExportAsyncService) executeExport(task *model.ExportTask, username, role, fileFormat string) {
 	ctx := context.Background()
 
 	// Mark as processing
@@ -220,8 +220,10 @@ func (s *ExportAsyncService) executeExport(task *model.ExportTask, username, rol
 	}
 	defer f.Close()
 
-	// Write BOM header
-	_, _ = f.Write([]byte{0xEF, 0xBB, 0xBF})
+	// Write BOM header (CSV only)
+	if fileFormat != string(ExportFormatExcel) {
+		_, _ = f.Write([]byte{0xEF, 0xBB, 0xBF})
+	}
 
 	var totalRows int64
 
@@ -229,11 +231,19 @@ func (s *ExportAsyncService) executeExport(task *model.ExportTask, username, rol
 	case ExportTypeAudit:
 		var filters AuditExportFilters
 		_ = json.Unmarshal([]byte(task.FiltersJSON), &filters)
-		totalRows, err = s.exportSvc.StreamExportAuditLogs(ctx, f, username, filters)
+		if fileFormat == string(ExportFormatExcel) {
+			totalRows, err = s.exportSvc.StreamExportAuditLogsExcel(ctx, f, username, filters, nil)
+		} else {
+			totalRows, err = s.exportSvc.StreamExportAuditLogs(ctx, f, username, filters)
+		}
 	case ExportTypeTicket:
 		var filters TicketExportFilters
 		_ = json.Unmarshal([]byte(task.FiltersJSON), &filters)
-		totalRows, err = s.exportSvc.StreamExportTickets(ctx, f, username, filters)
+		if fileFormat == string(ExportFormatExcel) {
+			totalRows, err = s.exportSvc.StreamExportTicketsExcel(ctx, f, username, filters, nil)
+		} else {
+			totalRows, err = s.exportSvc.StreamExportTickets(ctx, f, username, filters)
+		}
 	default:
 		err = ErrExportTypeInvalid
 	}
@@ -358,9 +368,13 @@ func (s *ExportAsyncService) cleanupExpiredFiles() {
 }
 
 // generateExportFilename creates a unique filename for an export file.
-func generateExportFilename(exportType string) string {
+func generateExportFilename(exportType string, fileFormat string) string {
 	randBytes := make([]byte, 8)
 	_, _ = rand.Read(randBytes)
 	suffix := hex.EncodeToString(randBytes)
-	return strings.ToLower(exportType) + "_" + time.Now().Format("20060102_150405") + "_" + suffix + ".csv"
+	ext := "csv"
+	if fileFormat == string(ExportFormatExcel) {
+		ext = "xlsx"
+	}
+	return strings.ToLower(exportType) + "_" + time.Now().Format("20060102_150405") + "_" + suffix + "." + ext
 }

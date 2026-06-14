@@ -350,32 +350,36 @@ func init() {
 	exporttaskDescStatus := exporttaskFields[3].Descriptor()
 	// exporttask.DefaultStatus holds the default value on creation for the status field.
 	exporttask.DefaultStatus = exporttaskDescStatus.Default.(string)
+	// exporttaskDescFileFormat is the schema descriptor for file_format field.
+	exporttaskDescFileFormat := exporttaskFields[4].Descriptor()
+	// exporttask.DefaultFileFormat holds the default value on creation for the file_format field.
+	exporttask.DefaultFileFormat = exporttaskDescFileFormat.Default.(string)
 	// exporttaskDescFilename is the schema descriptor for filename field.
-	exporttaskDescFilename := exporttaskFields[4].Descriptor()
+	exporttaskDescFilename := exporttaskFields[5].Descriptor()
 	// exporttask.DefaultFilename holds the default value on creation for the filename field.
 	exporttask.DefaultFilename = exporttaskDescFilename.Default.(string)
 	// exporttaskDescFilePath is the schema descriptor for file_path field.
-	exporttaskDescFilePath := exporttaskFields[5].Descriptor()
+	exporttaskDescFilePath := exporttaskFields[6].Descriptor()
 	// exporttask.DefaultFilePath holds the default value on creation for the file_path field.
 	exporttask.DefaultFilePath = exporttaskDescFilePath.Default.(string)
 	// exporttaskDescTotalRows is the schema descriptor for total_rows field.
-	exporttaskDescTotalRows := exporttaskFields[6].Descriptor()
+	exporttaskDescTotalRows := exporttaskFields[7].Descriptor()
 	// exporttask.DefaultTotalRows holds the default value on creation for the total_rows field.
 	exporttask.DefaultTotalRows = exporttaskDescTotalRows.Default.(int64)
 	// exporttaskDescFileBytes is the schema descriptor for file_bytes field.
-	exporttaskDescFileBytes := exporttaskFields[7].Descriptor()
+	exporttaskDescFileBytes := exporttaskFields[8].Descriptor()
 	// exporttask.DefaultFileBytes holds the default value on creation for the file_bytes field.
 	exporttask.DefaultFileBytes = exporttaskDescFileBytes.Default.(int64)
 	// exporttaskDescFiltersJSON is the schema descriptor for filters_json field.
-	exporttaskDescFiltersJSON := exporttaskFields[8].Descriptor()
+	exporttaskDescFiltersJSON := exporttaskFields[9].Descriptor()
 	// exporttask.DefaultFiltersJSON holds the default value on creation for the filters_json field.
 	exporttask.DefaultFiltersJSON = exporttaskDescFiltersJSON.Default.(string)
 	// exporttaskDescErrorMsg is the schema descriptor for error_msg field.
-	exporttaskDescErrorMsg := exporttaskFields[9].Descriptor()
+	exporttaskDescErrorMsg := exporttaskFields[10].Descriptor()
 	// exporttask.DefaultErrorMsg holds the default value on creation for the error_msg field.
 	exporttask.DefaultErrorMsg = exporttaskDescErrorMsg.Default.(string)
 	// exporttaskDescCreatedAt is the schema descriptor for created_at field.
-	exporttaskDescCreatedAt := exporttaskFields[10].Descriptor()
+	exporttaskDescCreatedAt := exporttaskFields[11].Descriptor()
 	// exporttask.DefaultCreatedAt holds the default value on creation for the created_at field.
 	exporttask.DefaultCreatedAt = exporttaskDescCreatedAt.Default.(func() time.Time)
 	gitlinkFields := schema.GitLink{}.Fields()

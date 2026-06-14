@@ -74,6 +74,11 @@ func Status(v string) predicate.ExportTask {
 	return predicate.ExportTask(sql.FieldEQ(FieldStatus, v))
 }
 
+// FileFormat applies equality check predicate on the "file_format" field. It's identical to FileFormatEQ.
+func FileFormat(v string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldEQ(FieldFileFormat, v))
+}
+
 // Filename applies equality check predicate on the "filename" field. It's identical to FilenameEQ.
 func Filename(v string) predicate.ExportTask {
 	return predicate.ExportTask(sql.FieldEQ(FieldFilename, v))
@@ -347,6 +352,71 @@ func StatusEqualFold(v string) predicate.ExportTask {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.ExportTask {
 	return predicate.ExportTask(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// FileFormatEQ applies the EQ predicate on the "file_format" field.
+func FileFormatEQ(v string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldEQ(FieldFileFormat, v))
+}
+
+// FileFormatNEQ applies the NEQ predicate on the "file_format" field.
+func FileFormatNEQ(v string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldNEQ(FieldFileFormat, v))
+}
+
+// FileFormatIn applies the In predicate on the "file_format" field.
+func FileFormatIn(vs ...string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldIn(FieldFileFormat, vs...))
+}
+
+// FileFormatNotIn applies the NotIn predicate on the "file_format" field.
+func FileFormatNotIn(vs ...string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldNotIn(FieldFileFormat, vs...))
+}
+
+// FileFormatGT applies the GT predicate on the "file_format" field.
+func FileFormatGT(v string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldGT(FieldFileFormat, v))
+}
+
+// FileFormatGTE applies the GTE predicate on the "file_format" field.
+func FileFormatGTE(v string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldGTE(FieldFileFormat, v))
+}
+
+// FileFormatLT applies the LT predicate on the "file_format" field.
+func FileFormatLT(v string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldLT(FieldFileFormat, v))
+}
+
+// FileFormatLTE applies the LTE predicate on the "file_format" field.
+func FileFormatLTE(v string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldLTE(FieldFileFormat, v))
+}
+
+// FileFormatContains applies the Contains predicate on the "file_format" field.
+func FileFormatContains(v string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldContains(FieldFileFormat, v))
+}
+
+// FileFormatHasPrefix applies the HasPrefix predicate on the "file_format" field.
+func FileFormatHasPrefix(v string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldHasPrefix(FieldFileFormat, v))
+}
+
+// FileFormatHasSuffix applies the HasSuffix predicate on the "file_format" field.
+func FileFormatHasSuffix(v string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldHasSuffix(FieldFileFormat, v))
+}
+
+// FileFormatEqualFold applies the EqualFold predicate on the "file_format" field.
+func FileFormatEqualFold(v string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldEqualFold(FieldFileFormat, v))
+}
+
+// FileFormatContainsFold applies the ContainsFold predicate on the "file_format" field.
+func FileFormatContainsFold(v string) predicate.ExportTask {
+	return predicate.ExportTask(sql.FieldContainsFold(FieldFileFormat, v))
 }
 
 // FilenameEQ applies the EQ predicate on the "filename" field.

@@ -29,6 +29,8 @@ func (ExportTask) Fields() []ent.Field {
 			Default(""),
 		field.String("status").
 			Default("pending"),
+		field.String("file_format").
+			Default("csv"),
 		field.String("filename").
 			Default(""),
 		field.String("file_path").
