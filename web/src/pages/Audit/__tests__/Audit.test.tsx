@@ -206,6 +206,12 @@ const mockLogs = [
 
 function setupMocks() {
   mockApiGet.mockImplementation((url: string) => {
+    if (url.includes("/auth/me")) {
+      return Promise.resolve({
+        code: 0,
+        data: { role: "admin" },
+      });
+    }
     if (url.includes("/datasources")) {
       return Promise.resolve({
         code: 0,
@@ -256,9 +262,9 @@ describe("AuditPage", () => {
   // --- Rendering ---
 
   describe("rendering", () => {
-    it('renders page header "审计日志"', () => {
+    it('renders page header "审计"', () => {
       renderAuditPage();
-      expect(screen.getByText("审计日志")).toBeInTheDocument();
+      expect(screen.getByText("审计")).toBeInTheDocument();
     });
 
     it("renders total count badge", async () => {
