@@ -72,7 +72,12 @@ function buildExportQuery(params: Record<string, unknown>): string {
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null || value === "") continue;
     if (Array.isArray(value) && value.length > 0) {
-      qs.set(key, value.join(","));
+      // columns 需要JSON序列化，后端用 json.Unmarshal 解析
+      if (key === "columns") {
+        qs.set(key, JSON.stringify(value));
+      } else {
+        qs.set(key, value.join(","));
+      }
     } else if (!Array.isArray(value)) {
       qs.set(key, String(value));
     }
