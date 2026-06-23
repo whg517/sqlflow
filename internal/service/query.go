@@ -175,8 +175,9 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 	queryStart := time.Now()
 	var result *QueryResult
 
-	// Use Driver abstraction for MySQL and PostgreSQL
-	if s.poolMgr != nil && (dbType == "mysql" || dbType == "postgresql") {
+	// Use Driver abstraction for MySQL, PostgreSQL and MongoDB.
+	// ES 仍走 fallback（查询语义复杂，迁移留待后续）。
+	if s.poolMgr != nil && (dbType == "mysql" || dbType == "postgresql" || dbType == "mongodb") {
 		adapter := newDataSourceAdapter(ds)
 		cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
 		if err != nil {

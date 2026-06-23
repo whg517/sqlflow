@@ -235,30 +235,30 @@ func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *
 	}
 	_ = n
 
-	// Invalidate cached connection pool since config may have changed
-	// Use PoolManager (Driver) if available
+	// Invalidate cached connection pool since config may have changed.
+	// PoolManager.Remove 按 dsID 统一清理所有类型的连接（替代旧 connMgr 的按类型分支清理）。
 	if s.poolMgr != nil {
 		s.poolMgr.Remove(id)
-	}
-
-	// Also invalidate legacy connpool for backward compatibility
-	if ds.Type == "mysql" {
-		s.connMgr.Remove(id, ds.Host, ds.Port, ds.Database)
-		if existing.Host != ds.Host || existing.Port != ds.Port || existing.Database != ds.Database {
-			s.connMgr.Remove(id, existing.Host, existing.Port, existing.Database)
+	} else {
+		// Legacy fallback (poolMgr 未注入时)
+		if ds.Type == "mysql" {
+			s.connMgr.Remove(id, ds.Host, ds.Port, ds.Database)
+			if existing.Host != ds.Host || existing.Port != ds.Port || existing.Database != ds.Database {
+				s.connMgr.Remove(id, existing.Host, existing.Port, existing.Database)
+			}
 		}
-	}
-	if ds.Type == "postgresql" {
-		s.connMgr.RemovePG(id, ds.Host, ds.Port, ds.Database)
-		if existing.Host != ds.Host || existing.Port != ds.Port || existing.Database != ds.Database {
-			s.connMgr.RemovePG(id, existing.Host, existing.Port, existing.Database)
+		if ds.Type == "postgresql" {
+			s.connMgr.RemovePG(id, ds.Host, ds.Port, ds.Database)
+			if existing.Host != ds.Host || existing.Port != ds.Port || existing.Database != ds.Database {
+				s.connMgr.RemovePG(id, existing.Host, existing.Port, existing.Database)
+			}
 		}
-	}
-	if ds.Type == "mongodb" || existing.Type == "mongodb" {
-		s.connMgr.RemoveMongo(id)
-	}
-	if ds.Type == "elasticsearch" || existing.Type == "elasticsearch" {
-		s.connMgr.RemoveElasticsearch(id)
+		if ds.Type == "mongodb" || existing.Type == "mongodb" {
+			s.connMgr.RemoveMongo(id)
+		}
+		if ds.Type == "elasticsearch" || existing.Type == "elasticsearch" {
+			s.connMgr.RemoveElasticsearch(id)
+		}
 	}
 
 	return nil
@@ -280,21 +280,24 @@ func (s *DatasourceService) DisableDataSource(ctx context.Context, id int64) err
 		return fmt.Errorf("disable datasource: %w", err)
 	}
 
-	// Clean up cached connection pool
+	// Clean up cached connection pool.
+	// PoolManager.Remove 按 dsID 统一清理（替代旧 connMgr 按类型分支）。
 	if s.poolMgr != nil {
 		s.poolMgr.Remove(id)
-	}
-	if existing.Type == "mysql" {
-		s.connMgr.Remove(id, existing.Host, existing.Port, existing.Database)
-	}
-	if existing.Type == "postgresql" {
-		s.connMgr.RemovePG(id, existing.Host, existing.Port, existing.Database)
-	}
-	if existing.Type == "mongodb" {
-		s.connMgr.RemoveMongo(id)
-	}
-	if existing.Type == "elasticsearch" {
-		s.connMgr.RemoveElasticsearch(id)
+	} else {
+		// Legacy fallback (poolMgr 未注入时)
+		if existing.Type == "mysql" {
+			s.connMgr.Remove(id, existing.Host, existing.Port, existing.Database)
+		}
+		if existing.Type == "postgresql" {
+			s.connMgr.RemovePG(id, existing.Host, existing.Port, existing.Database)
+		}
+		if existing.Type == "mongodb" {
+			s.connMgr.RemoveMongo(id)
+		}
+		if existing.Type == "elasticsearch" {
+			s.connMgr.RemoveElasticsearch(id)
+		}
 	}
 
 	return nil
