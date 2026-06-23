@@ -46,17 +46,28 @@ ai:
   base_url: ""
   timeout: "10s"
 
-dingtalk:
+# 钉钉机器人通知（mapstructure key 为 "notify"，非 "dingtalk"）
+# ⚠️ 配置文件中用 notify: 段；环境变量 SQLFLOW_NOTIFY_WEBHOOK_URL / SQLFLOW_NOTIFY_SECRET 同样生效
+notify:
   webhook_url: ""
-  # ⚠️ 推荐通过环境变量 SQLFLOW_DINGTALK_SECRET 设置
+  # ⚠️ 推荐通过环境变量 SQLFLOW_NOTIFY_SECRET 设置
   secret: ""
-  # DingTalk OAuth2 登录（可选）
-  oauth:
-    enabled: false
-    app_key: ""
-    app_secret: ""
-    # 回调地址必须与钉钉开放平台应用配置一致
-    redirect_url: "http://localhost:8080/api/v1/auth/dingtalk/callback"
+
+# 飞书 Webhook 通知（默认实例；多实例通过管理后台 /api/settings/feishu/webhooks 配置）
+feishu:
+  webhook_url: ""  # 或通过 SQLFLOW_FEISHU_WEBHOOK_URL 设置
+
+# OIDC 单点登录（可选，支持多 IdP）
+# 启用后登录页显示对应 provider 的 SSO 入口（/api/auth/oidc/:provider）
+oidc:
+  providers: []
+    # - name: "google"                      # provider 标识，用于路由 /api/auth/oidc/<name>
+    #   issuer: "https://accounts.google.com"
+    #   client_id: "xxx"
+    #   client_secret: "xxx"                # 推荐用环境变量注入，勿明文提交
+    #   redirect_url: "http://localhost:8080/api/auth/oidc/google/callback"
+    #   scopes: "openid profile email"
+    #   enabled: true
 
 # 数据库自动备份
 backup:
