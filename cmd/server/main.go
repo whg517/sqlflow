@@ -20,14 +20,12 @@ import (
 
 	"github.com/whg517/sqlflow/config"
 	"github.com/whg517/sqlflow/internal/api"
-	"github.com/whg517/sqlflow/internal/connpool"
-	"github.com/whg517/sqlflow/internal/driver"
+	"github.com/whg517/sqlflow/internal/app"
 	"github.com/whg517/sqlflow/internal/db"
 	_ "github.com/whg517/sqlflow/internal/driver/elasticsearch"
 	_ "github.com/whg517/sqlflow/internal/driver/mongodb"
 	_ "github.com/whg517/sqlflow/internal/driver/mysql"
 	_ "github.com/whg517/sqlflow/internal/driver/postgresql"
-	"github.com/whg517/sqlflow/internal/service"
 )
 
 func main() {
@@ -52,158 +50,15 @@ func main() {
 	}
 	log.Println("database migrated successfully")
 
-	// Initialize services
-	authSvc := service.NewAuthService(database, cfg.JWT.Secret, cfg.JWT.Expiry)
-
-	// Initialize connection pool manager
-	connMgr := connpool.NewManager()
-	defer connMgr.Close()
-
-	// Initialize Driver PoolManager
-	poolMgr := driver.NewPoolManager()
-	defer poolMgr.Close()
-
-	dsSvc := service.NewDatasourceService(database, cfg.EncryptionKey, connMgr, poolMgr)
-	permSvc, err := service.NewPermissionService(database)
+	// Initialize application container (services, schedulers, circular deps, admin seed)
+	container, err := app.NewContainer(database, cfg)
 	if err != nil {
-		log.Fatalf("failed to initialize permission service: %v", err)
+		log.Fatalf("failed to initialize application: %v", err)
 	}
-	log.Println("permission service initialized")
+	defer container.Close()
+	log.Println("application container initialized")
 
-	historySvc := service.NewQueryHistoryService(database)
-
-	auditSvc := service.NewAuditService(database, 0, 0)
-	defer auditSvc.Close()
-	log.Println("audit service initialized")
-
-	exportSvc := service.NewExportService(database, auditSvc)
-	log.Println("export service initialized")
-
-	exportAsyncSvc := service.NewExportAsyncService(database, exportSvc, auditSvc, cfg.DB.Path)
-	defer exportAsyncSvc.Close()
-	log.Println("async export service initialized")
-
-	querySvc := service.NewQueryService(database, dsSvc, historySvc, permSvc, auditSvc, cfg.EncryptionKey, connMgr, poolMgr)
-	log.Println("query service initialized")
-
-	ticketSvc := service.NewTicketService(database, auditSvc, nil)
-	log.Println("ticket service initialized")
-
-	// Initialize and start the ticket scheduler
-	scheduler := service.NewScheduler(ticketSvc, 1*time.Minute)
-	scheduler.Start()
-	defer scheduler.Stop()
-	log.Println("ticket scheduler started")
-
-	notifySvc := service.NewNotifyService(cfg.Notify.WebhookURL, cfg.Notify.Secret)
-	notifySvc.SetFeishuWebhook(cfg.Feishu.WebhookURL)
-	notifySvc.SetDB(database.DB)
-	log.Println("notify service initialized")
-	ticketSvc.SetNotifyService(notifySvc)
-	ticketSvc.SetDatasourceService(dsSvc, connMgr, cfg.EncryptionKey)
-	ticketSvc.SetPermissionService(permSvc)
-
-	maskRuleSvc := service.NewMaskRuleService(database, permSvc, auditSvc)
-	log.Println("mask rule service initialized")
-
-	aiReviewSvc := service.NewAIReviewService(database.DB, cfg.AI.Provider, cfg.AI.Model, cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Timeout)
-	log.Println("AI review service initialized")
-
-	dashboardSvc := service.NewDashboardService(database)
-	log.Println("dashboard service initialized")
-
-	// Initialize backup service
-	backupSvc := service.NewBackupService(database, cfg.DB.Path, cfg.Backup)
-	log.Println("backup service initialized")
-
-	// Initialize audit report service
-	reportSvc := service.NewAuditReportService(database)
-	log.Println("audit report service initialized")
-
-	// Initialize permission request service
-	permReqSvc := service.NewPermissionRequestService(database, permSvc, auditSvc)
-	log.Println("permission request service initialized")
-
-	commentSvc := service.NewCommentService(database)
-	log.Println("comment service initialized")
-
-	// Initialize OIDC service
-	oidcSvc := service.NewOIDCService(database, authSvc)
-	if len(cfg.OIDC.Providers) > 0 {
-		configProviders := make([]service.ConfigOIDCProvider, 0, len(cfg.OIDC.Providers))
-		for _, p := range cfg.OIDC.Providers {
-			configProviders = append(configProviders, service.ConfigOIDCProvider{
-				Name:         p.Name,
-				Issuer:       p.Issuer,
-				ClientID:     p.ClientID,
-				ClientSecret: p.ClientSecret,
-				RedirectURL:  p.RedirectURL,
-				Scopes:       p.Scopes,
-				Enabled:      p.Enabled,
-			})
-		}
-		if err := oidcSvc.LoadConfigProviders(context.Background(), configProviders); err != nil {
-			log.Printf("warn: failed to load OIDC providers from config: %v", err)
-		}
-	}
-	log.Println("oidc service initialized")
-
-	// Initialize git service
-	gitSvc := service.NewGitService(database)
-	log.Println("git service initialized")
-	ticketSvc.SetGitService(gitSvc)
-
-	// Initialize SLA service and scheduler (single-instance, constructor injection)
-	slaSvc := service.NewSLAService(database, notifySvc)
-	ticketSvc.SetSLAService(slaSvc)
-
-	slaScheduler := service.NewSLAScheduler(slaSvc, 10*time.Minute)
-	slaScheduler.Start()
-	defer slaScheduler.Stop()
-	log.Println("SLA scheduler started (interval=10m)")
-
-	// Initialize API token service
-	tokenSvc := service.NewTokenService(database)
-	log.Println("api token service initialized")
-
-	// Initialize SQL template service
-	templateSvc := service.NewSQLTemplateService(database)
-	log.Println("sql template service initialized")
-
-	// Initialize share service (SF-FEAT0038)
-	shareSvc := service.NewShareService(database)
-	log.Println("share service initialized")
-
-	// Initialize Web Vitals service (SF-ENG0033)
-	vitalsSvc := service.NewWebVitalsService(database)
-	log.Println("web vitals service initialized")
-
-	// Seed initial admin if users table is empty
-	count, err := authSvc.UserCount(context.Background())
-	if err != nil {
-		log.Fatalf("failed to count users: %v", err)
-	}
-	if count == 0 {
-		admin, err := authSvc.CreateUser(context.Background(), cfg.Admin.Username, cfg.Admin.Password, "admin")
-		if err != nil {
-			log.Fatalf("failed to create admin user: %v", err)
-		}
-		log.Printf("initial admin user created: %s (id=%d)", admin.Username, admin.ID)
-	} else {
-		log.Println("admin user already exists, skipping seed")
-	}
-
-	// Start backup scheduler
-	backupSvc.Start()
-	defer backupSvc.Stop()
-
-	approvalEngine := service.NewApprovalEngine(database)
-	approvalEngine.SetNotifyService(notifySvc)
-	_ = approvalEngine.EnsureDefaultPolicy(context.Background())
-
-	ticketSvc.SetApprovalEngine(approvalEngine)
-
-	e := api.NewRouter(authSvc, dsSvc, permSvc, querySvc, historySvc, ticketSvc, maskRuleSvc, aiReviewSvc, auditSvc, exportSvc, exportAsyncSvc, notifySvc, dashboardSvc, commentSvc, oidcSvc, backupSvc, gitSvc, tokenSvc, reportSvc, permReqSvc, templateSvc, shareSvc, vitalsSvc, approvalEngine, database, cfg, connMgr, poolMgr)
+	e := api.NewRouter(container)
 
 	if cfg.Server.TLS.Enable {
 		// TLS mode: start HTTPS server
