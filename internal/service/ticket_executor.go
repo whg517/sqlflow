@@ -16,6 +16,7 @@ import (
 
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db/ent"
+	"github.com/whg517/sqlflow/internal/driver"
 	executionresult "github.com/whg517/sqlflow/internal/db/ent/executionresult"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
@@ -29,6 +30,22 @@ type statementResult struct {
 	RowsAffected int64
 	Error        string
 	DurationMs   int64
+}
+
+// convertDriverResults 将 driver 层的 StatementResult 转换为 service 层的 statementResult。
+// 两者的字段结构基本一致（SQL/Status/Error/RowsAffected/DurationMs），仅类型不同。
+func convertDriverResults(drvResults []driver.StatementResult) []statementResult {
+	results := make([]statementResult, 0, len(drvResults))
+	for _, dr := range drvResults {
+		results = append(results, statementResult{
+			SQL:          dr.Statement,
+			Status:       dr.Status,
+			RowsAffected: dr.RowsAffected,
+			Error:        dr.Error,
+			DurationMs:   dr.DurationMs,
+		})
+	}
+	return results
 }
 
 // executeSQL connects to the target database and executes the ticket's SQL.
@@ -45,6 +62,30 @@ func (s *TicketService) executeSQL(ctx context.Context, ds *model.DataSource, da
 		return s.executeMongoStatements(ctx, ds, database, password, sqlContent)
 	}
 
+	// 优先走 driver 抽象层（poolMgr），支持 MySQL/PostgreSQL 的批量+事务执行。
+	// 迁移期间回退到旧 connMgr 路径（见下方 fallback）。
+	if s.poolMgr != nil && (ds.Type == "mysql" || ds.Type == "postgresql" || ds.Type == "postgres") {
+		adapter := newDataSourceAdapter(ds)
+		cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+		if err != nil {
+			return nil, fmt.Errorf("构建连接配置失败: %w", err)
+		}
+		d, err := s.poolMgr.Get(ctx, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("连接数据源失败: %w", err)
+		}
+
+		// Split multi-statement SQL by semicolons
+		statements := splitStatements(sqlContent)
+		drvResults, err := d.ExecuteStatements(ctx, database, statements)
+		if err != nil {
+			// driver 层返回 error 时，drvResults 仍包含已执行语句的结果（含 rolled_back 标记）
+			return convertDriverResults(drvResults), err
+		}
+		return convertDriverResults(drvResults), nil
+	}
+
+	// --- fallback: 旧 connMgr 路径（迁移完成后删除）---
 	var targetDB *sql.DB
 
 	switch ds.Type {

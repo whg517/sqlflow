@@ -28,6 +28,7 @@ func (m *mockDriver) ListTables(ctx context.Context, db string) ([]driver.TableI
 func (m *mockDriver) GetColumns(ctx context.Context, db, tbl string) ([]driver.ColumnInfo, error) { return nil, nil }
 func (m *mockDriver) ExecuteQuery(ctx context.Context, db, q string, l int) (*driver.QueryResult, error) { return nil, nil }
 func (m *mockDriver) ExecuteStatement(ctx context.Context, db, s string) (*driver.StatementResult, error) { return nil, nil }
+func (m *mockDriver) ExecuteStatements(ctx context.Context, db string, s []string) ([]driver.StatementResult, error) { return nil, nil }
 func (m *mockDriver) Parse(q string) (*driver.ParseResult, error)                    { return nil, nil }
 
 func TestCapabilitySet_Has(t *testing.T) {

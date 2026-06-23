@@ -13,6 +13,7 @@ import (
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
+	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
 )
@@ -73,6 +74,7 @@ type TicketService struct {
 	slaSvc          *SLAService
 	dsSvc           *DatasourceService
 	connMgr         *connpool.Manager
+	poolMgr         *driver.PoolManager // 新增：driver 层连接池（迁移中，优先于 connMgr）
 	encryptionKey   string
 	permSvc         *PermissionService
 	approvalEngine  *ApprovalEngine
@@ -110,11 +112,13 @@ func (s *TicketService) SetApprovalEngine(engine *ApprovalEngine) {
 	s.approvalEngine = engine
 }
 
-// SetDatasourceService injects the datasource service and connection manager
-// for actual SQL execution.
-func (s *TicketService) SetDatasourceService(dsSvc *DatasourceService, connMgr *connpool.Manager, encryptionKey string) {
+// SetDatasourceService injects the datasource service, connection manager (legacy)
+// and driver pool manager (new) for actual SQL execution.
+// 迁移期间 connMgr 与 poolMgr 并存，ticket_executor 优先使用 poolMgr，回退 connMgr。
+func (s *TicketService) SetDatasourceService(dsSvc *DatasourceService, connMgr *connpool.Manager, poolMgr *driver.PoolManager, encryptionKey string) {
 	s.dsSvc = dsSvc
 	s.connMgr = connMgr
+	s.poolMgr = poolMgr
 	s.encryptionKey = encryptionKey
 }
 

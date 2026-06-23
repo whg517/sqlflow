@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -268,7 +269,49 @@ func (d *MySQLDriver) ExecuteStatement(ctx context.Context, database string, stm
 	return r, nil
 }
 
-// Parse analyzes a SQL string using the unified parser.
+// ExecuteStatements 逐条 auto-commit 执行多条语句（MySQL DDL 非事务性，无法回滚）。
+// 任一语句失败后继续执行剩余语句（与 service.executeSQL 的 MySQL 路径一致），
+// 首个错误通过返回值 error 传递，但所有语句的结果都会收集到 results 中。
+func (d *MySQLDriver) ExecuteStatements(ctx context.Context, database string, statements []string) ([]driver.StatementResult, error) {
+	if d.db == nil {
+		return nil, fmt.Errorf("mysql: not connected")
+	}
+
+	results := make([]driver.StatementResult, 0, len(statements))
+	var firstErr error
+
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
+			continue
+		}
+
+		start := time.Now()
+		sqlResult, execErr := d.db.ExecContext(ctx, stmt)
+		duration := time.Since(start).Milliseconds()
+
+		r := driver.StatementResult{
+			Statement:  stmt,
+			DurationMs: duration,
+		}
+
+		if execErr != nil {
+			r.Status = "error"
+			r.Error = execErr.Error()
+			if firstErr == nil {
+				firstErr = fmt.Errorf("statement failed: %s", r.Error)
+			}
+		} else {
+			r.Status = "success"
+			if sqlResult != nil {
+				r.RowsAffected, _ = sqlResult.RowsAffected()
+			}
+		}
+		results = append(results, r)
+	}
+
+	return results, firstErr
+}
 func (d *MySQLDriver) Parse(query string) (*driver.ParseResult, error) {
 	result, err := sqlparser.ParseSQL(query, "mysql")
 	if err != nil {

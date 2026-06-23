@@ -121,7 +121,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 
 	// --- 循环依赖 setter（严格遵循原 main.go 顺序）---
 	ticketSvc.SetNotifyService(notifySvc)
-	ticketSvc.SetDatasourceService(dsSvc, connMgr, cfg.EncryptionKey)
+	ticketSvc.SetDatasourceService(dsSvc, connMgr, poolMgr, cfg.EncryptionKey)
 	ticketSvc.SetPermissionService(permSvc)
 
 	// QueryService 依赖 ds/perm/audit + 连接池

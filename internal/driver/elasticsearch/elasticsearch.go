@@ -367,6 +367,11 @@ func (d *ESDriver) ExecuteStatement(ctx context.Context, database string, stmt s
 	return nil, fmt.Errorf("elasticsearch: statement execution is not supported (read-only data source)")
 }
 
+// ExecuteStatements is not supported for Elasticsearch (read-only data source).
+func (d *ESDriver) ExecuteStatements(ctx context.Context, database string, statements []string) ([]driver.StatementResult, error) {
+	return nil, fmt.Errorf("elasticsearch: statement execution is not supported (read-only data source)")
+}
+
 // Parse analyzes an Elasticsearch query JSON for security rules.
 func (d *ESDriver) Parse(query string) (*driver.ParseResult, error) {
 	result, err := sqlparser.ParseSQL(query, "elasticsearch")
