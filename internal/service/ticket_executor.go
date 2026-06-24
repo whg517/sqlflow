@@ -408,6 +408,29 @@ func splitStatements(sqlContent string) []string {
 	return statements
 }
 
+// isConnectionError 判断错误是否为连接类错误（不可达/连接被拒/连接失效等）。
+// 用于把数据源连接失败映射为 ErrSQLTimeout，让 handler 返回 400 而非 500。
+func isConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, pattern := range []string{
+		"invalid connection",   // mysql driver: 连接池中的连接已失效
+		"connection refused",   // TCP 连接被拒
+		"no such host",         // DNS 解析失败
+		"connection reset",     // 连接被重置
+		"i/o timeout",          // 网络 IO 超时
+		"connect: connection",  // net 包的连接错误前缀
+		"bad connection",       // postgres/pgx: 连接已断开
+	} {
+		if strings.Contains(msg, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 // sha256Hash computes the SHA-256 hash of a string.
 func sha256Hash(s string) string {
 	h := sha256.Sum256([]byte(s))

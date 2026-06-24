@@ -183,9 +183,15 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 		if err != nil {
 			return nil, err
 		}
-		d, err := s.poolMgr.Get(ctx, cfg)
+		// 包一层超时 context（与 fallback 路径 executeMySQL/PG/Mongo 一致）
+		drvCtx, drvCancel := context.WithTimeout(ctx, queryTimeout)
+		defer drvCancel()
+		d, err := s.poolMgr.Get(drvCtx, cfg)
 		if err != nil {
-			return nil, fmt.Errorf("connect %s: %w", dbType, err)
+			// 连接失败：统一映射为 ErrSQLTimeout（数据源不可达/超时，对用户来说语义一致）。
+			// 这与 fallback 路径的 DeadlineExceeded 处理行为一致，
+			// 让 handler 能返回 400（客户端可重试）而非 500。
+			return nil, ErrSQLTimeout
 		}
 		dbName := database
 		if dbName == "" {
@@ -199,6 +205,10 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 		}
 		drvResult, err := d.ExecuteQuery(ctx, dbName, sqlContent, defaultRowLimit)
 		if err != nil {
+			// 执行失败：超时映射为 ErrSQLTimeout（与 fallback 路径一致）
+			if ctx.Err() == context.DeadlineExceeded {
+				return nil, ErrSQLTimeout
+			}
 			return nil, fmt.Errorf("driver execute query: %w", err)
 		} else {
 			result = &QueryResult{
@@ -307,7 +317,7 @@ func (s *QueryService) executePostgreSQL(ctx context.Context, datasourceID int64
 
 	targetDB, err := s.connMgr.GetPostgreSQL(datasourceID, ds.Host, ds.Port, ds.Username, password, dbName, ds.SSLMode, poolCfg)
 	if err != nil {
-		return nil, fmt.Errorf("连接PostgreSQL失败: %w", err)
+		return nil, ErrSQLTimeout
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
@@ -316,6 +326,11 @@ func (s *QueryService) executePostgreSQL(ctx context.Context, datasourceID int64
 	rows, err := targetDB.QueryContext(ctx, sqlContent)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
+			return nil, ErrSQLTimeout
+		}
+		// 连接类错误（invalid connection / connection refused 等）映射为 ErrSQLTimeout，
+		// 让 handler 返回 400（数据源不可达，客户端可重试）而非 500。
+		if isConnectionError(err) {
 			return nil, ErrSQLTimeout
 		}
 		return nil, fmt.Errorf("执行查询失败: %w", err)
@@ -387,7 +402,9 @@ func (s *QueryService) executeMySQL(ctx context.Context, datasourceID int64, dat
 
 	targetDB, err := s.connMgr.GetMySQL(datasourceID, host, port, user, password, dbName, poolCfg)
 	if err != nil {
-		return nil, fmt.Errorf("连接数据库失败: %w", err)
+		// 连接失败（数据源不可达/超时）：映射为 ErrSQLTimeout，让 handler 返回 400。
+		// 对用户来说"连接不上"与"查询超时"行为一致（数据源配置有误，可重试）。
+		return nil, ErrSQLTimeout
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
@@ -396,6 +413,11 @@ func (s *QueryService) executeMySQL(ctx context.Context, datasourceID int64, dat
 	rows, err := targetDB.QueryContext(ctx, sqlContent)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
+			return nil, ErrSQLTimeout
+		}
+		// 连接类错误（invalid connection / connection refused 等）映射为 ErrSQLTimeout，
+		// 让 handler 返回 400（数据源不可达，客户端可重试）而非 500。
+		if isConnectionError(err) {
 			return nil, ErrSQLTimeout
 		}
 		return nil, fmt.Errorf("执行查询失败: %w", err)
@@ -458,7 +480,7 @@ func (s *QueryService) executeMongoDB(ctx context.Context, datasourceID int64, d
 
 	client, err := s.connMgr.GetMongoDB(ctx, datasourceID, uri)
 	if err != nil {
-		return nil, fmt.Errorf("连接MongoDB失败: %w", err)
+		return nil, ErrSQLTimeout
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
@@ -809,7 +831,7 @@ func (s *QueryService) ExplainQuery(ctx context.Context, userID int64, role stri
 
 	targetDB, err := s.connMgr.GetMySQL(datasourceID, ds.Host, ds.Port, ds.Username, password, dbName, poolCfg)
 	if err != nil {
-		return nil, fmt.Errorf("连接数据库失败: %w", err)
+		return nil, ErrSQLTimeout
 	}
 
 	// Execute EXPLAIN with timeout

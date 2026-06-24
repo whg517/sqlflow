@@ -1147,9 +1147,11 @@ func TestQueryHandler_ExportQuery_HighRiskSQL(t *testing.T) {
 		t.Fatalf("handler error: %v", err)
 	}
 
-	// High-risk SQL should return 403 or fall to default 500 depending on error wrapping
-	if rec.Code != http.StatusInternalServerError && rec.Code != http.StatusForbidden {
-		t.Errorf("status = %d, want 403 or 500; body = %s", rec.Code, rec.Body.String())
+	// UPDATE without WHERE 会被 parser 标记为 IsBlocked=true + RiskHigh，
+	// query.ExecuteQuery 先检查 IsBlocked → 返回 ErrSQLBlocked → handler 返回 400。
+	// （若 IsBlocked 检查未命中，则 RiskHigh → ErrSQLHighRisk → handler 返回 403）
+	if rec.Code != http.StatusBadRequest && rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 400 (blocked) or 403 (high-risk); body = %s", rec.Code, rec.Body.String())
 	}
 }
 
