@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -72,16 +73,20 @@ func (h *QueryHandler) ExecuteQuery(c echo.Context) error {
 
 	result, err := h.querySvc.ExecuteQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, "")
 	if err != nil {
-		switch err {
-		case service.ErrSQLOperationForbidden:
+		switch {
+		case errors.Is(err, service.ErrDatasourceNotFound):
+			return resp.BadRequest(c, "数据源不存在")
+		case errors.Is(err, service.ErrDatasourceDisabled):
+			return resp.BadRequest(c, "数据源已禁用")
+		case errors.Is(err, service.ErrSQLOperationForbidden):
 			return resp.Forbidden(c, "该操作需要提交工单，仅允许 SELECT 查询")
-		case service.ErrSQLHighRisk:
+		case errors.Is(err, service.ErrSQLHighRisk):
 			return resp.Forbidden(c, "高风险操作被拦截，请提交工单")
-		case service.ErrSQLBlocked:
-			return resp.Forbidden(c, "SQL操作被拦截")
-		case service.ErrSQLTimeout:
+		case errors.Is(err, service.ErrSQLBlocked):
+			return resp.BadRequest(c, "SQL操作被拦截")
+		case errors.Is(err, service.ErrSQLTimeout):
 			return resp.BadRequest(c, "查询超时（30秒），请优化查询或缩小范围")
-		case service.ErrEmptySQL:
+		case errors.Is(err, service.ErrEmptySQL):
 			return resp.BadRequest(c, "SQL不能为空")
 		default:
 			log.Printf("ExecuteQuery failed: %v", err)
@@ -111,14 +116,14 @@ func (h *QueryHandler) ExplainQuery(c echo.Context) error {
 
 	result, err := h.querySvc.ExplainQuery(c.Request().Context(), userID, role, req.DatasourceID, req.Database, req.SQL)
 	if err != nil {
-		switch err {
-		case service.ErrExplainNonSelect:
+		switch {
+		case errors.Is(err, service.ErrExplainNonSelect):
 			return resp.BadRequest(c, "EXPLAIN 仅支持 SELECT 语句")
-		case service.ErrExplainNotSupported:
+		case errors.Is(err, service.ErrExplainNotSupported):
 			return resp.BadRequest(c, "EXPLAIN 仅支持 MySQL 数据源")
-		case service.ErrSQLTimeout:
+		case errors.Is(err, service.ErrSQLTimeout):
 			return resp.BadRequest(c, "查询超时（30秒）")
-		case service.ErrEmptySQL:
+		case errors.Is(err, service.ErrEmptySQL):
 			return resp.BadRequest(c, "SQL不能为空")
 		default:
 			log.Printf("ExplainQuery failed: %v", err)
@@ -209,7 +214,8 @@ func (h *QueryHandler) ClearHistory(c echo.Context) error {
 	userID := getContextUserID(c)
 
 	if err := h.historySvc.ClearHistory(c.Request().Context(), userID); err != nil {
-		return resp.InternalError(c, "清空查询历史失败")
+		log.Printf("ClearHistory failed: %v", err)
+		return resp.BadRequest(c, "清空查询历史失败")
 	}
 
 	return resp.OKWithMessage(c, "已清空所有查询历史", nil)
@@ -257,18 +263,22 @@ func (h *QueryHandler) ExportQuery(c echo.Context) error {
 
 	result, err := h.querySvc.ExportQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, "")
 	if err != nil {
-		switch err {
-		case service.ErrSQLOperationForbidden:
+		switch {
+		case errors.Is(err, service.ErrDatasourceNotFound):
+			return resp.BadRequest(c, "数据源不存在")
+		case errors.Is(err, service.ErrDatasourceDisabled):
+			return resp.BadRequest(c, "数据源已禁用")
+		case errors.Is(err, service.ErrSQLOperationForbidden):
 			return resp.Forbidden(c, "该操作需要提交工单，仅允许 SELECT 查询")
-		case service.ErrSQLHighRisk:
+		case errors.Is(err, service.ErrSQLHighRisk):
 			return resp.Forbidden(c, "高风险操作被拦截，请提交工单")
-		case service.ErrSQLBlocked:
-			return resp.Forbidden(c, "SQL操作被拦截")
-		case service.ErrSQLTimeout:
+		case errors.Is(err, service.ErrSQLBlocked):
+			return resp.BadRequest(c, "SQL操作被拦截")
+		case errors.Is(err, service.ErrSQLTimeout):
 			return resp.BadRequest(c, "查询超时（30秒），请优化查询或缩小范围")
-		case service.ErrEmptySQL:
+		case errors.Is(err, service.ErrEmptySQL):
 			return resp.BadRequest(c, "SQL不能为空")
-		case service.ErrExportRowLimit:
+		case errors.Is(err, service.ErrExportRowLimit):
 			return resp.BadRequest(c, "导出数据超过10000行上限，请添加 LIMIT 条件缩小范围")
 		default:
 			log.Printf("ExportQuery failed: %v", err)

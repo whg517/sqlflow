@@ -369,6 +369,37 @@ func (d *MongoDBDriver) ExecuteStatement(ctx context.Context, database string, s
 	}
 }
 
+// ExecuteStatements 逐条执行多条 MongoDB 命令（MongoDB 无跨文档事务语义，逐条独立执行）。
+// 任一语句失败后继续执行剩余语句，首错通过 error 返回。
+// 降级实现：循环调用 ExecuteStatement，与 service.executeMongoStatements 行为一致。
+func (d *MongoDBDriver) ExecuteStatements(ctx context.Context, database string, statements []string) ([]driver.StatementResult, error) {
+	if d.client == nil {
+		return nil, fmt.Errorf("mongodb: not connected")
+	}
+
+	results := make([]driver.StatementResult, 0, len(statements))
+	var firstErr error
+
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
+			continue
+		}
+		r, err := d.ExecuteStatement(ctx, database, stmt)
+		if r != nil {
+			results = append(results, *r)
+		}
+		if err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("statement failed: %v", err)
+			}
+			continue
+		}
+	}
+
+	return results, firstErr
+}
+
 // Parse analyzes a MongoDB command JSON body.
 func (d *MongoDBDriver) Parse(query string) (*driver.ParseResult, error) {
 	result, err := sqlparser.ParseSQL(query, "mongodb")

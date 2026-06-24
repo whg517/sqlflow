@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -287,7 +288,79 @@ func (d *PostgreSQLDriver) ExecuteStatement(ctx context.Context, database string
 	return r, nil
 }
 
-// Parse analyzes a SQL string using the unified parser.
+// ExecuteStatements 在单个事务中批量执行多条语句（PostgreSQL 事务性 DDL）。
+// 任一语句失败立即停止并回滚，已成功执行的语句标记为 "rolled_back"。
+// 严格对齐 service.TicketService.executeSQLTransactional 的事务语义。
+func (d *PostgreSQLDriver) ExecuteStatements(ctx context.Context, database string, statements []string) ([]driver.StatementResult, error) {
+	if d.db == nil {
+		return nil, fmt.Errorf("postgresql: not connected")
+	}
+
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("postgresql: begin tx: %w", err)
+	}
+
+	results := make([]driver.StatementResult, 0, len(statements))
+	var firstErr error
+
+	defer func() {
+		if firstErr != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				// 回滚失败仅记录，不覆盖首错
+				_ = rbErr
+			}
+		}
+	}()
+
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
+			continue
+		}
+
+		start := time.Now()
+		sqlResult, execErr := tx.ExecContext(ctx, stmt)
+		duration := time.Since(start).Milliseconds()
+
+		r := driver.StatementResult{
+			Statement:  stmt,
+			DurationMs: duration,
+		}
+
+		if execErr != nil {
+			r.Status = "error"
+			r.Error = execErr.Error()
+			if firstErr == nil {
+				firstErr = fmt.Errorf("statement failed: %s", r.Error)
+			}
+			results = append(results, r)
+			break // 首错即停止
+		}
+
+		r.Status = "success"
+		if sqlResult != nil {
+			r.RowsAffected, _ = sqlResult.RowsAffected()
+		}
+		results = append(results, r)
+	}
+
+	if firstErr != nil {
+		// 已成功的语句标记为 rolled_back（通过 defer 执行回滚）
+		for i := range results {
+			if results[i].Status == "success" {
+				results[i].Status = "rolled_back"
+			}
+		}
+		return results, firstErr
+	}
+
+	if err := tx.Commit(); err != nil {
+		return results, fmt.Errorf("postgresql: commit tx: %w", err)
+	}
+
+	return results, nil
+}
 func (d *PostgreSQLDriver) Parse(query string) (*driver.ParseResult, error) {
 	result, err := sqlparser.ParseSQL(query, "postgresql")
 	if err != nil {

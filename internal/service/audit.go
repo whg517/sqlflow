@@ -26,10 +26,19 @@ func NewAuditService(database *db.DB, batchSize int, flushInterval time.Duration
 
 // Write inserts an audit record directly into the database.
 // If the receiver is nil or the insert fails, an error is logged but not returned.
+// Write 写入审计日志。
+//
+// 使用独立的 context（不受调用方 context 超时/取消影响），确保即使触发审计日志的
+// 操作本身已超时（如查询超时），审计日志仍能可靠写入。
+// 这对系统"所有操作必须留痕"的核心设计至关重要——否则超时操作的审计记录会丢失。
 func (s *AuditService) Write(ctx context.Context, rec AuditRecord) {
 	if s == nil {
 		return
 	}
+	// 独立 context：不继承调用方的超时/取消，但设置 10s 上限防止无限阻塞
+	auditCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	_, err := s.client.AuditLog.Create().
 		SetUserID(rec.UserID).
 		SetAction(rec.Action).
@@ -45,7 +54,7 @@ func (s *AuditService) Write(ctx context.Context, rec AuditRecord) {
 		SetIPAddress(rec.IPAddress).
 		SetAiReviewResult(rec.AIReviewResult).
 		SetTicketID(rec.TicketID).
-		Save(ctx)
+		Save(auditCtx)
 	if err != nil {
 		log.Printf("audit write: insert: %v", err)
 	}

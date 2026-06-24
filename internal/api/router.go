@@ -1,23 +1,20 @@
 package api
 
 import (
-	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/app"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/config"
 	"github.com/whg517/sqlflow/internal/api/handler"
 	"github.com/whg517/sqlflow/internal/api/middleware"
-	"github.com/whg517/sqlflow/internal/connpool"
-	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/pkg/metrics"
-	"github.com/whg517/sqlflow/internal/service"
 
 	echoSwagger "github.com/swaggo/echo-swagger"
 	_ "github.com/whg517/sqlflow/docs"
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
-func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, permSvc *service.PermissionService, querySvc *service.QueryService, historySvc *service.QueryHistoryService, ticketSvc *service.TicketService, maskRuleSvc *service.MaskRuleService, aiReviewSvc *service.AIReviewService, auditSvc *service.AuditService, exportSvc *service.ExportService, exportAsyncSvc *service.ExportAsyncService, notifySvc *service.NotifyService, dashboardSvc *service.DashboardService, commentSvc *service.CommentService, oidcSvc *service.OIDCService, backupSvc *service.BackupService, gitSvc *service.GitService, tokenSvc *service.TokenService, reportSvc *service.AuditReportService, permReqSvc *service.PermissionRequestService, templateSvc *service.TemplateService, shareSvc *service.ShareService, vitalsSvc *service.WebVitalsService, approvalEngine *service.ApprovalEngine, database *db.DB, cfg *config.Config, connMgr *connpool.Manager, poolMgr *driver.PoolManager) *echo.Echo {
+// 所有依赖从 *app.Container 获取，替代了原先 28 个位置参数。
+func NewRouter(c *app.Container) *echo.Echo {
 	e := echo.New()
 
 	// Global middleware
@@ -26,21 +23,21 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	e.Use(middleware.CORS())
 
 	// Prometheus metrics middleware
-	if cfg.Metrics.Enabled {
+	if c.Cfg.Metrics.Enabled {
 		e.Use(metrics.Middleware())
 	}
 
 	// Health check endpoints (public)
-	healthHandler := handler.NewHealthHandler(database.DB)
-	healthHandler.SetConnPoolManager(connMgr)
-	healthHandler.SetPoolManager(poolMgr)
+	healthHandler := handler.NewHealthHandler(c.DB.DB)
+	healthHandler.SetConnPoolManager(c.ConnMgr)
+	healthHandler.SetPoolManager(c.PoolMgr)
 	e.GET("/health", healthHandler.Health)
 	e.GET("/healthz", healthHandler.Healthz)   // Liveness probe (no dependency checks)
 	e.GET("/readyz", healthHandler.Readyz)     // Readiness probe (checks all deps)
 	e.GET("/api/health", healthHandler.Health)
 
 	// Prometheus metrics endpoint
-	if cfg.Metrics.Enabled {
+	if c.Cfg.Metrics.Enabled {
 		e.GET("/metrics", healthHandler.Metrics)
 	}
 
@@ -48,35 +45,35 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	// Auth handlers
-	userHandler := handler.NewUserHandler(authSvc)
-	dsHandler := handler.NewDatasourceHandler(dsSvc)
-	permHandler := handler.NewPermissionHandler(permSvc)
-	queryHandler := handler.NewQueryHandler(querySvc, historySvc)
-	ticketHandler := handler.NewTicketHandler(ticketSvc)
-	approvalHandler := handler.NewApprovalHandler(approvalEngine)
-	approvalHandler.SetAuditService(auditSvc)
-	maskRuleHandler := handler.NewMaskRuleHandler(maskRuleSvc)
-	aiReviewHandler := handler.NewAIReviewHandler(aiReviewSvc, dsSvc)
-	auditHandler := handler.NewAuditHandler(auditSvc)
-	exportHandler := handler.NewExportHandler(exportSvc, exportAsyncSvc)
-	dashboardHandler := handler.NewDashboardHandler(dashboardSvc)
-	backupHandler := handler.NewBackupHandler(backupSvc)
-	performanceHandler := handler.NewPerformanceHandler(historySvc)
-	gitHandler := handler.NewGitHandler(gitSvc)
-	tokenHandler := handler.NewTokenHandler(tokenSvc)
-	reportHandler := handler.NewAuditReportHandler(reportSvc)
-	permReqHandler := handler.NewPermReqHandler(permReqSvc)
-	sqlTemplateHandler := handler.NewSQLTemplateHandler(templateSvc)
+	userHandler := handler.NewUserHandler(c.Auth)
+	dsHandler := handler.NewDatasourceHandler(c.Datasource)
+	permHandler := handler.NewPermissionHandler(c.Permission)
+	queryHandler := handler.NewQueryHandler(c.Query, c.History)
+	ticketHandler := handler.NewTicketHandler(c.Ticket)
+	approvalHandler := handler.NewApprovalHandler(c.ApprovalEngine)
+	approvalHandler.SetAuditService(c.Audit)
+	maskRuleHandler := handler.NewMaskRuleHandler(c.MaskRule)
+	aiReviewHandler := handler.NewAIReviewHandler(c.AIReview, c.Datasource)
+	auditHandler := handler.NewAuditHandler(c.Audit)
+	exportHandler := handler.NewExportHandler(c.Export, c.ExportAsync)
+	dashboardHandler := handler.NewDashboardHandler(c.Dashboard)
+	backupHandler := handler.NewBackupHandler(c.Backup)
+	performanceHandler := handler.NewPerformanceHandler(c.History)
+	gitHandler := handler.NewGitHandler(c.Git)
+	tokenHandler := handler.NewTokenHandler(c.Token)
+	reportHandler := handler.NewAuditReportHandler(c.Report)
+	permReqHandler := handler.NewPermReqHandler(c.PermRequest)
+	sqlTemplateHandler := handler.NewSQLTemplateHandler(c.SQLTemplate)
 
-	shareHandler := handler.NewShareHandler(shareSvc)
-	webVitalsHandler := handler.NewWebVitalsHandler(vitalsSvc)
+	shareHandler := handler.NewShareHandler(c.Share)
+	webVitalsHandler := handler.NewWebVitalsHandler(c.WebVitals)
 
 	// Public routes
 	e.POST("/api/auth/login", userHandler.Login)
 	e.POST("/api/auth/refresh", userHandler.Refresh)
 
 	// OIDC (public)
-	oidcHandler := handler.NewOIDCHandler(oidcSvc)
+	oidcHandler := handler.NewOIDCHandler(c.OIDC)
 	e.GET("/api/auth/oidc/:provider", oidcHandler.Login)
 	e.GET("/api/auth/oidc/:provider/callback", oidcHandler.Callback)
 	e.GET("/api/auth/providers", oidcHandler.Providers)
@@ -89,7 +86,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	e.POST("/api/metrics/web-vitals", webVitalsHandler.RecordVitals)
 
 	// Authenticated routes (supports both JWT and API Token)
-	authGroup := e.Group("", middleware.Auth(authSvc, tokenSvc))
+	authGroup := e.Group("", middleware.Auth(c.Auth, c.Token))
 	authGroup.GET("/api/dashboard/stats", dashboardHandler.GetStats)
 	authGroup.GET("/api/dashboard/overview", dashboardHandler.GetFullStats)
 	authGroup.GET("/api/auth/me", userHandler.Me)
@@ -137,7 +134,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.GET("/api/tickets/:id/revisions", ticketHandler.ListRevisions)
 
 	// Comment routes (authenticated users)
-	commentHandler := handler.NewCommentHandler(commentSvc)
+	commentHandler := handler.NewCommentHandler(c.Comment)
 	authGroup.GET("/api/tickets/:id/comments", commentHandler.ListComments)
 	authGroup.POST("/api/tickets/:id/comments", commentHandler.CreateComment)
 	authGroup.DELETE("/api/comments/:id", commentHandler.DeleteComment)
@@ -162,7 +159,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.DELETE("/api/tokens/:id", tokenHandler.RevokeMyToken)
 
 	// Admin-only routes (supports both JWT and API Token with admin scope)
-	adminGroup := e.Group("", middleware.Auth(authSvc, tokenSvc), middleware.Admin())
+	adminGroup := e.Group("", middleware.Auth(c.Auth, c.Token), middleware.Admin())
 	adminGroup.POST("/api/users", userHandler.CreateUser)
 	adminGroup.GET("/api/users", userHandler.ListUsers)
 	adminGroup.GET("/api/users/:id", userHandler.GetUser)
@@ -238,12 +235,10 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.DELETE("/api/backups/:filename", backupHandler.DeleteBackup)
 
 	// Notification & Settings (admin)
-	notifyHandler := handler.NewNotifyHandler(notifySvc, aiReviewSvc)
+	notifyHandler := handler.NewNotifyHandler(c.Notify, c.AIReview)
 
 	// Feishu webhook CRUD (admin)
-	feishuWebhookSvc := service.NewFeishuWebhookService(database.DB, cfg.EncryptionKey)
-	feishuWebhookHandler := handler.NewFeishuWebhookHandler(feishuWebhookSvc)
-	notifySvc.SetFeishuWebhookService(feishuWebhookSvc)
+	feishuWebhookHandler := handler.NewFeishuWebhookHandler(c.FeishuWebhook)
 
 	adminGroup.GET("/api/settings", notifyHandler.GetSettings)
 	adminGroup.PUT("/api/settings/notify/webhook", notifyHandler.UpdateNotifyConfig)
@@ -253,8 +248,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.POST("/api/settings/feishu/test", notifyHandler.TestFeishuNotify)
 
 	// Notification preferences (auth)
-	notifPrefSvc := service.NewNotificationPreferenceService(database)
-	notifPrefHandler := handler.NewNotificationPreferenceHandler(notifPrefSvc)
+	notifPrefHandler := handler.NewNotificationPreferenceHandler(c.NotificationPreference)
 	authGroup.GET("/api/notifications/preferences", notifPrefHandler.GetPreferences)
 	authGroup.PUT("/api/notifications/preferences", notifPrefHandler.UpdatePreferences)
 
@@ -271,8 +265,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.DELETE("/api/admin/tokens/:id", tokenHandler.RevokeAnyToken)
 
 	// SLA configuration management (admin only)
-	slaSvc := service.NewSLAService(database, notifySvc)
-	slaHandler := handler.NewSLAHandler(slaSvc)
+	slaHandler := handler.NewSLAHandler(c.SLA)
 
 	adminGroup.GET("/api/settings/sla", slaHandler.ListSLAConfigs)
 	adminGroup.POST("/api/settings/sla", slaHandler.CreateSLAConfig)
@@ -303,8 +296,7 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	adminGroup.GET("/api/sla-notifications", slaHandler.ListSLANotifications)
 
 	// Webhook subscription management (admin)
-	webhookSubSvc := service.NewWebhookSubscriptionService(database.DB, cfg.EncryptionKey)
-	webhookSubHandler := handler.NewWebhookSubscriptionHandler(webhookSubSvc)
+	webhookSubHandler := handler.NewWebhookSubscriptionHandler(c.WebhookSubscription)
 	adminGroup.GET("/api/admin/webhooks/subscriptions", webhookSubHandler.List)
 	adminGroup.POST("/api/admin/webhooks/subscriptions", webhookSubHandler.Create)
 	adminGroup.GET("/api/admin/webhooks/subscriptions/:id", webhookSubHandler.Get)
@@ -317,7 +309,8 @@ func NewRouter(authSvc *service.AuthService, dsSvc *service.DatasourceService, p
 	authGroup.GET("/api/tickets/sla-status", slaHandler.GetTicketSLAStatuses)
 
 	// Coverage audit system (SF-QA0025) — MUST-1: nil pgDB guard inside RegisterCoverageRoutes
-	handler.RegisterCoverageRoutes(e, middleware.Auth(authSvc, tokenSvc), middleware.Admin(), nil)
+	// coverage 需独立 PG 库，平台为 SQLite，此处传 nil 表示禁用（设计性禁用，非 bug）
+	handler.RegisterCoverageRoutes(e, middleware.Auth(c.Auth, c.Token), middleware.Admin(), nil)
 
 	// Frontend SPA (must be after API routes)
 	serveFrontend(e)

@@ -255,9 +255,12 @@ func (s *DashboardService) GetFullStats(ctx context.Context, startDate, endDate 
 
 // getSparkline returns 7 daily counts for the given query.
 // The query MUST have exactly 2 placeholders: start_time and end_time.
+//
+// 注意：使用 UTC 时间计算日期边界，与 SQLite datetime('now') 一致。
+// 若用本地时间，在非 UTC 时区会导致"今天"的数据落入昨天的窗口（跨日错位）。
 func (s *DashboardService) getSparkline(ctx context.Context, query string) ([]int, error) {
 	result := make([]int, 7)
-	now := time.Now()
+	now := time.Now().UTC()
 
 	for i := 6; i >= 0; i-- {
 		dayStart := now.AddDate(0, 0, -i).Truncate(24 * time.Hour)
@@ -280,12 +283,12 @@ func (s *DashboardService) getSparkline(ctx context.Context, query string) ([]in
 // getQueryTrend returns daily query counts within the given date range.
 // Defaults to last 7 days if no dates provided.
 func (s *DashboardService) getQueryTrend(ctx context.Context, startDate, endDate string) ([]DailyCount, error) {
-	// Default: last 7 days
+	// Default: last 7 days (UTC, 与 SQLite datetime('now') 一致)
 	if startDate == "" {
-		startDate = time.Now().AddDate(0, 0, -6).Format("2006-01-02")
+		startDate = time.Now().UTC().AddDate(0, 0, -6).Format("2006-01-02")
 	}
 	if endDate == "" {
-		endDate = time.Now().Format("2006-01-02")
+		endDate = time.Now().UTC().Format("2006-01-02")
 	}
 
 	parsedStart, _ := time.Parse("2006-01-02", startDate)

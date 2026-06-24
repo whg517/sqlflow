@@ -133,6 +133,19 @@ type Driver interface {
 	// ExecuteStatement executes a single DML/DDL statement (CapTicketExec).
 	ExecuteStatement(ctx context.Context, database string, stmt string) (*StatementResult, error)
 
+	// ExecuteStatements executes multiple DML/DDL statements in a batch (CapTicketExec).
+	//
+	// 事务语义因驱动而异：
+	//   - PostgreSQL: 所有语句包在单个事务中，任一语句失败立即停止并回滚已执行的语句
+	//     （成功执行的语句在结果中标记为 "rolled_back"）
+	//   - MySQL: 逐条 auto-commit 执行（DDL 无法回滚），任一语句失败后继续执行剩余语句
+	//     （收集所有语句的结果，首错通过 error 返回但不中断）
+	//   - MongoDB/Elasticsearch: 不支持批量（仅单条），实现可降级为循环调用 ExecuteStatement
+	//
+	// 此方法严格对齐 service.TicketService.executeSQLTransactional 的事务语义，
+	// 用于工单 DDL/DML 执行路径的 driver 层迁移。
+	ExecuteStatements(ctx context.Context, database string, statements []string) ([]StatementResult, error)
+
 	// Parse analyzes a query string and returns operation metadata (CapSQLParse).
 	Parse(query string) (*ParseResult, error)
 }
