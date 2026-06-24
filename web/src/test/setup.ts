@@ -40,3 +40,34 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => false,
   }),
 });
+
+// localStorage / sessionStorage polyfill — jsdom 在 Vitest 4 下提供的 storage
+// 对象缺少 clear/getItem 等方法（getter 返回的对象不完整），用内存 mock 替换。
+const createStorageMock = () => {
+  const store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => store[key] ?? null,
+    setItem: (key: string, value: string) => {
+      store[key] = String(value);
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      Object.keys(store).forEach((k) => delete store[k]);
+    },
+    key: (index: number) => Object.keys(store)[index] ?? null,
+    get length() {
+      return Object.keys(store).length;
+    },
+  };
+};
+
+Object.defineProperty(window, "localStorage", {
+  writable: true,
+  value: createStorageMock(),
+});
+Object.defineProperty(window, "sessionStorage", {
+  writable: true,
+  value: createStorageMock(),
+});
