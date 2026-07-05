@@ -80,19 +80,19 @@ export async function updateSubscription(
 export async function deleteSubscription(
   id: number,
 ): Promise<{ code: number; data: string }> {
-  return api.delete(`/admin/webhooks/subscriptions/${id}`);
+  return api.del(`/admin/webhooks/subscriptions/${id}`);
 }
 
 export async function toggleSubscription(
   id: number,
 ): Promise<{ code: number; data: WebhookSubscription }> {
-  return api.post(`/admin/webhooks/subscriptions/${id}/toggle`);
+  return api.post(`/admin/webhooks/subscriptions/${id}/toggle`, {});
 }
 
 export async function testSubscription(
   id: number,
 ): Promise<{ code: number; data: string }> {
-  return api.post(`/admin/webhooks/subscriptions/${id}/test`);
+  return api.post(`/admin/webhooks/subscriptions/${id}/test`, {});
 }
 
 // --- URL Validation ---

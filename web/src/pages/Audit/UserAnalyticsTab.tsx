@@ -440,9 +440,10 @@ function TopUsersChart({ users, onUserClick }: TopUsersChartProps) {
       <BarChart
         data={chartData}
         margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
-        onClick={(e) => {
-          if (e && e.activePayload && e.activePayload[0]) {
-            const raw = e.activePayload[0].payload?.raw as ActiveUserEntry | undefined;
+        onClick={(e: unknown) => {
+          const evt = e as { activePayload?: Array<{ payload?: { raw?: unknown } }> };
+          if (evt && evt.activePayload && evt.activePayload[0]) {
+            const raw = evt.activePayload[0].payload?.raw as ActiveUserEntry | undefined;
             if (raw) onUserClick(raw);
           }
         }}

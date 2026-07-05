@@ -8,7 +8,7 @@
  * - Consistent UX across Audit and Ticket export flows
  */
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, Loader2, FileSpreadsheet, FileText } from "lucide-react";
 import { toast } from "sonner";
 

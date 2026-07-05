@@ -105,7 +105,7 @@ function FailureBadge({ count }: { count: number }) {
 // ==========================================
 
 function EventTags({ events }: { events: string[] }) {
-  const eventMap = new Map(WEBHOOK_EVENTS.map((e) => [e.key, e.label]));
+  const eventMap = new Map<string, string>(WEBHOOK_EVENTS.map((e) => [e.key, e.label]));
 
   return (
     <div className="flex flex-wrap gap-1">
@@ -396,7 +396,7 @@ function SubscriptionList() {
   }
 
   function toggleCategory(category: string) {
-    const categoryEvents = WEBHOOK_EVENTS.filter(
+    const categoryEvents: string[] = WEBHOOK_EVENTS.filter(
       (e) => e.category === category,
     ).map((e) => e.key);
     const allSelected = categoryEvents.every((e) => form.events.includes(e));
@@ -420,11 +420,12 @@ function SubscriptionList() {
   }
 
   // Group events by category for the form
+  type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
   const eventsByCategory = WEBHOOK_EVENTS.reduce<
-    Record<string, typeof WEBHOOK_EVENTS>
+    Record<string, WebhookEvent[]>
   >((acc, evt) => {
     if (!acc[evt.category]) acc[evt.category] = [];
-    acc[evt.category].push(evt);
+    acc[evt.category] = [...acc[evt.category], evt];
     return acc;
   }, {});
 

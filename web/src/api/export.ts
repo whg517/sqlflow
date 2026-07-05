@@ -67,7 +67,7 @@ interface ApiResponse<T> {
 
 // --- Internal: build query string with shared export params ---
 
-function buildExportQuery(params: Record<string, unknown>): string {
+function buildExportQuery(params: object): string {
   const qs = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null || value === "") continue;
