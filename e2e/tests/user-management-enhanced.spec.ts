@@ -592,7 +592,6 @@ test('分页：点击下一页加载更多用户', async ({ page }) => {
     const isDisabled = await nextBtn.isDisabled()
     if (!isDisabled) {
       await nextBtn.click()
-      await page.waitForTimeout(500)
       // Should show page 2 info
       await expect(page.getByText(/第 2\//)).toBeVisible()
     }

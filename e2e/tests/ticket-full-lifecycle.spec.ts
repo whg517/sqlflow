@@ -53,7 +53,6 @@ async function createTicketViaUI(page: import('@playwright/test').Page, sql = 'S
   // Select datasource (first available)
   const dsTrigger = page.locator('[role="combobox"]').first()
   await dsTrigger.click()
-  await page.waitForTimeout(500)
   const firstOption = page.locator('[role="option"]').first()
   await firstOption.waitFor({ state: 'visible' })
   await firstOption.click()
@@ -99,7 +98,6 @@ async function openTicketDetail(page: import('@playwright/test').Page, ticketId:
 async function closeTicketDetail(page: import('@playwright/test').Page) {
   // Press Escape to close the sheet/drawer
   await page.keyboard.press('Escape')
-  await page.waitForTimeout(500)
 }
 
 // ── Tests ──
@@ -137,12 +135,10 @@ test('工单全流程：创建→审批→执行→完成', async ({ page }) => 
 
   // Wait for dialog to close
   await expect(page.getByRole('alertdialog')).not.toBeVisible({ timeout: 10_000 })
-  await page.waitForTimeout(1000)
 
   // Step 4: Verify status changed to APPROVED
   // Re-open the detail to see updated status
   await closeTicketDetail(page)
-  await page.waitForTimeout(500)
 
   // Refresh the list
   await page.reload()
@@ -161,11 +157,9 @@ test('工单全流程：创建→审批→执行→完成', async ({ page }) => 
 
   await page.getByRole('button', { name: '确认执行' }).click()
   await expect(page.getByRole('alertdialog')).not.toBeVisible({ timeout: 10_000 })
-  await page.waitForTimeout(1000)
 
   // Step 6: Verify status changed to DONE
   await closeTicketDetail(page)
-  await page.waitForTimeout(500)
 
   // Switch to "已执行" tab to verify
   await page.getByRole('tab', { name: '已执行' }).click()
@@ -201,11 +195,9 @@ test('工单全流程：创建→拒绝（含原因）', async ({ page }) => {
 
   await page.getByRole('button', { name: '确认驳回' }).click()
   await expect(page.getByRole('alertdialog')).not.toBeVisible({ timeout: 10_000 })
-  await page.waitForTimeout(1000)
 
   // Step 3: Verify status changed to REJECTED
   await closeTicketDetail(page)
-  await page.waitForTimeout(500)
 
   await page.reload()
   await page.waitForLoadState('networkidle')
@@ -326,7 +318,6 @@ test('工单详情抽屉：显示完整信息', async ({ page }) => {
 
   // Drawer should show ticket information
   // The drawer should have action buttons (depending on ticket status)
-  await page.waitForTimeout(1000)
 
   // Close drawer
   await page.keyboard.press('Escape')
@@ -371,11 +362,9 @@ test('工单全流程：创建→取消工单', async ({ page }) => {
 
     await page.getByRole('button', { name: /^确认/ }).click()
     await expect(page.getByRole('alertdialog')).not.toBeVisible({ timeout: 10_000 })
-    await page.waitForTimeout(1000)
 
     // Verify status changed to CANCELLED
     await closeTicketDetail(page)
-    await page.waitForTimeout(500)
 
     await page.reload()
     await page.waitForLoadState('networkidle')

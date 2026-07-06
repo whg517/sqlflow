@@ -31,14 +31,12 @@ async function gotoReportsPage(page: Page) {
 /** Switch to a specific tab by name */
 async function switchTab(page: Page, tabName: string) {
   await page.getByRole('tab', { name: tabName }).click()
-  await page.waitForTimeout(500)
 }
 
 /** Select time range */
 async function selectTimeRange(page: Page, label: string) {
   await page.getByRole('combobox').click()
   await page.getByRole('option', { name: label }).click()
-  await page.waitForTimeout(500)
 }
 
 /** Get auth token for API calls */
@@ -208,7 +206,6 @@ test('使用统计：统计卡片显示数值', async ({ page }) => {
   await gotoReportsPage(page)
 
   // Cards should have numeric values (API may return 0 or actual data)
-  await page.waitForTimeout(2_000)
 
   // Total actions card should show a number
   const totalActionsCard = page.locator('text=总操作数').locator('..').locator('.text-2xl')
@@ -240,8 +237,6 @@ test('错误分析：统计卡片和表格', async ({ page }) => {
   await gotoReportsPage(page)
   await switchTab(page, '错误分析')
 
-  await page.waitForTimeout(2_000)
-
   // Stat cards
   await expect(page.getByText('总错误数')).toBeVisible()
   await expect(page.getByText('错误率')).toBeVisible()
@@ -256,8 +251,6 @@ test('错误分析：表格列标题正确', async ({ page }) => {
   await loginViaUI(page)
   await gotoReportsPage(page)
   await switchTab(page, '错误分析')
-
-  await page.waitForTimeout(2_000)
 
   // Error types table headers
   const errorTypesSection = page.locator('text=错误类型分布').locator('..')
@@ -282,8 +275,6 @@ test('性能趋势：统计卡片', async ({ page }) => {
   await gotoReportsPage(page)
   await switchTab(page, '性能趋势')
 
-  await page.waitForTimeout(2_000)
-
   await expect(page.getByText('平均耗时').first()).toBeVisible()
   await expect(page.getByText('最大耗时').first()).toBeVisible()
   await expect(page.getByText('P95 耗时')).toBeVisible()
@@ -294,8 +285,6 @@ test('性能趋势：每日性能趋势表格', async ({ page }) => {
   await loginViaUI(page)
   await gotoReportsPage(page)
   await switchTab(page, '性能趋势')
-
-  await page.waitForTimeout(2_000)
 
   await expect(page.getByText('每日性能趋势')).toBeVisible({ timeout: 5_000 })
 
@@ -312,8 +301,6 @@ test('性能趋势：耗时格式化（ms 或 s）', async ({ page }) => {
   await loginViaUI(page)
   await gotoReportsPage(page)
   await switchTab(page, '性能趋势')
-
-  await page.waitForTimeout(2_000)
 
   // Stat cards should show time values with ms/s suffix
   const avgCard = page.locator('text=平均耗时').locator('..').locator('.text-2xl')
@@ -333,8 +320,6 @@ test('工单统计：顶部统计卡片', async ({ page }) => {
   await gotoReportsPage(page)
   await switchTab(page, '工单统计')
 
-  await page.waitForTimeout(2_000)
-
   await expect(page.getByText('总工单数')).toBeVisible()
   await expect(page.getByText('待审批', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('平均审批时间')).toBeVisible()
@@ -345,8 +330,6 @@ test('工单统计：状态分布卡片', async ({ page }) => {
   await loginViaUI(page)
   await gotoReportsPage(page)
   await switchTab(page, '工单统计')
-
-  await page.waitForTimeout(2_000)
 
   // Status breakdown cards (5 cards in a row)
   await expect(page.getByText('已审批').first()).toBeVisible({ timeout: 5_000 })
@@ -359,8 +342,6 @@ test('工单统计：工单趋势表格', async ({ page }) => {
   await loginViaUI(page)
   await gotoReportsPage(page)
   await switchTab(page, '工单统计')
-
-  await page.waitForTimeout(2_000)
 
   await expect(page.getByText('工单趋势')).toBeVisible({ timeout: 5_000 })
 
@@ -375,8 +356,6 @@ test('工单统计：风险分布', async ({ page }) => {
   await loginViaUI(page)
   await gotoReportsPage(page)
   await switchTab(page, '工单统计')
-
-  await page.waitForTimeout(2_000)
 
   await expect(page.getByText('风险分布')).toBeVisible({ timeout: 5_000 })
 })
@@ -439,7 +418,6 @@ test('时间范围联动：错误分析标签页切换时间范围', async ({ pa
   await selectTimeRange(page, '近 14 天')
 
   // Data should refresh
-  await page.waitForTimeout(1_000)
   await expect(page.getByText('总错误数')).toBeVisible({ timeout: 5_000 })
 })
 
@@ -450,7 +428,6 @@ test('时间范围联动：性能趋势标签页切换时间范围', async ({ pa
   await expect(page.getByText('平均耗时').first()).toBeVisible({ timeout: 5_000 })
 
   await selectTimeRange(page, '近 30 天')
-  await page.waitForTimeout(1_000)
   await expect(page.getByText('平均耗时').first()).toBeVisible({ timeout: 5_000 })
 })
 
@@ -461,7 +438,6 @@ test('时间范围联动：工单统计标签页切换时间范围', async ({ pa
   await expect(page.getByText('总工单数')).toBeVisible({ timeout: 5_000 })
 
   await selectTimeRange(page, '近 90 天')
-  await page.waitForTimeout(1_000)
   await expect(page.getByText('总工单数')).toBeVisible({ timeout: 5_000 })
 })
 
@@ -483,8 +459,6 @@ test('数据一致性：错误分析数据与 API 返回匹配', async ({ page }
   // Navigate to reports
   await gotoReportsPage(page)
   await switchTab(page, '错误分析')
-
-  await page.waitForTimeout(2_000)
 
   // Total errors should match
   const totalErrorsText = page.locator('text=总错误数').locator('..').locator('.text-2xl')

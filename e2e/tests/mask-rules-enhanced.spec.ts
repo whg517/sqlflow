@@ -68,7 +68,6 @@ async function gotoMaskRulesPage(page: Page) {
   // If the mask rules sub-tabs are not visible, click the tab
   if (!await page.getByRole('button', { name: /敏感表标记/ }).isVisible({ timeout: 3_000 }).catch(() => false)) {
     await maskTab.click()
-    await page.waitForTimeout(500)
   }
 }
 
@@ -78,12 +77,10 @@ function waitForTableLoad(page: Page) {
 
 async function switchToFieldRules(page: Page) {
   await page.getByRole('button', { name: /字段规则/ }).click()
-  await page.waitForTimeout(500)
 }
 
 async function switchToSensitiveTables(page: Page) {
   await page.getByRole('button', { name: /敏感表标记/ }).click()
-  await page.waitForTimeout(500)
 }
 
 // ── Sensitive Tables helpers ──
@@ -497,7 +494,6 @@ test('数据源筛选：过滤敏感表列表', async ({ page }) => {
     const option = page.getByRole('option', { name: /e2e-shared-mysql|mysql/i }).first()
     if (await option.isVisible({ timeout: 2_000 }).catch(() => false)) {
       await option.click()
-      await page.waitForTimeout(500)
       // Table should reload
       await waitForTableLoad(page)
     }
@@ -864,7 +860,6 @@ test('导航：通过侧边栏进入脱敏规则页', async ({ page }) => {
   const maskTab = page.getByRole('button', { name: '脱敏规则' })
   if (!await page.getByRole('button', { name: /敏感表标记/ }).isVisible({ timeout: 2_000 }).catch(() => false)) {
     await maskTab.click()
-    await page.waitForTimeout(500)
   }
 
   // Verify mask rules content
@@ -892,7 +887,6 @@ test('字段规则数据源筛选：过滤规则列表', async ({ page }) => {
       const option = page.getByRole('option', { name: /e2e-shared-mysql|mysql/i }).first()
       if (await option.isVisible({ timeout: 2_000 }).catch(() => false)) {
         await option.click()
-        await page.waitForTimeout(500)
         await waitForTableLoad(page)
       }
     }
@@ -974,7 +968,6 @@ test('自定义正则：选择自定义类型后显示正则和模板输入框',
   const maskTrigger = page.getByRole('dialog').locator('label', { hasText: '脱敏类型' }).locator('..').getByRole('combobox')
   await maskTrigger.click()
   await page.getByRole('option', { name: '自定义正则' }).first().click()
-  await page.waitForTimeout(300)
 
   // Now regex fields should be visible
   await expect(page.getByRole('dialog').getByText('正则表达式', { exact: true })).toBeVisible()

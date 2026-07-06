@@ -3,8 +3,10 @@
 # Triggered by:
 #   - Push to main (full E2E — verify every merge)
 #   - Pull requests to main (smoke tests only — fast feedback)
-#   - Scheduled (weekdays 14:00 CST — regression guard)
-#   - Manual dispatch (on-demand runs)
+#   - Manual dispatch (scope: smoke | real | all, on-demand runs)
+#
+# Note: there is no scheduled cron trigger. Add an `on.schedule` entry if a
+# periodic regression run is desired.
 #
 # Uses docker-compose.test.yml for isolated test environment.
 # Concurrency key uses sha, so rapid merges don't cancel each other.
@@ -49,11 +51,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  e2e-lint:
+    name: E2E lint (no new sleeps)
+    runs-on: ubuntu-latest
+    # Fast, no Docker — guards against new page.waitForTimeout() regressions.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for new waitForTimeout calls
+        run: ./scripts/check-no-new-waitfortimeout.sh
+
   e2e-smoke:
     name: E2E (smoke)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     if: github.event_name == 'pull_request'
+    needs: e2e-lint
     steps:
       - uses: actions/checkout@v4
 
@@ -104,6 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     if: github.event_name != 'pull_request'
+    needs: e2e-lint
     strategy:
       matrix:
         scope: [real]

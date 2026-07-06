@@ -35,8 +35,24 @@ jobs:
           cache: true
 
       - name: Run Go tests
-        run: go test -v -race -count=1 -timeout 10m ./...
-          -skip 'TestQueryHandler_ExecuteQuery_DatasourceNotFound|TestQueryHandler_ExecuteQuery_DisabledDatasource|TestQueryHandler_ExecuteQuery_BlockedSQL|TestQueryHandler_ExportQuery_BlockedSQL|TestQueryHandler_ClearHistory_Error|TestUserHandler_DeleteUser|TestExecuteQuery_AuditOnFailure|TestExportQuery_AuditOnFailure|TestFullWorkflow'
+        # Only a single subtest is skipped: TestUserHandler_DeleteUser/
+        # cannot_delete_only_admin_via_another_admin hits a SQLite single-connection
+        # deadline during refresh-token generation under -race. All other formerly
+        # skipped tests now pass and run normally.
+        run: go test -v -race -count=1 -timeout 10m -coverprofile=coverage.out -covermode=atomic ./...
+          -skip 'TestUserHandler_DeleteUser/cannot_delete_only_admin_via_another_admin'
+
+      - name: Print coverage summary
+        if: always()
+        run: go tool cover -func=coverage.out | tail -1
+
+      - name: Upload Go coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: coverage.out
+          retention-days: 14
 
   test-frontend:
     name: Test (Frontend)
@@ -54,9 +70,18 @@ jobs:
         working-directory: web
         run: npm install
 
-      - name: Run unit tests
+      - name: Run unit tests with coverage
         working-directory: web
-        run: npm test
+        run: npm run test:coverage
+
+      - name: Upload frontend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: |
+            web/coverage/
+          retention-days: 14
 
   build:
     name: Build
