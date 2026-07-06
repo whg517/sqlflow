@@ -9,6 +9,7 @@
 vendor/
 /server
 coverage.out
+coverage.html
 
 # SQLite
 *.db

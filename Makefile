@@ -4,7 +4,8 @@
 
 .PHONY: help build dev test lint fmt clean verify \
         docker-up docker-down docker-build docker-up-dev docker-down-dev docker-build-dev \
-        merge-cleanup e2e-setup e2e-test e2e-teardown e2e-all docs
+        merge-cleanup e2e-setup e2e-test e2e-teardown e2e-all docs \
+        cover go-cover web-cover
 
 ##@ Build
 
@@ -39,11 +40,23 @@ dev-frontend: ## Start frontend dev server (Vite :5173)
 test: ## Run all tests (Go + frontend unit)
 test: go-test web-test
 
-go-test: ## Run Go tests
-	go test ./...
+go-test: ## Run Go tests (with race detector)
+	go test -race -count=1 ./...
 
 web-test: ## Run frontend unit tests (Vitest)
 	cd web && npm run test
+
+cover: ## Generate coverage reports (Go + frontend)
+cover: go-cover web-cover
+
+go-cover: ## Generate Go coverage report (coverage.out + HTML)
+	go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+	go tool cover -func=coverage.out | tail -1
+	@echo "HTML report: open coverage.html"
+	go tool cover -html=coverage.out -o coverage.html
+
+web-cover: ## Generate frontend coverage report
+	cd web && npm run test:coverage
 
 ##@ Quality
 
