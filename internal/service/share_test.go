@@ -5,22 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 func setupShareTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	database, err := db.Open(":memory:")
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-
-	return database.DB
+	return testutil.NewDB(t).DB
 }
 
 func TestShareService_CreateAndGet(t *testing.T) {

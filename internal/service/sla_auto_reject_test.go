@@ -6,22 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 func setupSLATestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
-	database, err := db.Open(tmpDir + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return database.DB
+	return testutil.NewDB(t).DB
 }
 
 func createTestUserForSLA(t *testing.T, ctx context.Context, d *sql.DB, username string) int64 {

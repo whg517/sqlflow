@@ -3,11 +3,10 @@ package service
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"sort"
 	"testing"
 
-	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // seedPolicies is the in-memory copy of policy.csv used by tests.
@@ -31,17 +30,7 @@ var seedRoles = []string{"admin", "dba", "developer"}
 // setupPermissionTestDB creates a temp SQLite database with schema migrated.
 func setupPermissionTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("failed to open test database: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("failed to migrate test database: %v", err)
-	}
-	return database.DB
+	return testutil.NewDB(t).DB
 }
 
 // seedTestPolicies inserts seed policy rows directly into casbin_rule so that

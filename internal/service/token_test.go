@@ -3,26 +3,17 @@ package service
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // setupTokenTestDB creates a test database with schema migrated, returning *db.DB for ent-based services.
 func setupTokenTestDB(t *testing.T) *db.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("open test db: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate test db: %v", err)
-	}
-	return database
+	return testutil.NewDB(t)
 }
 
 // createTokenTestUser creates a test user and returns the ID.

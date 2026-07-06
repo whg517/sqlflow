@@ -124,7 +124,9 @@ func TestExportHandler_ExportAuditLogs_DeveloperDenied(t *testing.T) {
 
 	// Verify error message
 	var result map[string]interface{}
-	_ = json.Unmarshal(rec.Body.Bytes(), &result)
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON response body: %v; body=%s", err, rec.Body.String())
+	}
 	if msg, ok := result["message"].(string); !ok || !strings.Contains(msg, "导出权限") {
 		t.Errorf("expected permission error message, got %v", result["message"])
 	}
@@ -158,7 +160,9 @@ func TestExportHandler_ExportAuditLogs_ExceedsLimit(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	_ = json.Unmarshal(rec.Body.Bytes(), &result)
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON response body: %v; body=%s", err, rec.Body.String())
+	}
 	if msg, ok := result["message"].(string); !ok || !strings.Contains(msg, "后台生成") {
 		t.Errorf("expected async export message, got %v", result["message"])
 	}

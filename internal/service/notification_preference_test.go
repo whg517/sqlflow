@@ -5,16 +5,12 @@ import (
 	"testing"
 
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 func setupNotifPrefDB(t *testing.T) *db.DB {
 	t.Helper()
-	conn := setupTestDB(t)
-	database, err := db.WrapSQL(conn)
-	if err != nil {
-		t.Fatalf("WrapSQL: %v", err)
-	}
-	return database
+	return testutil.NewDB(t)
 }
 
 func TestGetPreferences_Defaults(t *testing.T) {

@@ -5,12 +5,100 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/whg517/sqlflow/internal/model"
 )
+
+// reqRecorder is a concurrency-safe helper that captures the last request body
+// from a test server and exposes a channel-based synchronization primitive so
+// tests can wait deterministically for the async goroutine spawned by
+// NotifyService (which uses fire-and-forget `go s.sendMarkdown(...)`) instead
+// of brittle time.Sleep calls.
+type reqRecorder struct {
+	mu       sync.Mutex
+	body     dingTalkRequest
+	feishu   map[string]interface{}
+	url      string
+	called   bool
+	notifyCh chan struct{} // closed-per-call signal (see newReqRecorder / signalOnce)
+}
+
+func newReqRecorder() *reqRecorder {
+	return &reqRecorder{notifyCh: make(chan struct{}, 32)}
+}
+
+// signal marks one request received (non-blocking).
+func (r *reqRecorder) signal() {
+	select {
+	case r.notifyCh <- struct{}{}:
+	default:
+	}
+}
+
+// waitFor blocks until at least `n` requests are received or the timeout
+// elapses. Returns the number of requests received in that window.
+func (r *reqRecorder) waitFor(t *testing.T, n int, timeout time.Duration) int {
+	t.Helper()
+	deadline := time.After(timeout)
+	got := 0
+	for got < n {
+		select {
+		case <-r.notifyCh:
+			got++
+		case <-deadline:
+			return got
+		}
+	}
+	return got
+}
+
+// lastBody returns a copy of the last captured DingTalk request body.
+func (r *reqRecorder) lastBody() dingTalkRequest {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.body
+}
+
+func (r *reqRecorder) lastFeishu() map[string]interface{} {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.feishu
+}
+
+func (r *reqRecorder) lastURL() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.url
+}
+
+func (r *reqRecorder) wasCalled() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.called
+}
+
+// reset clears captured state between subtests.
+func (r *reqRecorder) reset() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.body = dingTalkRequest{}
+	r.feishu = nil
+	r.url = ""
+	r.called = false
+	// drain pending signals
+	for {
+		select {
+		case <-r.notifyCh:
+		default:
+			return
+		}
+	}
+}
+
 
 func TestNewNotifyService(t *testing.T) {
 	t.Run("enabled when webhook provided", func(t *testing.T) {
@@ -105,20 +193,16 @@ func TestNotifyService_DisabledNoop(t *testing.T) {
 }
 
 func TestNotifyService_SendsWebhook(t *testing.T) {
-	var receivedReq struct {
-		mu     sync.Mutex
-		body   dingTalkRequest
-		called bool
-	}
+	rec := newReqRecorder()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedReq.mu.Lock()
-		defer receivedReq.mu.Unlock()
-
-		if err := json.NewDecoder(r.Body).Decode(&receivedReq.body); err != nil {
+		rec.mu.Lock()
+		if err := json.NewDecoder(r.Body).Decode(&rec.body); err != nil {
 			t.Errorf("decode request body: %v", err)
 		}
-		receivedReq.called = true
+		rec.called = true
+		rec.mu.Unlock()
+		rec.signal()
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
@@ -128,6 +212,7 @@ func TestNotifyService_SendsWebhook(t *testing.T) {
 	svc := NewNotifyService(server.URL, "")
 
 	t.Run("ticket created notification", func(t *testing.T) {
+		rec.reset()
 		ticket := &model.Ticket{
 			ID:            42,
 			SubmitterName: "alice",
@@ -139,72 +224,61 @@ func TestNotifyService_SendsWebhook(t *testing.T) {
 		}
 		svc.NotifyTicketCreated(context.Background(), ticket)
 
-		// Wait for async goroutine
-		time.Sleep(200 * time.Millisecond)
-
-		receivedReq.mu.Lock()
-		if !receivedReq.called {
-			t.Error("expected webhook to be called")
+		if rec.waitFor(t, 1, 2*time.Second) != 1 {
+			t.Fatal("expected webhook to be called")
 		}
-		if receivedReq.body.MsgType != "markdown" {
-			t.Errorf("MsgType = %s, want markdown", receivedReq.body.MsgType)
+		body := rec.lastBody()
+		if body.MsgType != "markdown" {
+			t.Errorf("MsgType = %s, want markdown", body.MsgType)
 		}
-		if receivedReq.body.Markdown == nil {
+		if body.Markdown == nil {
 			t.Fatal("Markdown is nil")
 		}
-		if receivedReq.body.Markdown.Title == "" {
+		if body.Markdown.Title == "" {
 			t.Error("Markdown.Title is empty")
 		}
-		if receivedReq.body.Markdown.Text == "" {
+		if body.Markdown.Text == "" {
 			t.Error("Markdown.Text is empty")
 		}
-		receivedReq.called = false
-		receivedReq.mu.Unlock()
 	})
 
 	t.Run("risk alert notification", func(t *testing.T) {
+		rec.reset()
 		svc.NotifyRiskAlert("bob", "DELETE FROM users", "high", 1, "proddb")
 
-		time.Sleep(200 * time.Millisecond)
-
-		receivedReq.mu.Lock()
-		if !receivedReq.called {
-			t.Error("expected webhook to be called for risk alert")
+		if rec.waitFor(t, 1, 2*time.Second) != 1 {
+			t.Fatal("expected webhook to be called for risk alert")
 		}
-		if receivedReq.body.Markdown == nil {
+		body := rec.lastBody()
+		if body.Markdown == nil {
 			t.Fatal("Markdown is nil")
 		}
-		if receivedReq.body.Markdown.Title != "⚠️ 风险操作告警" {
-			t.Errorf("Title = %s, want ⚠️ 风险操作告警", receivedReq.body.Markdown.Title)
+		if body.Markdown.Title != "⚠️ 风险操作告警" {
+			t.Errorf("Title = %s, want ⚠️ 风险操作告警", body.Markdown.Title)
 		}
-		receivedReq.called = false
-		receivedReq.mu.Unlock()
 	})
 
 	t.Run("test message", func(t *testing.T) {
+		rec.reset()
 		svc.SendTestMessage()
 
-		time.Sleep(200 * time.Millisecond)
-
-		receivedReq.mu.Lock()
-		if !receivedReq.called {
+		if rec.waitFor(t, 1, 2*time.Second) != 1 {
+			t.Fatal("expected webhook to be called for test message")
+		}
+		if !rec.wasCalled() {
 			t.Error("expected webhook to be called for test message")
 		}
-		receivedReq.called = false
-		receivedReq.mu.Unlock()
 	})
 }
 
 func TestNotifyService_Signature(t *testing.T) {
-	var receivedURL struct {
-		mu  sync.Mutex
-		url string
-	}
+	rec := newReqRecorder()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedURL.mu.Lock()
-		receivedURL.url = r.URL.String()
-		receivedURL.mu.Unlock()
+		rec.mu.Lock()
+		rec.url = r.URL.String()
+		rec.mu.Unlock()
+		rec.signal()
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
@@ -224,15 +298,10 @@ func TestNotifyService_Signature(t *testing.T) {
 	}
 	svc.NotifyTicketCreated(context.Background(), ticket)
 
-	time.Sleep(200 * time.Millisecond)
-
-	receivedURL.mu.Lock()
-	u := receivedURL.url
-	receivedURL.mu.Unlock()
-
-	if u == "" {
+	if rec.waitFor(t, 1, 2*time.Second) != 1 {
 		t.Fatal("no request received")
 	}
+	u := rec.lastURL()
 
 	// URL should contain timestamp and sign parameters
 	if !containsParam(u, "timestamp") {
@@ -244,8 +313,10 @@ func TestNotifyService_Signature(t *testing.T) {
 }
 
 func TestNotifyService_ErrorHandling(t *testing.T) {
-	t.Run("handles server error response", func(t *testing.T) {
+	t.Run("handles server error response without panic", func(t *testing.T) {
+		rec := newReqRecorder()
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			rec.signal()
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`{"errcode":300001,"errmsg":"token is not exist"}`))
 		}))
@@ -262,12 +333,16 @@ func TestNotifyService_ErrorHandling(t *testing.T) {
 			RiskLevel:     "low",
 			CreatedAt:     time.Now(),
 		}
-		// Should not panic
+		// The contract under test: a non-OK errcode in the response body must
+		// not panic the notifier. We additionally assert the request reached
+		// the server so the error path was actually exercised.
 		svc.NotifyTicketCreated(context.Background(), ticket)
-		time.Sleep(200 * time.Millisecond)
+		if rec.waitFor(t, 1, 2*time.Second) != 1 {
+			t.Fatal("expected request to reach the error-responding server")
+		}
 	})
 
-	t.Run("handles connection refused", func(t *testing.T) {
+	t.Run("handles connection refused without panic", func(t *testing.T) {
 		svc := NewNotifyService("http://127.0.0.1:1/webhook", "")
 
 		ticket := &model.Ticket{
@@ -279,15 +354,26 @@ func TestNotifyService_ErrorHandling(t *testing.T) {
 			RiskLevel:     "low",
 			CreatedAt:     time.Now(),
 		}
-		// Should not panic
-		svc.NotifyTicketCreated(context.Background(), ticket)
-		time.Sleep(200 * time.Millisecond)
+		// Connection-refused has no observable success side effect; the only
+		// contract is "must not panic". We still bound the wait deterministically
+		// via the http.Client 5s timeout rather than an arbitrary sleep.
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			svc.NotifyTicketCreated(context.Background(), ticket)
+		}()
+		select {
+		case <-done:
+		case <-time.After(6 * time.Second):
+			t.Fatal("NotifyTicketCreated did not return within 6s on connection refused")
+		}
 	})
 }
 
 func TestNotifyService_TicketLifecycleNotifications(t *testing.T) {
 	var mu sync.Mutex
 	var messages []string
+	rec := newReqRecorder()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req dingTalkRequest
@@ -296,6 +382,7 @@ func TestNotifyService_TicketLifecycleNotifications(t *testing.T) {
 			messages = append(messages, req.Markdown.Title)
 			mu.Unlock()
 		}
+		rec.signal()
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
 	}))
@@ -322,12 +409,11 @@ func TestNotifyService_TicketLifecycleNotifications(t *testing.T) {
 	svc.NotifyTicketExecuted(context.Background(), ticket)
 	svc.NotifyTicketFailed(context.Background(), ticket, "execution error")
 
-	time.Sleep(500 * time.Millisecond)
-
-	mu.Lock()
-	defer mu.Unlock()
-	if len(messages) != 5 {
-		t.Errorf("expected 5 notifications, got %d", len(messages))
+	// Wait deterministically for all 5 lifecycle notifications.
+	if got := rec.waitFor(t, 5, 3*time.Second); got != 5 {
+		mu.Lock()
+		t.Errorf("expected 5 notifications, got %d (titles so far: %v)", got, messages)
+		mu.Unlock()
 	}
 }
 
@@ -424,6 +510,7 @@ func TestNotifyService_FeishuBasic(t *testing.T) {
 func TestNotifyService_FeishuSendsWebhook(t *testing.T) {
 	var mu sync.Mutex
 	var receivedBodies []map[string]interface{}
+	rec := newReqRecorder()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]interface{}
@@ -432,6 +519,7 @@ func TestNotifyService_FeishuSendsWebhook(t *testing.T) {
 			receivedBodies = append(receivedBodies, body)
 			mu.Unlock()
 		}
+		rec.signal()
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"code":0,"msg":"ok"}`))
 	}))
@@ -444,6 +532,7 @@ func TestNotifyService_FeishuSendsWebhook(t *testing.T) {
 		mu.Lock()
 		receivedBodies = nil
 		mu.Unlock()
+		rec.reset()
 
 		ticket := &model.Ticket{
 			ID:            100,
@@ -456,12 +545,10 @@ func TestNotifyService_FeishuSendsWebhook(t *testing.T) {
 		}
 		svc.NotifyTicketCreated(context.Background(), ticket)
 
-		time.Sleep(300 * time.Millisecond)
-
-		mu.Lock()
-		if len(receivedBodies) == 0 {
+		if rec.waitFor(t, 1, 2*time.Second) != 1 {
 			t.Fatal("expected feishu webhook to be called")
 		}
+		mu.Lock()
 		body := receivedBodies[0]
 		mu.Unlock()
 
@@ -489,6 +576,7 @@ func TestNotifyService_FeishuSendsWebhook(t *testing.T) {
 		mu.Lock()
 		receivedBodies = nil
 		mu.Unlock()
+		rec.reset()
 
 		ticket := &model.Ticket{
 			ID:            200,
@@ -500,19 +588,16 @@ func TestNotifyService_FeishuSendsWebhook(t *testing.T) {
 		}
 		svc.NotifyTicketApproved(context.Background(), ticket)
 
-		time.Sleep(300 * time.Millisecond)
-
-		mu.Lock()
-		if len(receivedBodies) == 0 {
+		if rec.waitFor(t, 1, 2*time.Second) != 1 {
 			t.Fatal("expected feishu webhook to be called for approval")
 		}
-		mu.Unlock()
 	})
 
 	t.Run("ticket rejected sends feishu card", func(t *testing.T) {
 		mu.Lock()
 		receivedBodies = nil
 		mu.Unlock()
+		rec.reset()
 
 		ticket := &model.Ticket{
 			ID:            300,
@@ -525,19 +610,16 @@ func TestNotifyService_FeishuSendsWebhook(t *testing.T) {
 		}
 		svc.NotifyTicketRejected(context.Background(), ticket)
 
-		time.Sleep(300 * time.Millisecond)
-
-		mu.Lock()
-		if len(receivedBodies) == 0 {
+		if rec.waitFor(t, 1, 2*time.Second) != 1 {
 			t.Fatal("expected feishu webhook to be called for rejection")
 		}
-		mu.Unlock()
 	})
 
 	t.Run("ticket failed sends feishu card", func(t *testing.T) {
 		mu.Lock()
 		receivedBodies = nil
 		mu.Unlock()
+		rec.reset()
 
 		ticket := &model.Ticket{
 			ID:            400,
@@ -547,12 +629,10 @@ func TestNotifyService_FeishuSendsWebhook(t *testing.T) {
 		}
 		svc.NotifyTicketFailed(context.Background(), ticket, "table does not exist")
 
-		time.Sleep(300 * time.Millisecond)
-
-		mu.Lock()
-		if len(receivedBodies) == 0 {
+		if rec.waitFor(t, 1, 2*time.Second) != 1 {
 			t.Fatal("expected feishu webhook to be called for failure")
 		}
+		mu.Lock()
 		body := receivedBodies[0]
 		mu.Unlock()
 
@@ -568,6 +648,7 @@ func TestNotifyService_FeishuSendsWebhook(t *testing.T) {
 		mu.Lock()
 		receivedBodies = nil
 		mu.Unlock()
+		rec.reset()
 
 		schedTime := time.Now().Add(1 * time.Hour)
 		ticket := &model.Ticket{
@@ -580,13 +661,9 @@ func TestNotifyService_FeishuSendsWebhook(t *testing.T) {
 		}
 		svc.NotifyTicketScheduled(context.Background(), ticket)
 
-		time.Sleep(300 * time.Millisecond)
-
-		mu.Lock()
-		if len(receivedBodies) == 0 {
+		if rec.waitFor(t, 1, 2*time.Second) != 1 {
 			t.Fatal("expected feishu webhook to be called for scheduled")
 		}
-		mu.Unlock()
 	})
 }
 
@@ -612,13 +689,10 @@ func TestNotifyService_FeishuDisabledNoop(t *testing.T) {
 }
 
 func TestNotifyService_FeishuTestMessage(t *testing.T) {
-	var mu sync.Mutex
-	var received bool
+	rec := newReqRecorder()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		received = true
-		mu.Unlock()
+		rec.signal()
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"code":0,"msg":"ok"}`))
 	}))
@@ -628,32 +702,24 @@ func TestNotifyService_FeishuTestMessage(t *testing.T) {
 	svc.SetFeishuWebhook(server.URL)
 
 	svc.SendFeishuTestMessage()
-	time.Sleep(300 * time.Millisecond)
-
-	mu.Lock()
-	if !received {
+	if rec.waitFor(t, 1, 2*time.Second) != 1 {
 		t.Error("expected feishu test message to be sent")
 	}
-	mu.Unlock()
 }
 
 func TestNotifyService_BothChannelsSimultaneously(t *testing.T) {
-	var mu sync.Mutex
-	var dingtalkCalled, feishuCalled bool
+	dingRec := newReqRecorder()
+	feishuRec := newReqRecorder()
 
 	dingtalkServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		dingtalkCalled = true
-		mu.Unlock()
+		dingRec.signal()
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
 	}))
 	defer dingtalkServer.Close()
 
 	feishuServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		feishuCalled = true
-		mu.Unlock()
+		feishuRec.signal()
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"code":0,"msg":"ok"}`))
 	}))
@@ -673,16 +739,12 @@ func TestNotifyService_BothChannelsSimultaneously(t *testing.T) {
 	}
 	svc.NotifyTicketCreated(context.Background(), ticket)
 
-	time.Sleep(300 * time.Millisecond)
-
-	mu.Lock()
-	if !dingtalkCalled {
+	if dingRec.waitFor(t, 1, 2*time.Second) != 1 {
 		t.Error("expected DingTalk to be called")
 	}
-	if !feishuCalled {
+	if feishuRec.waitFor(t, 1, 2*time.Second) != 1 {
 		t.Error("expected Feishu to be called")
 	}
-	mu.Unlock()
 }
 
 // ---------------------------------------------------------------------------
@@ -690,31 +752,37 @@ func TestNotifyService_BothChannelsSimultaneously(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNotifyService_Dedup(t *testing.T) {
-	svc := NewNotifyService("http://127.0.0.1:1/webhook", "") // webhook won't be called
+	t.Run("nil db allows all notifications through", func(t *testing.T) {
+		rec := newReqRecorder()
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			rec.signal()
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
+		}))
+		defer server.Close()
 
-	var mu sync.Mutex
-	sendCount := 0
+		svc := NewNotifyService(server.URL, "") // no DB attached → shouldNotify always returns true
 
-	// Override shouldNotify via direct DB test
-	// Since we can't easily set up DB in this test, test the nil-db path (always allows)
-	t.Run("nil db allows all notifications", func(t *testing.T) {
+		// Same ticket, same event type sent twice — without a DB the dedup layer
+		// cannot suppress the second one, so both must reach the webhook.
 		ticket := &model.Ticket{ID: 1, SubmitterName: "test", SQLSummary: "SELECT 1", CreatedAt: time.Now()}
-		// Without DB, all notifications go through
 		svc.NotifyTicketCreated(context.Background(), ticket)
-		// No panic = pass
+		svc.NotifyTicketCreated(context.Background(), ticket)
+
+		if got := rec.waitFor(t, 2, 2*time.Second); got != 2 {
+			t.Errorf("expected 2 notifications with nil-db (no dedup), got %d", got)
+		}
 	})
-	_ = &mu
-	_ = sendCount
 }
 
 func TestNotifyService_FailedNotificationContent(t *testing.T) {
-	var mu sync.Mutex
-	var received dingTalkRequest
+	rec := newReqRecorder()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		json.NewDecoder(r.Body).Decode(&received)
-		mu.Unlock()
+		rec.mu.Lock()
+		json.NewDecoder(r.Body).Decode(&rec.body)
+		rec.mu.Unlock()
+		rec.signal()
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
 	}))
@@ -722,26 +790,36 @@ func TestNotifyService_FailedNotificationContent(t *testing.T) {
 
 	svc := NewNotifyService(server.URL, "")
 
-	t.Run("error message truncated at 200 chars", func(t *testing.T) {
-		longErr := string(make([]byte, 300))
-		runes := []rune(longErr)
-		for i := range runes {
-			runes[i] = 'x'
-		}
-		longErr = string(runes)
+	t.Run("error message truncated at 200 chars with marker", func(t *testing.T) {
+		rec.reset()
+		longErr := strings.Repeat("x", 300)
 		ticket := &model.Ticket{
 			ID: 1, SubmitterName: "test", SQLSummary: "SELECT 1", UpdatedAt: time.Now(),
 		}
 		svc.NotifyTicketFailed(context.Background(), ticket, longErr)
-		time.Sleep(200 * time.Millisecond)
 
-		mu.Lock()
-		text := received.Markdown.Text
-		mu.Unlock()
-		// Should contain truncation marker
-		if len(text) > 0 {
-			// Just verify no panic and something was sent
-			t.Logf("received truncated markdown length: %d", len(text))
+		if rec.waitFor(t, 1, 2*time.Second) != 1 {
+			t.Fatal("expected failure notification to be sent")
+		}
+		body := rec.lastBody()
+		if body.Markdown == nil {
+			t.Fatal("Markdown is nil")
+		}
+		text := body.Markdown.Text
+		if text == "" {
+			t.Fatal("expected non-empty markdown text")
+		}
+		// Truncated error must be capped at 200 chars + the truncation marker.
+		if !strings.Contains(text, "...") {
+			t.Errorf("expected truncation marker '...' in text, got: %s", text)
+		}
+		// The 300-char error must not appear in full (first 200 'x' may appear,
+		// but the 201st..300th 'x' run is replaced by '...').
+		if strings.Contains(text, strings.Repeat("x", 201)) {
+			t.Error("expected error to be truncated below 201 consecutive 'x' chars")
+		}
+		if body.Markdown.Title != "🚨 工单执行失败通知" {
+			t.Errorf("Title = %s, want 🚨 工单执行失败通知", body.Markdown.Title)
 		}
 	})
 }

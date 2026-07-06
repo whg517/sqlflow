@@ -6,64 +6,19 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
-	_ "modernc.org/sqlite"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 const testEncryptionKey = "0123456789abcdef0123456789abcdef" // 32 bytes for AES-256
 
 func setupFeishuWebhookTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	tmpFile, err := os.CreateTemp("", "feishu_webhook_test_*.db")
-	if err != nil {
-		t.Fatalf("create temp db: %v", err)
-	}
-	tmpFile.Close()
-	t.Cleanup(func() { os.Remove(tmpFile.Name()) })
-
-	db, err := sql.Open("sqlite", tmpFile.Name()+"?_busy_timeout=5000&_journal_mode=WAL")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	db.SetMaxOpenConns(1)
-
-	// Create tables
-	migration := `
-	CREATE TABLE IF NOT EXISTS feishu_webhooks (
-		id              INTEGER PRIMARY KEY AUTOINCREMENT,
-		name            TEXT    NOT NULL,
-		encrypted_url   TEXT    NOT NULL,
-		url_hash        TEXT    NOT NULL,
-		scene           TEXT    NOT NULL DEFAULT 'general',
-		enabled         INTEGER NOT NULL DEFAULT 1,
-		rate_limit_rps  REAL    NOT NULL DEFAULT 1.0,
-		created_by      TEXT    NOT NULL DEFAULT '',
-		created_at      DATETIME NOT NULL DEFAULT (datetime('now')),
-		updated_at      DATETIME NOT NULL DEFAULT (datetime('now'))
-	);
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_feishu_webhooks_url_hash ON feishu_webhooks(url_hash);
-
-	CREATE TABLE IF NOT EXISTS feishu_dead_letters (
-		id              INTEGER PRIMARY KEY AUTOINCREMENT,
-		webhook_id      INTEGER NOT NULL,
-		payload         TEXT    NOT NULL,
-		error_message   TEXT    NOT NULL DEFAULT '',
-		attempt_count   INTEGER NOT NULL DEFAULT 0,
-		last_attempt_at DATETIME NOT NULL DEFAULT (datetime('now')),
-		created_at      DATETIME NOT NULL DEFAULT (datetime('now'))
-	);
-	CREATE INDEX IF NOT EXISTS idx_dead_letters_webhook_id ON feishu_dead_letters(webhook_id);
-	`
-	if _, err := db.Exec(migration); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-
-	return db
+	return testutil.NewDB(t).DB
 }
 
 func newTestFeishuWebhookService(t *testing.T) *FeishuWebhookService {

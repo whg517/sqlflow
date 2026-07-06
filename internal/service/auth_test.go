@@ -2,27 +2,17 @@ package service
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // setupAuthTestDB creates a temp SQLite database with schema migrated.
 func setupAuthTestDB(t *testing.T) *db.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("failed to open test database: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("failed to migrate test database: %v", err)
-	}
-	return database
+	return testutil.NewDB(t)
 }
 
 // newTestAuthService creates an AuthService with a real SQLite DB and test JWT config.
@@ -44,7 +34,7 @@ func TestNewAuthService(t *testing.T) {
 // CreateUser
 // ---------------------------------------------------------------------------
 
-func TestCreateUser(t *testing.T) {
+func TestAuthService_CreateUser(t *testing.T) {
 	svc, _ := newTestAuthService(t)
 	ctx := context.Background()
 
@@ -95,7 +85,7 @@ func TestCreateUser(t *testing.T) {
 // Authenticate
 // ---------------------------------------------------------------------------
 
-func TestAuthenticate(t *testing.T) {
+func TestAuthService_Authenticate(t *testing.T) {
 	svc, _ := newTestAuthService(t)
 	ctx := context.Background()
 
@@ -169,7 +159,7 @@ func TestAuthenticate(t *testing.T) {
 // ListUsers
 // ---------------------------------------------------------------------------
 
-func TestListUsers(t *testing.T) {
+func TestAuthService_ListUsers(t *testing.T) {
 	svc, _ := newTestAuthService(t)
 	ctx := context.Background()
 
@@ -289,7 +279,7 @@ func TestListUsers(t *testing.T) {
 // ChangePassword
 // ---------------------------------------------------------------------------
 
-func TestChangePassword(t *testing.T) {
+func TestAuthService_ChangePassword(t *testing.T) {
 	svc, _ := newTestAuthService(t)
 	ctx := context.Background()
 
@@ -337,7 +327,7 @@ func TestChangePassword(t *testing.T) {
 // AdminCount
 // ---------------------------------------------------------------------------
 
-func TestAdminCount(t *testing.T) {
+func TestAuthService_AdminCount(t *testing.T) {
 	svc, _ := newTestAuthService(t)
 	ctx := context.Background()
 
@@ -393,7 +383,7 @@ func TestAdminCount(t *testing.T) {
 // UserCount
 // ---------------------------------------------------------------------------
 
-func TestUserCount(t *testing.T) {
+func TestAuthService_UserCount(t *testing.T) {
 	svc, _ := newTestAuthService(t)
 	ctx := context.Background()
 
@@ -442,7 +432,7 @@ func TestUserCount(t *testing.T) {
 // UpdateUserRole
 // ---------------------------------------------------------------------------
 
-func TestUpdateUserRole(t *testing.T) {
+func TestAuthService_UpdateUserRole(t *testing.T) {
 	svc, _ := newTestAuthService(t)
 	ctx := context.Background()
 
@@ -490,7 +480,7 @@ func TestUpdateUserRole(t *testing.T) {
 // DeleteUser
 // ---------------------------------------------------------------------------
 
-func TestDeleteUser(t *testing.T) {
+func TestAuthService_DeleteUser(t *testing.T) {
 	svc, _ := newTestAuthService(t)
 	ctx := context.Background()
 
@@ -538,7 +528,7 @@ func TestDeleteUser(t *testing.T) {
 // ResetPassword
 // ---------------------------------------------------------------------------
 
-func TestResetPassword(t *testing.T) {
+func TestAuthService_ResetPassword(t *testing.T) {
 	svc, _ := newTestAuthService(t)
 	ctx := context.Background()
 
@@ -594,7 +584,7 @@ func TestResetPassword(t *testing.T) {
 // ParseToken (bonus: covers token validation edge cases)
 // ---------------------------------------------------------------------------
 
-func TestParseToken(t *testing.T) {
+func TestAuthService_ParseToken(t *testing.T) {
 	svc, _ := newTestAuthService(t)
 	ctx := context.Background()
 

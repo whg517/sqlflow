@@ -3,28 +3,15 @@ package service
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 func setupDashboardTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("failed to open test database: %v", err)
-	}
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("failed to migrate test database: %v", err)
-	}
-
-	return database.DB
+	return testutil.NewDB(t).DB
 }
 
 func TestNewDashboardService(t *testing.T) {
@@ -252,8 +239,11 @@ func TestDashboardService_GetFullStats_DateRange(t *testing.T) {
 	testDB.ExecContext(ctx,
 		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 3', datetime('now'))`)
 
-	// Query with specific date range (5 days)
-	now := time.Now()
+	// Query with specific date range (5 days).
+	// NOTE: the seeded rows above use SQLite datetime('now') which is UTC, so
+	// compute the date bounds in UTC too — otherwise the test is flaky in any
+	// timezone where local "today" differs from UTC "today".
+	now := time.Now().UTC()
 	startDate := now.AddDate(0, 0, -4).Format("2006-01-02")
 	endDate := now.Format("2006-01-02")
 

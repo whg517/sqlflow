@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,9 +13,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/whg517/sqlflow/internal/connpool"
-	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/mask"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -28,17 +27,9 @@ import (
 // read policy.csv from disk).
 func setupQueryTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("open test db: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate test db: %v", err)
-	}
-	seedCasbinRules(t, database.DB)
-	return database.DB
+	testDB := testutil.NewDB(t).DB
+	seedCasbinRules(t, testDB)
+	return testDB
 }
 
 // seedCasbinRules inserts the default policies directly into casbin_rule

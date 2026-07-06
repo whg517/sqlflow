@@ -5,30 +5,20 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/whg517/sqlflow/internal/db"
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/pkg/crypto"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // setupTicketTestDB creates an in-memory SQLite database with the required schema.
 func setupTicketTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("failed to open test database: %v", err)
-	}
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("failed to migrate test database: %v", err)
-	}
-
-	return database.DB
+	return testutil.NewDB(t).DB
 }
 
 // seedTestUser creates a test user and returns the user ID.
@@ -628,12 +618,49 @@ func TestStateMachine(t *testing.T) {
 }
 
 func TestFullWorkflow(t *testing.T) {
-	t.Skip("Requires mock connMgr/dsSvc for ExecuteTicket — tracked in SF-FIX0004")
+	// SF-FIX0004: previously skipped because ExecuteTicket needed connMgr/dsSvc.
+	// Now wired with a real DatasourceService + connpool.Manager and an injected
+	// sqlmock DB (same pattern as ticket_executor_tx_test.go), so the full
+	// SUBMITTED → PENDING_APPROVAL → APPROVED → EXECUTING → DONE lifecycle is
+	// exercised end-to-end without a live MySQL.
+	//
+	// NOTE: we deliberately leave poolMgr nil so executeSQL takes the legacy
+	// connMgr path (which honors InjectMySQLForTest). The driver-abstraction
+	// path (poolMgr) would attempt a real dial.
 	testDB := setupTicketTestDB(t)
-	svc := NewTicketService(mustWrapDB(testDB), nil, nil)
+	encKey := "test-encryption-key-32byte-len!!"
+
+	connMgr := connpool.NewManager()
+	t.Cleanup(func() { connMgr.Close() })
+
+	dsSvc := NewDatasourceService(mustWrapDB(testDB), encKey, connMgr, nil)
+	auditSvc := NewAuditService(mustWrapDB(testDB), 0, 0)
+	svc := NewTicketService(mustWrapDB(testDB), auditSvc, nil)
+	// Inject connMgr/dsSvc without poolMgr to force the connMgr execution path.
+	svc.dsSvc = dsSvc
+	svc.connMgr = connMgr
+	svc.encryptionKey = encKey
+
 	devID := seedTestUser(t, testDB, "dev1", "developer")
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
-	dsID := seedTestDatasource(t, testDB, "test-mysql")
+
+	// Seed a datasource with an encrypted password so GetDataSource can decrypt it.
+	encPass, _ := crypto.Encrypt("secret", encKey)
+	dsRes, err := testDB.Exec(
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES (?, 'mysql', 'localhost', 3306, 'root', ?, 'active', datetime('now'), datetime('now'))`,
+		"test-mysql", encPass)
+	if err != nil {
+		t.Fatalf("seed datasource: %v", err)
+	}
+	dsID, _ := dsRes.LastInsertId()
+
+	// Inject a sqlmock as the MySQL pool keyed by the seeded datasource identity.
+	mockDB, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock: %v", err)
+	}
+	defer mockDB.Close()
+	connMgr.InjectMySQLForTest(dsID, "localhost", 3306, "mydb", mockDB)
 
 	// Step 1: Create ticket
 	ticket, err := svc.CreateTicket(context.Background(), devID, "developer", dsID, "mydb",
@@ -661,7 +688,8 @@ func TestFullWorkflow(t *testing.T) {
 		t.Errorf("ReviewerName = %s, want dba1", ticket.ReviewerName)
 	}
 
-	// Step 4: Developer executes
+	// Step 4: Developer executes — MySQL route runs the DDL via sqlmock (auto-commit, no tx).
+	mock.ExpectExec("ALTER TABLE users ADD COLUMN phone VARCHAR\\(20\\)").WillReturnResult(sqlmock.NewResult(0, 0))
 	ticket, err = svc.ExecuteTicket(context.Background(), ticket.ID, devID, "developer", "dev1")
 	if err != nil {
 		t.Fatalf("ExecuteTicket() error: %v", err)
@@ -671,6 +699,9 @@ func TestFullWorkflow(t *testing.T) {
 	}
 	if ticket.ExecutedAt == nil {
 		t.Error("ExecutedAt should not be nil after execution")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled sqlmock expectations: %v", err)
 	}
 }
 

@@ -7,15 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/mask"
 	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -25,17 +24,7 @@ import (
 // setupIntegrationDB creates a fully migrated SQLite database for integration tests.
 func setupIntegrationDB(t *testing.T) *sql.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "integration_test.db")
-
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("open integration db: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate integration db: %v", err)
-	}
-	return database.DB
+	return testutil.NewDB(t).DB
 }
 
 // seedIntegrationUser creates a user and returns the ID.

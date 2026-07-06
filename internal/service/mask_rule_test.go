@@ -3,25 +3,16 @@ package service
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 func setupTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("open test db: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate test db: %v", err)
-	}
-	return database.DB
+	return testutil.NewDB(t).DB
 }
 
 // mustWrapDB wraps *sql.DB into *db.DB for ent-based service constructors.

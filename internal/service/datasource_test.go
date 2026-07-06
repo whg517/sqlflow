@@ -3,16 +3,15 @@ package service
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/whg517/sqlflow/internal/connpool"
-	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 const testEncKey = "0123456789abcdef0123456789abcdef" // 32 bytes for AES-256
@@ -20,17 +19,7 @@ const testEncKey = "0123456789abcdef0123456789abcdef" // 32 bytes for AES-256
 // setupDatasourceTestDB creates a temp SQLite database with schema migrated.
 func setupDatasourceTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("failed to open test database: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("failed to migrate test database: %v", err)
-	}
-	return database.DB
+	return testutil.NewDB(t).DB
 }
 
 // newTestDatasourceService creates a DatasourceService with a real SQLite DB.
@@ -676,7 +665,7 @@ func TestDisableDataSource_MongoDB(t *testing.T) {
 
 // ─── TestConnection ───────────────────────────────────────────────────────────
 
-func TestTestConnection(t *testing.T) {
+func TestDatasourceService_TestConnection(t *testing.T) {
 	svc, _ := newTestDatasourceService(t)
 
 	t.Run("invalid_type_no_id", func(t *testing.T) {

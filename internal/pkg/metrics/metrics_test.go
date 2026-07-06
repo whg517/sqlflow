@@ -39,7 +39,9 @@ func TestMiddleware_RecordsDifferentStatusCodes(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		_ = handler(c)
+		if err := handler(c); err != nil {
+			t.Fatalf("middleware error: %v", err)
+		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 		}
@@ -53,7 +55,11 @@ func TestMiddleware_RecordsDifferentStatusCodes(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
-		_ = handler(c)
+		// The handler writes a 500 body (not an echo error), so err must be nil
+		// and the status code must be preserved by the middleware.
+		if err := handler(c); err != nil {
+			t.Fatalf("unexpected middleware error: %v", err)
+		}
 		if rec.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 		}
@@ -74,12 +80,17 @@ func TestMiddleware_DurationRecorded(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	start := time.Now()
-	_ = handler(c)
+	if err := handler(c); err != nil {
+		t.Fatalf("middleware error: %v", err)
+	}
 	elapsed := time.Since(start)
 
 	// The handler slept 10ms, so middleware should record at least that
 	if elapsed < 10*time.Millisecond {
 		t.Errorf("elapsed = %v, expected >= 10ms", elapsed)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 }
 

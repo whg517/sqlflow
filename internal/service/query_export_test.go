@@ -10,9 +10,9 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/whg517/sqlflow/internal/connpool"
-	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -22,17 +22,9 @@ import (
 // setupExportTestDB creates a temp SQLite DB with schema migrated and casbin rules seeded.
 func setupExportTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := tmpDir + "/test.db"
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("open test db: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate test db: %v", err)
-	}
-	seedCasbinRules(t, database.DB)
-	return database.DB
+	testDB := testutil.NewDB(t).DB
+	seedCasbinRules(t, testDB)
+	return testDB
 }
 
 // setupExportService creates a full QueryService for export tests.

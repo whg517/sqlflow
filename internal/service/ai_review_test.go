@@ -12,40 +12,20 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
-
 	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
 
+// newTestDB returns a migrated *sql.DB for AI review tests. The mask_rules
+// table (used for sensitive-table detection) is created by the migrations
+// applied by testutil.NewDB.
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open test db: %v", err)
-	}
-	// Create mask_rules table for sensitive table checks
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS mask_rules (
-			id              INTEGER PRIMARY KEY AUTOINCREMENT,
-			datasource_id   INTEGER NOT NULL DEFAULT 0,
-			database        TEXT    NOT NULL DEFAULT '',
-			table_name      TEXT    NOT NULL DEFAULT '',
-			field           TEXT    NOT NULL DEFAULT '',
-			mask_type       TEXT    NOT NULL DEFAULT '',
-			custom_regex    TEXT    NOT NULL DEFAULT '',
-			custom_template TEXT    NOT NULL DEFAULT '',
-			created_at      DATETIME NOT NULL DEFAULT (datetime('now')),
-			updated_at      DATETIME NOT NULL DEFAULT (datetime('now'))
-		)
-	`)
-	if err != nil {
-		t.Fatalf("create mask_rules table: %v", err)
-	}
-	return db
+	return testutil.NewDB(t).DB
 }
 
 func newTestService(t *testing.T, db *sql.DB) *AIReviewService {

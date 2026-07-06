@@ -228,5 +228,63 @@ func TestPermReqService_ListRequests(t *testing.T) {
 }
 
 func TestPermReqService_ExpireOverdue(t *testing.T) {
-	t.Skip("skipped: ExpireOverdue requires concurrent access to casbin enforcer which deadlocks with SQLite single-connection limit in test env")
+	db := setupTestDB(t)
+	permSvc, err := NewPermissionService(mustWrapDB(db))
+	if err != nil {
+		t.Fatalf("create PermissionService: %v", err)
+	}
+	svc := NewPermissionRequestService(mustWrapDB(db), permSvc, nil)
+	ctx := context.Background()
+
+	userID := createPermTestUser(t, db, "perm_expire")
+
+	// Create two requests and approve them.
+	req1, err := svc.CreateRequest(ctx, userID, 1, "testdb", "table1", "select", "test", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("CreateRequest 1: %v", err)
+	}
+	req2, err := svc.CreateRequest(ctx, userID, 1, "testdb", "table2", "select", "test", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("CreateRequest 2: %v", err)
+	}
+	if _, err := svc.ApproveRequest(ctx, req1.ID, userID, "approved"); err != nil {
+		t.Fatalf("ApproveRequest 1: %v", err)
+	}
+	if _, err := svc.ApproveRequest(ctx, req2.ID, userID, "approved"); err != nil {
+		t.Fatalf("ApproveRequest 2: %v", err)
+	}
+
+	// Force req1 into the past (expired), leave req2 still valid.
+	if _, err := db.ExecContext(ctx,
+		`UPDATE permission_requests SET expires_at = datetime('now','-1 hour') WHERE id = ?`,
+		req1.ID); err != nil {
+		t.Fatalf("force expiry: %v", err)
+	}
+
+	// Run the expiry sweep — only the overdue one should be marked EXPIRED.
+	// (Previously skipped due to a suspected SQLite single-connection deadlock
+	// that no longer reproduces; verified safe under -race.)
+	count, err := svc.ExpireOverdue(ctx)
+	if err != nil {
+		t.Fatalf("ExpireOverdue: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 expired, got %d", count)
+	}
+
+	// Verify the expired one is now EXPIRED and the still-valid one is APPROVED.
+	got1, err := svc.GetRequestByID(ctx, req1.ID)
+	if err != nil {
+		t.Fatalf("GetRequestByID 1: %v", err)
+	}
+	if got1.Status != "EXPIRED" {
+		t.Errorf("req1 status = %s, want EXPIRED", got1.Status)
+	}
+	got2, err := svc.GetRequestByID(ctx, req2.ID)
+	if err != nil {
+		t.Fatalf("GetRequestByID 2: %v", err)
+	}
+	if got2.Status != "APPROVED" {
+		t.Errorf("req2 status = %s, want APPROVED (should not be expired)", got2.Status)
+	}
 }

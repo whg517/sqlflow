@@ -9,20 +9,12 @@ import (
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 func setupTxTestDB(t *testing.T) *db.DB {
 	t.Helper()
-	tmpDir := t.TempDir()
-	database, err := db.Open(tmpDir + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return database
+	return testutil.NewDB(t)
 }
 
 // TestExecuteSQL_PostgreSQLRoute verifies that executeSQL routes to
