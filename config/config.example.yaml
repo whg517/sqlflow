@@ -4,10 +4,10 @@
 #
 # ⚠️ 敏感配置项（密钥、密码等）不要写在此文件中，请使用环境变量：
 #   SQLFLOW_JWT_SECRET       - JWT 签名密钥（必填，≥16字符）
-#   SQLFLOW_ENCRYPTION_KEY   - AES 加密密钥（必填，16/24/32字节）
+#   SQLFLOW_ENCRYPTION_KEY   - AES 加密密钥（必填，16/24/32字符）
 #   SQLFLOW_ADMIN_PASSWORD   - 初始管理员密码（必填，≥8字符，含字母+数字）
 #   SQLFLOW_AI_API_KEY       - AI 评审 API Key（可选）
-#   SQLFLOW_DINGTALK_SECRET  - 钉钉机器人签名密钥（可选）
+#   SQLFLOW_NOTIFY_SECRET    - 钉钉机器人签名密钥（可选）
 
 server:
   port: 8080  # 服务监听端口
@@ -78,7 +78,7 @@ backup:
   compress: true         # 是否压缩备份文件（gzip）
 
 # Required. Set via SQLFLOW_ENCRYPTION_KEY env var
-# 必须为 16、24 或 32 字节（对应 AES-128/192/256）
+# 必须为 16、24 或 32 个单字节字符（对应 AES-128/192/256）
 # 生成方法: openssl rand -hex 16
 encryption_key: "2f89e3851766a2840c3348dc6df23ab4"  # INSECURE DEV-ONLY — override with env var in production
 

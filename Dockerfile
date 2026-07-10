@@ -97,7 +97,11 @@ EXPOSE 8080
 
 # Health check — container orchestrators (Docker Swarm, K8s, compose) use this
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8080/health || exit 1
+  CMD if [ "$SQLFLOW_TLS_ENABLE" = "true" ]; then \
+        curl -fk https://localhost:8080/health; \
+      else \
+        curl -f http://localhost:8080/health; \
+      fi || exit 1
 
 # Pass build args as environment for entrypoint
 ARG VERSION=dev

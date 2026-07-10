@@ -1,73 +1,45 @@
-# React + TypeScript + Vite
+# SQLFlow Web
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+SQLFlow 前端是 React + TypeScript + Vite 单页应用。生产构建由 Go 服务嵌入，开发时由 Vite 提供 HMR 并把 API 代理到本地后端。
 
-Currently, two official plugins are available:
+## 开发
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+需要 Node.js 22+ 和 npm：
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+默认访问 `http://localhost:5173`。后端应另行运行在 `http://localhost:8080`。
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 命令
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build          # TypeScript 检查 + 生产构建
+npm run lint           # ESLint
+npm run test           # Vitest 单次运行
+npm run test:watch     # Vitest watch
+npm run test:coverage  # 覆盖率报告
+npm run preview        # 本地预览生产构建
 ```
+
+## 目录边界
+
+```text
+src/api/          HTTP 客户端、接口模块和传输类型
+src/pages/        页面级编排和路由入口
+src/components/   可复用业务组件与 UI 基础组件
+src/hooks/        可复用副作用和交互状态
+src/store/        跨页面客户端状态
+src/lib/          通用前端工具
+src/test/         测试环境和共享测试设施
+```
+
+页面通过 `src/App.tsx` 中的 `lazyPage` 懒加载。新 API 调用进入 `src/api`，新页面必须处理加载、空数据、错误和 403；后端权限始终是最终安全边界。
+
+## 相关文档
+
+- [项目入口](../README.md)
+- [前端架构](../docs/ARCHITECTURE.md#9-前端架构)
+- [暗色主题 Token](docs/dark-mode-design-tokens.md)
