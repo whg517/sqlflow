@@ -9,7 +9,7 @@ import (
 	"github.com/whg517/sqlflow/internal/pkg/metrics"
 
 	echoSwagger "github.com/swaggo/echo-swagger"
-	_ "github.com/whg517/sqlflow/docs"
+	_ "github.com/whg517/sqlflow/internal/api/openapi"
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.

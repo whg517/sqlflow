@@ -76,8 +76,8 @@ fmt: ## Format all code (go fmt + goimports + prettier)
 	golangci-lint fmt ./...
 	cd web && npx prettier --write "src/**/*.{ts,tsx}"
 
-docs: ## Generate Swagger API documentation
-	$(shell go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs/
+docs: ## Generate OpenAPI package used by Swagger UI
+	$(shell go env GOPATH)/bin/swag init -g cmd/server/main.go -o internal/api/openapi --ot go
 
 verify: ## Full CI check (lint + build + test)
 verify: lint build test

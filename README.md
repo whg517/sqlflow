@@ -64,7 +64,6 @@ SQLFlow 是一个面向开发团队和 DBA 的 SQL 审批管理平台。它将�
 - 本地账号 + JWT（Access Token + Refresh Token）
 - **API Token**：用于 CI/CD 自动化场景，独立 scope 控制
 - **OIDC 单点登录**：支持多 IdP（任意 OIDC 兼容服务），按 provider 动态注册
-- **钉钉 OAuth2 登录**（可选）
 
 ### 其他能力
 - **SQL 模板**：参数化 SQL 复用，支持 `{{var}}` 渲染
@@ -88,7 +87,7 @@ SQLFlow 是一个面向开发团队和 DBA 的 SQL 审批管理平台。它将�
 | **目标数据库** | MySQL + PostgreSQL + MongoDB + Elasticsearch |
 | **SQL 解析** | pingcap/parser（MySQL）+ pg_query_go（PostgreSQL）|
 | **权限** | Casbin RBAC with domains |
-| **认证** | JWT（HS256）+ Refresh Token + API Token + OIDC + 钉钉 OAuth2 |
+| **认证** | JWT（HS256）+ Refresh Token + API Token + OIDC |
 | **AI 评审** | OpenAI / 智谱 GLM / Azure / 自定义（SSE 流式）|
 | **可观测性** | Prometheus metrics + Web Vitals + OpenTelemetry |
 | **部署** | Docker（单容器，前端 embed 进 Go 二进制）|
@@ -193,7 +192,7 @@ docker build -t sqlflow .
 ```bash
 make lint      # golangci-lint + ESLint
 make verify    # 完整 CI 检查（lint + build + test）
-make docs      # 生成 Swagger API 文档（docs/swagger.{json,yaml}）
+make docs      # 生成 internal/api/openapi OpenAPI 包（供 /swagger 使用）
 ```
 
 ---
@@ -271,6 +270,7 @@ sqlflow/
 │   ├── api/
 │   │   ├── handler/                # HTTP 请求处理器（按模块分文件）
 │   │   ├── middleware/             # 中间件（Auth/CORS/Logger/Recovery/Admin）
+│   │   ├── openapi/                # swaggo 生成包（make docs）
 │   │   └── router.go               # 路由注册（API 唯一事实源）
 │   ├── connpool/                   # ⚠️ 旧连接池（MySQL/PG/Mongo/ES），迁移到 driver 层中
 │   ├── driver/                     # ✅ 新数据源抽象层（Driver 接口 + 注册表 + PoolManager）
@@ -298,11 +298,10 @@ sqlflow/
 │   └── lib/                        # 工具函数
 ├── e2e/                            # Playwright E2E 测试（20+ spec）
 ├── docs/
-│   ├── spec/                       # PRD-v2 / ARCHITECTURE-v2 / UI-DESIGN-v2 / DESIGN-TOKENS
-│   ├── requirements/               # 需求规格文档（SF-FEAT*/SF-ENG*/SF-QA*）
-│   ├── retrospectives/             # 复盘记录
-│   ├── api.md                      # API 端点文档（详细版）
-│   └── swagger.{json,yaml}         # Swagger 自动生成（make docs）
+│   ├── README.md                   # 文档索引与治理规则
+│   ├── spec/                       # 当前有效的需求、架构、UI 设计文档
+│   ├── deployment.md               # 部署、备份、健康检查和故障排查
+│   └── user-journeys.md            # 用户旅程与场景矩阵
 ├── Dockerfile                      # 多阶段构建（前端构建 → Go 编译 → Alpine 运行）
 ├── docker-compose.yml              # 生产编排
 ├── docker-compose.{dev,test}.yml   # 开发/测试编排
@@ -313,7 +312,7 @@ sqlflow/
 
 ## 📡 API 端点概览
 
-> 完整端点（~140 条）见 [docs/api.md](docs/api.md)。以下按模块精简分组。所有 `/api/*` 端点（除标注「公开」外）需 Bearer JWT 或 API Token。
+> API 契约以 handler 注解生成的 OpenAPI 为准，运行时访问 `/swagger/index.html`。以下按模块精简分组。所有 `/api/*` 端点（除标注「公开」外）需 Bearer JWT 或 API Token。
 
 ### 认证与用户（Auth）
 | 方法 | 路径 | 说明 | 权限 |
@@ -399,7 +398,7 @@ sqlflow/
 | `GET` | `/metrics` | Prometheus 指标（需启用 `metrics.enabled`）|
 | `GET` | `/swagger/*` | Swagger UI |
 
-> 完整 API 文档见 [docs/api.md](docs/api.md)，Swagger UI 运行时访问 `/swagger`。
+> 完整 API 文档运行时访问 `/swagger/index.html`，生成包位于 `internal/api/openapi`。
 
 ---
 
