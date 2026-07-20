@@ -84,12 +84,12 @@ Swagger UI 在服务启动后通过 `/swagger/index.html` 访问。API 契约以
 
 ## 架构概览
 
-SQLFlow 采用单体仓库、模块化单体和单一部署单元：React SPA 构建后嵌入 Go 服务，Echo 将请求交给 Handler 和 Service，Service 再访问平台 SQLite、目标数据源 Driver 或外部集成。
+SQLFlow 采用单体仓库、模块化单体和单一部署单元：React SPA 构建后随镜像打包并由 Go 服务托管，Echo 将 API 请求交给 Handler 和 Service，Service 再访问平台 SQLite、目标数据源 Driver 或外部集成。
 
 ```mermaid
 flowchart LR
     Client["Browser / API Client"] --> Echo["Echo HTTP Server"]
-    Echo --> SPA["Embedded React SPA"]
+    Echo --> SPA["Packaged React SPA"]
     Echo --> Handler["Handlers"]
     Handler --> Service["Application Services"]
     Service --> SQLite["SQLite metadata"]
@@ -122,7 +122,7 @@ docs/                    需求、架构、ADR、设计和运维文档
 - [需求文档](docs/REQUIREMENTS.md)
 - [架构文档](docs/ARCHITECTURE.md)
 - [架构决策记录](docs/adr/README.md)
-- [变更记录](CHANGELOG.md)
+- [User Stories](docs/user-stories/README.md)
 
 ## License
 
