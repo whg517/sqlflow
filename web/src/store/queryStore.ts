@@ -14,6 +14,9 @@ export interface QueryTab {
   datasourceId: number | null;
   datasourceType: string;
   database: string;
+  queryParams: unknown[];
+  sourceTemplateId: number | null;
+  sourceTemplateName: string;
   result: QueryResult | null;
   executing: boolean;
   error: string | null;
@@ -60,6 +63,15 @@ interface QueryStore {
     sql: string,
     datasourceId: number,
     database: string,
+    params?: unknown[],
+    datasourceType?: string,
+  ) => void;
+  openTemplateAsTab: (
+    name: string,
+    sql: string,
+    datasourceType: string,
+    params: unknown[],
+    templateId: number,
   ) => void;
   // MongoDB actions
   updateMongoField: (
@@ -99,6 +111,9 @@ function createTab(): QueryTab {
     datasourceId: null,
     datasourceType: "",
     database: "",
+    queryParams: [],
+    sourceTemplateId: null,
+    sourceTemplateName: "",
     result: null,
     executing: false,
     error: null,
@@ -140,6 +155,9 @@ export const useQueryStore = create<QueryStore>((set) => ({
       datasourceId: null,
       datasourceType: "",
       database: "",
+      queryParams: [],
+      sourceTemplateId: null,
+      sourceTemplateName: "",
       result: null,
       executing: false,
       error: null,
@@ -190,6 +208,9 @@ export const useQueryStore = create<QueryStore>((set) => ({
           ? {
               ...t,
               sql,
+              queryParams: [],
+              sourceTemplateId: null,
+              sourceTemplateName: "",
               dirty: true,
               title: sql.trim()
                 ? sql.trim().substring(0, 20) +
@@ -230,11 +251,19 @@ export const useQueryStore = create<QueryStore>((set) => ({
       ),
     })),
 
-  restoreHistoryAsTab: (sql, datasourceId, database) => {
+  restoreHistoryAsTab: (
+    sql,
+    datasourceId,
+    database,
+    params = [],
+    datasourceType = "",
+  ) => {
     const tab = createTab();
     tab.sql = sql;
     tab.datasourceId = datasourceId;
     tab.database = database;
+    tab.datasourceType = datasourceType;
+    tab.queryParams = params;
     tab.title =
       sql.trim().substring(0, 20) + (sql.trim().length > 20 ? "..." : "");
     tab.dirty = false;
@@ -242,6 +271,21 @@ export const useQueryStore = create<QueryStore>((set) => ({
       tabs: [...state.tabs, tab],
       activeTabId: tab.id,
       historyOpen: false,
+    }));
+  },
+
+  openTemplateAsTab: (name, sql, datasourceType, params, templateId) => {
+    const tab = createTab();
+    tab.title = name;
+    tab.sql = sql;
+    tab.datasourceType = datasourceType;
+    tab.queryParams = params;
+    tab.sourceTemplateId = templateId;
+    tab.sourceTemplateName = name;
+    tab.dirty = false;
+    set((state) => ({
+      tabs: [...state.tabs, tab],
+      activeTabId: tab.id,
     }));
   },
 

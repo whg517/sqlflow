@@ -207,6 +207,13 @@ func TestExtractURLs(t *testing.T) {
 		want []string
 	}{
 		{
+			name: "from Extra urls as []string",
+			cfg: &driver.Config{Extra: map[string]interface{}{
+				"urls": []string{"http://es1:9200", "http://es2:9200"},
+			}},
+			want: []string{"http://es1:9200", "http://es2:9200"},
+		},
+		{
 			name: "from Extra urls as []interface{}",
 			cfg: &driver.Config{Extra: map[string]interface{}{
 				"urls": []interface{}{"http://es1:9200", "http://es2:9200"},

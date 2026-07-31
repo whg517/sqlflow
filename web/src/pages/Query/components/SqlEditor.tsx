@@ -30,6 +30,7 @@ import {
   getFrequentQueries,
   type FrequentQuery,
 } from "@/api/queryHistory";
+import { tabCompletionKeymap } from "./completionKeymap";
 
 interface SqlEditorProps {
   value: string;
@@ -924,6 +925,7 @@ export default function SqlEditor({
       ),
       completionTheme,
       keymap.of([
+        tabCompletionKeymap,
         ...defaultKeymap,
         ...historyKeymap,
         ...completionKeymap,

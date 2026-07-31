@@ -79,6 +79,11 @@ func SQLHash(v string) predicate.QueryHistory {
 	return predicate.QueryHistory(sql.FieldEQ(FieldSQLHash, v))
 }
 
+// ParamsJSON applies equality check predicate on the "params_json" field. It's identical to ParamsJSONEQ.
+func ParamsJSON(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldEQ(FieldParamsJSON, v))
+}
+
 // SQLSummary applies equality check predicate on the "sql_summary" field. It's identical to SQLSummaryEQ.
 func SQLSummary(v string) predicate.QueryHistory {
 	return predicate.QueryHistory(sql.FieldEQ(FieldSQLSummary, v))
@@ -382,6 +387,71 @@ func SQLHashEqualFold(v string) predicate.QueryHistory {
 // SQLHashContainsFold applies the ContainsFold predicate on the "sql_hash" field.
 func SQLHashContainsFold(v string) predicate.QueryHistory {
 	return predicate.QueryHistory(sql.FieldContainsFold(FieldSQLHash, v))
+}
+
+// ParamsJSONEQ applies the EQ predicate on the "params_json" field.
+func ParamsJSONEQ(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldEQ(FieldParamsJSON, v))
+}
+
+// ParamsJSONNEQ applies the NEQ predicate on the "params_json" field.
+func ParamsJSONNEQ(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldNEQ(FieldParamsJSON, v))
+}
+
+// ParamsJSONIn applies the In predicate on the "params_json" field.
+func ParamsJSONIn(vs ...string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldIn(FieldParamsJSON, vs...))
+}
+
+// ParamsJSONNotIn applies the NotIn predicate on the "params_json" field.
+func ParamsJSONNotIn(vs ...string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldNotIn(FieldParamsJSON, vs...))
+}
+
+// ParamsJSONGT applies the GT predicate on the "params_json" field.
+func ParamsJSONGT(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldGT(FieldParamsJSON, v))
+}
+
+// ParamsJSONGTE applies the GTE predicate on the "params_json" field.
+func ParamsJSONGTE(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldGTE(FieldParamsJSON, v))
+}
+
+// ParamsJSONLT applies the LT predicate on the "params_json" field.
+func ParamsJSONLT(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldLT(FieldParamsJSON, v))
+}
+
+// ParamsJSONLTE applies the LTE predicate on the "params_json" field.
+func ParamsJSONLTE(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldLTE(FieldParamsJSON, v))
+}
+
+// ParamsJSONContains applies the Contains predicate on the "params_json" field.
+func ParamsJSONContains(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldContains(FieldParamsJSON, v))
+}
+
+// ParamsJSONHasPrefix applies the HasPrefix predicate on the "params_json" field.
+func ParamsJSONHasPrefix(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldHasPrefix(FieldParamsJSON, v))
+}
+
+// ParamsJSONHasSuffix applies the HasSuffix predicate on the "params_json" field.
+func ParamsJSONHasSuffix(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldHasSuffix(FieldParamsJSON, v))
+}
+
+// ParamsJSONEqualFold applies the EqualFold predicate on the "params_json" field.
+func ParamsJSONEqualFold(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldEqualFold(FieldParamsJSON, v))
+}
+
+// ParamsJSONContainsFold applies the ContainsFold predicate on the "params_json" field.
+func ParamsJSONContainsFold(v string) predicate.QueryHistory {
+	return predicate.QueryHistory(sql.FieldContainsFold(FieldParamsJSON, v))
 }
 
 // SQLSummaryEQ applies the EQ predicate on the "sql_summary" field.

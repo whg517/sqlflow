@@ -29,6 +29,9 @@ func NewQueryHistoryService(database *db.DB) *QueryHistoryService {
 
 // CreateHistory inserts a new query history record and auto-cleans old records.
 func (s *QueryHistoryService) CreateHistory(ctx context.Context, h *model.QueryHistory) (int64, error) {
+	if h.ParamsJSON == "" {
+		h.ParamsJSON = "[]"
+	}
 	// Compute SQL hash for deduplication (normalized: trimmed + lowercase + collapsed whitespace)
 	normalized := strings.TrimSpace(strings.ToLower(h.SQLContent))
 	// Collapse multiple spaces into one for robust dedup
@@ -44,6 +47,7 @@ func (s *QueryHistoryService) CreateHistory(ctx context.Context, h *model.QueryH
 		SetDatabase(h.Database).
 		SetSQLContent(h.SQLContent).
 		SetSQLHash(sqlHash).
+		SetParamsJSON(h.ParamsJSON).
 		SetSQLSummary(h.SQLSummary).
 		SetDbType(h.DBType).
 		SetExecutionTime(h.ExecutionTime).
@@ -86,7 +90,7 @@ func (s *QueryHistoryService) ListHistory(ctx context.Context, userID int64, pag
 	}
 
 	querySQL := PaginatedQuerySQL(
-		"SELECT id, user_id, datasource_id, database, sql_content, sql_summary, db_type, execution_time, result_rows, affected_rows, created_at",
+		"SELECT id, user_id, datasource_id, database, sql_content, params_json, sql_summary, db_type, execution_time, result_rows, affected_rows, created_at",
 		"query_history", whereClause, "id DESC", p,
 	)
 	queryArgs := AppendLimitArgs(args, p)
@@ -101,7 +105,7 @@ func (s *QueryHistoryService) ListHistory(ctx context.Context, userID int64, pag
 		var h model.QueryHistory
 		var createdAt string
 		if err := rows.Scan(&h.ID, &h.UserID, &h.DatasourceID, &h.Database,
-			&h.SQLContent, &h.SQLSummary, &h.DBType, &h.ExecutionTime,
+			&h.SQLContent, &h.ParamsJSON, &h.SQLSummary, &h.DBType, &h.ExecutionTime,
 			&h.ResultRows, &h.AffectedRows, &createdAt); err != nil {
 			return nil, 0, fmt.Errorf("scan query history: %w", err)
 		}
@@ -147,7 +151,7 @@ type FrequentQuery struct {
 }
 
 const (
-	frequentQueryLimit = 20
+	frequentQueryLimit    = 20
 	frequentQueryCacheTTL = 5 * time.Minute
 )
 

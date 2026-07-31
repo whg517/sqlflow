@@ -72,6 +72,9 @@ func (h *TokenHandler) CreateToken(c echo.Context) error {
 		if errors.Is(err, service.ErrTokenInvalidScope) {
 			return resp.BadRequest(c, err.Error())
 		}
+		if errors.Is(err, service.ErrTokenScopeDenied) {
+			return resp.Forbidden(c, "当前用户不能创建管理员 Scope 的 Token")
+		}
 		log.Printf("CreateToken failed for user %d: %v", userID, err)
 		return resp.InternalError(c, "创建 Token 失败")
 	}

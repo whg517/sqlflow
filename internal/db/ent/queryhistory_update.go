@@ -112,6 +112,20 @@ func (_u *QueryHistoryUpdate) SetNillableSQLHash(v *string) *QueryHistoryUpdate 
 	return _u
 }
 
+// SetParamsJSON sets the "params_json" field.
+func (_u *QueryHistoryUpdate) SetParamsJSON(v string) *QueryHistoryUpdate {
+	_u.mutation.SetParamsJSON(v)
+	return _u
+}
+
+// SetNillableParamsJSON sets the "params_json" field if the given value is not nil.
+func (_u *QueryHistoryUpdate) SetNillableParamsJSON(v *string) *QueryHistoryUpdate {
+	if v != nil {
+		_u.SetParamsJSON(*v)
+	}
+	return _u
+}
+
 // SetSQLSummary sets the "sql_summary" field.
 func (_u *QueryHistoryUpdate) SetSQLSummary(v string) *QueryHistoryUpdate {
 	_u.mutation.SetSQLSummary(v)
@@ -292,6 +306,9 @@ func (_u *QueryHistoryUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.SQLHash(); ok {
 		_spec.SetField(queryhistory.FieldSQLHash, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.ParamsJSON(); ok {
+		_spec.SetField(queryhistory.FieldParamsJSON, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.SQLSummary(); ok {
 		_spec.SetField(queryhistory.FieldSQLSummary, field.TypeString, value)
 	}
@@ -419,6 +436,20 @@ func (_u *QueryHistoryUpdateOne) SetSQLHash(v string) *QueryHistoryUpdateOne {
 func (_u *QueryHistoryUpdateOne) SetNillableSQLHash(v *string) *QueryHistoryUpdateOne {
 	if v != nil {
 		_u.SetSQLHash(*v)
+	}
+	return _u
+}
+
+// SetParamsJSON sets the "params_json" field.
+func (_u *QueryHistoryUpdateOne) SetParamsJSON(v string) *QueryHistoryUpdateOne {
+	_u.mutation.SetParamsJSON(v)
+	return _u
+}
+
+// SetNillableParamsJSON sets the "params_json" field if the given value is not nil.
+func (_u *QueryHistoryUpdateOne) SetNillableParamsJSON(v *string) *QueryHistoryUpdateOne {
+	if v != nil {
+		_u.SetParamsJSON(*v)
 	}
 	return _u
 }
@@ -632,6 +663,9 @@ func (_u *QueryHistoryUpdateOne) sqlSave(ctx context.Context) (_node *QueryHisto
 	}
 	if value, ok := _u.mutation.SQLHash(); ok {
 		_spec.SetField(queryhistory.FieldSQLHash, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ParamsJSON(); ok {
+		_spec.SetField(queryhistory.FieldParamsJSON, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.SQLSummary(); ok {
 		_spec.SetField(queryhistory.FieldSQLSummary, field.TypeString, value)

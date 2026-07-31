@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { Clock, Link2 } from "lucide-react";
+import { Braces, Clock, Link2 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -15,9 +15,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { api } from "@/api/client";
 import {
   executeQuery,
+  fetchESIndices,
   streamAIReview,
   buildMongoSql,
   buildESQuerySql,
@@ -43,6 +45,7 @@ import TicketSubmitSheet from "./components/TicketSubmitSheet";
 import ExplainPanel from "./components/ExplainPanel";
 import ShareButton from "./components/ShareButton";
 import ShareListPanel from "./components/ShareListPanel";
+import TemplatePickerDialog from "./components/TemplatePickerDialog";
 
 
 // --- Types ---
@@ -81,13 +84,22 @@ export default function QueryPage() {
   const clearAIReview = useQueryStore((s) => s.clearAIReview);
 
   const [datasources, setDatasources] = useState<DataSourceOption[]>([]);
+  const [datasourceLoadError, setDatasourceLoadError] = useState("");
   const [ticketSheetOpen, setTicketSheetOpen] = useState(false);
-  const [schemaData, setSchemaData] = useState<SchemaData | null>(null);
+  const [schemaMetadata, setSchemaMetadata] = useState<{
+    datasourceId: number;
+    data: SchemaData | null;
+  } | null>(null);
+  const [esIndexMetadata, setESIndexMetadata] = useState<{
+    datasourceId: number;
+    patterns: string[];
+  } | null>(null);
   const [explainSheetOpen, setExplainSheetOpen] = useState(false);
   const [explainResult, setExplainResult] = useState<ExplainResult | null>(null);
   const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
   const [shareListOpen, setShareListOpen] = useState(false);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
 
   const { fetchTables, fetchColumns, clearDatasourceCache } =
     useSchemaCompletion();
@@ -102,23 +114,38 @@ export default function QueryPage() {
   // Load datasources
   useEffect(() => {
     api
-      .get<DataSourceListResponse>("/datasources")
+      .get<DataSourceListResponse>("/datasources/available")
       .then((res) => {
         const list = (res.data ?? []).filter((ds) => ds.status === "active");
         setDatasources(list);
-        // Auto-select first datasource if tab has none
-        if (list.length > 0) {
-          for (const tab of tabs) {
-            if (!tab.datasourceId) {
-              const ds = list[0];
-              updateTabDatasource(tab.id, ds.id, "", ds.type);
-            }
-          }
-        }
+        setDatasourceLoadError(list.length === 0 ? "当前没有可用数据源" : "");
       })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .catch((err) => {
+        setDatasourceLoadError(err instanceof Error ? err.message : "数据源加载失败");
+      });
   }, []);
+
+  // Select a compatible datasource for tabs created after the page has mounted,
+  // including tabs generated from the in-workbench template picker.
+  useEffect(() => {
+    if (datasources.length === 0) return;
+    const frame = requestAnimationFrame(() => {
+      for (const tab of tabs) {
+        if (tab.datasourceId) continue;
+        const datasource = tab.sourceTemplateId
+          ? datasources.find((item) => item.type === tab.datasourceType)
+          : datasources[0];
+        if (datasource) {
+          updateTabDatasource(tab.id, datasource.id, "", datasource.type);
+        } else if (tab.sourceTemplateId) {
+          setDatasourceLoadError(
+            `模板需要 ${tab.datasourceType} 数据源，但当前没有可用实例`,
+          );
+        }
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [datasources, tabs, updateTabDatasource]);
 
   // Cleanup review stream on unmount
   useEffect(() => {
@@ -127,18 +154,64 @@ export default function QueryPage() {
     };
   }, []);
 
-  // Fetch schema data when active datasource changes
+  // Load the metadata endpoint appropriate for the selected datasource type.
   useEffect(() => {
+    let cancelled = false;
+
     if (!activeTab?.datasourceId) {
       return;
     }
-    fetchTables(activeTab.datasourceId).then((data) => {
-      setSchemaData(data ?? null);
+    const datasourceId = activeTab.datasourceId;
+
+    if (activeTab.datasourceType === "elasticsearch") {
+      void fetchESIndices(datasourceId)
+        .then((indices) => {
+          if (!cancelled) {
+            setESIndexMetadata({
+              datasourceId,
+              patterns: indices.map((index) => index.name),
+            });
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setESIndexMetadata({
+              datasourceId,
+              patterns: [],
+            });
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void fetchTables(datasourceId).then((data) => {
+      if (!cancelled) {
+        setSchemaMetadata({
+          datasourceId,
+          data: data ?? null,
+        });
+      }
     });
-  }, [activeTab?.datasourceId, fetchTables]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeTab?.datasourceId,
+    activeTab?.datasourceType,
+    fetchTables,
+  ]);
 
   // Derive: when datasource is cleared, schema is implicitly null
-  const effectiveSchemaData = activeTab?.datasourceId ? schemaData : null;
+  const effectiveSchemaData =
+    activeTab?.datasourceId === schemaMetadata?.datasourceId
+      ? schemaMetadata.data
+      : null;
+  const esIndexPatterns =
+    activeTab?.datasourceId === esIndexMetadata?.datasourceId
+      ? esIndexMetadata.patterns
+      : [];
 
   const buildMongoQuerySql = useCallback((): string | null => {
     if (!activeTab) return null;
@@ -195,6 +268,7 @@ export default function QueryPage() {
           datasource_id: activeTab.datasourceId,
           database: activeTab.database,
           sql,
+          params: activeTab.queryParams,
         });
         setTabResult(activeTab.id, result);
         clearAIReview(activeTab.id);
@@ -304,6 +378,7 @@ export default function QueryPage() {
         activeTab.sql.trim(),
         activeTab.datasourceId,
         activeTab.database,
+        activeTab.queryParams,
       );
       setExplainResult(result);
     } catch (err) {
@@ -378,6 +453,13 @@ export default function QueryPage() {
           value={activeTab?.datasourceId ? String(activeTab.datasourceId) : ""}
           onValueChange={(v) => {
             const ds = datasources.find((d) => d.id === Number(v));
+            if (
+              activeTab.sourceTemplateId &&
+              ds?.type !== activeTab.datasourceType
+            ) {
+              toast.error(`该模板需要 ${activeTab.datasourceType} 数据源`);
+              return;
+            }
             updateTabDatasource(
               activeTab.id,
               Number(v),
@@ -391,7 +473,14 @@ export default function QueryPage() {
           </SelectTrigger>
           <SelectContent>
             {datasources.map((ds) => (
-              <SelectItem key={ds.id} value={String(ds.id)}>
+              <SelectItem
+                key={ds.id}
+                value={String(ds.id)}
+                disabled={
+                  !!activeTab.sourceTemplateId &&
+                  ds.type !== activeTab.datasourceType
+                }
+              >
                 <span className="flex items-center gap-2">
                   <span
                     className={`inline-block h-1.5 w-1.5 rounded-full ${ds.type === "mysql" ? "bg-blue-400" : ds.type === "elasticsearch" ? "bg-orange-400" : "bg-green-400"}`}
@@ -403,6 +492,9 @@ export default function QueryPage() {
             ))}
           </SelectContent>
         </Select>
+        {datasourceLoadError && (
+          <span className="text-xs text-amber-400">{datasourceLoadError}</span>
+        )}
 
         <input
           type="text"
@@ -433,6 +525,16 @@ export default function QueryPage() {
 
         <div className="flex-1" />
 
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1.5 px-2.5 text-sm text-[var(--text-secondary)]"
+          onClick={() => setTemplatePickerOpen(true)}
+        >
+          <Braces size={14} />
+          使用模板
+        </Button>
+
         {/* History toggle */}
         <div className="relative" data-history-panel>
           <Button
@@ -450,6 +552,27 @@ export default function QueryPage() {
 
       {/* Tabs */}
       <QueryTabs />
+
+      {activeTab?.sourceTemplateId && (
+        <div className="flex items-center gap-2 border-b border-[var(--border-default)] bg-[var(--accent-primary)]/5 px-3 py-1.5 text-xs text-[var(--text-secondary)]">
+          <Braces size={13} className="text-[var(--accent-primary)]" />
+          <span>
+            来源模板：
+            <strong className="font-medium text-[var(--text-primary)]">
+              {activeTab.sourceTemplateName}
+            </strong>
+          </span>
+          <Badge
+            variant="outline"
+            className="h-5 border-[var(--accent-primary)]/30 px-1.5 text-[10px] text-[var(--accent-primary)]"
+          >
+            {activeTab.queryParams.length} 个绑定参数
+          </Badge>
+          <span className="text-[var(--text-muted)]">
+            编辑 SQL 将自动解除参数绑定
+          </span>
+        </div>
+      )}
 
       {/* AI Review Card (between editor and result) */}
       <AIReviewCard
@@ -507,6 +630,7 @@ export default function QueryPage() {
                   updateESField(activeTab.id, { esQueryBody: v })
                 }
                 onExecute={handleExecute}
+                defaultIndexPatterns={esIndexPatterns}
               />
             ) : (
               <SqlEditor
@@ -556,6 +680,8 @@ export default function QueryPage() {
                 datasourceId={activeTab?.datasourceId ?? null}
                 database={activeTab?.database ?? ""}
                 sql={currentSql}
+                params={activeTab?.queryParams ?? []}
+                dbType={activeTab?.datasourceType ?? ""}
                 onExecute={handleExecute}
                 onExplain={handleExplain}
                 explaining={explaining}
@@ -577,6 +703,11 @@ export default function QueryPage() {
         dbType={activeTab?.datasourceType ?? ""}
         reviewResult={activeTab?.aiReviewResult ?? null}
         onSubmitSuccess={handleTicketSuccess}
+      />
+
+      <TemplatePickerDialog
+        open={templatePickerOpen}
+        onOpenChange={setTemplatePickerOpen}
       />
 
       {/* Explain panel sheet */}

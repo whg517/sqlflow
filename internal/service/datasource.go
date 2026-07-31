@@ -5,14 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/elastic/go-elasticsearch/v8/esapi"
 	es "github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v8/esapi"
 
+	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
@@ -27,10 +30,43 @@ var (
 	ErrDatasourceNotFound    = errors.New("数据源不存在")
 	ErrDatasourceNameExists  = errors.New("数据源名称已存在")
 	ErrDatasourceDisabled    = errors.New("数据源已禁用")
-	ErrInvalidDatasourceType = errors.New("数据源类型必须是 mysql、postgresql、mongodb 或 elasticsearch")
+	ErrInvalidDatasourceType = errors.New("数据源类型必须是 mysql、postgresql、sqlite、mongodb 或 elasticsearch")
+	ErrSystemDatasource      = errors.New("系统数据源受保护，不能执行此操作")
+	ErrDatasourceMustDisable = errors.New("请先禁用数据源，再执行删除")
 )
 
-var ValidDatasourceTypes = map[string]bool{"mysql": true, "postgresql": true, "mongodb": true, "elasticsearch": true}
+var ValidDatasourceTypes = map[string]bool{"mysql": true, "postgresql": true, "sqlite": true, "mongodb": true, "elasticsearch": true}
+
+const internalDatasourceExtraConfig = `{"system":true,"read_only":true}`
+
+type DatasourceDependency struct {
+	Label string `json:"label"`
+	Count int64  `json:"count"`
+}
+
+type DatasourceInUseError struct {
+	Dependencies []DatasourceDependency
+}
+
+func (e *DatasourceInUseError) Error() string {
+	parts := make([]string, 0, len(e.Dependencies))
+	for _, dependency := range e.Dependencies {
+		parts = append(parts, fmt.Sprintf("%s %d 条", dependency.Label, dependency.Count))
+	}
+	return "数据源仍被以下内容引用：" + strings.Join(parts, "、")
+}
+
+// IsInternalDataSource reports whether a datasource exposes SQLFlow's own
+// metadata database. These datasources are restricted to administrators.
+func IsInternalDataSource(ds *model.DataSource) bool {
+	if ds == nil || ds.Type != "sqlite" || ds.ExtraConfig == "" {
+		return false
+	}
+	var extra struct {
+		System bool `json:"system"`
+	}
+	return json.Unmarshal([]byte(ds.ExtraConfig), &extra) == nil && extra.System
+}
 
 // DatasourceService handles datasource management logic.
 type DatasourceService struct {
@@ -131,6 +167,56 @@ func (s *DatasourceService) CreateDataSource(ctx context.Context, ds *model.Data
 	return nil
 }
 
+// EnsureInternalDataSource registers SQLFlow's own SQLite database as a
+// read-only datasource. The operation is idempotent across restarts.
+func (s *DatasourceService) EnsureInternalDataSource(ctx context.Context, databasePath string) (*model.DataSource, error) {
+	const name = "SQLFlow 元数据库"
+	existing, err := s.client.DataSource.Query().
+		Where(datasource.NameEQ(name)).
+		Only(ctx)
+	if err == nil {
+		if existing.Type != "sqlite" || existing.ExtraConfig != internalDatasourceExtraConfig {
+			return nil, fmt.Errorf("datasource name %q is already used by a non-system datasource", name)
+		}
+		if existing.Database != databasePath || existing.Status != "active" {
+			existing, err = s.client.DataSource.UpdateOneID(existing.ID).
+				SetDatabase(databasePath).
+				SetHost("localhost").
+				SetPort(0).
+				SetStatus("active").
+				SetMaxOpen(1).
+				SetMaxIdle(1).
+				Save(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("update internal datasource: %w", err)
+			}
+			if s.poolMgr != nil {
+				s.poolMgr.Remove(int64(existing.ID))
+			}
+		}
+		result := entDatasourceToModel(existing)
+		return &result, nil
+	}
+	if !ent.IsNotFound(err) {
+		return nil, fmt.Errorf("query internal datasource: %w", err)
+	}
+
+	ds := &model.DataSource{
+		Name:        name,
+		Type:        "sqlite",
+		Host:        "localhost",
+		Database:    databasePath,
+		MaxOpen:     1,
+		MaxIdle:     1,
+		Status:      "active",
+		ExtraConfig: internalDatasourceExtraConfig,
+	}
+	if err := s.CreateDataSource(ctx, ds); err != nil {
+		return nil, err
+	}
+	return ds, nil
+}
+
 // ListDataSources returns all datasources without encrypted passwords.
 func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSource, error) {
 	results, err := s.client.DataSource.Query().
@@ -143,6 +229,39 @@ func (s *DatasourceService) ListDataSources(ctx context.Context) ([]model.DataSo
 	var list []model.DataSource
 	for _, d := range results {
 		list = append(list, entDatasourceToModel(d))
+	}
+	return list, nil
+}
+
+// ListAvailableDataSources returns the minimal discovery fields for active
+// datasources. It intentionally does not return connection details or imply
+// query authorization; downstream operations still enforce table/action
+// permissions.
+func (s *DatasourceService) ListAvailableDataSources(ctx context.Context) ([]model.DataSource, error) {
+	results, err := s.client.DataSource.Query().
+		Where(datasource.StatusEQ("active")).
+		Select(
+			datasource.FieldID,
+			datasource.FieldName,
+			datasource.FieldType,
+			datasource.FieldStatus,
+			datasource.FieldExtraConfig,
+		).
+		Order(datasource.ByID()).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("query available datasources: %w", err)
+	}
+
+	list := make([]model.DataSource, 0, len(results))
+	for _, d := range results {
+		list = append(list, model.DataSource{
+			ID:          int64(d.ID),
+			Name:        d.Name,
+			Type:        d.Type,
+			Status:      d.Status,
+			ExtraConfig: d.ExtraConfig,
+		})
 	}
 	return list, nil
 }
@@ -179,6 +298,9 @@ func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *
 	existing, err := s.GetDataSource(ctx, id)
 	if err != nil {
 		return err
+	}
+	if IsInternalDataSource(existing) {
+		return ErrSystemDatasource
 	}
 
 	// Build update query — if password is provided, re-encrypt; otherwise keep existing
@@ -264,10 +386,12 @@ func (s *DatasourceService) UpdateDataSource(ctx context.Context, id int64, ds *
 	return nil
 }
 func (s *DatasourceService) DisableDataSource(ctx context.Context, id int64) error {
-	// Get existing datasource for pool cleanup
 	existing, err := s.GetDataSource(ctx, id)
 	if err != nil {
 		return err
+	}
+	if IsInternalDataSource(existing) {
+		return ErrSystemDatasource
 	}
 
 	err = s.client.DataSource.UpdateOneID(int(id)).
@@ -280,12 +404,99 @@ func (s *DatasourceService) DisableDataSource(ctx context.Context, id int64) err
 		return fmt.Errorf("disable datasource: %w", err)
 	}
 
-	// Clean up cached connection pool.
-	// PoolManager.Remove 按 dsID 统一清理（替代旧 connMgr 按类型分支）。
+	s.removeDatasourcePool(id, existing)
+	return nil
+}
+
+func (s *DatasourceService) EnableDataSource(ctx context.Context, id int64) error {
+	existing, err := s.GetDataSource(ctx, id)
+	if err != nil {
+		return err
+	}
+	if IsInternalDataSource(existing) {
+		return ErrSystemDatasource
+	}
+	if existing.Status == "active" {
+		return nil
+	}
+	if err := s.client.DataSource.UpdateOneID(int(id)).
+		SetStatus("active").
+		Exec(ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrDatasourceNotFound
+		}
+		return fmt.Errorf("enable datasource: %w", err)
+	}
+	return nil
+}
+
+func (s *DatasourceService) DeleteDataSource(ctx context.Context, id int64) error {
+	existing, err := s.GetDataSource(ctx, id)
+	if err != nil {
+		return err
+	}
+	if IsInternalDataSource(existing) {
+		return ErrSystemDatasource
+	}
+	if existing.Status != "disabled" {
+		return ErrDatasourceMustDisable
+	}
+
+	dependencies, err := s.datasourceDependencies(ctx, id)
+	if err != nil {
+		return err
+	}
+	if len(dependencies) > 0 {
+		return &DatasourceInUseError{Dependencies: dependencies}
+	}
+
+	if err := s.client.DataSource.DeleteOneID(int(id)).Exec(ctx); err != nil {
+		if ent.IsNotFound(err) {
+			return ErrDatasourceNotFound
+		}
+		return fmt.Errorf("delete datasource: %w", err)
+	}
+	s.removeDatasourcePool(id, existing)
+	return nil
+}
+
+func (s *DatasourceService) datasourceDependencies(ctx context.Context, id int64) ([]DatasourceDependency, error) {
+	domain := authz.DatasourceDomain(id)
+	checks := []struct {
+		label string
+		query string
+		args  []interface{}
+	}{
+		{"工单", `SELECT COUNT(*) FROM tickets WHERE datasource_id = ?`, []interface{}{id}},
+		{"查询历史", `SELECT COUNT(*) FROM query_history WHERE datasource_id = ?`, []interface{}{id}},
+		{"审计日志", `SELECT COUNT(*) FROM audit_logs WHERE datasource_id = ?`, []interface{}{id}},
+		{"脱敏规则", `SELECT COUNT(*) FROM mask_rules WHERE datasource_id = ?`, []interface{}{id}},
+		{"敏感表", `SELECT COUNT(*) FROM sensitive_tables WHERE datasource_id = ?`, []interface{}{id}},
+		{"临时权限申请", `SELECT COUNT(*) FROM permission_requests WHERE datasource_id = ?`, []interface{}{id}},
+		{"权限策略", `SELECT COUNT(*) FROM casbin_rule WHERE v1 = ? OR v2 = ?`, []interface{}{domain, domain}},
+		{"临时授权", `SELECT COUNT(*) FROM temp_policies WHERE dom = ?`, []interface{}{domain}},
+	}
+
+	dependencies := make([]DatasourceDependency, 0)
+	for _, check := range checks {
+		var count int64
+		if err := s.database.DB.QueryRowContext(ctx, check.query, check.args...).Scan(&count); err != nil {
+			return nil, fmt.Errorf("check datasource dependency %s: %w", check.label, err)
+		}
+		if count > 0 {
+			dependencies = append(dependencies, DatasourceDependency{
+				Label: check.label,
+				Count: count,
+			})
+		}
+	}
+	return dependencies, nil
+}
+
+func (s *DatasourceService) removeDatasourcePool(id int64, existing *model.DataSource) {
 	if s.poolMgr != nil {
 		s.poolMgr.Remove(id)
 	} else {
-		// Legacy fallback (poolMgr 未注入时)
 		if existing.Type == "mysql" {
 			s.connMgr.Remove(id, existing.Host, existing.Port, existing.Database)
 		}
@@ -299,31 +510,49 @@ func (s *DatasourceService) DisableDataSource(ctx context.Context, id int64) err
 			s.connMgr.RemoveElasticsearch(id)
 		}
 	}
-
-	return nil
 }
 
 // TestConnection attempts to connect to the datasource using the Driver abstraction.
 func (s *DatasourceService) TestConnection(ctx context.Context, ds *model.DataSource) error {
 	password := ds.PasswordEncrypted
+	esAPIKey := ds.ESApiKey
 
-	// If the datasource has an ID, try to decrypt the stored password
+	if ds.Type == "sqlite" {
+		info, err := os.Stat(ds.Database)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("SQLite 文件不存在: %s", ds.Database)
+			}
+			return fmt.Errorf("无法访问 SQLite 文件: %w", err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("SQLite 地址必须指向数据库文件")
+		}
+	}
+
+	// Candidate configurations used while editing carry the existing datasource
+	// ID. Reuse stored secrets only when the user leaves those fields empty;
+	// all other connection fields must come from the candidate configuration.
 	if ds.ID > 0 {
 		stored, err := s.GetDataSource(ctx, ds.ID)
 		if err != nil {
 			return err
 		}
-		decrypted, err := crypto.Decrypt(stored.PasswordEncrypted, s.encryptionKey)
-		if err != nil {
-			return fmt.Errorf("decrypt password: %w", err)
+		if password == "" || password == stored.PasswordEncrypted {
+			decrypted, err := crypto.Decrypt(stored.PasswordEncrypted, s.encryptionKey)
+			if err != nil {
+				return fmt.Errorf("decrypt password: %w", err)
+			}
+			password = decrypted
 		}
-		password = decrypted
-		// Use stored values for ES fields that need decrypted API key
-		ds.ESUrls = stored.ESUrls
-		ds.ESAuthType = stored.ESAuthType
-		ds.ESApiKey = stored.ESApiKey
-		ds.ESIndexPattern = stored.ESIndexPattern
-		ds.ESVerifyCerts = stored.ESVerifyCerts
+		if ds.Type == "elasticsearch" && ds.ESAuthType == "api_key" &&
+			(esAPIKey == "" || esAPIKey == stored.ESApiKey) {
+			decrypted, err := crypto.Decrypt(stored.ESApiKey, s.encryptionKey)
+			if err != nil {
+				return fmt.Errorf("decrypt es_api_key: %w", err)
+			}
+			esAPIKey = decrypted
+		}
 	}
 
 	// If poolMgr is available, use Driver abstraction for all types.
@@ -331,7 +560,9 @@ func (s *DatasourceService) TestConnection(ctx context.Context, ds *model.DataSo
 	// When poolMgr is fully adopted and connpool is removed, this comment and the
 	// fallback block below should be deleted.
 	if s.poolMgr != nil {
-		adapter := newDataSourceAdapter(ds)
+		candidate := *ds
+		candidate.ESApiKey = esAPIKey
+		adapter := newDataSourceAdapter(&candidate)
 		cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
 		if err != nil {
 			return err
@@ -361,14 +592,6 @@ func (s *DatasourceService) TestConnection(ctx context.Context, ds *model.DataSo
 			return err
 		}
 		urls := parseESUrls(ds.ESUrls)
-		esAPIKey := ""
-		if ds.ESApiKey != "" {
-			dec, err := crypto.Decrypt(ds.ESApiKey, s.encryptionKey)
-			if err != nil {
-				return fmt.Errorf("decrypt es_api_key: %w", err)
-			}
-			esAPIKey = dec
-		}
 		return connpool.ElasticsearchPing(ctx, urls, ds.ESAuthType, ds.Username, password, esAPIKey, ds.ESVerifyCerts)
 	default:
 		return ErrInvalidDatasourceType
@@ -391,10 +614,10 @@ func (s *DatasourceService) GetTables(ctx context.Context, id int64) ([]string, 
 		return nil, fmt.Errorf("decrypt password: %w", err)
 	}
 
-	// Use Driver abstraction if available (MySQL, PG)
+	// Use Driver abstraction if available.
 	if s.poolMgr != nil {
 		switch ds.Type {
-		case "mysql", "postgresql":
+		case "mysql", "postgresql", "sqlite":
 			adapter := newDataSourceAdapter(ds)
 			cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
 			if err != nil {
@@ -488,10 +711,10 @@ func (s *DatasourceService) GetTableColumns(ctx context.Context, id int64, table
 		return nil, fmt.Errorf("decrypt password: %w", err)
 	}
 
-	// Use Driver abstraction if available (MySQL, PG)
+	// Use Driver abstraction if available.
 	if s.poolMgr != nil {
 		switch ds.Type {
-		case "mysql", "postgresql":
+		case "mysql", "postgresql", "sqlite":
 			adapter := newDataSourceAdapter(ds)
 			cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
 			if err != nil {
@@ -772,13 +995,27 @@ func buildMongoURI(host string, port int, user, password string) string {
 }
 
 // parseESUrls 将逗号分隔的 ES URL 字符串解析为 []string。
-// validateESURLs checks that all ES URLs use HTTPS.
-// Returns an error if any URL uses plain HTTP (security requirement).
+// validateESURLs requires HTTPS for public endpoints. Plain HTTP is allowed for
+// localhost and private IP ranges, which are common for internal ES clusters.
 func validateESURLs(raw string) error {
 	urls := parseESUrls(raw)
-	for _, u := range urls {
-		if strings.HasPrefix(u, "http://") {
-			return fmt.Errorf("Elasticsearch 连接地址必须使用 HTTPS，当前地址 %s 使用了 HTTP", u)
+	for _, rawURL := range urls {
+		parsed, err := url.Parse(rawURL)
+		if err != nil || parsed.Hostname() == "" {
+			return fmt.Errorf("Elasticsearch 连接地址无效: %s", rawURL)
+		}
+		switch strings.ToLower(parsed.Scheme) {
+		case "https":
+			continue
+		case "http":
+			host := strings.ToLower(parsed.Hostname())
+			ip := net.ParseIP(host)
+			if host == "localhost" || (ip != nil && (ip.IsPrivate() || ip.IsLoopback())) {
+				continue
+			}
+			return fmt.Errorf("公网 Elasticsearch 连接地址必须使用 HTTPS，当前地址 %s 使用了 HTTP", rawURL)
+		default:
+			return fmt.Errorf("Elasticsearch 连接地址必须使用 HTTP 或 HTTPS: %s", rawURL)
 		}
 	}
 	return nil
@@ -804,8 +1041,8 @@ func parseESUrls(raw string) []string {
 // ESIndexInfo represents metadata for a single Elasticsearch index.
 type ESIndexInfo struct {
 	Name        string `json:"name"`
-	Health      string `json:"health"`       // green, yellow, red
-	Status      string `json:"status"`       // open, closed
+	Health      string `json:"health"` // green, yellow, red
+	Status      string `json:"status"` // open, closed
 	DocCount    int64  `json:"doc_count"`
 	StoreSize   string `json:"store_size"`   // human-readable, e.g. "4.2mb"
 	StoreBytes  int64  `json:"store_bytes"`  // raw bytes
@@ -814,11 +1051,11 @@ type ESIndexInfo struct {
 
 // ESIndexField represents a field in an Elasticsearch index mapping.
 type ESIndexField struct {
-	Name        string         `json:"name"`
-	ESType      string         `json:"es_type"`       // text, keyword, date, long, boolean, nested, object, etc.
-	Searchable  bool           `json:"searchable"`
-	Aggregatable bool          `json:"aggregatable"`
-	SubFields   []ESIndexField `json:"sub_fields,omitempty"` // nested/object children
+	Name         string         `json:"name"`
+	ESType       string         `json:"es_type"` // text, keyword, date, long, boolean, nested, object, etc.
+	Searchable   bool           `json:"searchable"`
+	Aggregatable bool           `json:"aggregatable"`
+	SubFields    []ESIndexField `json:"sub_fields,omitempty"` // nested/object children
 }
 
 // getESClient is a helper that resolves and returns an ES client for a datasource.
@@ -1047,16 +1284,16 @@ func parseESProperties(props map[string]interface{}) []ESIndexField {
 				for subName, subData := range subMap {
 					if sm, ok := subData.(map[string]interface{}); ok {
 						field.SubFields = append(field.SubFields, ESIndexField{
-							Name:        name + "." + subName,
-							ESType:      getStrVal(sm, "type"),
-							Searchable:  true,
+							Name:         name + "." + subName,
+							ESType:       getStrVal(sm, "type"),
+							Searchable:   true,
 							Aggregatable: true, // multi-fields are typically keyword for agg
 						})
 					}
 				}
 				sort.Slice(field.SubFields, func(i, j int) bool {
-				return field.SubFields[i].Name < field.SubFields[j].Name
-			})
+					return field.SubFields[i].Name < field.SubFields[j].Name
+				})
 			}
 		}
 

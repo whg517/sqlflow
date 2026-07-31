@@ -21,6 +21,7 @@ func TestParseSQL_MySQL(t *testing.T) {
 		wantRisk    RiskLevel
 	}{
 		{"safe select", "SELECT * FROM users LIMIT 10", false, RiskLow},
+		{"parameterized select", "SELECT * FROM users WHERE id = ?", false, RiskLow},
 		{"drop database blocked", "DROP DATABASE production", true, RiskHigh},
 		{"drop table blocked", "DROP TABLE users", true, RiskHigh},
 		{"truncate blocked", "TRUNCATE TABLE users", true, RiskHigh},
@@ -49,6 +50,19 @@ func TestParseSQL_MySQL(t *testing.T) {
 				t.Errorf("RiskLevel = %q, want %q", result.RiskLevel, tt.wantRisk)
 			}
 		})
+	}
+}
+
+func TestParseSQL_PostgreSQLParameterizedSelect(t *testing.T) {
+	result, err := ParseSQL("SELECT * FROM users WHERE id = $1 AND status = $2", "postgresql")
+	if err != nil {
+		t.Fatalf("ParseSQL error: %v", err)
+	}
+	if result.Operation != OpSelect {
+		t.Fatalf("Operation = %q, want %q", result.Operation, OpSelect)
+	}
+	if len(result.Tables) != 1 || result.Tables[0] != "users" {
+		t.Fatalf("Tables = %#v, want users", result.Tables)
 	}
 }
 

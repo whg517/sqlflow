@@ -19,12 +19,7 @@ import {
 } from "@codemirror/language";
 import { linter } from "@codemirror/lint";
 import { Button } from "@/components/ui/button";
-import { FileText } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { ChevronDown, FileText } from "lucide-react";
 
 interface ElasticEditorProps {
   indexPattern: string;
@@ -296,6 +291,37 @@ export default function ElasticEditor({
   defaultIndexPatterns = [],
 }: ElasticEditorProps) {
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [indexListOpen, setIndexListOpen] = useState(false);
+  const indexPickerRef = useRef<HTMLDivElement>(null);
+
+  const filteredIndexPatterns = useMemo(() => {
+    const keyword = indexPattern.trim().toLowerCase();
+    if (!keyword) return defaultIndexPatterns;
+    return defaultIndexPatterns.filter((pattern) =>
+      pattern.toLowerCase().includes(keyword),
+    );
+  }, [defaultIndexPatterns, indexPattern]);
+
+  useEffect(() => {
+    if (!indexListOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (
+        event.target instanceof Node &&
+        !indexPickerRef.current?.contains(event.target)
+      ) {
+        setIndexListOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [indexListOpen]);
+
+  function selectIndexPattern(pattern: string) {
+    onIndexPatternChange(pattern);
+    setIndexListOpen(false);
+  }
 
   function applyTemplate(tpl: ESTemplate) {
     onQueryBodyChange(tpl.body);
@@ -320,27 +346,78 @@ export default function ElasticEditor({
       {/* Controls bar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-default)] px-3 py-2">
         {/* Index Pattern input */}
-        <div className="relative">
+        <div ref={indexPickerRef} className="relative">
           <input
             type="text"
             value={indexPattern}
-            onChange={(e) => onIndexPatternChange(e.target.value)}
+            role="combobox"
+            aria-label="Index Pattern"
+            aria-expanded={indexListOpen}
+            aria-controls="es-index-pattern-options"
+            aria-autocomplete="list"
+            onFocus={() =>
+              setIndexListOpen(defaultIndexPatterns.length > 0)
+            }
+            onChange={(e) => {
+              onIndexPatternChange(e.target.value);
+              setIndexListOpen(defaultIndexPatterns.length > 0);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setIndexListOpen(false);
+              } else if (
+                e.key === "ArrowDown" &&
+                filteredIndexPatterns.length > 0
+              ) {
+                e.preventDefault();
+                setIndexListOpen(true);
+              }
+            }}
             placeholder="Index Pattern (e.g. logs-*, my-index)"
-            className="h-8 w-64 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]"
+            className="h-8 w-72 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-3 pr-16 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]"
           />
           {defaultIndexPatterns.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-muted)]">
-                  {defaultIndexPatterns.length} presets
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                {defaultIndexPatterns.map((p) => (
-                  <div key={p}>{p}</div>
-                ))}
-              </TooltipContent>
-            </Tooltip>
+            <button
+              type="button"
+              aria-label="选择索引"
+              className="absolute right-1 top-1/2 flex h-6 -translate-y-1/2 items-center gap-1 rounded px-1.5 text-[10px] text-[var(--text-muted)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-secondary)]"
+              onClick={() => setIndexListOpen((open) => !open)}
+            >
+              {defaultIndexPatterns.length}
+              <ChevronDown
+                size={12}
+                className={`transition-transform ${indexListOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+          )}
+          {indexListOpen && (
+            <div
+              id="es-index-pattern-options"
+              role="listbox"
+              aria-label="Elasticsearch 索引"
+              className="absolute left-0 top-full z-50 mt-1 max-h-64 w-96 overflow-y-auto rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-1 shadow-xl"
+            >
+              {filteredIndexPatterns.length > 0 ? (
+                filteredIndexPatterns.map((pattern) => (
+                  <button
+                    key={pattern}
+                    type="button"
+                    role="option"
+                    aria-selected={pattern === indexPattern}
+                    className="block w-full truncate rounded-md px-3 py-2 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
+                    title={pattern}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => selectIndexPattern(pattern)}
+                  >
+                    {pattern}
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-3 text-sm text-[var(--text-muted)]">
+                  没有匹配的索引
+                </div>
+              )}
+            </div>
           )}
         </div>
 

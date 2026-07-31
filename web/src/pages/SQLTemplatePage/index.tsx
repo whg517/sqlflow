@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
-  Code2,
   Plus,
   Trash2,
   Pencil,
@@ -13,6 +14,8 @@ import {
   Lock,
   Copy,
   Check,
+  ArrowRight,
+  Layers3,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +53,8 @@ import {
   type CreateTemplateRequest,
   type RenderResult,
 } from "@/api/sql-template";
+import PageHeader from "@/components/PageHeader";
+import { useQueryStore } from "@/store/queryStore";
 
 // --- Template Form Dialog (Create/Edit) ---
 
@@ -227,28 +232,54 @@ function RenderDialog({
   template: SQLTemplate;
   onClose: () => void;
 }) {
+  const navigate = useNavigate();
+  const openTemplateAsTab = useQueryStore((state) => state.openTemplateAsTab);
   const params = parseParamsJSON(template.params_json);
   const [values, setValues] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {};
     for (const p of params) {
-      m[p.name] = p.default;
+      if (p.default !== "") {
+        m[p.name] = p.default;
+      }
     }
     return m;
   });
   const [result, setResult] = useState<RenderResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [copiedSQL, setCopiedSQL] = useState(false);
+  const [renderError, setRenderError] = useState("");
+  const canUseInQuery =
+    (template.db_type === "mysql" || template.db_type === "postgresql") &&
+    /^(select|with)\b/i.test(template.sql_content.trim());
 
   const handleRender = async () => {
     setLoading(true);
+    setRenderError("");
     try {
       const res = await renderTemplate(template.id, values);
       setResult(res);
-    } catch {
-      // error handled by api client
+    } catch (error) {
+      setResult(null);
+      setRenderError(
+        error instanceof Error ? error.message : "模板渲染失败，请检查参数",
+      );
     } finally {
       setLoading(false);
     }
+  };
+
+  const useInQuery = () => {
+    if (!result || !canUseInQuery) return;
+    openTemplateAsTab(
+      template.name,
+      result.rendered_sql,
+      template.db_type,
+      result.param_values,
+      template.id,
+    );
+    onClose();
+    navigate("/query");
+    toast.success("模板已带入查询工作台");
   };
 
   const copySQL = async () => {
@@ -280,6 +311,12 @@ function RenderDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-2">
+          {renderError && (
+            <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">
+              {renderError}
+            </div>
+          )}
+
           {params.length === 0 ? (
             <div className="rounded-lg bg-[var(--bg-base)] p-4 text-center text-sm text-[var(--text-muted)]">
               该模板没有占位符，无需填写参数
@@ -327,6 +364,13 @@ function RenderDialog({
               )}
               渲染
             </Button>
+            {!canUseInQuery && (
+              <span className="text-xs text-[var(--text-muted)]">
+                {template.db_type === "mongodb"
+                  ? "MongoDB 模板当前支持渲染预览和复制"
+                  : "变更类模板请复制 SQL 后通过工单提交"}
+              </span>
+            )}
           </div>
 
           {result && (
@@ -336,14 +380,22 @@ function RenderDialog({
                   <h4 className="text-sm font-medium text-[var(--text-primary)]">
                     渲染结果
                   </h4>
-                  <Button size="sm" variant="ghost" onClick={copySQL}>
-                    {copiedSQL ? (
-                      <Check size={12} className="mr-1" />
-                    ) : (
-                      <Copy size={12} className="mr-1" />
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="ghost" onClick={copySQL}>
+                      {copiedSQL ? (
+                        <Check size={12} className="mr-1" />
+                      ) : (
+                        <Copy size={12} className="mr-1" />
+                      )}
+                      {copiedSQL ? "已复制" : "复制"}
+                    </Button>
+                    {canUseInQuery && (
+                      <Button size="sm" onClick={useInQuery}>
+                        在查询中使用
+                        <ArrowRight size={12} className="ml-1" />
+                      </Button>
                     )}
-                    {copiedSQL ? "已复制" : "复制"}
-                  </Button>
+                  </div>
                 </div>
                 <pre className="max-h-[200px] overflow-auto rounded-lg bg-[var(--bg-base)] p-3 text-sm font-mono text-[var(--text-primary)]">
                   {result.rendered_sql}
@@ -398,6 +450,7 @@ export default function SQLTemplatePage() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [category, setCategory] = useState("");
+  const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(true);
   const [editTemplate, setEditTemplate] = useState<SQLTemplate | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -421,6 +474,15 @@ export default function SQLTemplatePage() {
   }, [fetchTemplates]);
 
   const totalPages = Math.ceil(total / pageSize);
+  const visibleTemplates = useMemo(() => {
+    const query = keyword.trim().toLowerCase();
+    if (!query) return templates;
+    return templates.filter((template) =>
+      [template.name, template.description, template.category, template.db_type]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(query)),
+    );
+  }, [keyword, templates]);
 
   const handleDelete = async (id: number) => {
     if (!confirm("确定要删除此模板吗？")) return;
@@ -455,174 +517,281 @@ export default function SQLTemplatePage() {
   };
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-6 page-transition">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">
-          SQL 模板库
-        </h1>
-        <Button onClick={() => setShowCreate(true)}>
-          <Plus size={14} className="mr-1.5" />
-          新建模板
-        </Button>
-      </div>
+    <div className="mx-auto max-w-[1360px] space-y-6 page-transition">
+      <PageHeader
+        eyebrow="Knowledge assets"
+        title="SQL 模板"
+        description="沉淀团队常用查询与变更语句，通过参数化模板减少重复编写，并让高频操作保持一致。"
+        meta={
+          <span className="rounded-full border border-[var(--border-default)] bg-[var(--bg-surface)] px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] shadow-[var(--shadow-xs)]">
+            {total} 个模板
+          </span>
+        }
+        actions={
+          <Button
+            size="default"
+            onClick={() => setShowCreate(true)}
+            className="shadow-[0_8px_20px_var(--accent-shadow)]"
+          >
+            <Plus size={15} />
+            新建模板
+          </Button>
+        }
+      />
 
-      {/* Filters */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
-          />
-          <Select value={category} onValueChange={(v) => { setCategory(v === "__all__" ? "" : v); setPage(1); }}>
-            <SelectTrigger className="pl-8">
-              <SelectValue placeholder="全部分类" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">全部分类</SelectItem>
-              <SelectItem value="general">通用</SelectItem>
-              <SelectItem value="query">查询</SelectItem>
-              <SelectItem value="dml">DML</SelectItem>
-              <SelectItem value="ddl">DDL</SelectItem>
-            </SelectContent>
-          </Select>
+      <Card className="gap-0 overflow-hidden rounded-xl border-[var(--border-subtle)] bg-[var(--bg-surface)] py-0 shadow-[var(--shadow-sm)]">
+        <div className="flex flex-col gap-3 border-b border-[var(--border-subtle)] px-5 py-4 xl:flex-row xl:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <Input
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              placeholder="搜索模板名称、说明或分类"
+              startIcon={<Search />}
+              className="max-w-[360px] bg-[var(--bg-elevated)]"
+            />
+            <Select
+              value={category}
+              onValueChange={(value) => {
+                setCategory(value === "__all__" ? "" : value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-9 min-w-[132px] bg-[var(--bg-elevated)]">
+                <SelectValue placeholder="全部分类" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">全部分类</SelectItem>
+                <SelectItem value="general">通用</SelectItem>
+                <SelectItem value="query">查询</SelectItem>
+                <SelectItem value="dml">DML</SelectItem>
+                <SelectItem value="ddl">DDL</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 xl:justify-end">
+            <span className="text-xs text-[var(--text-muted)]">
+              {loading ? "正在同步模板…" : `当前显示 ${visibleTemplates.length} 条`}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={fetchTemplates}
+              aria-label="刷新模板"
+              className="h-8"
+            >
+              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+              刷新
+            </Button>
+          </div>
         </div>
-        <Button size="sm" variant="outline" onClick={fetchTemplates}>
-          <RefreshCw size={14} className="mr-1.5" />
-          刷新
-        </Button>
-      </div>
 
-      {/* Template List */}
-      <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex h-40 items-center justify-center">
-              <Loader2 size={20} className="animate-spin text-[var(--text-muted)]" />
+            <div className="space-y-3 p-6">
+              {[0, 1, 2, 3].map((item) => (
+                <div
+                  key={item}
+                  className="grid h-14 animate-pulse grid-cols-[2fr_1fr_1fr] items-center gap-5 rounded-lg border border-[var(--border-subtle)] px-4"
+                >
+                  <div className="h-3 w-2/3 rounded-full bg-[var(--bg-elevated)]" />
+                  <div className="h-3 w-1/2 rounded-full bg-[var(--bg-elevated)]" />
+                  <div className="h-3 w-1/3 rounded-full bg-[var(--bg-elevated)]" />
+                </div>
+              ))}
             </div>
           ) : templates.length === 0 ? (
-            <div className="flex h-40 flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
-              <Code2 size={32} strokeWidth={1} />
-              <span className="text-sm">暂无 SQL 模板</span>
-              <span className="text-xs">创建一个模板来复用常用 SQL 片段</span>
+            <div className="relative overflow-hidden px-6 py-10">
+              <div className="pointer-events-none absolute left-1/2 top-0 size-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--accent-muted)] blur-3xl" />
+              <div className="relative mx-auto max-w-3xl text-center">
+                <div className="mx-auto flex size-16 items-center justify-center rounded-2xl border border-[var(--border-default)] bg-gradient-to-br from-[var(--accent-muted)] to-transparent text-[var(--accent-primary)] shadow-[var(--shadow-md)]">
+                  <Layers3 size={28} strokeWidth={1.7} />
+                </div>
+                <h2 className="mt-5 text-lg font-semibold tracking-tight text-[var(--text-primary)]">
+                  建立团队的第一个 SQL 模板
+                </h2>
+                <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[var(--text-secondary)]">
+                  把常用 SQL 变成可复用、可参数化的团队资产。模板不会直接执行，
+                  你可以先渲染预览，再带入 SQL 工作台。
+                </p>
+                <Button
+                  className="mt-5 shadow-[0_8px_20px_var(--accent-shadow)]"
+                  onClick={() => setShowCreate(true)}
+                >
+                  <Plus size={15} />
+                  创建第一个模板
+                  <ArrowRight size={14} />
+                </Button>
+
+                <div className="mt-9 grid gap-3 text-left md:grid-cols-3">
+                  {[
+                    ["01", "编写 SQL", "使用占位符定义可复用参数"],
+                    ["02", "渲染检查", "填入参数并预览最终语句"],
+                    ["03", "团队复用", "公开模板供其他成员使用"],
+                  ].map(([step, title, detail]) => (
+                    <div
+                      key={step}
+                      className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/70 p-4"
+                    >
+                      <div className="text-[10px] font-semibold tracking-[0.18em] text-[var(--accent-primary)]">
+                        STEP {step}
+                      </div>
+                      <div className="mt-2 text-sm font-medium text-[var(--text-primary)]">
+                        {title}
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-[var(--text-tertiary)]">
+                        {detail}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : visibleTemplates.length === 0 ? (
+            <div className="flex min-h-[320px] flex-col items-center justify-center px-6 text-center">
+              <div className="flex size-12 items-center justify-center rounded-xl bg-[var(--bg-elevated)] text-[var(--text-muted)]">
+                <Search size={20} />
+              </div>
+              <h2 className="mt-4 text-sm font-semibold text-[var(--text-primary)]">
+                没有找到匹配的模板
+              </h2>
+              <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                尝试修改关键词或切换模板分类。
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-4"
+                onClick={() => setKeyword("")}
+              >
+                清除搜索
+              </Button>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="border-b border-[var(--border-default)]">
-                  <TableHead className="text-[var(--text-secondary)]">名称</TableHead>
-                  <TableHead className="text-[var(--text-secondary)]">数据库</TableHead>
-                  <TableHead className="text-[var(--text-secondary)]">分类</TableHead>
-                  <TableHead className="text-[var(--text-secondary)]">参数</TableHead>
-                  <TableHead className="text-[var(--text-secondary)]">可见性</TableHead>
-                  <TableHead className="text-[var(--text-secondary)]">更新时间</TableHead>
-                  <TableHead className="text-right text-[var(--text-secondary)]">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {templates.map((tpl) => {
-                  const params = parseParamsJSON(tpl.params_json);
-                  return (
-                    <TableRow key={tpl.id}>
-                      <TableCell>
-                        <div className="font-medium text-[var(--text-primary)]">
-                          {tpl.name}
-                        </div>
-                        {tpl.description && (
-                          <div className="mt-0.5 text-xs text-[var(--text-muted)]">
-                            {tpl.description}
+            <div className="table-responsive">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]/55 hover:bg-[var(--bg-elevated)]/55">
+                    <TableHead className="pl-5 text-[var(--text-secondary)]">名称</TableHead>
+                    <TableHead className="text-[var(--text-secondary)]">数据库</TableHead>
+                    <TableHead className="text-[var(--text-secondary)]">分类</TableHead>
+                    <TableHead className="text-[var(--text-secondary)]">参数</TableHead>
+                    <TableHead className="text-[var(--text-secondary)]">可见性</TableHead>
+                    <TableHead className="text-[var(--text-secondary)]">更新时间</TableHead>
+                    <TableHead className="pr-5 text-right text-[var(--text-secondary)]">操作</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleTemplates.map((tpl) => {
+                    const params = parseParamsJSON(tpl.params_json);
+                    return (
+                      <TableRow
+                        key={tpl.id}
+                        className="border-[var(--border-subtle)] hover:bg-[var(--bg-elevated)]/55"
+                      >
+                        <TableCell className="pl-5">
+                          <div className="font-medium text-[var(--text-primary)]">
+                            {tpl.name}
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={dbTypeColor(tpl.db_type)}>
-                          {dbTypeLabel(tpl.db_type)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="border-[var(--border-default)]">
-                          {tpl.category}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {params.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {params.map((p) => (
-                              <code
-                                key={p.name}
-                                className="rounded bg-[var(--bg-base)] px-1.5 py-0.5 text-xs font-mono text-[var(--text-muted)]"
-                              >
-                                {p.name}
-                              </code>
-                            ))}
+                          {tpl.description && (
+                            <div className="mt-1 max-w-sm truncate text-xs text-[var(--text-tertiary)]">
+                              {tpl.description}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={dbTypeColor(tpl.db_type)}>
+                            {dbTypeLabel(tpl.db_type)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="border-[var(--border-default)]">
+                            {tpl.category}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {params.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {params.map((param) => (
+                                <code
+                                  key={param.name}
+                                  className="rounded-md bg-[var(--bg-elevated)] px-1.5 py-0.5 font-mono text-xs text-[var(--text-tertiary)]"
+                                >
+                                  {param.name}
+                                </code>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-[var(--text-muted)]">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {tpl.is_public ? (
+                            <span className="flex items-center gap-1.5 text-xs text-[var(--accent-primary)]">
+                              <Globe size={12} /> 公开
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
+                              <Lock size={12} /> 私有
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-[var(--text-secondary)]">
+                          {new Date(tpl.updated_at).toLocaleString("zh-CN")}
+                        </TableCell>
+                        <TableCell className="pr-5 text-right">
+                          <div className="flex items-center justify-end gap-0.5">
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              title="预览 SQL"
+                              onClick={() => setRenderTemplateState(tpl)}
+                            >
+                              <Eye size={14} />
+                            </Button>
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              title="渲染模板"
+                              onClick={() => setRenderTemplateState(tpl)}
+                            >
+                              <Play size={14} />
+                            </Button>
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              title="编辑"
+                              onClick={() => setEditTemplate(tpl)}
+                            >
+                              <Pencil size={14} />
+                            </Button>
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                              title="删除"
+                              onClick={() => handleDelete(tpl.id)}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
                           </div>
-                        ) : (
-                          <span className="text-xs text-[var(--text-muted)]">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {tpl.is_public ? (
-                          <span className="flex items-center gap-1 text-xs text-blue-400">
-                            <Globe size={12} /> 公开
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
-                            <Lock size={12} /> 私有
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs text-[var(--text-secondary)]">
-                        {new Date(tpl.updated_at).toLocaleString("zh-CN")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            title="预览 SQL"
-                            onClick={() => setRenderTemplateState(tpl)}
-                          >
-                            <Eye size={14} />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            title="渲染模板"
-                            onClick={() => setRenderTemplateState(tpl)}
-                          >
-                            <Play size={14} />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            title="编辑"
-                            onClick={() => setEditTemplate(tpl)}
-                          >
-                            <Pencil size={14} />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                            title="删除"
-                            onClick={() => handleDelete(tpl.id)}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-between rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3 shadow-[var(--shadow-xs)]">
+          <span className="text-xs text-[var(--text-muted)]">
+            共 {total} 条记录
+          </span>
+          <div className="flex items-center gap-2">
           <Button
             size="sm"
             variant="outline"
@@ -632,7 +801,7 @@ export default function SQLTemplatePage() {
             上一页
           </Button>
           <span className="text-xs text-[var(--text-muted)]">
-            {page} / {totalPages}（共 {total} 条）
+            {page} / {totalPages}
           </span>
           <Button
             size="sm"
@@ -642,6 +811,7 @@ export default function SQLTemplatePage() {
           >
             下一页
           </Button>
+          </div>
         </div>
       )}
 

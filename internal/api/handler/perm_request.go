@@ -186,6 +186,10 @@ func (h *PermReqHandler) GetRequest(c echo.Context) error {
 		}
 		return resp.InternalError(c, "查询失败")
 	}
+	role := getContextRole(c)
+	if pr.ApplicantID != getContextUserID(c) && role != "admin" && role != "dba" {
+		return resp.Forbidden(c, "无权查看该权限申请")
+	}
 
 	return resp.OK(c, pr)
 }

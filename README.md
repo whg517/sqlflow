@@ -2,7 +2,7 @@
 
 SQLFlow 是面向开发团队和 DBA 的数据访问治理平台。它把低风险查询交给开发者自助完成，把高风险变更纳入评审、审批、执行和审计闭环。
 
-> 当前稳定版本：`v1.0.0`。主分支持 MySQL、PostgreSQL、MongoDB 和 Elasticsearch，平台元数据默认存储在 SQLite。
+> 当前发布标签：`v1.0.0`。主分包含 MySQL、PostgreSQL、MongoDB 和 Elasticsearch 适配，平台元数据默认存储在 SQLite。2026-07-26 跨角色评审发现发布阻断问题，当前仅建议用于隔离开发验证；生产采用前请完成[阶段 0 整改](docs/ROADMAP.md#阶段-0安全止血与主流程恢复p0)。
 
 ## 为什么需要 SQLFlow
 
@@ -123,6 +123,8 @@ docs/                    需求、架构、ADR、设计和运维文档
 - [架构文档](docs/ARCHITECTURE.md)
 - [架构决策记录](docs/adr/README.md)
 - [User Stories](docs/user-stories/README.md)
+- [跨角色评审记录](docs/reviews/2026-07-26-cross-functional-review.md)
+- [整改与交付路线图](docs/ROADMAP.md)
 
 ## License
 

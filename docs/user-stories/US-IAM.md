@@ -42,6 +42,22 @@
 
 **代表性验证**：`internal/service/auth_test.go`、`e2e/tests/admin-user-crud.spec.ts`、`e2e/tests/user-management*.spec.ts`。
 
+## US-IAM-003A：管理动态角色
+
+**故事**：作为具有 RBAC 管理权限的平台管理员，我希望创建职责明确的自定义角色并管理其生命周期，以便落实最小权限和职责分离。
+
+**关联需求**：FR-IAM-006、FR-SEC-001、FR-SEC-005
+
+**验收标准**：
+
+- Given 角色标识合法且唯一，When 创建角色并选择平台权限，Then 角色可用于用户分配和数据权限策略。
+- Given 角色仍有成员，When 尝试停用或删除，Then 操作被拒绝并提示先迁移成员。
+- Given 目标为内置角色，When 尝试停用或删除，Then 操作被拒绝。
+- Given 用户角色被调整或角色被停用，When 使用既有 JWT 或 API Token 再次请求，Then 服务端使用当前有效角色裁决而非令牌中的旧角色。
+- Given 自定义审批角色不存在或已停用，When 保存审批链，Then 配置被拒绝。
+
+**代表性验证**：`internal/service/role_test.go`、`internal/api/handler/permission_test.go`、角色管理页面测试。
+
 ## US-IAM-004：管理个人 API Token
 
 **故事**：作为需要自动化访问的用户，我希望创建带 Scope 和有效期的 API Token，以便在不共享登录密码的情况下调用 SQLFlow。
@@ -70,4 +86,3 @@
 - Given 首次登录用户未配置特权映射，Then 默认角色为 Developer。
 
 **代表性验证**：`internal/service/oidc_test.go`、`internal/api/handler/oidc_test.go`。
-

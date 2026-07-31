@@ -100,6 +100,15 @@ export default function HistoryPanel() {
     }
   }
 
+  function parseHistoryParams(paramsJSON: string): unknown[] {
+    try {
+      const parsed: unknown = JSON.parse(paramsJSON || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
   if (!open) return null;
 
   return (
@@ -151,6 +160,8 @@ export default function HistoryPanel() {
                       item.sql_content,
                       item.datasource_id,
                       item.database,
+                      parseHistoryParams(item.params_json),
+                      item.db_type,
                     )
                   }
                 >
@@ -165,6 +176,11 @@ export default function HistoryPanel() {
                     <div className="mt-0.5 flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
                       <span>{item.execution_time}ms</span>
                       <span>{item.result_rows} 行</span>
+                      {parseHistoryParams(item.params_json).length > 0 && (
+                        <span className="text-[var(--accent-primary)]">
+                          参数化
+                        </span>
+                      )}
                       <span>
                         {new Date(item.created_at).toLocaleString("zh-CN")}
                       </span>

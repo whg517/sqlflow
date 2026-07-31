@@ -4,7 +4,8 @@ import (
 	"testing"
 )
 
-// TestValidateESURLs_HTTPSEnforcement verifies HTTPS-only enforcement for ES URLs.
+// TestValidateESURLs_HTTPSEnforcement verifies HTTPS enforcement for public
+// endpoints while allowing HTTP on private development networks.
 func TestValidateESURLs_HTTPSEnforcement(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -14,9 +15,13 @@ func TestValidateESURLs_HTTPSEnforcement(t *testing.T) {
 		{name: "https allowed", urls: "https://es.example.com:9200", wantErr: false},
 		{name: "multiple https", urls: "https://es1:9200,https://es2:9200", wantErr: false},
 		{name: "https with path", urls: "https://es.example.com:9200/elastic", wantErr: false},
-		{name: "http blocked", urls: "http://es.example.com:9200", wantErr: true},
-		{name: "multiple http", urls: "http://es1:9200,http://es2:9200", wantErr: true},
-		{name: "mixed blocked", urls: "https://es1:9200,http://es2:9200", wantErr: true},
+		{name: "public http blocked", urls: "http://es.example.com:9200", wantErr: true},
+		{name: "private ipv4 http allowed", urls: "http://10.168.106.114:9200", wantErr: false},
+		{name: "loopback http allowed", urls: "http://127.0.0.1:9200", wantErr: false},
+		{name: "localhost http allowed", urls: "http://localhost:9200", wantErr: false},
+		{name: "mixed public http blocked", urls: "https://es1:9200,http://es.example.com:9200", wantErr: true},
+		{name: "unsupported scheme", urls: "ftp://10.0.0.1:9200", wantErr: true},
+		{name: "missing hostname", urls: "http://", wantErr: true},
 		{name: "empty ok", urls: "", wantErr: false},
 		{name: "whitespace only", urls: "  ", wantErr: false},
 	}
@@ -34,9 +39,9 @@ func TestValidateESURLs_HTTPSEnforcement(t *testing.T) {
 // TestParseESUrls verifies URL parsing.
 func TestParseESUrls(t *testing.T) {
 	tests := []struct {
-		name  string
-		raw   string
-		want  int
+		name string
+		raw  string
+		want int
 	}{
 		{"single url", "https://es:9200", 1},
 		{"two urls", "https://es1:9200,https://es2:9200", 2},

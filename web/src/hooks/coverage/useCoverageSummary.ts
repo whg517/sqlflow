@@ -16,6 +16,7 @@ interface UseCoverageSummaryResult {
 export function useCoverageSummary(
   project: string,
   testType?: string,
+  enabled = true,
 ): UseCoverageSummaryResult {
   const [summary, setSummary] = useState<CoverageSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,6 +25,11 @@ export function useCoverageSummary(
   const fetchIdRef = useRef(0);
 
   useEffect(() => {
+    if (!enabled) {
+      fetchIdRef.current += 1;
+      return;
+    }
+
     const fetchId = ++fetchIdRef.current;
 
     getCoverageSummary(project, testType)
@@ -44,7 +50,7 @@ export function useCoverageSummary(
         if (fetchId !== fetchIdRef.current) return;
         setLoading(false);
       });
-  }, [project, testType, tick]);
+  }, [enabled, project, testType, tick]);
 
   const refresh = useCallback(() => {
     setLoading(true);

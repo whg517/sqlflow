@@ -157,5 +157,33 @@ describe("Dashboard API Functions", () => {
       expect(res.data.ticket_distribution).toHaveLength(0);
       expect(res.data.recent_activity).toHaveLength(0);
     });
+
+    it("normalizes nullable collection fields from an empty backend", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 0,
+          data: {
+            ...mockBackendResponse,
+            pending_ticket_sparkline: null,
+            query_sparkline: null,
+            datasource_sparkline: null,
+            ticket_status_distribution: null,
+            query_trend: null,
+            recent_activity: null,
+          },
+        }),
+      });
+
+      const res = await getDashboardOverview(getTimeRanges()[1]);
+
+      expect(res.data.pending_tickets.sparkline).toEqual([]);
+      expect(res.data.query_count.sparkline).toEqual([]);
+      expect(res.data.active_datasources.sparkline).toEqual([]);
+      expect(res.data.ticket_distribution).toEqual([]);
+      expect(res.data.query_trend).toEqual([]);
+      expect(res.data.recent_activity).toEqual([]);
+    });
   });
 });

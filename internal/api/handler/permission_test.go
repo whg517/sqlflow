@@ -202,7 +202,7 @@ func TestPermissionHandler_GetRole(t *testing.T) {
 		}
 	})
 
-	t.Run("role_with_no_policies", func(t *testing.T) {
+	t.Run("nonexistent_role", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/roles/:role", nil)
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
@@ -213,27 +213,8 @@ func TestPermissionHandler_GetRole(t *testing.T) {
 			t.Fatalf("handler error: %v", err)
 		}
 
-		if rec.Code != http.StatusOK {
-			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
-		}
-
-		data := extractPermData(t, rec)
-		if data["name"] != "nonexistent_role" {
-			t.Errorf("name = %v, want nonexistent_role", data["name"])
-		}
-
-		// policies may be nil (serialized as null) for a role with no policies
-		policiesRaw := data["policies"]
-		if policiesRaw == nil {
-			// null is acceptable for no policies
-		} else {
-			policies, ok := policiesRaw.([]interface{})
-			if !ok {
-				t.Fatalf("policies is not an array; body=%s", rec.Body.String())
-			}
-			if len(policies) != 0 {
-				t.Errorf("expected empty policies for nonexistent role, got %d", len(policies))
-			}
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusNotFound, rec.Body.String())
 		}
 	})
 }
@@ -251,7 +232,7 @@ func TestPermissionHandler_AddPolicy(t *testing.T) {
 	}{
 		{
 			"success",
-			`{"sub":"developer","dom":"domain1","obj":"table1","act":"select"}`,
+			`{"sub":"developer","dom":"ds_1","obj":"table1","act":"select"}`,
 			http.StatusCreated,
 			"created",
 		},
@@ -292,6 +273,18 @@ func TestPermissionHandler_AddPolicy(t *testing.T) {
 			"请求格式错误",
 		},
 		{
+			"invalid_domain_format",
+			`{"sub":"developer","dom":"production","obj":"table1","act":"select"}`,
+			http.StatusBadRequest,
+			`invalid authorization tuple: invalid datasource domain "production"`,
+		},
+		{
+			"unsupported_action",
+			`{"sub":"developer","dom":"ds_1","obj":"table1","act":"execute"}`,
+			http.StatusBadRequest,
+			`invalid authorization tuple: unsupported action "execute"`,
+		},
+		{
 			"empty_body",
 			``,
 			http.StatusBadRequest,
@@ -326,7 +319,7 @@ func TestPermissionHandler_AddPolicy(t *testing.T) {
 	// Verify success response shape
 	t.Run("success_response_shape", func(t *testing.T) {
 		e := echo.New()
-		body := `{"sub":"test_sub","dom":"test_dom","obj":"test_obj","act":"test_act"}`
+		body := `{"sub":"test_sub","dom":"ds_2","obj":"test_obj","act":"select"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/policies", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -350,7 +343,7 @@ func TestPermissionHandler_AddPolicy(t *testing.T) {
 	// Duplicate policy should fail
 	t.Run("duplicate_policy", func(t *testing.T) {
 		e := echo.New()
-		body := `{"sub":"developer","dom":"domain1","obj":"table1","act":"select"}`
+		body := `{"sub":"developer","dom":"ds_1","obj":"table1","act":"select"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/policies", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -378,9 +371,9 @@ func TestPermissionHandler_ListPolicies(t *testing.T) {
 	e, permSvc, h := setupPermissionTest(t)
 
 	// Add a few policies for listing
-	addTestPolicy(t, permSvc, "list_sub_1", "list_dom_1", "list_obj_1", "select")
-	addTestPolicy(t, permSvc, "list_sub_2", "list_dom_2", "list_obj_2", "insert")
-	addTestPolicy(t, permSvc, "list_sub_3", "list_dom_3", "list_obj_3", "update")
+	addTestPolicy(t, permSvc, "list_sub_1", "ds_11", "list_obj_1", "select")
+	addTestPolicy(t, permSvc, "list_sub_2", "ds_12", "list_obj_2", "insert")
+	addTestPolicy(t, permSvc, "list_sub_3", "ds_13", "list_obj_3", "update")
 
 	t.Run("success_default_pagination", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/policies", nil)
@@ -563,7 +556,7 @@ func TestPermissionHandler_DeletePolicy(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		// Add a policy and get its ID via ListPolicies
-		addTestPolicy(t, permSvc, "del_sub", "del_dom", "del_obj", "delete")
+		addTestPolicy(t, permSvc, "del_sub", "ds_21", "del_obj", "delete")
 
 		ctx := contextWithTimeout(t)
 		policies, _, err := permSvc.GetPolicies(ctx, 1, 100, "", "del_sub")
@@ -767,9 +760,13 @@ func TestPermissionHandler_CRUDLifecycle(t *testing.T) {
 		}
 	})
 
+	if _, err := permSvc.CreateRole(t.Context(), "lifecycle_sub", "Lifecycle", "test role"); err != nil {
+		t.Fatalf("create lifecycle role: %v", err)
+	}
+
 	// Step 3: AddPolicy
 	t.Run("add_policy", func(t *testing.T) {
-		body := `{"sub":"lifecycle_sub","dom":"lifecycle_dom","obj":"lifecycle_obj","act":"select"}`
+		body := `{"sub":"lifecycle_sub","dom":"ds_31","obj":"lifecycle_obj","act":"select"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/policies", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()

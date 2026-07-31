@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	casbinModel "github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
 
+	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
 	entTemp "github.com/whg517/sqlflow/internal/db/ent/temppolicy"
@@ -49,11 +52,65 @@ type Policy struct {
 
 // RoleInfo represents a role with its associated policies.
 type RoleInfo struct {
-	Name     string   `json:"name"`
-	Policies []Policy `json:"policies"`
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	DisplayName string    `json:"display_name"`
+	Description string    `json:"description"`
+	IsBuiltin   bool      `json:"is_builtin"`
+	Status      string    `json:"status"`
+	UserCount   int64     `json:"user_count"`
+	PolicyCount int64     `json:"policy_count"`
+	Permissions []string  `json:"permissions"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Policies    []Policy  `json:"policies"`
 }
 
 var builtInRoles = []string{"admin", "dba", "developer"}
+
+var roleNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{1,31}$`)
+
+var (
+	ErrRoleNotFound    = errors.New("角色不存在")
+	ErrRoleExists      = errors.New("角色名称已存在")
+	ErrRoleInUse       = errors.New("角色仍有用户使用")
+	ErrBuiltinRole     = errors.New("内置角色不能删除或禁用")
+	ErrInvalidRoleName = errors.New("角色名称必须以小写字母开头，且只能包含小写字母、数字和下划线")
+)
+
+// Role is a persisted RBAC role definition.
+type Role struct {
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	DisplayName string    `json:"display_name"`
+	Description string    `json:"description"`
+	IsBuiltin   bool      `json:"is_builtin"`
+	Status      string    `json:"status"`
+	UserCount   int64     `json:"user_count"`
+	PolicyCount int64     `json:"policy_count"`
+	Permissions []string  `json:"permissions"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+var platformPermissions = map[string][2]string{
+	"users:manage":       {"users", "manage"},
+	"rbac:manage":        {"rbac", "manage"},
+	"datasources:manage": {"datasources", "manage"},
+	"security:manage":    {"security", "manage"},
+	"audit:view":         {"audit", "view"},
+	"settings:manage":    {"settings", "manage"},
+}
+
+// PlatformPermissionKeys returns the stable set of delegable platform permissions.
+func PlatformPermissionKeys() []string {
+	keys := make([]string, 0, len(platformPermissions))
+	for key := range platformPermissions {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
 
 // sqliteAdapter implements persist.Adapter using database/sql for SQLite.
 // RAW_SQL: casbin_rule has no ent schema — the Casbin adapter contract requires
@@ -213,8 +270,16 @@ func NewPermissionService(database *db.DB) (*PermissionService, error) {
 	if err := svc.seedIfEmpty(context.Background()); err != nil {
 		return nil, fmt.Errorf("seed policies: %w", err)
 	}
+	if err := svc.ensureBuiltinPlatformPolicies(); err != nil {
+		return nil, fmt.Errorf("seed platform policies: %w", err)
+	}
 
 	return svc, nil
+}
+
+func (s *PermissionService) ensureBuiltinPlatformPolicies() error {
+	_, err := s.enforcer.AddPolicy("dba", "system", "audit", "view")
+	return err
 }
 
 // seedIfEmpty loads initial policies from policy.csv if casbin_rule table is empty.
@@ -250,23 +315,89 @@ func (s *PermissionService) seedIfEmpty(ctx context.Context) error {
 		for i := range parts {
 			parts[i] = strings.TrimSpace(parts[i])
 		}
-		// e.g. "p, admin, *, *, *"
-		if len(parts) < 2 {
+		if len(parts) < 5 {
 			continue
 		}
 		ptype := parts[0]
 		rule := parts[1:]
-		if _, err := s.enforcer.AddPolicy(toInterfaceSlice(rule)...); err != nil {
-			return fmt.Errorf("add seed policy %v: %w", rule, err)
+		switch {
+		case strings.HasPrefix(ptype, "p"):
+			sub, dom, obj, act, err := authz.NormalizeTuple(rule[0], rule[1], rule[2], rule[3])
+			if err != nil {
+				return fmt.Errorf("normalize seed policy %v: %w", rule, err)
+			}
+			if _, err := s.enforcer.AddNamedPolicy(ptype, sub, dom, obj, act); err != nil {
+				return fmt.Errorf("add seed policy %v: %w", rule, err)
+			}
+		case strings.HasPrefix(ptype, "g"):
+			if _, err := s.enforcer.AddNamedGroupingPolicy(ptype, toInterfaceSlice(rule)...); err != nil {
+				return fmt.Errorf("add seed grouping policy %v: %w", rule, err)
+			}
+		default:
+			return fmt.Errorf("unsupported seed policy type %q", ptype)
 		}
-		_ = ptype // p is the default
 	}
 	return nil
 }
 
 // Enforce checks if a subject has permission to perform an action.
 func (s *PermissionService) Enforce(sub, dom, obj, act string) (bool, error) {
+	sub, dom, obj, act, err := authz.NormalizeTuple(sub, dom, obj, act)
+	if err != nil {
+		return false, err
+	}
 	return s.enforcer.Enforce(sub, dom, obj, act)
+}
+
+// EnforceActor evaluates both the actor's role policy and individual user
+// policy. Temporary user policies are checked against their expiry at decision
+// time, so an unavailable cleanup job can never extend a grant.
+func (s *PermissionService) EnforceActor(ctx context.Context, userID int64, role, dom, obj, act string) (bool, error) {
+	allowed, err := s.Enforce(role, dom, obj, act)
+	if err != nil || allowed || userID <= 0 {
+		return allowed, err
+	}
+
+	userSub := authz.UserSubject(userID)
+	allowed, err = s.Enforce(userSub, dom, obj, act)
+	if err != nil || !allowed {
+		return allowed, err
+	}
+
+	userSub, dom, obj, act, err = authz.NormalizeTuple(userSub, dom, obj, act)
+	if err != nil {
+		return false, err
+	}
+
+	var expiresAt time.Time
+	err = s.database.DB.QueryRowContext(ctx,
+		`SELECT expires_at FROM temp_policies
+		 WHERE sub = ? AND dom = ? AND obj = ? AND act = ?`,
+		userSub, dom, obj, act,
+	).Scan(&expiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		// A non-temporary individual policy is a permanent explicit grant.
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("check temporary policy expiry: %w", err)
+	}
+	if !expiresAt.After(time.Now().UTC()) {
+		_, _ = s.enforcer.RemovePolicy(userSub, dom, obj, act)
+		return false, nil
+	}
+	return true, nil
+}
+
+// CanViewObject controls metadata visibility. A dedicated metadata:view grant
+// can expose schema metadata without data access; select also implies that the
+// object must be discoverable to query tooling.
+func (s *PermissionService) CanViewObject(ctx context.Context, userID int64, role, dom, obj string) (bool, error) {
+	allowed, err := s.EnforceActor(ctx, userID, role, dom, obj, "metadata:view")
+	if err != nil || allowed {
+		return allowed, err
+	}
+	return s.EnforceActor(ctx, userID, role, dom, obj, "select")
 }
 
 // LoadPolicy reloads policies from the database into memory.
@@ -281,6 +412,10 @@ func (s *PermissionService) SavePolicy() error {
 
 // AddPolicy adds a new policy rule.
 func (s *PermissionService) AddPolicy(sub, dom, obj, act string) error {
+	sub, dom, obj, act, err := authz.NormalizeTuple(sub, dom, obj, act)
+	if err != nil {
+		return err
+	}
 	added, err := s.enforcer.AddPolicy(sub, dom, obj, act)
 	if err != nil {
 		return err
@@ -380,6 +515,231 @@ func (s *PermissionService) GetRoles() []string {
 	return builtInRoles
 }
 
+// ListRoles returns persisted roles with membership and policy counts.
+func (s *PermissionService) ListRoles(ctx context.Context) ([]Role, error) {
+	rows, err := s.database.DB.QueryContext(ctx, `
+		SELECT r.id, r.name, r.display_name, r.description, r.is_builtin, r.status,
+		       r.created_at, r.updated_at,
+		       (SELECT COUNT(*) FROM users u WHERE u.role = r.name) AS user_count,
+		       (SELECT COUNT(*) FROM casbin_rule c WHERE c.ptype = 'p' AND c.v0 = r.name) AS policy_count
+		FROM roles r
+		ORDER BY r.is_builtin DESC, r.id`)
+	if err != nil {
+		return nil, fmt.Errorf("list roles: %w", err)
+	}
+	defer rows.Close()
+
+	roles := make([]Role, 0)
+	for rows.Next() {
+		var role Role
+		if err := rows.Scan(
+			&role.ID, &role.Name, &role.DisplayName, &role.Description,
+			&role.IsBuiltin, &role.Status, &role.CreatedAt, &role.UpdatedAt,
+			&role.UserCount, &role.PolicyCount,
+		); err != nil {
+			return nil, fmt.Errorf("scan role: %w", err)
+		}
+		roles = append(roles, role)
+	}
+	for i := range roles {
+		roles[i].Permissions, err = s.GetPlatformPermissions(roles[i].Name)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return roles, rows.Err()
+}
+
+// GetRole returns a persisted role with counts.
+func (s *PermissionService) GetRole(ctx context.Context, name string) (*Role, error) {
+	var role Role
+	err := s.database.DB.QueryRowContext(ctx, `
+		SELECT r.id, r.name, r.display_name, r.description, r.is_builtin, r.status,
+		       r.created_at, r.updated_at,
+		       (SELECT COUNT(*) FROM users u WHERE u.role = r.name),
+		       (SELECT COUNT(*) FROM casbin_rule c WHERE c.ptype = 'p' AND c.v0 = r.name)
+		FROM roles r WHERE r.name = ?`, name).
+		Scan(
+			&role.ID, &role.Name, &role.DisplayName, &role.Description,
+			&role.IsBuiltin, &role.Status, &role.CreatedAt, &role.UpdatedAt,
+			&role.UserCount, &role.PolicyCount,
+		)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrRoleNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get role: %w", err)
+	}
+	role.Permissions, err = s.GetPlatformPermissions(role.Name)
+	if err != nil {
+		return nil, err
+	}
+	return &role, nil
+}
+
+// GetPlatformPermissions resolves effective platform permissions for a role.
+func (s *PermissionService) GetPlatformPermissions(role string) ([]string, error) {
+	result := make([]string, 0)
+	for _, key := range PlatformPermissionKeys() {
+		definition := platformPermissions[key]
+		allowed, err := s.Enforce(role, "system", definition[0], definition[1])
+		if err != nil {
+			return nil, err
+		}
+		if allowed {
+			result = append(result, key)
+		}
+	}
+	return result, nil
+}
+
+// SetPlatformPermissions replaces a custom role's explicit system policies.
+func (s *PermissionService) SetPlatformPermissions(ctx context.Context, roleName string, permissions []string) error {
+	role, err := s.GetRole(ctx, roleName)
+	if err != nil {
+		return err
+	}
+	if role.IsBuiltin {
+		return ErrBuiltinRole
+	}
+	seen := make(map[string]struct{}, len(permissions))
+	for _, key := range permissions {
+		if _, ok := platformPermissions[key]; !ok {
+			return fmt.Errorf("未知平台权限: %s", key)
+		}
+		seen[key] = struct{}{}
+	}
+
+	tx, err := s.database.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM casbin_rule WHERE ptype = 'p' AND v0 = ? AND v1 = 'system'`,
+		roleName,
+	); err != nil {
+		return err
+	}
+	for _, key := range PlatformPermissionKeys() {
+		if _, ok := seen[key]; !ok {
+			continue
+		}
+		definition := platformPermissions[key]
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES ('p', ?, 'system', ?, ?)`,
+			roleName, definition[0], definition[1],
+		); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return s.enforcer.LoadPolicy()
+}
+
+// IsRoleActive checks whether a role exists and can be assigned or authenticated.
+func (s *PermissionService) IsRoleActive(ctx context.Context, name string) (bool, error) {
+	var status string
+	err := s.database.DB.QueryRowContext(ctx, `SELECT status FROM roles WHERE name = ?`, name).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return status == "active", nil
+}
+
+// CreateRole creates a custom role. Role names are immutable identifiers.
+func (s *PermissionService) CreateRole(ctx context.Context, name, displayName, description string) (*Role, error) {
+	name = strings.TrimSpace(name)
+	displayName = strings.TrimSpace(displayName)
+	if !roleNamePattern.MatchString(name) {
+		return nil, ErrInvalidRoleName
+	}
+	if displayName == "" {
+		return nil, errors.New("角色显示名称不能为空")
+	}
+	_, err := s.database.DB.ExecContext(ctx, `
+		INSERT INTO roles (name, display_name, description, is_builtin, status)
+		VALUES (?, ?, ?, 0, 'active')`, name, displayName, strings.TrimSpace(description))
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "unique") {
+			return nil, ErrRoleExists
+		}
+		return nil, fmt.Errorf("create role: %w", err)
+	}
+	return s.GetRole(ctx, name)
+}
+
+// UpdateRole changes mutable role metadata and status.
+func (s *PermissionService) UpdateRole(ctx context.Context, name, displayName, description, status string) (*Role, error) {
+	role, err := s.GetRole(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	displayName = strings.TrimSpace(displayName)
+	if displayName == "" {
+		return nil, errors.New("角色显示名称不能为空")
+	}
+	if status != "active" && status != "disabled" {
+		return nil, errors.New("角色状态必须是 active 或 disabled")
+	}
+	if role.IsBuiltin && status == "disabled" {
+		return nil, ErrBuiltinRole
+	}
+	if status == "disabled" && role.UserCount > 0 {
+		return nil, ErrRoleInUse
+	}
+	result, err := s.database.DB.ExecContext(ctx, `
+		UPDATE roles
+		SET display_name = ?, description = ?, status = ?, updated_at = datetime('now')
+		WHERE name = ?`, displayName, strings.TrimSpace(description), status, name)
+	if err != nil {
+		return nil, fmt.Errorf("update role: %w", err)
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return nil, ErrRoleNotFound
+	}
+	return s.GetRole(ctx, name)
+}
+
+// DeleteRole removes an unused custom role and all of its policies atomically.
+func (s *PermissionService) DeleteRole(ctx context.Context, name string) error {
+	role, err := s.GetRole(ctx, name)
+	if err != nil {
+		return err
+	}
+	if role.IsBuiltin {
+		return ErrBuiltinRole
+	}
+	if role.UserCount > 0 {
+		return ErrRoleInUse
+	}
+
+	tx, err := s.database.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM casbin_rule WHERE v0 = ? AND ptype IN ('p', 'g')`, name); err != nil {
+		return fmt.Errorf("delete role policies: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM roles WHERE name = ?`, name); err != nil {
+		return fmt.Errorf("delete role: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if err := s.enforcer.LoadPolicy(); err != nil {
+		return fmt.Errorf("reload policies: %w", err)
+	}
+	return nil
+}
+
 // Enforcer returns the underlying Casbin enforcer (for middleware use).
 func (s *PermissionService) Enforcer() *casbin.Enforcer {
 	return s.enforcer
@@ -387,6 +747,10 @@ func (s *PermissionService) Enforcer() *casbin.Enforcer {
 
 // AddTemporaryPolicy adds a policy and tracks it with an expiry time for auto-cleanup.
 func (s *PermissionService) AddTemporaryPolicy(ctx context.Context, sub, dom, obj, act string, expiresAt time.Time) error {
+	sub, dom, obj, act, err := authz.NormalizeTuple(sub, dom, obj, act)
+	if err != nil {
+		return err
+	}
 	added, err := s.enforcer.AddPolicy(sub, dom, obj, act)
 	if err != nil {
 		return err
@@ -407,7 +771,11 @@ func (s *PermissionService) AddTemporaryPolicy(ctx context.Context, sub, dom, ob
 
 // RemoveTemporaryPolicy removes a policy and its tracking record.
 func (s *PermissionService) RemoveTemporaryPolicy(ctx context.Context, sub, dom, obj, act string) error {
-	_, err := s.enforcer.RemovePolicy(sub, dom, obj, act)
+	sub, dom, obj, act, err := authz.NormalizeTuple(sub, dom, obj, act)
+	if err != nil {
+		return err
+	}
+	_, err = s.enforcer.RemovePolicy(sub, dom, obj, act)
 	if err != nil {
 		return err
 	}

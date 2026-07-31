@@ -7,6 +7,13 @@
 
 export type CoverageStatus = "pass" | "warning" | "critical";
 
+// --- Feature availability ---
+
+export interface CoverageAvailability {
+  enabled: boolean;
+  reason?: string;
+}
+
 // --- Project summary ---
 
 export interface TestTypeSummary {
@@ -71,7 +78,8 @@ export interface FileListResponse {
 
 export interface ModuleListParams {
   test_type?: string;
-  sort?: "line_rate:asc" | "line_rate:desc" | "branch_rate:asc" | "branch_rate:desc";
+  sort?:
+    "line_rate:asc" | "line_rate:desc" | "branch_rate:asc" | "branch_rate:desc";
   status?: CoverageStatus;
   page?: number;
   page_size?: number;

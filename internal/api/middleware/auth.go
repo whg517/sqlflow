@@ -9,6 +9,7 @@ import (
 
 	"github.com/casbin/casbin/v2"
 	"github.com/labstack/echo/v4"
+	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/service"
 )
 
@@ -49,7 +50,7 @@ func Auth(authSvc *service.AuthService, tokenSvc *service.TokenService) echo.Mid
 
 			// API Token path: handle tokens prefixed with "sqlflow_"
 			if strings.HasPrefix(token, "sqlflow_") {
-				userID, username, scopes, err := tokenSvc.ValidateToken(c.Request().Context(), token)
+				userID, username, role, scopes, err := tokenSvc.ValidateTokenWithRole(c.Request().Context(), token)
 				if err != nil {
 					return c.JSON(http.StatusUnauthorized, map[string]string{
 						"error": "API Token 无效或已过期",
@@ -57,7 +58,7 @@ func Auth(authSvc *service.AuthService, tokenSvc *service.TokenService) echo.Mid
 				}
 				c.Set(ContextKeyUserID, userID)
 				c.Set(ContextKeyUsername, username)
-				c.Set(ContextKeyRole, "api_token")
+				c.Set(ContextKeyRole, role)
 				c.Set(ContextKeyTokenID, true)
 				c.Set(ContextKeyTokenScopes, scopes)
 				return next(c)
@@ -70,10 +71,15 @@ func Auth(authSvc *service.AuthService, tokenSvc *service.TokenService) echo.Mid
 					"error": "登录已过期，请重新登录",
 				})
 			}
-
-			c.Set(ContextKeyUserID, claims.UserID)
-			c.Set(ContextKeyUsername, claims.Username)
-			c.Set(ContextKeyRole, claims.Role)
+			user, err := authSvc.GetUserByID(c.Request().Context(), claims.UserID)
+			if err != nil || authSvc.ValidateRole(c.Request().Context(), user.Role) != nil {
+				return c.JSON(http.StatusUnauthorized, map[string]string{
+					"error": "用户角色已变更或停用，请重新登录",
+				})
+			}
+			c.Set(ContextKeyUserID, user.ID)
+			c.Set(ContextKeyUsername, user.Username)
+			c.Set(ContextKeyRole, user.Role)
 
 			return next(c)
 		}
@@ -111,7 +117,6 @@ func JWT(authSvc *service.AuthService) echo.MiddlewareFunc {
 					"error": "登录已过期，请重新登录",
 				})
 			}
-
 			c.Set(ContextKeyUserID, claims.UserID)
 			c.Set(ContextKeyUsername, claims.Username)
 			c.Set(ContextKeyRole, claims.Role)
@@ -147,7 +152,7 @@ func APITokenAuth(tokenSvc *service.TokenService) echo.MiddlewareFunc {
 				return next(c) // let JWT middleware handle it
 			}
 
-			userID, username, scopes, err := tokenSvc.ValidateToken(c.Request().Context(), token)
+			userID, username, role, scopes, err := tokenSvc.ValidateTokenWithRole(c.Request().Context(), token)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{
 					"error": "API Token 无效或已过期",
@@ -157,7 +162,7 @@ func APITokenAuth(tokenSvc *service.TokenService) echo.MiddlewareFunc {
 			// Set context values compatible with JWT middleware
 			c.Set(ContextKeyUserID, userID)
 			c.Set(ContextKeyUsername, username)
-			c.Set(ContextKeyRole, "api_token") // use a special role marker
+			c.Set(ContextKeyRole, role)
 			c.Set(ContextKeyTokenID, true)
 			c.Set(ContextKeyTokenScopes, scopes)
 
@@ -204,6 +209,29 @@ func Admin() echo.MiddlewareFunc {
 	}
 }
 
+// SystemPermission authorizes a platform-management operation through Casbin.
+// The built-in admin wildcard remains effective, while custom roles can receive
+// narrowly delegated control-plane permissions.
+func SystemPermission(permissionSvc *service.PermissionService, object, action string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			role, _ := c.Get(ContextKeyRole).(string)
+			allowed, err := permissionSvc.Enforce(role, "system", object, action)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{
+					"error": "权限校验失败",
+				})
+			}
+			if !allowed {
+				return c.JSON(http.StatusForbidden, map[string]string{
+					"error": "权限不足",
+				})
+			}
+			return next(c)
+		}
+	}
+}
+
 // Permission returns a middleware that checks Casbin RBAC permission.
 // action is the required action (e.g. "select", "update", "delete", "ddl", "export").
 // The middleware reads dom (datasource) and obj (table) from, in priority order:
@@ -214,10 +242,19 @@ func Permission(enforcer *casbin.Enforcer, action string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			role, _ := c.Get(ContextKeyRole).(string)
-			dom := extractDatasource(c)
-			obj := extractTable(c)
+			sub, dom, obj, act, err := authz.NormalizeTuple(
+				role,
+				extractDatasource(c),
+				extractTable(c),
+				action,
+			)
+			if err != nil {
+				return c.JSON(http.StatusForbidden, map[string]string{
+					"error": "权限请求参数无效",
+				})
+			}
 
-			ok, err := enforcer.Enforce(role, dom, obj, action)
+			ok, err := enforcer.Enforce(sub, dom, obj, act)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{
 					"error": "权限校验失败",
@@ -314,8 +351,7 @@ func bodyField(body map[string]interface{}, key string) string {
 	case string:
 		return val
 	case float64:
-		return strings.TrimRight(strings.TrimRight(
-			json.Number(strconv.FormatFloat(val, 'f', -1, 64)).String(), "0"), ".")
+		return strconv.FormatFloat(val, 'f', -1, 64)
 	default:
 		return ""
 	}

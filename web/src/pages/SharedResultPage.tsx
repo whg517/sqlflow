@@ -107,7 +107,7 @@ export default function SharedResultPage() {
   }
 
   // Password required but not yet verified
-  if (data?.has_password && !passwordVerified) {
+  if (data?.has_password && !data.access_granted) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
         <div className="flex flex-col items-center gap-6 max-w-sm w-full px-4">

@@ -4,9 +4,12 @@
 |---|---|
 | 架构风格 | 模块化单体、分层架构、单一部署单元 |
 | 基线日期 | 2026-07-14 |
-| 状态 | As-is baseline |
+| 状态 | Reviewed as-is baseline with known blockers |
 | 对应需求 | [REQUIREMENTS.md](REQUIREMENTS.md) |
 | 决策记录 | [adr/README.md](adr/README.md) |
+| 实现评审 | [2026-07-26 跨角色评审](reviews/2026-07-26-cross-functional-review.md) |
+
+> 本文描述目标架构约束和当前组件形态，不表示所有约束已被实现。已确认的授权、状态机、分享、恢复和运行偏差见[评审报告](reviews/2026-07-26-cross-functional-review.md)，整改顺序见[路线图](ROADMAP.md)。
 
 ## 1. 架构目标
 
@@ -115,7 +118,7 @@ flowchart LR
 
 - 公共路由：登录/刷新、OIDC、健康检查、分享链接和 Web Vitals 采集。
 - 已认证路由：同时接受 JWT 与 API Token，覆盖查询、工单、个人 Token 和个人权限申请。
-- Admin 路由：在认证后继续执行管理角色校验，覆盖用户、数据源、策略、备份和集成配置。
+- 平台管理路由：在认证后继续执行 `system` 域的 Casbin 权限校验；用户、RBAC、数据源、安全、审计和设置能力可独立委派。
 
 API 契约由 Handler 注解生成至 `internal/api/openapi`，运行时通过 `/swagger/` 提供 Swagger UI。
 
@@ -215,7 +218,7 @@ sequenceDiagram
 
 | 数据域 | 核心实体 |
 |---|---|
-| 身份 | User、RefreshToken、APIToken、OIDCProvider |
+| 身份 | User、Role、RefreshToken、APIToken、OIDCProvider |
 | 数据源与安全 | Datasource、MaskRule、SensitiveTable、TempPolicy、PermissionRequest |
 | 查询 | QueryHistory、SharedResult、SQLTemplate、ExportTask |
 | 工单 | Ticket、TicketRevision、ApprovalPolicy、ApprovalRecord、ExecutionResult、Comment、GitLink |
@@ -255,12 +258,22 @@ sequenceDiagram
 2. Service 级：资源所有权、DBA/Admin 操作权、工单当前阶段和状态校验。
 3. 数据级：Casbin 的角色/域/对象/动作策略与临时权限。
 
+Casbin 使用 [ADR-0006](adr/0006-canonical-casbin-tuples.md) 定义的唯一元组格式：角色或 `user:<id>`、`ds_<id>`、表/集合/索引和受控动作。策略侧的 `*` 可匹配任意域、对象或动作；运行路径通过 `internal/authz` 构造和规范化元组。
+
+授权决策遵循 [ADR-0007](adr/0007-unified-authorization-and-data-visibility.md)：
+
+- 主体同时包含用户 ID、当前角色和可选 API Token Scope；角色授权与个人授权取并集，再与 Token Scope 取交集。
+- `metadata:view` 控制表/集合/索引及字段元数据发现；`select` 隐含对象可发现性，但 `metadata:view` 不授予数据读取。
+- 临时个人策略在每次决策时校验到期时间，后台清理仅用于回收数据，不承担安全正确性。
+- 工单、权限申请、模板、导出任务等平台资源由服务端所有权策略裁决。
+
 ### 8.3 数据保护
 
 - 数据源密码/API Key 使用 AES 密钥加密存储。
 - 密码使用不可逆哈希；JWT Secret、管理员初始密码和加密密钥由部署环境注入。
-- 查询结果按数据源、库、表和字段匹配脱敏规则；脱敏豁免是显式权限。
+- 查询结果按数据源、库、表和字段匹配脱敏规则；字段命中规则时默认脱敏，显式 `unmask` 权限才允许返回明文。
 - SQL/JSON 输入通过解析、操作类型限制和驱动参数边界降低注入与越权风险。
+- SQL 模板只把占位符渲染为驱动参数标记；参数值通过 Query/EXPLAIN/Export API 单独传输，并由 MySQL/PostgreSQL 驱动绑定，不在浏览器或服务端拼接进 SQL。
 - TLS 可在进程内启用，也可由上游反向代理终止；生产环境必须使用受保护传输。
 
 ## 9. 前端架构
@@ -273,6 +286,7 @@ sequenceDiagram
 
 - `web/src/api/client.ts` 统一处理 API 前缀、Token 和刷新流程。
 - 服务端返回是授权事实来源；菜单显示和按钮禁用不代替 API 鉴权。
+- 从 SQL 模板进入查询工作台时，标签状态同时保存模板来源、有序参数和数据库类型；用户编辑 SQL 后必须清除旧参数绑定。
 - 页面级异步状态应显式处理 loading、empty、error 和 retry。
 - 覆盖度页面当前不代表后端已启用，必须由独立后端接入后才进入正式导航能力基线。
 
@@ -309,5 +323,18 @@ sequenceDiagram
 | 外部集成在进程内调用 | 慢调用和失败可能影响延迟 | 强化超时、重试、幂等与 outbox/队列边界 |
 | 覆盖度 UI 与禁用后端并存 | 用户预期不一致 | 未启用时隐藏导航，或完成独立 PostgreSQL 依赖注入和部署方案 |
 
-任何改变部署拓扑、元数据库、消息可靠性或授权模型的演进，应先新增 ADR，再修改本文件。
+### 12.1 已确认的实现偏差
 
+2026-07-26 评审确认以下架构不变量当前未成立：
+
+| 不变量 | 当前偏差 | 必要动作 |
+|---|---|---|
+| 授权输入在所有路径保持一致 | Casbin 元组已统一；API Token Scope 与角色/个人授权的组合规则仍未完成 | 阶段 1 建立统一授权决策入口并执行 Token Scope |
+| 被分析对象等于被执行对象 | SQL parser 可能只分析首条语句，Driver 接收原始完整输入 | 拒绝多语句或对规范化语句集合逐条门禁 |
+| 状态迁移只有一个事务化写入口 | Scheduler 与工单执行函数对 `EXECUTING` 前置状态理解冲突 | 统一 CAS 状态机并设计租约/恢复 |
+| 资源所有权由服务端裁决 | 私有模板读取/渲染已按所有者或公开状态门禁；工单和部分结果资源仍有仅要求认证的路径 | 继续为工单和结果建立统一资源授权策略和负向测试 |
+| 备份必须可验证恢复 | 当前主要是文件复制，缺少完整性、异地副本和恢复演练 | 建立备份—校验—恢复—演练闭环 |
+
+这些偏差是现有实现需要在模块化单体内部修复的问题，不构成立即拆分微服务的理由。
+
+任何改变部署拓扑、元数据库、消息可靠性或授权模型的演进，应先新增 ADR，再修改本文件。

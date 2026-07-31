@@ -36,11 +36,13 @@ export async function explainQuery(
   sql: string,
   datasourceId: number,
   database?: string,
+  params: unknown[] = [],
 ): Promise<ExplainResult> {
   const res = await api.post<ExplainResponse>("/query/explain", {
     sql,
     datasource_id: datasourceId,
     database: database ?? "",
+    params,
   });
   return res.data;
 }

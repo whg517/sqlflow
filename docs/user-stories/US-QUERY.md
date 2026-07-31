@@ -84,8 +84,12 @@
 **验收标准**：
 
 - Given 用户创建私有模板，Then 其他普通用户不可修改或删除它。
+- Given 用户创建私有模板，When 其他用户按 ID 读取或渲染，Then 返回不存在且不泄露模板内容。
 - Given 模板公开，When 其他用户浏览列表，Then 可以发现并渲染模板，但所有权仍受保护。
 - Given 参数不完整或不合法，When 渲染模板，Then 返回校验错误且不执行 SQL。
+- Given MySQL 或 PostgreSQL 的只读模板已成功渲染，When 用户选择“在查询中使用”，Then 工作台新建标签并保留模板来源、数据库类型和有序参数。
+- Given 模板查询被执行或导出（以及执行 MySQL EXPLAIN），Then 参数由数据库驱动绑定而不是拼接到 SQL；查询历史保存参数并可恢复。
+- Given 用户编辑从模板带入的 SQL，Then 原参数绑定立即解除，避免参数位置与新语句错配。
+- Given 模板是 MongoDB 或变更语句，Then 只提供渲染预览和复制，不绕过查询只读门禁或工单流程。
 
-**代表性验证**：`internal/service/sql_template_test.go`、`e2e/tests/sql-templates.spec.ts`。
-
+**代表性验证**：`internal/service/sql_template_test.go`、`internal/driver/mysql/mysql_test.go`、`internal/driver/postgresql/postgresql_test.go`、`web/src/store/__tests__/queryStore.test.ts`、`e2e/tests/sql-template.spec.ts`。

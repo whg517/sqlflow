@@ -523,6 +523,15 @@ func (d *ESDriver) executeCount(ctx context.Context, index string, bodyJSON []by
 
 func extractURLs(cfg *driver.Config) []string {
 	if cfg.Extra != nil {
+		if urls, ok := cfg.Extra["urls"].([]string); ok {
+			result := make([]string, 0, len(urls))
+			for _, u := range urls {
+				if u != "" {
+					result = append(result, u)
+				}
+			}
+			return result
+		}
 		if urls, ok := cfg.Extra["urls"].([]interface{}); ok {
 			result := make([]string, 0, len(urls))
 			for _, u := range urls {

@@ -1,14 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  BarChart3,
   Database,
   FileText,
+  Gauge,
   ShieldCheck,
   ScrollText,
   Server,
   EyeOff,
   Bot,
   Clock,
+  Webhook,
   Loader2,
   AlertCircle,
   History,
@@ -66,22 +69,47 @@ const pages = [
     to: "/permissions",
     label: "权限管理",
     icon: ShieldCheck,
-    group: "页面跳转",
+    group: "安全与合规",
   },
-  { to: "/audit", label: "审计日志", icon: ScrollText, group: "页面跳转" },
   {
-    to: "/settings/datasource",
-    label: "数据源管理",
-    icon: Server,
-    group: "设置",
+    to: "/settings/approval-policies",
+    label: "审批策略",
+    icon: ShieldCheck,
+    group: "安全与合规",
   },
   {
     to: "/settings/mask-rules",
     label: "脱敏规则",
     icon: EyeOff,
-    group: "设置",
+    group: "安全与合规",
   },
-  { to: "/settings/ai-config", label: "AI 配置", icon: Bot, group: "设置" },
+  { to: "/audit", label: "审计日志", icon: ScrollText, group: "治理" },
+  { to: "/reports", label: "报表", icon: BarChart3, group: "治理" },
+  { to: "/performance", label: "性能分析", icon: Gauge, group: "治理" },
+  {
+    to: "/settings/datasource",
+    label: "数据源配置",
+    icon: Server,
+    group: "系统管理",
+  },
+  {
+    to: "/settings/sla",
+    label: "SLA 告警",
+    icon: Clock,
+    group: "系统管理",
+  },
+  {
+    to: "/settings/integrations",
+    label: "系统集成",
+    icon: Webhook,
+    group: "系统管理",
+  },
+  {
+    to: "/settings/ai-config",
+    label: "AI 配置",
+    icon: Bot,
+    group: "系统管理",
+  },
 ];
 
 // --- Helpers ---
@@ -264,7 +292,12 @@ export default function CommandPalette({
     search.auditLogs.length > 0;
 
   const pageGroup = pages.filter((p) => p.group === "页面跳转");
-  const settingsGroup = pages.filter((p) => p.group === "设置");
+  const navigationGroups = ["安全与合规", "治理", "系统管理"].map(
+    (heading) => ({
+      heading,
+      items: pages.filter((page) => page.group === heading),
+    }),
+  );
 
   return (
     <CommandDialog
@@ -324,17 +357,19 @@ export default function CommandPalette({
                 <CommandSeparator />
               </>
             )}
-            <CommandGroup heading="设置">
-              {settingsGroup.map((page) => (
-                <CommandItem
-                  key={page.to}
-                  onSelect={() => runCommand(() => navigate(page.to))}
-                >
-                  <page.icon size={16} />
-                  <span>{page.label}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {navigationGroups.map((group) => (
+              <CommandGroup key={group.heading} heading={group.heading}>
+                {group.items.map((page) => (
+                  <CommandItem
+                    key={page.to}
+                    onSelect={() => runCommand(() => navigate(page.to))}
+                  >
+                    <page.icon size={16} />
+                    <span>{page.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
           </>
         )}
 

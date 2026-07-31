@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -25,14 +28,25 @@ func NewShareHandler(shareSvc *service.ShareService) *ShareHandler {
 type createShareRequest struct {
 	Columns        []string                 `json:"columns"`
 	Rows           []map[string]interface{} `json:"rows"`
-	ExpiresInHours int                     `json:"expires_in_hours"` // default 24, max 168
-	Password       string                  `json:"password,omitempty"`
-	SQLSummary     string                  `json:"sql_summary,omitempty"`
-	DatasourceName string                  `json:"datasource_name,omitempty"`
+	ExpiresInHours int                      `json:"expires_in_hours"` // default 24, max 168
+	Password       string                   `json:"password,omitempty"`
+	SQLSummary     string                   `json:"sql_summary,omitempty"`
+	DatasourceName string                   `json:"datasource_name,omitempty"`
 }
 
 type verifyPasswordRequest struct {
 	Password string `json:"password"`
+}
+
+const shareAccessCookieMaxAge = 15 * time.Minute
+
+func shareAccessCookieName(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return "sqlflow_share_" + hex.EncodeToString(sum[:12])
+}
+
+func requestUsesHTTPS(c echo.Context) bool {
+	return c.IsTLS() || strings.EqualFold(c.Request().Header.Get("X-Forwarded-Proto"), "https")
 }
 
 // CreateShare handles POST /api/query/share.
@@ -96,7 +110,7 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 // GetShare handles GET /s/:token (public, no auth required).
 //
 // @Summary 获取共享查询结果
-// @Description 通过 token 获取共享的查询结果（无需认证）
+// @Description 通过 token 获取共享结果；密码保护的结果在验证前只返回非敏感访问元数据
 // @Tags 共享
 // @Produce json
 // @Param token path string true "共享 token"
@@ -105,12 +119,19 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 // @Failure 410 {object} resp.ErrorResponse "链接已过期"
 // @Router /s/{token} [get]
 func (h *ShareHandler) GetShare(c echo.Context) error {
+	c.Response().Header().Set("Cache-Control", "no-store")
+
 	token := c.Param("token")
 	if token == "" {
 		return resp.BadRequest(c, "token 不能为空")
 	}
 
-	result, err := h.shareSvc.GetShare(c.Request().Context(), token)
+	var accessProof string
+	if cookie, err := c.Cookie(shareAccessCookieName(token)); err == nil {
+		accessProof = cookie.Value
+	}
+
+	result, err := h.shareSvc.GetShare(c.Request().Context(), token, accessProof)
 	if err != nil {
 		switch err {
 		case service.ErrShareNotFound:
@@ -150,10 +171,14 @@ func (h *ShareHandler) GetShare(c echo.Context) error {
 // @Produce json
 // @Param token path string true "共享 token"
 // @Param body body verifyPasswordRequest true "密码验证请求"
-// @Success 200 {object} resp.SuccessResponse "验证成功"
+// @Success 200 {object} resp.SuccessResponse "验证成功并设置短期 HttpOnly 访问 Cookie"
 // @Failure 401 {object} resp.ErrorResponse "密码错误"
+// @Failure 404 {object} resp.ErrorResponse "链接不存在"
+// @Failure 410 {object} resp.ErrorResponse "链接已过期或撤销"
 // @Router /s/{token}/verify [post]
 func (h *ShareHandler) VerifySharePassword(c echo.Context) error {
+	c.Response().Header().Set("Cache-Control", "no-store")
+
 	token := c.Param("token")
 	if token == "" {
 		return resp.BadRequest(c, "token 不能为空")
@@ -164,10 +189,24 @@ func (h *ShareHandler) VerifySharePassword(c echo.Context) error {
 		return resp.BadRequest(c, "请求格式错误")
 	}
 
-	if err := h.shareSvc.VerifyPassword(c.Request().Context(), token, req.Password); err != nil {
+	accessProof, err := h.shareSvc.VerifyPassword(c.Request().Context(), token, req.Password)
+	if err != nil {
 		switch err {
 		case service.ErrShareNotFound:
-			return resp.BadRequest(c, "共享链接不存在")
+			return c.JSON(http.StatusNotFound, map[string]interface{}{
+				"code":    404,
+				"message": "共享链接不存在",
+			})
+		case service.ErrShareExpired:
+			return c.JSON(http.StatusGone, map[string]interface{}{
+				"code":    410,
+				"message": "共享链接已过期",
+			})
+		case service.ErrShareRevoked:
+			return c.JSON(http.StatusGone, map[string]interface{}{
+				"code":    410,
+				"message": "共享链接已被撤销",
+			})
 		case service.ErrSharePassword:
 			return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 				"code":    401,
@@ -176,6 +215,19 @@ func (h *ShareHandler) VerifySharePassword(c echo.Context) error {
 		default:
 			return resp.InternalError(c, "验证密码失败")
 		}
+	}
+
+	if accessProof != "" {
+		c.SetCookie(&http.Cookie{
+			Name:     shareAccessCookieName(token),
+			Value:    accessProof,
+			Path:     "/s/" + token,
+			MaxAge:   int(shareAccessCookieMaxAge.Seconds()),
+			Expires:  time.Now().Add(shareAccessCookieMaxAge),
+			HttpOnly: true,
+			Secure:   requestUsesHTTPS(c),
+			SameSite: http.SameSiteStrictMode,
+		})
 	}
 
 	return resp.OKWithMessage(c, "密码验证成功", nil)

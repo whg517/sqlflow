@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, act, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -93,6 +93,9 @@ describe("Layout", () => {
         expect(screen.getByText("工单")).toBeInTheDocument();
         expect(screen.getByText("权限")).toBeInTheDocument();
         expect(screen.getByText("审计")).toBeInTheDocument();
+        expect(screen.getByText("安全与合规")).toBeInTheDocument();
+        expect(screen.getByText("治理")).toBeInTheDocument();
+        expect(screen.getByText("系统管理")).toBeInTheDocument();
       });
     });
 
@@ -202,13 +205,13 @@ describe("Layout", () => {
       await userEvent.click(screen.getByText("设置"));
 
       await waitFor(() => {
-        expect(screen.getByText("数据源管理")).toBeInTheDocument();
-        expect(screen.getByText("脱敏规则")).toBeInTheDocument();
+        expect(screen.getByText("SLA 告警")).toBeInTheDocument();
+        expect(screen.getByText("系统集成")).toBeInTheDocument();
         expect(screen.getByText("AI 配置")).toBeInTheDocument();
       });
     });
 
-    it("auto-opens settings when on a settings path", async () => {
+    it("keeps data sources as a top-level system management item", async () => {
       render(
         <MemoryRouter initialEntries={["/settings/datasource"]}>
           <TooltipProvider>
@@ -225,7 +228,30 @@ describe("Layout", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText("数据源管理")).toBeInTheDocument();
+        expect(screen.getByText("数据源配置")).toBeInTheDocument();
+        expect(screen.queryByText("SLA 告警")).not.toBeInTheDocument();
+      });
+    });
+
+    it("auto-opens settings for system settings paths", async () => {
+      render(
+        <MemoryRouter initialEntries={["/settings/ai-config"]}>
+          <TooltipProvider>
+            <Routes>
+              <Route element={<Layout />}>
+                <Route
+                  path="settings/*"
+                  element={<div data-testid="outlet">Settings</div>}
+                />
+              </Route>
+            </Routes>
+          </TooltipProvider>
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("SLA 告警")).toBeInTheDocument();
+        expect(screen.getByText("AI 配置")).toBeInTheDocument();
       });
     });
   });

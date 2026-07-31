@@ -44,10 +44,10 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 		t.Fatalf("failed to create enforcer: %v", err)
 	}
 
-	// role "developer" can "select" on datasource "1" table "users"
-	_, _ = e.AddPolicy("developer", "1", "users", "select")
-	// role "admin" can "select" on datasource "1" table "users"
-	_, _ = e.AddPolicy("admin", "1", "users", "select")
+	// role "developer" can "select" on datasource "ds_1" table "users"
+	_, _ = e.AddPolicy("developer", "ds_1", "users", "select")
+	// role "admin" can "select" on datasource "ds_1" table "users"
+	_, _ = e.AddPolicy("admin", "ds_1", "users", "select")
 
 	return e
 }
@@ -361,6 +361,12 @@ func TestBodyField(t *testing.T) {
 			body: map[string]interface{}{"key": float64(42)},
 			key:  "key",
 			want: "42",
+		},
+		{
+			name: "float64 integer with trailing zero",
+			body: map[string]interface{}{"key": float64(10)},
+			key:  "key",
+			want: "10",
 		},
 		{
 			name: "float64 decimal value",

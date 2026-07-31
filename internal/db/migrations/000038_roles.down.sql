@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS idx_roles_status;
+DROP TABLE IF EXISTS roles;

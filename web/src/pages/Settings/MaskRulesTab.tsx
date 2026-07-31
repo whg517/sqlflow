@@ -18,6 +18,7 @@ import {
   createSensitiveTable,
   deleteSensitiveTable,
   fetchDatasourceTables,
+  fetchDatasourceColumns,
   getMaskTypeLabel,
   MASK_TYPE_OPTIONS,
   SENSITIVITY_OPTIONS,
@@ -129,6 +130,8 @@ function SensitiveTablesTab() {
 
   // Datasource tables for dropdown
   const [dsTables, setDsTables] = useState<string[]>([]);
+  const [dsTablesLoading, setDsTablesLoading] = useState(false);
+  const [dsTablesError, setDsTablesError] = useState(false);
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState<SensitiveTable | null>(null);
@@ -166,12 +169,31 @@ function SensitiveTablesTab() {
     if (!form.datasource_id) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDsTables([]);
+      setDsTablesLoading(false);
+      setDsTablesError(false);
       return;
     }
+    let active = true;
     const dsId = Number(form.datasource_id);
+    setDsTables([]);
+    setDsTablesLoading(true);
+    setDsTablesError(false);
     fetchDatasourceTables(dsId)
-      .then((res) => setDsTables(res.data ?? []))
-      .catch(() => setDsTables([]));
+      .then((res) => {
+        if (active) setDsTables(res.data ?? []);
+      })
+      .catch(() => {
+        if (active) {
+          setDsTables([]);
+          setDsTablesError(true);
+        }
+      })
+      .finally(() => {
+        if (active) setDsTablesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [form.datasource_id]);
 
   function validate(): boolean {
@@ -420,7 +442,14 @@ function SensitiveTablesTab() {
 
             <div className="space-y-1.5">
               <Label className="text-[var(--text-secondary)]">表名</Label>
-              {dsTables.length > 0 ? (
+              {dsTablesLoading ? (
+                <Input
+                  value=""
+                  disabled
+                  placeholder="正在加载表..."
+                  className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
+                />
+              ) : dsTables.length > 0 ? (
                 <Select
                   value={form.table_name}
                   onValueChange={(v) =>
@@ -450,7 +479,9 @@ function SensitiveTablesTab() {
                   />
                   {form.datasource_id && (
                     <p className="text-xs text-[var(--text-muted)]">
-                      未获取到表列表，请手动输入表名
+                      {dsTablesError
+                        ? "表列表加载失败，请手动输入表名"
+                        : "该数据源没有可用表，请手动输入表名"}
                     </p>
                   )}
                 </>
@@ -563,6 +594,11 @@ function FieldRulesTab() {
 
   // Datasource tables for dropdown
   const [dsTables, setDsTables] = useState<string[]>([]);
+  const [dsTablesLoading, setDsTablesLoading] = useState(false);
+  const [dsTablesError, setDsTablesError] = useState(false);
+  const [dsColumns, setDsColumns] = useState<
+    Array<{ name: string; type: string; comment: string }>
+  >([]);
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState<MaskRule | null>(null);
@@ -600,13 +636,44 @@ function FieldRulesTab() {
     if (!form.datasource_id) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDsTables([]);
+      setDsTablesLoading(false);
+      setDsTablesError(false);
       return;
     }
+    let active = true;
     const dsId = Number(form.datasource_id);
+    setDsTables([]);
+    setDsTablesLoading(true);
+    setDsTablesError(false);
     fetchDatasourceTables(dsId)
-      .then((res) => setDsTables(res.data ?? []))
-      .catch(() => setDsTables([]));
+      .then((res) => {
+        if (active) setDsTables(res.data ?? []);
+      })
+      .catch(() => {
+        if (active) {
+          setDsTables([]);
+          setDsTablesError(true);
+        }
+      })
+      .finally(() => {
+        if (active) setDsTablesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [form.datasource_id]);
+
+  // Field rules are selected from server-authorized column metadata. Manual
+  // input remains available while editing legacy rules or if discovery fails.
+  useEffect(() => {
+    if (!form.datasource_id || !form.table_name || editingId) {
+      setDsColumns([]);
+      return;
+    }
+    fetchDatasourceColumns(Number(form.datasource_id), form.table_name)
+      .then((res) => setDsColumns(res.data ?? []))
+      .catch(() => setDsColumns([]));
+  }, [form.datasource_id, form.table_name, editingId]);
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
@@ -874,7 +941,12 @@ function FieldRulesTab() {
                 <Select
                   value={form.datasource_id}
                   onValueChange={(v) =>
-                    setForm((f) => ({ ...f, datasource_id: v, table_name: "" }))
+                    setForm((f) => ({
+                      ...f,
+                      datasource_id: v,
+                      table_name: "",
+                      field: "",
+                    }))
                   }
                 >
                   <SelectTrigger className="border-[var(--border-default)] bg-[var(--bg-elevated)]">
@@ -897,11 +969,18 @@ function FieldRulesTab() {
             {/* Table name */}
             <div className="space-y-1.5">
               <Label className="text-[var(--text-secondary)]">表名</Label>
-              {!editingId && dsTables.length > 0 ? (
+              {!editingId && dsTablesLoading ? (
+                <Input
+                  value=""
+                  disabled
+                  placeholder="正在加载表..."
+                  className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
+                />
+              ) : !editingId && dsTables.length > 0 ? (
                 <Select
                   value={form.table_name}
                   onValueChange={(v) =>
-                    setForm((f) => ({ ...f, table_name: v }))
+                    setForm((f) => ({ ...f, table_name: v, field: "" }))
                   }
                 >
                   <SelectTrigger className="border-[var(--border-default)] bg-[var(--bg-elevated)]">
@@ -916,14 +995,30 @@ function FieldRulesTab() {
                   </SelectContent>
                 </Select>
               ) : (
-                <Input
-                  value={form.table_name}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, table_name: e.target.value }))
-                  }
-                  placeholder="输入表名"
-                  className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
-                />
+                <>
+                  <Input
+                    value={form.table_name}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        table_name: e.target.value,
+                        field: "",
+                      }))
+                    }
+                    placeholder={
+                      form.datasource_id ? "输入表名" : "请先选择数据源"
+                    }
+                    disabled={!editingId && !form.datasource_id}
+                    className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
+                  />
+                  {!editingId && form.datasource_id && dsTables.length === 0 && (
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {dsTablesError
+                        ? "表列表加载失败，请手动输入表名"
+                        : "该数据源没有可用表，请手动输入表名"}
+                    </p>
+                  )}
+                </>
               )}
               {errors.table_name && (
                 <p className="text-xs text-red-400">{errors.table_name}</p>
@@ -933,14 +1028,33 @@ function FieldRulesTab() {
             {/* Field name */}
             <div className="space-y-1.5">
               <Label className="text-[var(--text-secondary)]">字段名</Label>
-              <Input
-                value={form.field}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, field: e.target.value }))
-                }
-                placeholder="输入字段名"
-                className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
-              />
+              {!editingId && dsColumns.length > 0 ? (
+                <Select
+                  value={form.field}
+                  onValueChange={(v) => setForm((f) => ({ ...f, field: v }))}
+                >
+                  <SelectTrigger className="border-[var(--border-default)] bg-[var(--bg-elevated)]">
+                    <SelectValue placeholder="选择需要脱敏的字段" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dsColumns.map((column) => (
+                      <SelectItem key={column.name} value={column.name}>
+                        {column.name} · {column.type}
+                        {column.comment ? ` · ${column.comment}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={form.field}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, field: e.target.value }))
+                  }
+                  placeholder="输入字段名"
+                  className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
+                />
+              )}
               {errors.field && (
                 <p className="text-xs text-red-400">{errors.field}</p>
               )}

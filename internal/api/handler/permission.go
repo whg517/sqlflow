@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"errors"
 	"log"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
+	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/resp"
 	"github.com/whg517/sqlflow/internal/service"
 )
@@ -29,12 +31,11 @@ func NewPermissionHandler(permSvc *service.PermissionService) *PermissionHandler
 // @Success 200 {object} resp.SuccessResponse "成功"
 // @Router /roles [get]
 func (h *PermissionHandler) ListRoles(c echo.Context) error {
-	roles := h.permSvc.GetRoles()
-	items := make([]map[string]string, 0, len(roles))
-	for _, r := range roles {
-		items = append(items, map[string]string{"name": r})
+	roles, err := h.permSvc.ListRoles(c.Request().Context())
+	if err != nil {
+		return resp.InternalError(c, "获取角色列表失败")
 	}
-	return resp.OK(c, items)
+	return resp.OK(c, roles)
 }
 
 // GetRole handles GET /api/roles/:role (admin).
@@ -55,15 +56,116 @@ func (h *PermissionHandler) GetRole(c echo.Context) error {
 		return resp.BadRequest(c, "角色名称不能为空")
 	}
 
+	roleInfo, err := h.permSvc.GetRole(c.Request().Context(), role)
+	if errors.Is(err, service.ErrRoleNotFound) {
+		return resp.NotFound(c, "角色不存在")
+	}
+	if err != nil {
+		return resp.InternalError(c, "获取角色失败")
+	}
 	policies, err := h.permSvc.GetPoliciesForRole(c.Request().Context(), role)
 	if err != nil {
 		return resp.InternalError(c, "获取角色策略失败")
 	}
 
 	return resp.OK(c, service.RoleInfo{
-		Name:     role,
-		Policies: policies,
+		ID:          roleInfo.ID,
+		Name:        roleInfo.Name,
+		DisplayName: roleInfo.DisplayName,
+		Description: roleInfo.Description,
+		IsBuiltin:   roleInfo.IsBuiltin,
+		Status:      roleInfo.Status,
+		UserCount:   roleInfo.UserCount,
+		PolicyCount: roleInfo.PolicyCount,
+		Permissions: roleInfo.Permissions,
+		CreatedAt:   roleInfo.CreatedAt,
+		UpdatedAt:   roleInfo.UpdatedAt,
+		Policies:    policies,
 	})
+}
+
+type createRoleRequest struct {
+	Name        string   `json:"name"`
+	DisplayName string   `json:"display_name"`
+	Description string   `json:"description"`
+	Permissions []string `json:"permissions"`
+}
+
+type updateRoleRequest struct {
+	DisplayName string   `json:"display_name"`
+	Description string   `json:"description"`
+	Status      string   `json:"status"`
+	Permissions []string `json:"permissions"`
+}
+
+// CreateRole handles POST /api/roles.
+func (h *PermissionHandler) CreateRole(c echo.Context) error {
+	var req createRoleRequest
+	if err := c.Bind(&req); err != nil {
+		return resp.BadRequest(c, "请求格式错误")
+	}
+	role, err := h.permSvc.CreateRole(c.Request().Context(), req.Name, req.DisplayName, req.Description)
+	switch {
+	case errors.Is(err, service.ErrInvalidRoleName), errors.Is(err, service.ErrRoleExists):
+		return resp.BadRequest(c, err.Error())
+	case err != nil:
+		return resp.InternalError(c, "创建角色失败")
+	default:
+		if err := h.permSvc.SetPlatformPermissions(c.Request().Context(), role.Name, req.Permissions); err != nil {
+			_ = h.permSvc.DeleteRole(c.Request().Context(), role.Name)
+			return resp.BadRequest(c, err.Error())
+		}
+		role, _ = h.permSvc.GetRole(c.Request().Context(), role.Name)
+		return resp.Created(c, role)
+	}
+}
+
+// UpdateRole handles PUT /api/roles/:role.
+func (h *PermissionHandler) UpdateRole(c echo.Context) error {
+	name := c.Param("role")
+	if name == "" {
+		return resp.BadRequest(c, "角色名称不能为空")
+	}
+	var req updateRoleRequest
+	if err := c.Bind(&req); err != nil {
+		return resp.BadRequest(c, "请求格式错误")
+	}
+	role, err := h.permSvc.UpdateRole(c.Request().Context(), name, req.DisplayName, req.Description, req.Status)
+	switch {
+	case errors.Is(err, service.ErrRoleNotFound):
+		return resp.NotFound(c, "角色不存在")
+	case errors.Is(err, service.ErrBuiltinRole), errors.Is(err, service.ErrRoleInUse):
+		return resp.BadRequest(c, err.Error())
+	case err != nil:
+		return resp.BadRequest(c, err.Error())
+	default:
+		if !role.IsBuiltin {
+			if err := h.permSvc.SetPlatformPermissions(c.Request().Context(), role.Name, req.Permissions); err != nil {
+				return resp.BadRequest(c, err.Error())
+			}
+			role, _ = h.permSvc.GetRole(c.Request().Context(), role.Name)
+		}
+		return resp.OK(c, role)
+	}
+}
+
+// DeleteRole handles DELETE /api/roles/:role.
+func (h *PermissionHandler) DeleteRole(c echo.Context) error {
+	name := c.Param("role")
+	if name == "" {
+		return resp.BadRequest(c, "角色名称不能为空")
+	}
+	err := h.permSvc.DeleteRole(c.Request().Context(), name)
+	switch {
+	case errors.Is(err, service.ErrRoleNotFound):
+		return resp.NotFound(c, "角色不存在")
+	case errors.Is(err, service.ErrBuiltinRole), errors.Is(err, service.ErrRoleInUse):
+		return resp.BadRequest(c, err.Error())
+	case err != nil:
+		return resp.InternalError(c, "删除角色失败")
+	default:
+		return resp.OKWithMessage(c, "角色已删除", nil)
+	}
 }
 
 type addPolicyRequest struct {
@@ -97,7 +199,7 @@ func (h *PermissionHandler) AddPolicy(c echo.Context) error {
 	}
 
 	if err := h.permSvc.AddPolicy(req.Sub, req.Dom, req.Obj, req.Act); err != nil {
-		if err.Error() == "策略已存在" {
+		if err.Error() == "策略已存在" || errors.Is(err, authz.ErrInvalidTuple) {
 			return resp.BadRequest(c, err.Error())
 		}
 		log.Printf("AddPolicy failed: %v", err)

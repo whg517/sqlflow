@@ -15,6 +15,135 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/auth/oidc/{provider}": {
+            "get": {
+                "description": "生成 OIDC Authorization Code Flow + PKCE 授权 URL",
+                "tags": [
+                    "认证"
+                ],
+                "summary": "OIDC 登录跳转",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "OIDC 提供者名称",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "回调地址",
+                        "name": "redirect_uri",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "授权链接",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "提供者不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/oidc/{provider}/callback": {
+            "get": {
+                "description": "处理 OIDC 授权回调，交换 token 并登录",
+                "tags": [
+                    "认证"
+                ],
+                "summary": "OIDC 回调处理",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "OIDC 提供者名称",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "授权码",
+                        "name": "code",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态参数",
+                        "name": "state",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "PKCE code verifier",
+                        "name": "code_verifier",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "回调地址",
+                        "name": "redirect_uri",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "登录成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "认证失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/providers": {
+            "get": {
+                "description": "返回所有已启用的 OIDC 身份提供者（不含密钥）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "获取可用 OIDC 提供者列表",
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/audit-logs": {
             "get": {
                 "security": [
@@ -175,6 +304,70 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "搜索失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/audit/user-analytics": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取用户行为分析聚合数据（活跃度 TOP 10、查询频率、操作类型占比、异常行为）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审计"
+                ],
+                "summary": "用户行为分析",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "7d",
+                        "description": "时间范围 (7d/30d/90d/custom)",
+                        "name": "time_range",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "自定义开始日期 (YYYY-MM-DD，time_range=custom 时必填)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "自定义结束日期 (YYYY-MM-DD，time_range=custom 时必填)",
+                        "name": "end_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "特定用户 ID（下钻，必须为正整数）",
+                        "name": "user_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "查询失败",
                         "schema": {
                             "$ref": "#/definitions/resp.ErrorResponse"
                         }
@@ -590,6 +783,69 @@ const docTemplate = `{
                 }
             }
         },
+        "/dashboard/full-stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "一次性返回看板所需的所有统计数据，包括趋势、工单分布、最近活动等",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "仪表盘"
+                ],
+                "summary": "获取仪表盘完整数据",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "查询趋势开始日期 (YYYY-MM-DD, 默认7天前)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "查询趋势结束日期 (YYYY-MM-DD, 默认今天)",
+                        "name": "end_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/resp.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.DashboardFullStats"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "获取统计数据失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/dashboard/stats": {
             "get": {
                 "security": [
@@ -604,7 +860,7 @@ const docTemplate = `{
                 "tags": [
                     "仪表盘"
                 ],
-                "summary": "获取仪表盘统计",
+                "summary": "获取仪表盘统计（简版）",
                 "responses": {
                     "200": {
                         "description": "成功",
@@ -733,6 +989,58 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "创建数据源失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/datasources/available": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "已认证用户获取活动数据源的安全摘要；该列表不授予查询权限",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "数据源"
+                ],
+                "summary": "获取可发现的数据源",
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/resp.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/handler.datasourceOptionResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "获取数据源列表失败",
                         "schema": {
                             "$ref": "#/definitions/resp.ErrorResponse"
                         }
@@ -871,14 +1179,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "管理员禁用指定数据源",
+                "description": "仅允许删除已禁用、无业务或权限引用的普通数据源",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "数据源"
                 ],
-                "summary": "禁用数据源",
+                "summary": "永久删除数据源",
                 "parameters": [
                     {
                         "type": "integer",
@@ -890,13 +1198,77 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "数据源已禁用",
+                        "description": "数据源已删除",
                         "schema": {
                             "$ref": "#/definitions/resp.SuccessResponse"
                         }
                     },
                     "400": {
-                        "description": "无效的数据源ID",
+                        "description": "数据源未禁用或属于系统数据源",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "数据源不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "数据源仍被业务或权限数据引用",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/datasources/{id}/status": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "启用或禁用数据源；启用前会验证连接",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "数据源"
+                ],
+                "summary": "更新数据源状态",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "数据源ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "目标状态",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.updateDatasourceStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "状态已更新",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "状态无效或连接验证失败",
                         "schema": {
                             "$ref": "#/definitions/resp.ErrorResponse"
                         }
@@ -1061,6 +1433,207 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "数据源不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/export/audit": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员/DBA导出审计日志为CSV（流式）",
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "导出"
+                ],
+                "summary": "导出审计日志",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "开始日期",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束日期",
+                        "name": "end_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "CSV文件",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "无权限",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/export/tasks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取当前用户的异步导出任务列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "导出"
+                ],
+                "summary": "导出任务列表",
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/export/tasks/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定导出任务的状态和详情",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "导出"
+                ],
+                "summary": "获取导出任务详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "任务ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "任务不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/export/tasks/{id}/download": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "下载指定导出任务生成的文件",
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "导出"
+                ],
+                "summary": "下载导出文件",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "任务ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "导出文件",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "404": {
+                        "description": "文件不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/export/tickets": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "认证用户导出工单为CSV（流式）",
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "导出"
+                ],
+                "summary": "导出工单",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "工单状态",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "风险等级",
+                        "name": "risk_level",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "CSV文件",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
                         "schema": {
                             "$ref": "#/definitions/resp.ErrorResponse"
                         }
@@ -2451,7 +3024,7 @@ const docTemplate = `{
         },
         "/s/{token}": {
             "get": {
-                "description": "通过 token 获取共享的查询结果（无需认证）",
+                "description": "通过 token 获取共享结果；密码保护的结果在验证前只返回非敏感访问元数据",
                 "produces": [
                     "application/json"
                 ],
@@ -2535,13 +3108,25 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "验证成功",
+                        "description": "验证成功并设置短期 HttpOnly 访问 Cookie",
                         "schema": {
                             "$ref": "#/definitions/resp.SuccessResponse"
                         }
                     },
                     "401": {
                         "description": "密码错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "链接不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "410": {
+                        "description": "链接已过期或撤销",
                         "schema": {
                             "$ref": "#/definitions/resp.ErrorResponse"
                         }
@@ -2779,14 +3364,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/settings/dingtalk": {
+        "/settings/feishu": {
             "put": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "管理员更新钉钉Webhook配置",
+                "description": "管理员更新飞书 Webhook 配置",
                 "consumes": [
                     "application/json"
                 ],
@@ -2796,10 +3381,335 @@ const docTemplate = `{
                 "tags": [
                     "设置"
                 ],
-                "summary": "更新钉钉通知配置",
+                "summary": "更新飞书通知配置",
                 "parameters": [
                     {
-                        "description": "钉钉配置请求",
+                        "description": "飞书配置请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.updateFeishuConfigRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求格式错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/feishu/test": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员发送一条测试飞书通知消息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "设置"
+                ],
+                "summary": "测试飞书通知",
+                "responses": {
+                    "200": {
+                        "description": "测试消息已发送",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "飞书通知未启用",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/feishu/webhooks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员获取所有飞书 Webhook 配置列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "飞书通知"
+                ],
+                "summary": "列出飞书 Webhook",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "description": "是否显示完整 URL（仅管理员）",
+                        "name": "full_url",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员创建新的飞书 Webhook 通知通道",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "飞书通知"
+                ],
+                "summary": "创建飞书 Webhook",
+                "parameters": [
+                    {
+                        "description": "Webhook 配置",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.FeishuWebhookCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "创建成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/feishu/webhooks/dead-letters": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员查看发送失败的飞书通知（死信队列）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "飞书通知"
+                ],
+                "summary": "查看死信队列",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "按 Webhook ID 过滤",
+                        "name": "webhook_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "返回数量（默认 50）",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/feishu/webhooks/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员获取单个飞书 Webhook 配置详情",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "飞书通知"
+                ],
+                "summary": "获取飞书 Webhook 详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Webhook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "是否显示完整 URL",
+                        "name": "full_url",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员更新飞书 Webhook 配置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "飞书通知"
+                ],
+                "summary": "更新飞书 Webhook",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Webhook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "更新字段",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.FeishuWebhookUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员删除飞书 Webhook 配置（同时清理死信队列）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "飞书通知"
+                ],
+                "summary": "删除飞书 Webhook",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Webhook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/notify/webhook": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员更新 Webhook 通知配置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "设置"
+                ],
+                "summary": "更新 Webhook 通知配置",
+                "parameters": [
+                    {
+                        "description": "Webhook 配置请求",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2824,21 +3734,21 @@ const docTemplate = `{
                 }
             }
         },
-        "/settings/dingtalk/test": {
+        "/settings/notify/webhook/test": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "管理员发送一条测试钉钉通知消息",
+                "description": "管理员发送一条测试通知消息",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "设置"
                 ],
-                "summary": "测试钉钉通知",
+                "summary": "测试 Webhook 通知",
                 "responses": {
                     "200": {
                         "description": "测试消息已发送",
@@ -2847,7 +3757,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "钉钉通知未启用",
+                        "description": "通知未启用",
                         "schema": {
                             "$ref": "#/definitions/resp.ErrorResponse"
                         }
@@ -2980,6 +3890,108 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "创建工单失败",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tickets/batch-approve": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员/DBA批量通过多条工单",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单"
+                ],
+                "summary": "批量通过工单",
+                "parameters": [
+                    {
+                        "description": "批量审批请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.batchTicketRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "批量审批结果",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求格式错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "无权限",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tickets/batch-reject": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员/DBA批量驳回多条工单",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单"
+                ],
+                "summary": "批量驳回工单",
+                "parameters": [
+                    {
+                        "description": "批量驳回请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.batchTicketRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "批量驳回结果",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求格式错误或驳回原因为空",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "无权限",
                         "schema": {
                             "$ref": "#/definitions/resp.ErrorResponse"
                         }
@@ -3367,6 +4379,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/tickets/{id}/execution-results": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取工单SQL执行的详细结果",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单"
+                ],
+                "summary": "获取工单执行结果",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "工单ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "无效的工单ID",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "工单不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/tickets/{id}/reject": {
             "post": {
                 "security": [
@@ -3418,6 +4476,116 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "无权限",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "工单不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tickets/{id}/resubmit": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "修改SQL后重新提交被驳回的工单",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单"
+                ],
+                "summary": "驳回后重提工单",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "工单ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "重提请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.resubmitTicketRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "重提成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求格式错误",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "无权限",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "工单不存在",
+                        "schema": {
+                            "$ref": "#/definitions/resp.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tickets/{id}/revisions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取工单的历史修订版本列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单"
+                ],
+                "summary": "查看工单历史版本",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "工单ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/resp.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "无效的工单ID",
                         "schema": {
                             "$ref": "#/definitions/resp.ErrorResponse"
                         }
@@ -3882,6 +5050,20 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.batchTicketRequest": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string"
+                },
+                "ticket_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "handler.cancelTicketRequest": {
             "type": "object",
             "properties": {
@@ -3939,6 +5121,9 @@ const docTemplate = `{
                 },
                 "host": {
                     "type": "string"
+                },
+                "id": {
+                    "type": "integer"
                 },
                 "max_idle": {
                     "type": "integer"
@@ -4134,6 +5319,23 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.datasourceOptionResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
         "handler.datasourceResponse": {
             "type": "object",
             "properties": {
@@ -4194,6 +5396,9 @@ const docTemplate = `{
                 "status": {
                     "type": "string"
                 },
+                "system": {
+                    "type": "boolean"
+                },
                 "type": {
                     "type": "string"
                 },
@@ -4214,6 +5419,10 @@ const docTemplate = `{
                 "datasource_id": {
                     "type": "integer"
                 },
+                "params": {
+                    "type": "array",
+                    "items": {}
+                },
                 "sql": {
                     "type": "string"
                 }
@@ -4231,6 +5440,10 @@ const docTemplate = `{
                 "format": {
                     "description": "\"csv\" or \"json\"",
                     "type": "string"
+                },
+                "params": {
+                    "type": "array",
+                    "items": {}
                 },
                 "sql": {
                     "type": "string"
@@ -4288,6 +5501,17 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.resubmitTicketRequest": {
+            "type": "object",
+            "properties": {
+                "change_reason": {
+                    "type": "string"
+                },
+                "sql_content": {
                     "type": "string"
                 }
             }
@@ -4400,6 +5624,22 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.updateDatasourceStatusRequest": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.updateFeishuConfigRequest": {
+            "type": "object",
+            "properties": {
+                "webhook_url": {
+                    "type": "string"
+                }
+            }
+        },
         "handler.updateMaskRuleRequest": {
             "type": "object",
             "properties": {
@@ -4447,6 +5687,12 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "integer"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "role": {
                     "type": "string"
@@ -4515,6 +5761,9 @@ const docTemplate = `{
         "model.SharedResultPublic": {
             "type": "object",
             "properties": {
+                "access_granted": {
+                    "type": "boolean"
+                },
                 "columns": {
                     "type": "array",
                     "items": {
@@ -4595,6 +5844,72 @@ const docTemplate = `{
                 }
             }
         },
+        "service.DailyCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.DashboardFullStats": {
+            "type": "object",
+            "properties": {
+                "active_datasources": {
+                    "type": "integer"
+                },
+                "datasource_sparkline": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "pending_ticket_sparkline": {
+                    "description": "Sparkline: 3 metrics × 7 days",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "pending_tickets": {
+                    "description": "Stat cards",
+                    "type": "integer"
+                },
+                "query_sparkline": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "query_trend": {
+                    "description": "Query trend: daily query counts within [startDate, endDate]",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.DailyCount"
+                    }
+                },
+                "recent_activity": {
+                    "description": "Recent activity: latest 10 audit logs",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.RecentActivityItem"
+                    }
+                },
+                "recent_queries_7d": {
+                    "type": "integer"
+                },
+                "ticket_status_distribution": {
+                    "description": "Ticket status distribution",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "service.DashboardStats": {
             "type": "object",
             "properties": {
@@ -4609,6 +5924,43 @@ const docTemplate = `{
                 },
                 "total_users": {
                     "type": "integer"
+                }
+            }
+        },
+        "service.FeishuWebhookCreateRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "rate_limit_rps": {
+                    "type": "number"
+                },
+                "scene": {
+                    "type": "string"
+                },
+                "webhook_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.FeishuWebhookUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "rate_limit_rps": {
+                    "type": "number"
+                },
+                "scene": {
+                    "type": "string"
+                },
+                "webhook_url": {
+                    "type": "string"
                 }
             }
         },
@@ -4659,6 +6011,9 @@ const docTemplate = `{
                 "execution_time_ms": {
                     "type": "integer"
                 },
+                "history_id": {
+                    "type": "integer"
+                },
                 "rows": {
                     "type": "array",
                     "items": {
@@ -4677,17 +6032,70 @@ const docTemplate = `{
                 }
             }
         },
+        "service.RecentActivityItem": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "ip_address": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "service.RoleInfo": {
             "type": "object",
             "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_builtin": {
+                    "type": "boolean"
+                },
                 "name": {
                     "type": "string"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "policies": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/service.Policy"
                     }
+                },
+                "policy_count": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_count": {
+                    "type": "integer"
                 }
             }
         }

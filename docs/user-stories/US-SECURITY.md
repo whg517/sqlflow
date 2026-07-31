@@ -39,7 +39,7 @@
 **验收标准**：
 
 - Given 规则匹配数据源、库、表和字段，When 用户查询结果包含该字段，Then 返回值按规则脱敏。
-- Given 用户缺少 `desensitize:bypass`，When 查询、导出或分享该数据，Then 不能通过更换入口绕过脱敏。
+- Given 用户缺少 `unmask`，When 查询、导出或分享该数据，Then 不能通过更换入口绕过脱敏。
 - Given 用户具有显式豁免，When 返回未脱敏结果，Then 豁免行为可审计。
 - Given 规则包含自定义正则/模板，When 配置无效，Then 保存被拒绝而不是在查询时静默失效。
 
@@ -59,3 +59,17 @@
 
 **代表性验证**：`e2e/tests/auth-boundary.spec.ts`、`e2e/tests/ticket-audit-boundary.spec.ts`、`e2e/tests/approval-permission-ui.spec.ts`。
 
+## US-SEC-005：按权限发现数据源对象与字段
+
+**故事**：作为数据使用者，我只希望看到自己有权使用的表、集合、索引和字段，避免元数据泄露和无效操作。
+
+**关联需求**：FR-SEC-006、FR-SEC-007
+
+**验收标准**：
+
+- Given 用户只拥有 `orders` 的 `select` 或 `metadata:view`，When 获取数据源表列表，Then 列表和 SQL 自动补全只包含 `orders`。
+- Given 用户无权发现 `payroll`，When 直接访问其字段接口，Then 返回 403，不返回字段名、类型或注释。
+- Given Admin 配置字段脱敏规则，When 选择目标字段，Then 候选项来自服务端授权后的真实字段元数据。
+- Given 用户拥有 `select` 但没有 `unmask`，When 查询命中脱敏规则的字段，Then 数据可查询但返回值保持脱敏。
+
+**代表性验证**：`internal/api/handler/datasource_test.go`、`internal/service/query_test.go`、`e2e/tests/permission-isolation.spec.ts`。

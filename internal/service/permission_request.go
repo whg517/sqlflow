@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
 	entPermReq "github.com/whg517/sqlflow/internal/db/ent/permissionrequest"
@@ -152,8 +153,8 @@ func (s *PermissionRequestService) ApproveRequest(ctx context.Context, requestID
 	}
 
 	// Grant temporary casbin policies
-	dsStr := fmt.Sprintf("%d", r.DatasourceID)
-	userSub := fmt.Sprintf("user:%d", r.ApplicantID)
+	dsStr := authz.DatasourceDomain(r.DatasourceID)
+	userSub := authz.UserSubject(r.ApplicantID)
 	actions := strings.Split(r.Actions, ",")
 	obj := r.TableName
 	if obj == "" {
@@ -222,8 +223,8 @@ func (s *PermissionRequestService) RevokeRequest(ctx context.Context, requestID,
 	}
 
 	// Remove temporary policies
-	dsStr := fmt.Sprintf("%d", r.DatasourceID)
-	userSub := fmt.Sprintf("user:%d", r.ApplicantID)
+	dsStr := authz.DatasourceDomain(r.DatasourceID)
+	userSub := authz.UserSubject(r.ApplicantID)
 	actions := strings.Split(r.Actions, ",")
 	obj := r.TableName
 	if obj == "" {
@@ -321,8 +322,8 @@ func (s *PermissionRequestService) ExpireOverdue(ctx context.Context) (int64, er
 			Save(ctx)
 
 		// Remove temporary policies
-		dsStr := fmt.Sprintf("%d", r.DatasourceID)
-		userSub := fmt.Sprintf("user:%d", r.ApplicantID)
+		dsStr := authz.DatasourceDomain(int64(r.DatasourceID))
+		userSub := authz.UserSubject(int64(r.ApplicantID))
 		obj := r.TableName
 		if obj == "" {
 			obj = r.Database
@@ -411,9 +412,6 @@ func (s *PermissionRequestService) logAudit(ctx context.Context, actorID int64, 
 		SQLSummary: fmt.Sprintf("%s permission request #%d for %s/%s", action, r.ID, r.Database, r.TableName),
 	})
 }
-
-
-
 
 func scanPermRequests(rows *sql.Rows) ([]*model.PermissionRequest, error) {
 	var requests []*model.PermissionRequest

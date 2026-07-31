@@ -193,7 +193,7 @@ describe("TicketNewPage", () => {
     it("fetches datasources on mount", async () => {
       renderTicketNewPage();
       await waitFor(() => {
-        expect(mockApiGet).toHaveBeenCalledWith("/datasources");
+        expect(mockApiGet).toHaveBeenCalledWith("/datasources/available");
       });
     });
 

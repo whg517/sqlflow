@@ -2,8 +2,10 @@ package postgresql
 
 import (
 	"context"
+	"regexp"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/whg517/sqlflow/internal/driver"
 )
 
@@ -118,5 +120,30 @@ func TestPostgreSQLDriver_Registry(t *testing.T) {
 
 	if d.Type() != "postgresql" {
 		t.Errorf("NewDriver(postgresql).Type() = %q, want %q", d.Type(), "postgresql")
+	}
+}
+
+func TestPostgreSQLDriver_ExecuteQueryWithArgs(t *testing.T) {
+	database, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
+	}
+	defer database.Close()
+
+	query := "SELECT name FROM users WHERE id = $1"
+	mock.ExpectQuery(regexp.QuoteMeta(query)).
+		WithArgs("42").
+		WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("Alice"))
+
+	d := &PostgreSQLDriver{db: database}
+	result, err := d.ExecuteQueryWithArgs(context.Background(), "app", query, []interface{}{"42"}, 10)
+	if err != nil {
+		t.Fatalf("ExecuteQueryWithArgs: %v", err)
+	}
+	if result.Total != 1 || len(result.Rows) != 1 || result.Rows[0]["name"] != "Alice" {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("expectations: %v", err)
 	}
 }

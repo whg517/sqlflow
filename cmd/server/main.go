@@ -26,6 +26,7 @@ import (
 	_ "github.com/whg517/sqlflow/internal/driver/mongodb"
 	_ "github.com/whg517/sqlflow/internal/driver/mysql"
 	_ "github.com/whg517/sqlflow/internal/driver/postgresql"
+	_ "github.com/whg517/sqlflow/internal/driver/sqlite"
 )
 
 func main() {

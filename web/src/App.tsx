@@ -105,6 +105,7 @@ function App() {
             <Route path="/settings/datasource" element={<SettingsPage />} />
             <Route path="/settings/mask-rules" element={<SettingsPage />} />
             <Route path="/settings/ai-config" element={<SettingsPage />} />
+            <Route path="/settings/:tab" element={<SettingsPage />} />
             <Route path="/tokens" element={<TokenPage />} />
             <Route path="/permission-requests" element={<PermRequestPage />} />
             <Route path="/sql-templates" element={<SQLTemplatePage />} />
@@ -116,7 +117,13 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
-        <Toaster richColors position="top-right" />
+        <Toaster
+          richColors
+          position="top-right"
+          expand
+          visibleToasts={5}
+          gap={10}
+        />
       </TooltipProvider>
     </BrowserRouter>
   );

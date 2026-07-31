@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/resp"
@@ -78,6 +79,9 @@ func (h *SQLTemplateHandler) CreateTemplate(c echo.Context) error {
 		if errors.Is(err, service.ErrSQLContentTooLarge) {
 			return resp.BadRequest(c, "SQL 内容不能超过 10KB")
 		}
+		if errors.Is(err, service.ErrTemplateDBType) {
+			return resp.BadRequest(c, "仅支持 MySQL、PostgreSQL 和 MongoDB 模板")
+		}
 		return resp.InternalError(c, "创建模板失败")
 	}
 
@@ -102,7 +106,7 @@ func (h *SQLTemplateHandler) GetTemplate(c echo.Context) error {
 		return resp.BadRequest(c, "无效的模板 ID")
 	}
 
-	tpl, err := h.svc.GetTemplate(c.Request().Context(), id)
+	tpl, err := h.svc.GetTemplateForUser(c.Request().Context(), id, getContextUserID(c))
 	if err != nil {
 		if errors.Is(err, service.ErrTemplateNotFound) {
 			return resp.NotFound(c, "模板不存在")
@@ -200,6 +204,9 @@ func (h *SQLTemplateHandler) UpdateTemplate(c echo.Context) error {
 		if errors.Is(err, service.ErrSQLContentTooLarge) {
 			return resp.BadRequest(c, "SQL 内容不能超过 10KB")
 		}
+		if errors.Is(err, service.ErrTemplateDBType) {
+			return resp.BadRequest(c, "仅支持 MySQL、PostgreSQL 和 MongoDB 模板")
+		}
 		return resp.InternalError(c, "更新模板失败")
 	}
 
@@ -265,10 +272,14 @@ func (h *SQLTemplateHandler) RenderTemplate(c echo.Context) error {
 		req.Params = make(map[string]string)
 	}
 
-	result, err := h.svc.RenderTemplate(c.Request().Context(), id, req.Params)
+	result, err := h.svc.RenderTemplateForUser(c.Request().Context(), id, getContextUserID(c), req.Params)
 	if err != nil {
 		if errors.Is(err, service.ErrTemplateNotFound) {
 			return resp.NotFound(c, "模板不存在")
+		}
+		if errors.Is(err, service.ErrTemplateParamMissing) {
+			paramName := strings.TrimSpace(strings.TrimPrefix(err.Error(), service.ErrTemplateParamMissing.Error()+":"))
+			return resp.BadRequest(c, "缺少必填参数："+paramName)
 		}
 		return resp.InternalError(c, "渲染模板失败")
 	}

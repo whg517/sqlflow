@@ -31,7 +31,7 @@ func TestValidateApprovalChainJSON_Valid(t *testing.T) {
 }
 
 func TestValidateApprovalChainJSON_InvalidRole(t *testing.T) {
-	chain := `[{"role":"superuser","auto_skip_same_submitter":true}]`
+	chain := `[{"role":"Super User!","auto_skip_same_submitter":true}]`
 	if err := validateApprovalChainJSON(chain); err == nil {
 		t.Error("expected error for invalid role")
 	}

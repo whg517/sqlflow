@@ -3,31 +3,33 @@ package service
 import (
 	"context"
 	"database/sql"
-	"github.com/whg517/sqlflow/internal/db"
-	"github.com/whg517/sqlflow/internal/db/ent"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
 var (
-	ErrTemplateNotFound = errors.New("SQL template not found")
-	ErrTemplateNameExists = errors.New("template name already exists for this user")
-	ErrSQLContentTooLarge = errors.New("SQL content exceeds 10KB limit")
+	ErrTemplateNotFound     = errors.New("SQL template not found")
+	ErrTemplateNameExists   = errors.New("template name already exists for this user")
+	ErrSQLContentTooLarge   = errors.New("SQL content exceeds 10KB limit")
+	ErrTemplateParamMissing = errors.New("required template parameter is missing")
+	ErrTemplateDBType       = errors.New("unsupported SQL template database type")
 )
 
 const maxSQLContentBytes = 10 * 1024 // 10KB
 
-// placeholderRegex matches {{param_name}} and {{param_name:default}}
-var placeholderRegex = regexp.MustCompile(`\{\{(\w+)(?::([^}]*))?\}\}`)
+// placeholderRegex matches {{param_name}} and {{param_name:default}}, with
+// optional whitespace around the name/default separator.
+var placeholderRegex = regexp.MustCompile(`\{\{\s*(\w+)\s*(?::\s*([^}]*?)\s*)?\}\}`)
 
 // TemplateService provides CRUD and render operations for SQL templates.
 type TemplateService struct {
@@ -44,6 +46,10 @@ func NewSQLTemplateService(database *db.DB) *TemplateService {
 func (s *TemplateService) CreateTemplate(ctx context.Context, userID int64, name, description, sqlContent, dbType, category string, isPublic bool) (*model.SQLTemplate, error) {
 	if len(sqlContent) > maxSQLContentBytes {
 		return nil, ErrSQLContentTooLarge
+	}
+	dbType = strings.ToLower(strings.TrimSpace(dbType))
+	if dbType != "mysql" && dbType != "postgresql" && dbType != "mongodb" {
+		return nil, ErrTemplateDBType
 	}
 
 	paramsJSON, err := extractParamsJSON(sqlContent)
@@ -87,11 +93,26 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, userID int64, name
 
 // GetTemplate returns a single template by ID.
 func (s *TemplateService) GetTemplate(ctx context.Context, id int64) (*model.SQLTemplate, error) {
+	return s.getTemplate(ctx, id, 0, false)
+}
+
+// GetTemplateForUser returns a public template or a template owned by userID.
+func (s *TemplateService) GetTemplateForUser(ctx context.Context, id, userID int64) (*model.SQLTemplate, error) {
+	return s.getTemplate(ctx, id, userID, true)
+}
+
+func (s *TemplateService) getTemplate(ctx context.Context, id, userID int64, enforceAccess bool) (*model.SQLTemplate, error) {
 	t := &model.SQLTemplate{}
 	var pub int
+	query := `SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at
+		 FROM sql_templates WHERE id = ?`
+	args := []interface{}{id}
+	if enforceAccess {
+		query += " AND (user_id = ? OR is_public = 1)"
+		args = append(args, userID)
+	}
 	err := s.database.QueryRowContext(ctx,
-		`SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at
-		 FROM sql_templates WHERE id = ?`, id,
+		query, args...,
 	).Scan(&t.ID, &t.UserID, &t.Name, &t.Description, &t.SQLContent, &t.DBType, &t.Category, &t.ParamsJSON, &pub, &t.CreatedAt, &t.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrTemplateNotFound
@@ -138,9 +159,9 @@ func (s *TemplateService) ListTemplates(ctx context.Context, userID int64, categ
 		rows, err = s.database.QueryContext(ctx, listQuery, listArgs...)
 	} else {
 		// User's own + all public
-		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE user_id = ? OR is_public = 1"
+		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE (user_id = ? OR is_public = 1)"
 		args := []interface{}{userID}
-		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE user_id = ? OR is_public = 1"
+		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE (user_id = ? OR is_public = 1)"
 		if category != "" {
 			countQuery += " AND category = ?"
 			listQuery += " AND category = ?"
@@ -180,6 +201,10 @@ func (s *TemplateService) ListTemplates(ctx context.Context, userID int64, categ
 func (s *TemplateService) UpdateTemplate(ctx context.Context, id, userID int64, name, description, sqlContent, dbType, category string, isPublic bool) error {
 	if len(sqlContent) > maxSQLContentBytes {
 		return ErrSQLContentTooLarge
+	}
+	dbType = strings.ToLower(strings.TrimSpace(dbType))
+	if dbType != "mysql" && dbType != "postgresql" && dbType != "mongodb" {
+		return ErrTemplateDBType
 	}
 
 	paramsJSON, err := extractParamsJSON(sqlContent)
@@ -234,7 +259,22 @@ type RenderResult struct {
 // RenderTemplate replaces placeholders in a template with parameter values.
 // MySQL: ?, PostgreSQL: $1,$2,..., MongoDB: original template.
 func (s *TemplateService) RenderTemplate(ctx context.Context, id int64, params map[string]string) (*RenderResult, error) {
-	t, err := s.GetTemplate(ctx, id)
+	return s.renderTemplate(ctx, id, 0, params, false)
+}
+
+// RenderTemplateForUser renders a template after enforcing public/owner access.
+func (s *TemplateService) RenderTemplateForUser(ctx context.Context, id, userID int64, params map[string]string) (*RenderResult, error) {
+	return s.renderTemplate(ctx, id, userID, params, true)
+}
+
+func (s *TemplateService) renderTemplate(ctx context.Context, id, userID int64, params map[string]string, enforceAccess bool) (*RenderResult, error) {
+	var t *model.SQLTemplate
+	var err error
+	if enforceAccess {
+		t, err = s.GetTemplateForUser(ctx, id, userID)
+	} else {
+		t, err = s.GetTemplate(ctx, id)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -244,12 +284,12 @@ func (s *TemplateService) RenderTemplate(ctx context.Context, id int64, params m
 		// No placeholders, return as-is
 		return &RenderResult{
 			RenderedSQL: t.SQLContent,
-			ParamValues: nil,
+			ParamValues: []interface{}{},
 			SQL:         t.SQLContent,
 		}, nil
 	}
 
-	var paramValues []interface{}
+	paramValues := make([]interface{}, 0, len(matches))
 	var rendered strings.Builder
 	lastIdx := 0
 
@@ -262,8 +302,11 @@ func (s *TemplateService) RenderTemplate(ctx context.Context, id int64, params m
 		}
 
 		// Use provided param value or default
-		val, ok := params[paramName]
-		if !ok {
+		val, provided := params[paramName]
+		if !provided && defaultVal == "" {
+			return nil, fmt.Errorf("%w: %s", ErrTemplateParamMissing, paramName)
+		}
+		if !provided {
 			val = defaultVal
 		}
 
@@ -380,6 +423,3 @@ func ParseExtractedParams(paramsJSON string) ([]map[string]string, error) {
 	}
 	return result, nil
 }
-
-// unused import guard
-var _ = strconv.Itoa

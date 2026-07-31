@@ -2,16 +2,21 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
-	"github.com/whg517/sqlflow/internal/db"
 	"entgo.io/ent/dialect/sql"
+	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
 	"github.com/whg517/sqlflow/internal/db/ent/sharedresult"
 	"github.com/whg517/sqlflow/internal/model"
@@ -19,28 +24,35 @@ import (
 )
 
 var (
-	ErrShareNotFound    = errors.New("共享链接不存在")
-	ErrShareExpired     = errors.New("共享链接已过期")
-	ErrShareRevoked     = errors.New("共享链接已撤销")
-	ErrSharePassword    = errors.New("密码错误")
-	ErrShareRowLimit    = errors.New("共享数据超过 10000 行上限")
+	ErrShareNotFound      = errors.New("共享链接不存在")
+	ErrShareExpired       = errors.New("共享链接已过期")
+	ErrShareRevoked       = errors.New("共享链接已撤销")
+	ErrSharePassword      = errors.New("密码错误")
+	ErrShareRowLimit      = errors.New("共享数据超过 10000 行上限")
 	ErrShareExpiryTooLong = errors.New("过期时间不能超过 7 天")
 )
 
 const (
-	shareMaxRows   = 10000
-	shareMaxExpiry = 7 * 24 * time.Hour
+	shareMaxRows         = 10000
+	shareMaxExpiry       = 7 * 24 * time.Hour
+	shareAccessTokenTTL  = 15 * time.Minute
+	shareAccessTokenType = "v1"
 )
 
 // ShareService handles shared query results.
 type ShareService struct {
-	database *db.DB
-	client   *ent.Client
+	database     *db.DB
+	client       *ent.Client
+	accessSecret []byte
 }
 
 // NewShareService creates a new ShareService.
-func NewShareService(database *db.DB) *ShareService {
-	return &ShareService{database: database, client: database.Client()}
+func NewShareService(database *db.DB, accessSecret string) *ShareService {
+	return &ShareService{
+		database:     database,
+		client:       database.Client(),
+		accessSecret: []byte(accessSecret),
+	}
 }
 
 // generateToken generates a cryptographically random 16-byte hex token.
@@ -124,8 +136,10 @@ func (s *ShareService) CreateShare(ctx context.Context, req *CreateShareRequest)
 	return result, nil
 }
 
-// GetShare retrieves a shared result by token (public, no auth).
-func (s *ShareService) GetShare(ctx context.Context, token string) (*model.SharedResultPublic, error) {
+// GetShare retrieves a shared result by token. Password-protected shares only
+// include result data when accessProof is a valid short-lived proof issued by
+// VerifyPassword.
+func (s *ShareService) GetShare(ctx context.Context, token, accessProof string) (*model.SharedResultPublic, error) {
 	sr, err := s.client.SharedResult.Query().
 		Where(sharedresult.Token(token)).
 		Only(ctx)
@@ -147,6 +161,19 @@ func (s *ShareService) GetShare(ctx context.Context, token string) (*model.Share
 		return nil, ErrShareRevoked
 	}
 
+	hasPassword := sr.PasswordHash != ""
+	accessGranted := !hasPassword || s.verifyAccessProof(accessProof, int64(sr.ID), token)
+	if !accessGranted {
+		return &model.SharedResultPublic{
+			Columns:       make([]string, 0),
+			Rows:          make([]map[string]interface{}, 0),
+			ExpiresAt:     sr.ExpiresAt.Format(time.RFC3339),
+			HasPassword:   true,
+			AccessGranted: false,
+			CreatedAt:     sr.CreatedAt.Format(time.RFC3339),
+		}, nil
+	}
+
 	// Parse JSON fields
 	var columns []string
 	if err := json.Unmarshal([]byte(sr.ColumnsJSON), &columns); err != nil {
@@ -166,33 +193,82 @@ func (s *ShareService) GetShare(ctx context.Context, token string) (*model.Share
 		SQLSummary:     sr.SQLSummary,
 		DatasourceName: sr.DatasourceName,
 		ExpiresAt:      sr.ExpiresAt.Format(time.RFC3339),
-		HasPassword:    sr.PasswordHash != "",
+		HasPassword:    hasPassword,
+		AccessGranted:  true,
 		CreatedAt:      sr.CreatedAt.Format(time.RFC3339),
 	}, nil
 }
 
-// VerifyPassword checks if the provided password matches the shared result.
-func (s *ShareService) VerifyPassword(ctx context.Context, token, password string) error {
+// VerifyPassword checks if the provided password matches the shared result and
+// returns a short-lived proof bound to that exact share.
+func (s *ShareService) VerifyPassword(ctx context.Context, token, password string) (string, error) {
 	sr, err := s.client.SharedResult.Query().
 		Where(sharedresult.Token(token)).
-		Select(sharedresult.FieldPasswordHash).
+		Select(
+			sharedresult.FieldID,
+			sharedresult.FieldPasswordHash,
+			sharedresult.FieldExpiresAt,
+			sharedresult.FieldRevoked,
+		).
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return ErrShareNotFound
+			return "", ErrShareNotFound
 		}
-		return fmt.Errorf("验证密码失败")
+		return "", fmt.Errorf("验证密码失败")
+	}
+
+	if time.Now().After(sr.ExpiresAt) {
+		return "", ErrShareExpired
+	}
+	if sr.Revoked {
+		return "", ErrShareRevoked
 	}
 
 	if sr.PasswordHash == "" {
-		return nil // no password set
+		return "", nil // no password set
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(sr.PasswordHash), []byte(password)); err != nil {
-		return ErrSharePassword
+		return "", ErrSharePassword
 	}
 
-	return nil
+	expiresAt := time.Now().Add(shareAccessTokenTTL)
+	if sr.ExpiresAt.Before(expiresAt) {
+		expiresAt = sr.ExpiresAt
+	}
+	return s.generateAccessProof(int64(sr.ID), token, expiresAt), nil
+}
+
+func (s *ShareService) generateAccessProof(shareID int64, token string, expiresAt time.Time) string {
+	expiresUnix := strconv.FormatInt(expiresAt.Unix(), 10)
+	payload := strings.Join([]string{shareAccessTokenType, strconv.FormatInt(shareID, 10), token, expiresUnix}, "|")
+	mac := hmac.New(sha256.New, s.accessSecret)
+	_, _ = mac.Write([]byte(payload))
+	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return shareAccessTokenType + "." + expiresUnix + "." + signature
+}
+
+func (s *ShareService) verifyAccessProof(proof string, shareID int64, token string) bool {
+	parts := strings.Split(proof, ".")
+	if len(parts) != 3 || parts[0] != shareAccessTokenType {
+		return false
+	}
+
+	expiresUnix, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil || time.Now().Unix() >= expiresUnix {
+		return false
+	}
+
+	payload := strings.Join([]string{shareAccessTokenType, strconv.FormatInt(shareID, 10), token, parts[1]}, "|")
+	mac := hmac.New(sha256.New, s.accessSecret)
+	_, _ = mac.Write([]byte(payload))
+	expected := mac.Sum(nil)
+	actual, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return false
+	}
+	return hmac.Equal(actual, expected)
 }
 
 // ListMyShares lists all shared results for a user.

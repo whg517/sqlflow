@@ -6,6 +6,7 @@ export interface QueryExecuteRequest {
   datasource_id: number;
   database: string;
   sql: string;
+  params?: unknown[];
 }
 
 export interface QueryResult {
@@ -29,6 +30,7 @@ export interface QueryExportRequest {
   datasource_id: number;
   database: string;
   sql: string;
+  params?: unknown[];
   format: "csv" | "json";
 }
 
@@ -38,6 +40,7 @@ export interface QueryHistoryItem {
   datasource_id: number;
   database: string;
   sql_content: string;
+  params_json: string;
   sql_summary: string;
   db_type: string;
   execution_time: number;
@@ -58,6 +61,25 @@ export interface QueryHistoryResponse {
 export interface ApiResponse {
   code: number;
   message: string;
+}
+
+export interface ESIndexInfo {
+  name: string;
+  health: string;
+  status: string;
+  doc_count: number;
+  store_size: string;
+  store_bytes: number;
+  created_time: string;
+}
+
+interface ESIndexListResponse {
+  code: number;
+  message: string;
+  data: {
+    items: ESIndexInfo[];
+    total: number;
+  };
 }
 
 // --- AI Review Types ---
@@ -106,6 +128,15 @@ export async function executeQuery(
 ): Promise<QueryResult> {
   const res = await api.post<QueryExecuteResponse>("/query/execute", req);
   return res.data;
+}
+
+export async function fetchESIndices(
+  datasourceId: number,
+): Promise<ESIndexInfo[]> {
+  const res = await api.get<ESIndexListResponse>(
+    `/datasources/${datasourceId}/es/indices?page=1&page_size=100`,
+  );
+  return res.data?.items ?? [];
 }
 
 /**

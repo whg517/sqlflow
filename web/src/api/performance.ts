@@ -69,7 +69,14 @@ export interface PerformanceStats {
 export interface PerformanceStatsResponse {
   code: number;
   message: string;
-  data: PerformanceStats;
+  data: Omit<
+    PerformanceStats,
+    "daily_trend" | "datasource_stats" | "top_slow_queries"
+  > & {
+    daily_trend: DailyTrend[] | null;
+    datasource_stats: DatasourceStats[] | null;
+    top_slow_queries: TopSlowQuery[] | null;
+  };
 }
 
 // --- API Functions ---
@@ -85,7 +92,13 @@ export async function getSlowQueries(
     qs.set("datasource_id", String(params.datasource_id));
   if (params.start_date) qs.set("start_date", params.start_date);
   if (params.end_date) qs.set("end_date", params.end_date);
-  return api.get<SlowQueryResponse>(`/query/performance/slow?${qs.toString()}`);
+  const res = await api.get<
+    Omit<SlowQueryResponse, "data"> & { data: SlowQueryItem[] | null }
+  >(`/query/performance/slow?${qs.toString()}`);
+  return {
+    ...res,
+    data: Array.isArray(res.data) ? res.data : [],
+  };
 }
 
 export async function getPerformanceStats(
@@ -94,5 +107,16 @@ export async function getPerformanceStats(
   const res = await api.get<PerformanceStatsResponse>(
     `/query/performance/stats?days=${days}`,
   );
-  return res.data;
+  return {
+    ...res.data,
+    daily_trend: Array.isArray(res.data.daily_trend)
+      ? res.data.daily_trend
+      : [],
+    datasource_stats: Array.isArray(res.data.datasource_stats)
+      ? res.data.datasource_stats
+      : [],
+    top_slow_queries: Array.isArray(res.data.top_slow_queries)
+      ? res.data.top_slow_queries
+      : [],
+  };
 }

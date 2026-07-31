@@ -30,15 +30,34 @@ func NewQueryHandler(querySvc *service.QueryService, historySvc *service.QueryHi
 }
 
 type executeQueryRequest struct {
-	DatasourceID int64  `json:"datasource_id"`
-	Database     string `json:"database"`
-	SQL          string `json:"sql"`
+	DatasourceID int64         `json:"datasource_id"`
+	Database     string        `json:"database"`
+	SQL          string        `json:"sql"`
+	Params       []interface{} `json:"params,omitempty"`
 }
 
 type explainQueryRequest struct {
-	DatasourceID int64  `json:"datasource_id"`
-	Database     string `json:"database"`
-	SQL          string `json:"sql"`
+	DatasourceID int64         `json:"datasource_id"`
+	Database     string        `json:"database"`
+	SQL          string        `json:"sql"`
+	Params       []interface{} `json:"params,omitempty"`
+}
+
+func validateQueryParams(params []interface{}) error {
+	if len(params) > 100 {
+		return fmt.Errorf("查询参数不能超过 100 个")
+	}
+	for _, value := range params {
+		switch typed := value.(type) {
+		case nil, bool, float64, string:
+			if text, ok := typed.(string); ok && len(text) > 64*1024 {
+				return fmt.Errorf("单个查询参数不能超过 64KB")
+			}
+		default:
+			return fmt.Errorf("查询参数仅支持字符串、数字、布尔值和 null")
+		}
+	}
+	return nil
 }
 
 // ExecuteQuery handles POST /api/query/execute.
@@ -66,12 +85,15 @@ func (h *QueryHandler) ExecuteQuery(c echo.Context) error {
 	if req.SQL == "" {
 		return resp.BadRequest(c, "SQL不能为空")
 	}
+	if err := validateQueryParams(req.Params); err != nil {
+		return resp.BadRequest(c, err.Error())
+	}
 
 	userID := getContextUserID(c)
 	username := getContextUsername(c)
 	role := getContextRole(c)
 
-	result, err := h.querySvc.ExecuteQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, "")
+	result, err := h.querySvc.ExecuteQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, "", req.Params...)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrDatasourceNotFound):
@@ -88,6 +110,10 @@ func (h *QueryHandler) ExecuteQuery(c echo.Context) error {
 			return resp.BadRequest(c, "查询超时（30秒），请优化查询或缩小范围")
 		case errors.Is(err, service.ErrEmptySQL):
 			return resp.BadRequest(c, "SQL不能为空")
+		case errors.Is(err, service.ErrQueryParamsUnsupported):
+			return resp.BadRequest(c, err.Error())
+		case errors.Is(err, service.ErrInternalDatasourceOnly):
+			return resp.Forbidden(c, err.Error())
 		default:
 			log.Printf("ExecuteQuery failed: %v", err)
 			return resp.InternalError(c, "查询执行失败")
@@ -110,11 +136,14 @@ func (h *QueryHandler) ExplainQuery(c echo.Context) error {
 	if req.SQL == "" {
 		return resp.BadRequest(c, "SQL不能为空")
 	}
+	if err := validateQueryParams(req.Params); err != nil {
+		return resp.BadRequest(c, err.Error())
+	}
 
 	userID := getContextUserID(c)
 	role := getContextRole(c)
 
-	result, err := h.querySvc.ExplainQuery(c.Request().Context(), userID, role, req.DatasourceID, req.Database, req.SQL)
+	result, err := h.querySvc.ExplainQuery(c.Request().Context(), userID, role, req.DatasourceID, req.Database, req.SQL, req.Params...)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrExplainNonSelect):
@@ -222,10 +251,11 @@ func (h *QueryHandler) ClearHistory(c echo.Context) error {
 }
 
 type exportQueryRequest struct {
-	DatasourceID int64  `json:"datasource_id"`
-	Database     string `json:"database"`
-	SQL          string `json:"sql"`
-	Format       string `json:"format"` // "csv" or "json"
+	DatasourceID int64         `json:"datasource_id"`
+	Database     string        `json:"database"`
+	SQL          string        `json:"sql"`
+	Format       string        `json:"format"` // "csv" or "json"
+	Params       []interface{} `json:"params,omitempty"`
 }
 
 // ExportQuery handles POST /api/query/export.
@@ -256,12 +286,15 @@ func (h *QueryHandler) ExportQuery(c echo.Context) error {
 	if req.Format != "csv" && req.Format != "json" {
 		return resp.BadRequest(c, "导出格式仅支持 csv 或 json")
 	}
+	if err := validateQueryParams(req.Params); err != nil {
+		return resp.BadRequest(c, err.Error())
+	}
 
 	userID := getContextUserID(c)
 	username := getContextUsername(c)
 	role := getContextRole(c)
 
-	result, err := h.querySvc.ExportQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, "")
+	result, err := h.querySvc.ExportQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, "", req.Params...)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrDatasourceNotFound):
@@ -280,6 +313,10 @@ func (h *QueryHandler) ExportQuery(c echo.Context) error {
 			return resp.BadRequest(c, "SQL不能为空")
 		case errors.Is(err, service.ErrExportRowLimit):
 			return resp.BadRequest(c, "导出数据超过10000行上限，请添加 LIMIT 条件缩小范围")
+		case errors.Is(err, service.ErrQueryParamsUnsupported):
+			return resp.BadRequest(c, err.Error())
+		case errors.Is(err, service.ErrInternalDatasourceOnly):
+			return resp.Forbidden(c, err.Error())
 		default:
 			log.Printf("ExportQuery failed: %v", err)
 			return resp.InternalError(c, "导出失败")

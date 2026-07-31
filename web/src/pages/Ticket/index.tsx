@@ -213,7 +213,7 @@ export default function TicketPage() {
   // Load datasources
   useEffect(() => {
     api
-      .get<{ code: number; data: DataSourceOption[] }>("/datasources")
+      .get<{ code: number; data: DataSourceOption[] }>("/datasources/available")
       .then((res) => {
         setDatasources(res.data ?? []);
       })

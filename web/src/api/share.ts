@@ -25,6 +25,7 @@ export interface SharedResultPublic {
   datasource_name: string;
   expires_at: string;
   has_password: boolean;
+  access_granted: boolean;
   created_at: string;
 }
 
@@ -60,7 +61,7 @@ export async function revokeShare(id: number): Promise<void> {
 
 // Public API (no auth required) — uses fetch directly with full URL
 export async function getSharedResult(token: string): Promise<SharedResultPublic> {
-  const res = await fetch(`/s/${token}`);
+  const res = await fetch(`/s/${token}`, { credentials: "same-origin" });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message || `请求失败 (${res.status})`);
@@ -75,6 +76,7 @@ export async function verifySharePassword(
 ): Promise<void> {
   const res = await fetch(`/s/${token}/verify`, {
     method: "POST",
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password }),
   });

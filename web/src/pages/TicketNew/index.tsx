@@ -37,6 +37,7 @@ export default function TicketNewPage() {
   const navigate = useNavigate();
 
   const [datasources, setDatasources] = useState<DataSourceOption[]>([]);
+  const [datasourceLoadError, setDatasourceLoadError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // Form state
@@ -51,11 +52,15 @@ export default function TicketNewPage() {
   // Load datasources
   useEffect(() => {
     api
-      .get<DatasourceListResponse>("/datasources")
+      .get<DatasourceListResponse>("/datasources/available")
       .then((res) => {
-        setDatasources((res.data ?? []).filter((ds) => ds.status === "active"));
+        const list = (res.data ?? []).filter((ds) => ds.status === "active");
+        setDatasources(list);
+        setDatasourceLoadError(list.length === 0 ? "当前没有可用数据源" : "");
       })
-      .catch(() => {});
+      .catch((err) => {
+        setDatasourceLoadError(err instanceof Error ? err.message : "数据源加载失败");
+      });
   }, []);
 
   function validate(): boolean {
@@ -141,6 +146,11 @@ export default function TicketNewPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {datasourceLoadError && (
+                <p className="mt-1 text-xs text-amber-400">
+                  {datasourceLoadError}
+                </p>
+              )}
               {errors.datasourceId && (
                 <p className="mt-1 text-xs text-red-400">
                   {errors.datasourceId}

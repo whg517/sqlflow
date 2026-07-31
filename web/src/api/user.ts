@@ -42,6 +42,22 @@ export interface UserActionResponse {
   data?: User;
 }
 
+export interface Role {
+  id: number;
+  name: string;
+  display_name: string;
+  description: string;
+  is_builtin: boolean;
+  status: "active" | "disabled";
+  user_count: number;
+  policy_count: number;
+}
+
+export interface ListRolesResponse {
+  code: number;
+  data: Role[];
+}
+
 // --- API Functions ---
 
 export async function listUsers(
@@ -75,6 +91,10 @@ export async function resetPassword(
   req: ResetPasswordRequest,
 ): Promise<UserActionResponse> {
   return api.put<UserActionResponse>(`/users/${id}/reset-password`, req);
+}
+
+export async function listRoles(): Promise<ListRolesResponse> {
+  return api.get<ListRolesResponse>("/roles");
 }
 
 // --- Helpers ---

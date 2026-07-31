@@ -20,6 +20,7 @@ interface UseModuleListResult {
 export function useModuleList(
   project: string,
   initialParams?: ModuleListParams,
+  enabled = true,
 ): UseModuleListResult {
   const [params, setParamsState] = useState<ModuleListParams>(
     initialParams ?? { sort: "line_rate:asc", page: 1, page_size: 20 },
@@ -33,6 +34,11 @@ export function useModuleList(
   const fetchIdRef = useRef(0);
 
   useEffect(() => {
+    if (!enabled) {
+      fetchIdRef.current += 1;
+      return;
+    }
+
     const fetchId = ++fetchIdRef.current;
 
     getModuleList(project, params)
@@ -56,7 +62,7 @@ export function useModuleList(
         if (fetchId !== fetchIdRef.current) return;
         setLoading(false);
       });
-  }, [project, params]);
+  }, [enabled, project, params]);
 
   const setParams = useCallback(
     (next: Partial<ModuleListParams>) => {

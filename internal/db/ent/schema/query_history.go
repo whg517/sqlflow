@@ -28,8 +28,10 @@ func (QueryHistory) Fields() []ent.Field {
 			Default(""),
 		field.String("sql_content").
 			NotEmpty(),
-	field.String("sql_hash").
+		field.String("sql_hash").
 			Default(""),
+		field.String("params_json").
+			Default("[]"),
 		field.String("sql_summary").
 			Default(""),
 		field.String("db_type").

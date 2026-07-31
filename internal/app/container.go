@@ -9,6 +9,7 @@ package app
 import (
 	"context"
 	"log"
+	"path/filepath"
 	"time"
 
 	"github.com/whg517/sqlflow/config"
@@ -36,7 +37,7 @@ type Container struct {
 	Permission *service.PermissionService
 
 	// 查询
-	Query  *service.QueryService
+	Query   *service.QueryService
 	History *service.QueryHistoryService
 
 	// 工单 & 审批
@@ -52,27 +53,27 @@ type Container struct {
 	ExportAsync *service.ExportAsyncService
 
 	// 通知
-	Notify                  *service.NotifyService
-	FeishuWebhook           *service.FeishuWebhookService
-	NotificationPreference  *service.NotificationPreferenceService
-	WebhookSubscription     *service.WebhookSubscriptionService
+	Notify                 *service.NotifyService
+	FeishuWebhook          *service.FeishuWebhookService
+	NotificationPreference *service.NotificationPreferenceService
+	WebhookSubscription    *service.WebhookSubscriptionService
 
 	// SLA
 	SLA *service.SLAService
 
 	// 其他 service
-	Dashboard     *service.DashboardService
-	Comment       *service.CommentService
-	OIDC          *service.OIDCService
-	Backup        *service.BackupService
-	Git           *service.GitService
-	Token         *service.TokenService
-	Report        *service.AuditReportService
-	PermRequest   *service.PermissionRequestService
-	SQLTemplate   *service.TemplateService
-	Share         *service.ShareService
-	WebVitals     *service.WebVitalsService
-	AIReview      *service.AIReviewService
+	Dashboard   *service.DashboardService
+	Comment     *service.CommentService
+	OIDC        *service.OIDCService
+	Backup      *service.BackupService
+	Git         *service.GitService
+	Token       *service.TokenService
+	Report      *service.AuditReportService
+	PermRequest *service.PermissionRequestService
+	SQLTemplate *service.TemplateService
+	Share       *service.ShareService
+	WebVitals   *service.WebVitalsService
+	AIReview    *service.AIReviewService
 
 	// 调度器（需在 Close 时停止）
 	ticketScheduler *service.Scheduler
@@ -110,6 +111,17 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	exportAsyncSvc := service.NewExportAsyncService(database, exportSvc, auditSvc, cfg.DB.Path)
 
 	dsSvc := service.NewDatasourceService(database, cfg.EncryptionKey, connMgr, poolMgr)
+	internalDBPath, err := filepath.Abs(cfg.DB.Path)
+	if err != nil {
+		connMgr.Close()
+		poolMgr.Close()
+		return nil, err
+	}
+	if _, err := dsSvc.EnsureInternalDataSource(context.Background(), internalDBPath); err != nil {
+		connMgr.Close()
+		poolMgr.Close()
+		return nil, err
+	}
 
 	// NotifyService 先构造（TicketService 依赖它，但它又依赖后续的 FeishuWebhook）
 	notifySvc := service.NewNotifyService(cfg.Notify.WebhookURL, cfg.Notify.Secret)
@@ -152,7 +164,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	// API Token / SQL Template / Share / WebVitals
 	tokenSvc := service.NewTokenService(database)
 	templateSvc := service.NewSQLTemplateService(database)
-	shareSvc := service.NewShareService(database)
+	shareSvc := service.NewShareService(database, cfg.JWT.Secret)
 	vitalsSvc := service.NewWebVitalsService(database)
 
 	// OIDC（依赖 auth）
@@ -222,12 +234,12 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 		Export: exportSvc, ExportAsync: exportAsyncSvc,
 		Notify: notifySvc, FeishuWebhook: feishuWebhookSvc,
 		NotificationPreference: notifPrefSvc, WebhookSubscription: webhookSubSvc,
-		SLA: slaSvc,
+		SLA:       slaSvc,
 		Dashboard: dashboardSvc, Comment: commentSvc, OIDC: oidcSvc,
 		Backup: backupSvc, Git: gitSvc, Token: tokenSvc,
 		Report: reportSvc, PermRequest: permReqSvc,
 		SQLTemplate: templateSvc, Share: shareSvc, WebVitals: vitalsSvc,
-		AIReview: aiReviewSvc,
+		AIReview:        aiReviewSvc,
 		ticketScheduler: ticketScheduler, slaScheduler: slaScheduler,
 	}, nil
 }

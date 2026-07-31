@@ -58,6 +58,7 @@ import {
   updateUser,
   deleteUser,
   resetPassword,
+  listRoles,
   ROLE_LABEL_MAP,
   ROLE_BADGE_CLASS,
   ROLE_OPTIONS,
@@ -94,6 +95,8 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(false);
   const [inited, setInited] = useState(false);
   const [keyword, setKeyword] = useState("");
+  const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS);
+  const [roleLabels, setRoleLabels] = useState(ROLE_LABEL_MAP);
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -139,8 +142,33 @@ export default function UsersPage() {
     }
   }, []);
 
+  const fetchRoles = useCallback(async () => {
+    try {
+      const res = await listRoles();
+      const activeRoles = (res.data ?? []).filter(
+        (role) => role.status === "active",
+      );
+      if (activeRoles.length > 0) {
+        setRoleOptions(
+          activeRoles.map((role) => ({
+            value: role.name,
+            label: role.display_name,
+          })),
+        );
+        setRoleLabels(
+          Object.fromEntries(
+            activeRoles.map((role) => [role.name, role.display_name]),
+          ),
+        );
+      }
+    } catch {
+      // Keep built-in fallbacks when role discovery is unavailable.
+    }
+  }, []);
+
   if (!inited && !loading) {
     fetchUsers(1);
+    fetchRoles();
   }
 
   // --- Filtered users ---
@@ -286,7 +314,7 @@ export default function UsersPage() {
                 ROLE_BADGE_CLASS[role] ?? "bg-muted text-muted-foreground"
               }
             >
-              {ROLE_LABEL_MAP[role] ?? role}
+              {roleLabels[role] ?? role}
             </Badge>
           );
         },
@@ -618,7 +646,7 @@ export default function UsersPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ROLE_OPTIONS.map((o) => (
+                  {roleOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>
                       {o.label}
                     </SelectItem>
@@ -689,7 +717,7 @@ export default function UsersPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ROLE_OPTIONS.map((o) => (
+                  {roleOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>
                       {o.label}
                     </SelectItem>

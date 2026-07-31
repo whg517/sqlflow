@@ -11,20 +11,21 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	es "github.com/elastic/go-elasticsearch/v8"
+	_ "github.com/go-sql-driver/mysql"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
-	pkgmetrics "github.com/whg517/sqlflow/internal/pkg/metrics"
 	"github.com/whg517/sqlflow/internal/pkg/mask"
+	pkgmetrics "github.com/whg517/sqlflow/internal/pkg/metrics"
 	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
 )
 
@@ -34,12 +35,14 @@ const (
 )
 
 var (
-	ErrSQLOperationForbidden = errors.New("该操作需要提交工单，仅允许 SELECT 查询")
-	ErrSQLHighRisk           = errors.New("高风险操作被拦截，请提交工单")
-	ErrSQLBlocked            = errors.New("SQL操作被拦截")
-	ErrSQLTimeout            = errors.New("查询超时（30秒）")
-	ErrEmptySQL              = errors.New("SQL 不能为空")
-	ErrDatasourceType        = errors.New("不支持的数据源类型")
+	ErrSQLOperationForbidden  = errors.New("该操作需要提交工单，仅允许 SELECT 查询")
+	ErrSQLHighRisk            = errors.New("高风险操作被拦截，请提交工单")
+	ErrSQLBlocked             = errors.New("SQL操作被拦截")
+	ErrSQLTimeout             = errors.New("查询超时（30秒）")
+	ErrEmptySQL               = errors.New("SQL 不能为空")
+	ErrDatasourceType         = errors.New("不支持的数据源类型")
+	ErrQueryParamsUnsupported = errors.New("当前数据源不支持参数化查询")
+	ErrInternalDatasourceOnly = errors.New("SQLFlow 元数据库仅允许管理员访问")
 )
 
 // QueryResult holds the result of a query execution.
@@ -99,8 +102,26 @@ func NewQueryService(database *db.DB, dsSvc *DatasourceService, historySvc *Quer
 	}
 }
 
+func executeDriverQuery(
+	ctx context.Context,
+	d driver.Driver,
+	database,
+	query string,
+	args []interface{},
+	limit int,
+) (*driver.QueryResult, error) {
+	if len(args) == 0 {
+		return d.ExecuteQuery(ctx, database, query, limit)
+	}
+	parameterized, ok := d.(driver.ParameterizedQueryExecutor)
+	if !ok {
+		return nil, ErrQueryParamsUnsupported
+	}
+	return parameterized.ExecuteQueryWithArgs(ctx, database, query, args, limit)
+}
+
 // ExecuteQuery executes a SQL query on the specified datasource.
-func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username, role string, datasourceID int64, database, sqlContent, dbType string) (*QueryResult, error) {
+func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username, role string, datasourceID int64, database, sqlContent, dbType string, queryParams ...interface{}) (*QueryResult, error) {
 	if strings.TrimSpace(sqlContent) == "" {
 		return nil, ErrEmptySQL
 	}
@@ -112,6 +133,9 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 	}
 	if ds.Status == "disabled" {
 		return nil, ErrDatasourceDisabled
+	}
+	if IsInternalDataSource(ds) && role != "admin" {
+		return nil, ErrInternalDatasourceOnly
 	}
 
 	// Use datasource type if dbType not explicitly provided
@@ -148,7 +172,7 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 
 	// Check table-level permissions via Casbin
 	for _, table := range parseResult.Tables {
-		allowed, err := s.permSvc.Enforce(role, fmt.Sprintf("ds_%d", datasourceID), table, "select")
+		allowed, err := s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "select")
 		if err != nil {
 			return nil, fmt.Errorf("权限校验失败: %w", err)
 		}
@@ -175,9 +199,9 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 	queryStart := time.Now()
 	var result *QueryResult
 
-	// Use Driver abstraction for MySQL, PostgreSQL and MongoDB.
+	// Use Driver abstraction for MySQL, PostgreSQL, SQLite and MongoDB.
 	// ES 仍走 fallback（查询语义复杂，迁移留待后续）。
-	if s.poolMgr != nil && (dbType == "mysql" || dbType == "postgresql" || dbType == "mongodb") {
+	if s.poolMgr != nil && (dbType == "mysql" || dbType == "postgresql" || dbType == "sqlite" || dbType == "mongodb") {
 		adapter := newDataSourceAdapter(ds)
 		cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
 		if err != nil {
@@ -203,7 +227,7 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 				dbName = "postgres"
 			}
 		}
-		drvResult, err := d.ExecuteQuery(ctx, dbName, sqlContent, defaultRowLimit)
+		drvResult, err := executeDriverQuery(ctx, d, dbName, sqlContent, queryParams, defaultRowLimit)
 		if err != nil {
 			// 执行失败：超时映射为 ErrSQLTimeout（与 fallback 路径一致）
 			if ctx.Err() == context.DeadlineExceeded {
@@ -226,12 +250,18 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 		// Fallback to legacy connpool-based execution for unsupported types (MongoDB, ES)
 		switch dbType {
 		case "mysql":
-			result, err = s.executeMySQL(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, poolCfg, defaultRowLimit)
+			result, err = s.executeMySQLWithArgs(ctx, datasourceID, database, sqlContent, queryParams, ds.Host, ds.Port, ds.Username, password, poolCfg, defaultRowLimit)
 		case "postgresql":
-			result, err = s.executePostgreSQL(ctx, datasourceID, database, sqlContent, ds, password, pgPoolCfg, defaultRowLimit)
+			result, err = s.executePostgreSQLWithArgs(ctx, datasourceID, database, sqlContent, queryParams, ds, password, pgPoolCfg, defaultRowLimit)
 		case "mongodb":
+			if len(queryParams) > 0 {
+				return nil, ErrQueryParamsUnsupported
+			}
 			result, err = s.executeMongoDB(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, defaultRowLimit)
 		case "elasticsearch":
+			if len(queryParams) > 0 {
+				return nil, ErrQueryParamsUnsupported
+			}
 			result, err = s.executeElasticsearch(ctx, datasourceID, ds, password, sqlContent, defaultRowLimit)
 		default:
 			return nil, ErrDatasourceType
@@ -262,18 +292,23 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 	}
 
 	// Apply desensitization
-	desensitized, maskedFields := s.applyDesensitization(ctx, result, role, datasourceID, database, parseResult.Tables)
+	desensitized, maskedFields := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, database, parseResult.Tables)
 	result.Desensitized = desensitized
 	result.DesensitizedFields = maskedFields
 	result.Warnings = parseResult.Warnings
 
 	// Write query history (async, best-effort)
 	summary := truncateSQL(sqlContent)
+	paramsJSON := []byte("[]")
+	if len(queryParams) > 0 {
+		paramsJSON, _ = json.Marshal(queryParams)
+	}
 	history := &model.QueryHistory{
 		UserID:        userID,
 		DatasourceID:  datasourceID,
 		Database:      database,
 		SQLContent:    sqlContent,
+		ParamsJSON:    string(paramsJSON),
 		SQLSummary:    summary,
 		DBType:        dbType,
 		ExecutionTime: result.ExecutionTime,
@@ -305,6 +340,10 @@ func (s *QueryService) ExecuteQuery(ctx context.Context, userID int64, username,
 
 // executePostgreSQL executes a SQL query on a PostgreSQL datasource.
 func (s *QueryService) executePostgreSQL(ctx context.Context, datasourceID int64, database, sqlContent string, ds *model.DataSource, password string, poolCfg connpool.PGPoolConfig, rowLimit int) (*QueryResult, error) {
+	return s.executePostgreSQLWithArgs(ctx, datasourceID, database, sqlContent, nil, ds, password, poolCfg, rowLimit)
+}
+
+func (s *QueryService) executePostgreSQLWithArgs(ctx context.Context, datasourceID int64, database, sqlContent string, queryParams []interface{}, ds *model.DataSource, password string, poolCfg connpool.PGPoolConfig, rowLimit int) (*QueryResult, error) {
 	dbName := database
 	if dbName == "" {
 		dbName = ds.Database
@@ -323,7 +362,7 @@ func (s *QueryService) executePostgreSQL(ctx context.Context, datasourceID int64
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 
-	rows, err := targetDB.QueryContext(ctx, sqlContent)
+	rows, err := targetDB.QueryContext(ctx, sqlContent, queryParams...)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, ErrSQLTimeout
@@ -393,6 +432,10 @@ func (s *QueryService) executePostgreSQL(ctx context.Context, datasourceID int64
 }
 
 func (s *QueryService) executeMySQL(ctx context.Context, datasourceID int64, database, sqlContent, host string, port int, user, password string, poolCfg connpool.MySQLPoolConfig, rowLimit int) (*QueryResult, error) {
+	return s.executeMySQLWithArgs(ctx, datasourceID, database, sqlContent, nil, host, port, user, password, poolCfg, rowLimit)
+}
+
+func (s *QueryService) executeMySQLWithArgs(ctx context.Context, datasourceID int64, database, sqlContent string, queryParams []interface{}, host string, port int, user, password string, poolCfg connpool.MySQLPoolConfig, rowLimit int) (*QueryResult, error) {
 	dbName := database
 	if dbName == "" {
 		dbName = "information_schema"
@@ -410,7 +453,7 @@ func (s *QueryService) executeMySQL(ctx context.Context, datasourceID int64, dat
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 
-	rows, err := targetDB.QueryContext(ctx, sqlContent)
+	rows, err := targetDB.QueryContext(ctx, sqlContent, queryParams...)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, ErrSQLTimeout
@@ -587,18 +630,29 @@ func (s *QueryService) executeMongoDB(ctx context.Context, datasourceID int64, d
 // applyDesensitization checks if the user has desensitize:bypass permission.
 // If not, applies masking rules to the result set.
 func (s *QueryService) applyDesensitization(ctx context.Context, result *QueryResult, role string, datasourceID int64, database string, tables []string) (bool, []string) {
-	// Check desensitize:bypass permission
+	return s.applyDesensitizationForActor(ctx, result, 0, role, datasourceID, database, tables)
+}
+
+func (s *QueryService) applyDesensitizationForActor(ctx context.Context, result *QueryResult, userID int64, role string, datasourceID int64, database string, tables []string) (bool, []string) {
+	// Check the canonical unmask permission, retaining the legacy action during
+	// migration so existing installations do not unexpectedly lose access.
 	for _, table := range tables {
 		if table == "" {
 			continue
 		}
-		bypass, err := s.permSvc.Enforce(role, fmt.Sprintf("ds_%d", datasourceID), table, "desensitize:bypass")
+		bypass, err := s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "unmask")
+		if err == nil && !bypass {
+			bypass, err = s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "desensitize:bypass")
+		}
 		if err == nil && bypass {
 			return false, nil
 		}
 	}
 	// Also check wildcard
-	bypass, _ := s.permSvc.Enforce(role, fmt.Sprintf("ds_%d", datasourceID), "*", "desensitize:bypass")
+	bypass, _ := s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), "*", "unmask")
+	if !bypass {
+		bypass, _ = s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), "*", "desensitize:bypass")
+	}
 	if bypass {
 		return false, nil
 	}
@@ -717,14 +771,14 @@ var (
 )
 
 // ExplainQuery executes EXPLAIN for a SQL query and returns structured results.
-func (s *QueryService) ExplainQuery(ctx context.Context, userID int64, role string, datasourceID int64, database, sqlContent string) (*ExplainResult, error) {
+func (s *QueryService) ExplainQuery(ctx context.Context, userID int64, role string, datasourceID int64, database, sqlContent string, queryParams ...interface{}) (*ExplainResult, error) {
 	if strings.TrimSpace(sqlContent) == "" {
 		return nil, ErrEmptySQL
 	}
 
 	// Only allow SELECT statements
 	upper := strings.TrimSpace(strings.ToUpper(sqlContent))
-	if !strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "EXPLAIN") {
+	if !strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "WITH") && !strings.HasPrefix(upper, "EXPLAIN") {
 		return nil, ErrExplainNonSelect
 	}
 
@@ -759,7 +813,7 @@ func (s *QueryService) ExplainQuery(ctx context.Context, userID int64, role stri
 	}
 
 	for _, table := range parseResult.Tables {
-		allowed, err := s.permSvc.Enforce(role, fmt.Sprintf("ds_%d", datasourceID), table, "select")
+		allowed, err := s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "select")
 		if err != nil {
 			return nil, fmt.Errorf("权限校验失败: %w", err)
 		}
@@ -789,7 +843,7 @@ func (s *QueryService) ExplainQuery(ctx context.Context, userID int64, role stri
 		if err != nil {
 			return nil, fmt.Errorf("connect mysql: %w", err)
 		}
-		drvResult, err := d.ExecuteQuery(ctx, dbName, "EXPLAIN "+explainSQL, 100)
+		drvResult, err := executeDriverQuery(ctx, d, dbName, "EXPLAIN "+explainSQL, queryParams, 100)
 		if err != nil {
 			return nil, fmt.Errorf("执行 EXPLAIN 失败: %w", err)
 		}
@@ -838,7 +892,7 @@ func (s *QueryService) ExplainQuery(ctx context.Context, userID int64, role stri
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 
-	rows, err := targetDB.QueryContext(ctx, "EXPLAIN "+explainSQL)
+	rows, err := targetDB.QueryContext(ctx, "EXPLAIN "+explainSQL, queryParams...)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, ErrSQLTimeout

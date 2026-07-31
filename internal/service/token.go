@@ -19,22 +19,23 @@ import (
 )
 
 var (
-	ErrTokenNotFound    = errors.New("API token not found")
-	ErrTokenExpired     = errors.New("API token has expired")
-	ErrTokenRevoked     = errors.New("API token has been revoked")
-	ErrTokenNameExists  = errors.New("token name already exists for this user")
+	ErrTokenNotFound     = errors.New("API token not found")
+	ErrTokenExpired      = errors.New("API token has expired")
+	ErrTokenRevoked      = errors.New("API token has been revoked")
+	ErrTokenNameExists   = errors.New("token name already exists for this user")
 	ErrTokenInvalidScope = errors.New("invalid token scope")
+	ErrTokenScopeDenied  = errors.New("token scope exceeds user permissions")
 )
 
 // ValidAPITokenScopes lists allowed scopes for API tokens.
 var ValidAPITokenScopes = []string{
-	"read:query",       // read query results
-	"execute:query",    // execute queries
-	"read:ticket",      // read tickets
-	"write:ticket",     // create/manage tickets
-	"read:datasource",  // read datasource metadata
-	"read:audit",       // read audit logs
-	"admin",            // full admin access (admin users only)
+	"read:query",      // read query results
+	"execute:query",   // execute queries
+	"read:ticket",     // read tickets
+	"write:ticket",    // create/manage tickets
+	"read:datasource", // read datasource metadata
+	"read:audit",      // read audit logs
+	"admin",           // full admin access (admin users only)
 }
 
 // TokenService manages API tokens for external integrations.
@@ -57,6 +58,15 @@ func (s *TokenService) CreateToken(ctx context.Context, userID int64, name, desc
 	// Validate scopes
 	if err := validateScopes(scopes); err != nil {
 		return "", nil, err
+	}
+	if HasScope(scopes, "admin") {
+		u, err := s.client.User.Get(ctx, int(userID))
+		if err != nil {
+			return "", nil, fmt.Errorf("check token owner role: %w", err)
+		}
+		if u.Role != "admin" {
+			return "", nil, ErrTokenScopeDenied
+		}
 	}
 
 	// Check duplicate name for same user
@@ -237,6 +247,13 @@ func (s *TokenService) RevokeTokenAdmin(ctx context.Context, tokenID int64) erro
 // It also records usage (last_used_at, use_count).
 // RAW_SQL: LEFT JOIN users for username — no ent edge defined for this relation.
 func (s *TokenService) ValidateToken(ctx context.Context, plainToken string) (userID int64, username string, scopes []string, err error) {
+	userID, username, _, scopes, err = s.ValidateTokenWithRole(ctx, plainToken)
+	return
+}
+
+// ValidateTokenWithRole validates a token and returns the owner's current role.
+// Token authentication never replaces RBAC: scopes can only narrow this role.
+func (s *TokenService) ValidateTokenWithRole(ctx context.Context, plainToken string) (userID int64, username, role string, scopes []string, err error) {
 	hash := sha256.Sum256([]byte(plainToken))
 	tokenHash := hex.EncodeToString(hash[:])
 
@@ -246,25 +263,26 @@ func (s *TokenService) ValidateToken(ctx context.Context, plainToken string) (us
 	var lastUsedAt sql.NullTime
 
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT t.user_id, COALESCE(u.username, ''), t.scopes, t.expires_at, t.is_active, t.last_used_at
+		`SELECT t.user_id, COALESCE(u.username, ''), COALESCE(u.role, ''), t.scopes, t.expires_at, t.is_active, t.last_used_at
 		 FROM api_tokens t
-		 LEFT JOIN users u ON u.id = t.user_id
+		 JOIN users u ON u.id = t.user_id
+		 JOIN roles r ON r.name = u.role AND r.status = 'active'
 		 WHERE t.token_hash = ?`,
 		tokenHash,
-	).Scan(&userID, &username, &scopeStr, &expiresAt, &isActive, &lastUsedAt)
+	).Scan(&userID, &username, &role, &scopeStr, &expiresAt, &isActive, &lastUsedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return 0, "", nil, ErrTokenNotFound
+			return 0, "", "", nil, ErrTokenNotFound
 		}
-		return 0, "", nil, fmt.Errorf("validate token: %w", err)
+		return 0, "", "", nil, fmt.Errorf("validate token: %w", err)
 	}
 
 	if isActive != 1 {
-		return 0, "", nil, ErrTokenRevoked
+		return 0, "", "", nil, ErrTokenRevoked
 	}
 
 	if time.Now().After(expiresAt) {
-		return 0, "", nil, ErrTokenExpired
+		return 0, "", "", nil, ErrTokenExpired
 	}
 
 	// Update usage (best-effort, don't fail auth on update error)
@@ -277,7 +295,7 @@ func (s *TokenService) ValidateToken(ctx context.Context, plainToken string) (us
 	if scopeStr != "" {
 		scopes = strings.Split(scopeStr, ",")
 	}
-	return userID, username, scopes, nil
+	return userID, username, role, scopes, nil
 }
 
 // HasScope checks if the given scopes contain the required scope.
@@ -341,7 +359,7 @@ func scanTokens(rows *sql.Rows) ([]*model.APIToken, error) {
 // but raw SQL is clearer for this specific aggregation pattern.
 func (s *TokenService) GetTokenStats(ctx context.Context, userID int64) (totalCount, activeCount, totalUsage int64, err error) {
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*), SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), COALESCE(SUM(use_count), 0)
+		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0), COALESCE(SUM(use_count), 0)
 		 FROM api_tokens WHERE user_id = ?`, userID,
 	).Scan(&totalCount, &activeCount, &totalUsage)
 	if err != nil {

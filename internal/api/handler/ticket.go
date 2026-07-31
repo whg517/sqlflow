@@ -97,9 +97,13 @@ func (h *TicketHandler) GetTicket(c echo.Context) error {
 		return resp.BadRequest(c, "无效的工单ID")
 	}
 
-	ticket, err := h.ticketSvc.GetTicket(c.Request().Context(), id)
+	ticket, err := h.ticketSvc.GetTicketForActor(
+		c.Request().Context(), id, getContextUserID(c), getContextRole(c),
+	)
 	if err != nil {
 		switch err {
+		case service.ErrNoPermission:
+			return resp.Forbidden(c, err.Error())
 		case service.ErrTicketNotFound:
 			return resp.NotFound(c, err.Error())
 		default:
@@ -593,10 +597,14 @@ func (h *TicketHandler) GetExecutionResults(c echo.Context) error {
 		return resp.BadRequest(c, "无效的工单ID")
 	}
 
-	// Verify ticket exists
-	_, err = h.ticketSvc.GetTicket(c.Request().Context(), id)
+	// Verify ticket exists and the actor may read it.
+	_, err = h.ticketSvc.GetTicketForActor(
+		c.Request().Context(), id, getContextUserID(c), getContextRole(c),
+	)
 	if err != nil {
 		switch err {
+		case service.ErrNoPermission:
+			return resp.Forbidden(c, err.Error())
 		case service.ErrTicketNotFound:
 			return resp.NotFound(c, err.Error())
 		default:

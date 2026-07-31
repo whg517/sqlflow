@@ -31,6 +31,8 @@ describe("queryStore", () => {
       expect(tab.sql).toBe("");
       expect(tab.datasourceId).toBeNull();
       expect(tab.database).toBe("");
+      expect(tab.queryParams).toEqual([]);
+      expect(tab.sourceTemplateId).toBeNull();
       expect(tab.result).toBeNull();
       expect(tab.executing).toBe(false);
       expect(tab.error).toBeNull();
@@ -506,6 +508,66 @@ describe("queryStore", () => {
       useQueryStore.getState().restoreHistoryAsTab("SELECT 1", 10, "db");
 
       expect(useQueryStore.getState().historyOpen).toBe(false);
+    });
+
+    it("restores parameter bindings and datasource type", async () => {
+      const { useQueryStore } = await import("@/store/queryStore");
+      useQueryStore
+        .getState()
+        .restoreHistoryAsTab(
+          "SELECT * FROM users WHERE id = $1",
+          10,
+          "app",
+          ["42"],
+          "postgresql",
+        );
+
+      const tab = useQueryStore.getState().tabs[1];
+      expect(tab.queryParams).toEqual(["42"]);
+      expect(tab.datasourceType).toBe("postgresql");
+    });
+  });
+
+  describe("openTemplateAsTab", () => {
+    it("opens a rendered template with bound parameters", async () => {
+      const { useQueryStore } = await import("@/store/queryStore");
+      useQueryStore
+        .getState()
+        .openTemplateAsTab(
+          "按用户查询",
+          "SELECT * FROM users WHERE id = ?",
+          "mysql",
+          ["42"],
+          7,
+        );
+
+      const tab = useQueryStore.getState().tabs[1];
+      expect(tab.title).toBe("按用户查询");
+      expect(tab.queryParams).toEqual(["42"]);
+      expect(tab.datasourceType).toBe("mysql");
+      expect(tab.sourceTemplateId).toBe(7);
+      expect(tab.sourceTemplateName).toBe("按用户查询");
+      expect(tab.dirty).toBe(false);
+    });
+
+    it("clears template bindings when SQL is edited", async () => {
+      const { useQueryStore } = await import("@/store/queryStore");
+      const store = useQueryStore.getState();
+      store.openTemplateAsTab(
+        "按用户查询",
+        "SELECT * FROM users WHERE id = ?",
+        "mysql",
+        ["42"],
+        7,
+      );
+      const tab = useQueryStore.getState().tabs[1];
+
+      store.updateTabSql(tab.id, "SELECT * FROM users WHERE id = ? LIMIT 1");
+
+      const updated = useQueryStore.getState().tabs[1];
+      expect(updated.queryParams).toEqual([]);
+      expect(updated.sourceTemplateId).toBeNull();
+      expect(updated.sourceTemplateName).toBe("");
     });
   });
 });

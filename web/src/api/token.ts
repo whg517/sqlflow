@@ -56,15 +56,26 @@ export async function createToken(req: CreateTokenRequest): Promise<CreateTokenR
 }
 
 export async function listMyTokens(): Promise<APIToken[]> {
-  const res = await api.get<{ code: number; data: APIToken[] }>("/tokens");
-  return res.data;
+  const res = await api.get<{ code: number; data: APIToken[] | null }>("/tokens");
+  return Array.isArray(res.data) ? res.data : [];
 }
 
 export async function listAllTokens(page = 1, pageSize = 20): Promise<PaginatedResponse<APIToken>> {
-  const res = await api.get<{ code: number; data: PaginatedResponse<APIToken> }>(
+  const res = await api.get<{
+    code: number;
+    data: APIToken[] | null;
+    total?: number;
+    page?: number;
+    page_size?: number;
+  }>(
     `/admin/tokens?page=${page}&page_size=${pageSize}`
   );
-  return res.data;
+  return {
+    items: Array.isArray(res.data) ? res.data : [],
+    total: res.total ?? 0,
+    page: res.page ?? page,
+    page_size: res.page_size ?? pageSize,
+  };
 }
 
 export async function revokeMyToken(id: number): Promise<void> {

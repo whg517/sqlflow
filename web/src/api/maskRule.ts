@@ -163,6 +163,21 @@ export async function fetchDatasourceTables(
   return api.get<ApiResponse<string[]>>(`/datasources/${datasourceId}/tables`);
 }
 
+export interface DatasourceColumn {
+  name: string;
+  type: string;
+  comment: string;
+}
+
+export async function fetchDatasourceColumns(
+  datasourceId: number,
+  tableName: string,
+): Promise<ApiResponse<DatasourceColumn[]>> {
+  return api.get<ApiResponse<DatasourceColumn[]>>(
+    `/datasources/${datasourceId}/tables/${encodeURIComponent(tableName)}/columns`,
+  );
+}
+
 // --- Mask Type Labels ---
 
 export const MASK_TYPE_OPTIONS = [

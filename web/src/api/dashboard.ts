@@ -130,32 +130,35 @@ export async function getDashboardOverview(
   );
 
   const raw = res.data;
+  const pendingTicketSparkline = raw.pending_ticket_sparkline ?? [];
+  const querySparkline = raw.query_sparkline ?? [];
+  const datasourceSparkline = raw.datasource_sparkline ?? [];
 
   // Transform to frontend shape
   const overview: DashboardOverview = {
     pending_tickets: {
       value: raw.pending_tickets,
-      sparkline: sparklineToPoints(raw.pending_ticket_sparkline),
-      trend: computeTrend(raw.pending_ticket_sparkline),
+      sparkline: sparklineToPoints(pendingTicketSparkline),
+      trend: computeTrend(pendingTicketSparkline),
     },
     query_count: {
       value: raw.recent_queries_7d,
-      sparkline: sparklineToPoints(raw.query_sparkline),
-      trend: computeTrend(raw.query_sparkline),
+      sparkline: sparklineToPoints(querySparkline),
+      trend: computeTrend(querySparkline),
     },
     active_datasources: {
       value: raw.active_datasources,
-      sparkline: sparklineToPoints(raw.datasource_sparkline),
-      trend: computeTrend(raw.datasource_sparkline),
+      sparkline: sparklineToPoints(datasourceSparkline),
+      trend: computeTrend(datasourceSparkline),
     },
-    query_trend: raw.query_trend,
-    ticket_distribution: Object.entries(raw.ticket_status_distribution).map(
+    query_trend: raw.query_trend ?? [],
+    ticket_distribution: Object.entries(raw.ticket_status_distribution ?? {}).map(
       ([status, count]) => ({
         status: STATUS_LABELS[status] || status,
         count,
       }),
     ),
-    recent_activity: raw.recent_activity.map((a) => ({
+    recent_activity: (raw.recent_activity ?? []).map((a) => ({
       id: Number(a.id),
       user: `用户#${a.user_id}`,
       action: a.action,

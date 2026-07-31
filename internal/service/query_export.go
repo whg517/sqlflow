@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/pkg/crypto"
@@ -18,7 +19,7 @@ const exportRowLimit = 10000
 var ErrExportRowLimit = errors.New("导出数据超过10000行上限，请添加 LIMIT 条件缩小范围")
 
 // ExportQuery executes a query for data export with a higher row limit (10000).
-func (s *QueryService) ExportQuery(ctx context.Context, userID int64, username, role string, datasourceID int64, database, sqlContent, dbType string) (*QueryResult, error) {
+func (s *QueryService) ExportQuery(ctx context.Context, userID int64, username, role string, datasourceID int64, database, sqlContent, dbType string, queryParams ...interface{}) (*QueryResult, error) {
 	if strings.TrimSpace(sqlContent) == "" {
 		return nil, ErrEmptySQL
 	}
@@ -30,6 +31,9 @@ func (s *QueryService) ExportQuery(ctx context.Context, userID int64, username, 
 	}
 	if ds.Status == "disabled" {
 		return nil, ErrDatasourceDisabled
+	}
+	if IsInternalDataSource(ds) && role != "admin" {
+		return nil, ErrInternalDatasourceOnly
 	}
 
 	if dbType == "" {
@@ -65,12 +69,19 @@ func (s *QueryService) ExportQuery(ctx context.Context, userID int64, username, 
 
 	// Check table-level permissions via Casbin
 	for _, table := range parseResult.Tables {
-		allowed, err := s.permSvc.Enforce(role, fmt.Sprintf("ds_%d", datasourceID), table, "select")
+		allowed, err := s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "select")
 		if err != nil {
 			return nil, fmt.Errorf("权限校验失败: %w", err)
 		}
 		if !allowed {
 			return nil, fmt.Errorf("没有表 %s 的查询权限", table)
+		}
+		allowed, err = s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "export")
+		if err != nil {
+			return nil, fmt.Errorf("导出权限校验失败: %w", err)
+		}
+		if !allowed {
+			return nil, fmt.Errorf("没有表 %s 的导出权限", table)
 		}
 	}
 
@@ -81,12 +92,18 @@ func (s *QueryService) ExportQuery(ctx context.Context, userID int64, username, 
 		MaxLifetime: ds.MaxLifetime,
 		MaxIdleTime: ds.MaxIdleTime,
 	}
+	pgPoolCfg := connpool.PGPoolConfig{
+		MaxOpen:     ds.MaxOpen,
+		MaxIdle:     ds.MaxIdle,
+		MaxLifetime: ds.MaxLifetime,
+		MaxIdleTime: ds.MaxIdleTime,
+	}
 
 	// Execute with exportRowLimit+1 to detect overflow
 	var result *QueryResult
 
-	// Use Driver abstraction for MySQL
-	if s.poolMgr != nil && dbType == "mysql" {
+	// Use Driver abstraction for relational databases.
+	if s.poolMgr != nil && (dbType == "mysql" || dbType == "postgresql" || dbType == "sqlite") {
 		adapter := newDataSourceAdapter(ds)
 		cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
 		if err != nil {
@@ -100,10 +117,14 @@ func (s *QueryService) ExportQuery(ctx context.Context, userID int64, username, 
 		if dbName == "" {
 			dbName = ds.Database
 			if dbName == "" {
-				dbName = "information_schema"
+				if dbType == "mysql" {
+					dbName = "information_schema"
+				} else {
+					dbName = "postgres"
+				}
 			}
 		}
-		drvResult, err := d.ExecuteQuery(ctx, dbName, sqlContent, exportRowLimit+1)
+		drvResult, err := executeDriverQuery(ctx, d, dbName, sqlContent, queryParams, exportRowLimit+1)
 		if err != nil {
 			return nil, fmt.Errorf("driver execute query: %w", err)
 		} else {
@@ -121,8 +142,13 @@ func (s *QueryService) ExportQuery(ctx context.Context, userID int64, username, 
 		// Fallback to legacy connpool-based execution
 		switch dbType {
 		case "mysql":
-			result, err = s.executeMySQL(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, poolCfg, exportRowLimit+1)
+			result, err = s.executeMySQLWithArgs(ctx, datasourceID, database, sqlContent, queryParams, ds.Host, ds.Port, ds.Username, password, poolCfg, exportRowLimit+1)
+		case "postgresql":
+			result, err = s.executePostgreSQLWithArgs(ctx, datasourceID, database, sqlContent, queryParams, ds, password, pgPoolCfg, exportRowLimit+1)
 		case "mongodb":
+			if len(queryParams) > 0 {
+				return nil, ErrQueryParamsUnsupported
+			}
 			result, err = s.executeMongoDB(ctx, datasourceID, database, sqlContent, ds.Host, ds.Port, ds.Username, password, exportRowLimit+1)
 		default:
 			return nil, ErrDatasourceType
@@ -158,7 +184,7 @@ func (s *QueryService) ExportQuery(ctx context.Context, userID int64, username, 
 	}
 
 	// Apply desensitization
-	desensitized, maskedFields := s.applyDesensitization(ctx, result, role, datasourceID, database, parseResult.Tables)
+	desensitized, maskedFields := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, database, parseResult.Tables)
 	result.Desensitized = desensitized
 	result.DesensitizedFields = maskedFields
 

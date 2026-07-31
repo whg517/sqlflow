@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -105,6 +106,18 @@ func TestDatasourceHandler_CreateDatasource(t *testing.T) {
 			"created",
 		},
 		{
+			"success_elasticsearch_no_auth",
+			`{"name":"logs-es","type":"elasticsearch","es_urls":"https://es.example.com:9200","es_auth_type":"none","es_verify_certs":true}`,
+			http.StatusCreated,
+			"created",
+		},
+		{
+			"success_sqlite",
+			`{"name":"local-sqlite","type":"sqlite","database":"/tmp/app.db"}`,
+			http.StatusCreated,
+			"created",
+		},
+		{
 			"missing_name",
 			`{"type":"mysql","host":"10.0.0.1","port":3306,"username":"root","password":"secret"}`,
 			http.StatusBadRequest,
@@ -120,7 +133,7 @@ func TestDatasourceHandler_CreateDatasource(t *testing.T) {
 			"invalid_type",
 			`{"name":"bad-type","type":"postgres","host":"10.0.0.1","port":5432,"username":"root","password":"secret"}`,
 			http.StatusBadRequest,
-			"数据源类型必须是 mysql、postgresql、mongodb 或 elasticsearch",
+			"数据源类型必须是 mysql、postgresql、sqlite、mongodb 或 elasticsearch",
 		},
 		{
 			"missing_host",
@@ -157,6 +170,18 @@ func TestDatasourceHandler_CreateDatasource(t *testing.T) {
 			`{"name":"no-pw","type":"mysql","host":"10.0.0.1","port":3306,"username":"root","password":""}`,
 			http.StatusBadRequest,
 			"密码不能为空",
+		},
+		{
+			"elasticsearch_missing_urls",
+			`{"name":"no-url-es","type":"elasticsearch","es_auth_type":"none"}`,
+			http.StatusBadRequest,
+			"Elasticsearch 节点地址不能为空",
+		},
+		{
+			"elasticsearch_api_key_required",
+			`{"name":"no-key-es","type":"elasticsearch","es_urls":"https://es.example.com:9200","es_auth_type":"api_key"}`,
+			http.StatusBadRequest,
+			"Elasticsearch API Key 不能为空",
 		},
 		{
 			"empty_body",
@@ -400,6 +425,53 @@ func TestDatasourceHandler_ListDatasources_NoPasswords(t *testing.T) {
 	body := rec.Body.String()
 	if strings.Contains(body, "supersecret") {
 		t.Error("response body should not contain the raw password")
+	}
+}
+
+func TestDatasourceHandler_ListAvailableDatasources_SafeActiveSummaries(t *testing.T) {
+	e, dsSvc, h := setupDatasourceTest(t)
+
+	active := createTestDatasource(t, dsSvc, "active-prod", "mysql", "10.0.0.10", 3306)
+	disabled := createTestDatasource(t, dsSvc, "disabled-prod", "postgresql", "10.0.0.20", 5432)
+	if err := dsSvc.DisableDataSource(t.Context(), disabled.ID); err != nil {
+		t.Fatalf("disable datasource: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/datasources/available", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	if err := h.ListAvailableDatasources(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	result := decodeDatasourceResponse(t, rec)
+	items, ok := result["data"].([]interface{})
+	if !ok || len(items) != 1 {
+		t.Fatalf("data = %#v, want one active datasource", result["data"])
+	}
+	item, ok := items[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("item = %#v, want object", items[0])
+	}
+	if item["id"] != float64(active.ID) || item["name"] != active.Name || item["type"] != active.Type || item["status"] != "active" {
+		t.Fatalf("unexpected summary: %#v", item)
+	}
+
+	for _, forbidden := range []string{
+		"host", "port", "username", "database", "sslmode", "schema_name",
+		"max_open", "max_idle", "es_urls", "es_auth_type", "created_at", "updated_at",
+	} {
+		if _, exists := item[forbidden]; exists {
+			t.Errorf("safe datasource summary exposed %q", forbidden)
+		}
+	}
+	if strings.Contains(rec.Body.String(), "disabled-prod") ||
+		strings.Contains(rec.Body.String(), "10.0.0.10") ||
+		strings.Contains(rec.Body.String(), "testpassword") {
+		t.Fatalf("safe datasource response leaked disabled or connection data: %s", rec.Body.String())
 	}
 }
 
@@ -690,6 +762,58 @@ func TestDatasourceHandler_DisableDatasource(t *testing.T) {
 	})
 }
 
+func TestDatasourceHandler_Lifecycle(t *testing.T) {
+	e, dsSvc, h := setupDatasourceTest(t)
+	ds := createTestDatasource(t, dsSvc, "lifecycle-handler", "mysql", "10.0.0.1", 3306)
+
+	t.Run("disable_by_status", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/api/datasources/:id/status", strings.NewReader(`{"status":"disabled"}`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues(fmt.Sprintf("%d", ds.ID))
+
+		if err := h.UpdateDatasourceStatus(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body = %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("delete_disabled", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/api/datasources/:id", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues(fmt.Sprintf("%d", ds.ID))
+
+		if err := h.DeleteDatasource(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body = %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("invalid_status", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/api/datasources/:id/status", strings.NewReader(`{"status":"unknown"}`))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("1")
+
+		if err := h.UpdateDatasourceStatus(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400; body = %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
 // ─── TestConnection Tests ───────────────────────────────────────────────────
 
 func TestDatasourceHandler_TestConnection(t *testing.T) {
@@ -752,6 +876,57 @@ func TestDatasourceHandler_TestConnection(t *testing.T) {
 
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+		}
+	})
+}
+
+func TestDatasourceHandler_TestConnectionConfig(t *testing.T) {
+	e, dsSvc, h := setupDatasourceTest(t)
+
+	t.Run("tests_without_persisting", func(t *testing.T) {
+		before, err := dsSvc.ListDataSources(context.Background())
+		if err != nil {
+			t.Fatalf("list before test: %v", err)
+		}
+
+		body := `{"type":"mysql","host":"127.0.0.1","port":1,"username":"root","password":"secret","database":"app"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/datasources/test-config", strings.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		if err := h.TestConnectionConfig(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body = %s", rec.Code, rec.Body.String())
+		}
+		data := extractDatasourceData(t, rec)
+		if success, _ := data["success"].(bool); success {
+			t.Fatal("expected unavailable local port to fail")
+		}
+
+		after, err := dsSvc.ListDataSources(context.Background())
+		if err != nil {
+			t.Fatalf("list after test: %v", err)
+		}
+		if len(after) != len(before) {
+			t.Fatalf("connection test persisted datasource: before=%d after=%d", len(before), len(after))
+		}
+	})
+
+	t.Run("validates_unsaved_config", func(t *testing.T) {
+		body := `{"type":"mysql","port":3306,"username":"root","password":"secret"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/datasources/test-config", strings.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		if err := h.TestConnectionConfig(c); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400; body = %s", rec.Code, rec.Body.String())
 		}
 	})
 }

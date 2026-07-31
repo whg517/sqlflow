@@ -2,8 +2,10 @@ package mysql
 
 import (
 	"context"
+	"regexp"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/whg517/sqlflow/internal/driver"
 )
 
@@ -135,5 +137,30 @@ func TestMySQLDriver_NotConnected(t *testing.T) {
 
 	if _, err := d.ExecuteStatement(context.TODO(), "test", "INSERT INTO t VALUES (1)"); err == nil {
 		t.Error("ExecuteStatement should fail when not connected")
+	}
+}
+
+func TestMySQLDriver_ExecuteQueryWithArgs(t *testing.T) {
+	database, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
+	}
+	defer database.Close()
+
+	query := "SELECT name FROM users WHERE id = ?"
+	mock.ExpectQuery(regexp.QuoteMeta(query)).
+		WithArgs("42").
+		WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("Alice"))
+
+	d := &MySQLDriver{db: database}
+	result, err := d.ExecuteQueryWithArgs(context.Background(), "app", query, []interface{}{"42"}, 10)
+	if err != nil {
+		t.Fatalf("ExecuteQueryWithArgs: %v", err)
+	}
+	if result.Total != 1 || len(result.Rows) != 1 || result.Rows[0]["name"] != "Alice" {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("expectations: %v", err)
 	}
 }

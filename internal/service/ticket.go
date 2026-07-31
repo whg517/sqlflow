@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
@@ -66,18 +67,18 @@ var validTransitions = map[model.TicketStatus][]model.TicketStatus{
 
 // TicketService handles ticket management logic.
 type TicketService struct {
-	database        *db.DB
-	client          *ent.Client
-	auditSvc        *AuditService
-	notifySvc       *NotifyService
-	gitSvc          *GitService
-	slaSvc          *SLAService
-	dsSvc           *DatasourceService
-	connMgr         *connpool.Manager
-	poolMgr         *driver.PoolManager // 新增：driver 层连接池（迁移中，优先于 connMgr）
-	encryptionKey   string
-	permSvc         *PermissionService
-	approvalEngine  *ApprovalEngine
+	database       *db.DB
+	client         *ent.Client
+	auditSvc       *AuditService
+	notifySvc      *NotifyService
+	gitSvc         *GitService
+	slaSvc         *SLAService
+	dsSvc          *DatasourceService
+	connMgr        *connpool.Manager
+	poolMgr        *driver.PoolManager // 新增：driver 层连接池（迁移中，优先于 connMgr）
+	encryptionKey  string
+	permSvc        *PermissionService
+	approvalEngine *ApprovalEngine
 }
 
 // NewTicketService creates a new TicketService.
@@ -303,11 +304,29 @@ func (s *TicketService) GetTicket(ctx context.Context, id int64) (*model.Ticket,
 	return t, nil
 }
 
+// GetTicketForActor applies the resource ownership boundary for ticket reads.
+// Submitters and assigned reviewers can read a ticket; DBA/Admin can read all.
+func (s *TicketService) GetTicketForActor(ctx context.Context, id, userID int64, role string) (*model.Ticket, error) {
+	t, err := s.GetTicket(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if role == "admin" || role == "dba" || t.SubmitterID == userID || t.ReviewerID == userID {
+		return t, nil
+	}
+	return nil, ErrNoPermission
+}
+
 // ListTickets retrieves a paginated list of tickets with filtering.
 func (s *TicketService) ListTickets(ctx context.Context, page, pageSize int, status, datasourceIDStr, submitterIDStr, riskLevel, keyword, scope string, currentUserID int64, currentRole string) ([]model.Ticket, int64, error) {
 	p := ParsePagination(page, pageSize)
 
 	var filters []FilterClause
+	if currentRole != "admin" && currentRole != "dba" {
+		// Non-governance roles can never widen this boundary with query params.
+		filters = append(filters, FilterClause{Condition: "submitter_id = ?", Args: []interface{}{currentUserID}})
+		submitterIDStr = ""
+	}
 	if status != "" {
 		filters = append(filters, FilterClause{Condition: "status = ?", Args: []interface{}{status}})
 	}
@@ -637,15 +656,15 @@ func (s *TicketService) executeTicket(ctx context.Context, t *model.Ticket, oper
 	sqlHash := sha256Hash(t.SQLContent)
 
 	s.auditSvc.Write(ctx, AuditRecord{
-		UserID:         operatorID,
-		Action:         "ticket_execute",
-		DatasourceID:   t.DatasourceID,
-		Database:       t.Database,
-		SQLContent:     t.SQLContent,
-		SQLSummary:     t.SQLSummary,
-		AffectedRows:   totalRowsAffected(execResults),
+		UserID:          operatorID,
+		Action:          "ticket_execute",
+		DatasourceID:    t.DatasourceID,
+		Database:        t.Database,
+		SQLContent:      t.SQLContent,
+		SQLSummary:      t.SQLSummary,
+		AffectedRows:    totalRowsAffected(execResults),
 		ExecutionTimeMs: totalDurationMs(execResults),
-		TicketID:       t.ID,
+		TicketID:        t.ID,
 	})
 
 	t.Status = model.TicketStatusDone
@@ -944,7 +963,7 @@ func (s *TicketService) checkMongoPermission(ctx context.Context, role string, d
 	}
 
 	act := mongoOpToCasbinAct(mongoResult.Operation)
-	dom := fmt.Sprintf("ds_%d", datasourceID)
+	dom := authz.DatasourceDomain(datasourceID)
 
 	allowed, err := s.permSvc.Enforce(role, dom, mongoResult.Collection, act)
 	if err != nil {

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -663,6 +664,86 @@ func TestDisableDataSource_MongoDB(t *testing.T) {
 	}
 }
 
+func TestDatasourceLifecycle(t *testing.T) {
+	svc, testDB := newTestDatasourceService(t)
+	ctx := ctxWithTimeout(t)
+
+	created := &model.DataSource{
+		Name: "lifecycle-test", Type: "mysql", Host: "10.0.0.1", Port: 3306,
+		Username: "root", PasswordEncrypted: "secret",
+	}
+	if err := svc.CreateDataSource(ctx, created); err != nil {
+		t.Fatalf("CreateDataSource() error: %v", err)
+	}
+
+	if err := svc.DeleteDataSource(ctx, created.ID); !errors.Is(err, ErrDatasourceMustDisable) {
+		t.Fatalf("DeleteDataSource(active) error = %v, want ErrDatasourceMustDisable", err)
+	}
+	if err := svc.DisableDataSource(ctx, created.ID); err != nil {
+		t.Fatalf("DisableDataSource() error: %v", err)
+	}
+	if err := svc.EnableDataSource(ctx, created.ID); err != nil {
+		t.Fatalf("EnableDataSource() error: %v", err)
+	}
+	enabled, err := svc.GetDataSource(ctx, created.ID)
+	if err != nil || enabled.Status != "active" {
+		t.Fatalf("enabled datasource = %#v, error = %v", enabled, err)
+	}
+	if err := svc.DisableDataSource(ctx, created.ID); err != nil {
+		t.Fatalf("DisableDataSource() error: %v", err)
+	}
+
+	if _, err := testDB.ExecContext(ctx,
+		`INSERT INTO mask_rules (datasource_id, table_name, field, mask_type) VALUES (?, 'users', 'phone', 'phone')`,
+		created.ID,
+	); err != nil {
+		t.Fatalf("insert dependency: %v", err)
+	}
+	err = svc.DeleteDataSource(ctx, created.ID)
+	var inUse *DatasourceInUseError
+	if !errors.As(err, &inUse) || !strings.Contains(err.Error(), "脱敏规则 1 条") {
+		t.Fatalf("DeleteDataSource(in use) error = %v, want dependency error", err)
+	}
+
+	if _, err := testDB.ExecContext(ctx, `DELETE FROM mask_rules WHERE datasource_id = ?`, created.ID); err != nil {
+		t.Fatalf("remove dependency: %v", err)
+	}
+	if err := svc.DeleteDataSource(ctx, created.ID); err != nil {
+		t.Fatalf("DeleteDataSource() error: %v", err)
+	}
+	if _, err := svc.GetDataSource(ctx, created.ID); !errors.Is(err, ErrDatasourceNotFound) {
+		t.Fatalf("GetDataSource(deleted) error = %v, want ErrDatasourceNotFound", err)
+	}
+}
+
+func TestSystemDatasourceLifecycleProtected(t *testing.T) {
+	svc, _ := newTestDatasourceService(t)
+	ctx := ctxWithTimeout(t)
+	system := &model.DataSource{
+		Name:              "system-lifecycle-test",
+		Type:              "sqlite",
+		Host:              "localhost",
+		Database:          t.TempDir() + "/system.db",
+		ExtraConfig:       internalDatasourceExtraConfig,
+		PasswordEncrypted: "",
+	}
+	if err := svc.CreateDataSource(ctx, system); err != nil {
+		t.Fatalf("CreateDataSource() error: %v", err)
+	}
+
+	if err := svc.DisableDataSource(ctx, system.ID); !errors.Is(err, ErrSystemDatasource) {
+		t.Fatalf("DisableDataSource(system) error = %v, want ErrSystemDatasource", err)
+	}
+	if err := svc.DeleteDataSource(ctx, system.ID); !errors.Is(err, ErrSystemDatasource) {
+		t.Fatalf("DeleteDataSource(system) error = %v, want ErrSystemDatasource", err)
+	}
+	update := *system
+	update.Name = "renamed-system"
+	if err := svc.UpdateDataSource(ctx, system.ID, &update); !errors.Is(err, ErrSystemDatasource) {
+		t.Fatalf("UpdateDataSource(system) error = %v, want ErrSystemDatasource", err)
+	}
+}
+
 // ─── TestConnection ───────────────────────────────────────────────────────────
 
 func TestDatasourceService_TestConnection(t *testing.T) {
@@ -690,6 +771,30 @@ func TestDatasourceService_TestConnection(t *testing.T) {
 		err := svc.TestConnection(ctx, ds)
 		if err == nil {
 			t.Error("expected connection error, got nil")
+		}
+	})
+
+	t.Run("sqlite_file_must_exist", func(t *testing.T) {
+		ctx := ctxWithTimeout(t)
+		ds := &model.DataSource{
+			Type:     "sqlite",
+			Database: t.TempDir() + "/missing.db",
+		}
+		err := svc.TestConnection(ctx, ds)
+		if err == nil || !strings.Contains(err.Error(), "SQLite 文件不存在") {
+			t.Errorf("TestConnection() error = %v, want missing SQLite file error", err)
+		}
+	})
+
+	t.Run("sqlite_path_must_be_file", func(t *testing.T) {
+		ctx := ctxWithTimeout(t)
+		ds := &model.DataSource{
+			Type:     "sqlite",
+			Database: t.TempDir(),
+		}
+		err := svc.TestConnection(ctx, ds)
+		if err == nil || !strings.Contains(err.Error(), "必须指向数据库文件") {
+			t.Errorf("TestConnection() error = %v, want SQLite regular file error", err)
 		}
 	})
 

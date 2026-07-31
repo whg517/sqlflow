@@ -207,7 +207,7 @@ async function request<T>(
   if (!res.ok) {
     const serverMsg = await extractErrorMessage(res);
     const userMsg =
-      STATUS_MESSAGES[res.status] || serverMsg || `请求失败 (${res.status})`;
+      serverMsg || STATUS_MESSAGES[res.status] || `请求失败 (${res.status})`;
     toast.error(userMsg);
     throw new Error(serverMsg || `Request failed: ${res.status}`);
   }

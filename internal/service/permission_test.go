@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/whg517/sqlflow/internal/testutil"
 )
@@ -17,6 +18,7 @@ var seedPolicies = []struct {
 	{"dba", "*", "*", "select"},
 	{"dba", "*", "*", "update"},
 	{"dba", "*", "*", "delete"},
+	{"dba", "*", "*", "insert"},
 	{"dba", "*", "*", "ddl"},
 	{"dba", "*", "*", "export"},
 	{"dba", "*", "*", "desensitize:bypass"},
@@ -124,9 +126,9 @@ func TestNewPermissionService(t *testing.T) {
 		if err != nil {
 			t.Fatalf("count casbin_rule: %v", err)
 		}
-		// 8 p-policies + 3 g-policies = 11 rows
-		if count != 11 {
-			t.Errorf("expected 11 seeded rows, got %d", count)
+		// 9 data policies + DBA audit permission + 3 test grouping policies.
+		if count != 13 {
+			t.Errorf("expected 13 seeded rows, got %d", count)
 		}
 	})
 
@@ -163,9 +165,6 @@ func TestNewPermissionService(t *testing.T) {
 func TestPermissionService_Enforce(t *testing.T) {
 	svc, _ := newTestPermissionService(t)
 
-	// NOTE: The Casbin model uses strict == matching (no keyMatch).
-	// Seed policies have dom="*", obj="*", act="*" as literal strings.
-	// Only exact matches work — "*" is NOT a wildcard in == comparison.
 	tests := []struct {
 		name string
 		sub  string
@@ -174,22 +173,19 @@ func TestPermissionService_Enforce(t *testing.T) {
 		act  string
 		want bool
 	}{
-		{"admin exact star match", "admin", "*", "*", "*", true},
-		{"admin non-star act denied", "admin", "*", "*", "select", false},
-		{"dba wildcard select", "dba", "*", "*", "select", true},
-		{"dba wildcard update", "dba", "*", "*", "update", true},
-		{"dba wildcard delete", "dba", "*", "*", "delete", true},
-		{"dba wildcard ddl", "dba", "*", "*", "ddl", true},
-		{"dba wildcard export", "dba", "*", "*", "export", true},
-		{"dba cannot insert", "dba", "*", "*", "insert", false},
-		{"developer wildcard select", "developer", "*", "*", "select", true},
-		{"developer cannot update", "developer", "*", "*", "update", false},
-		{"developer cannot delete", "developer", "*", "*", "delete", false},
-		{"developer cannot ddl", "developer", "*", "*", "ddl", false},
-		{"unknown role denied", "guest", "*", "*", "select", false},
-		{"empty subject denied", "", "*", "*", "select", false},
-		{"non-star dom mismatch", "dba", "db1", "*", "select", false},
-		{"non-star obj mismatch", "dba", "*", "users", "select", false},
+		{"admin can select real datasource table", "admin", "ds_42", "orders", "select", true},
+		{"admin can perform ddl", "admin", "ds_42", "orders", "ddl", true},
+		{"dba can select", "dba", "ds_42", "orders", "select", true},
+		{"dba can update", "dba", "ds_42", "orders", "update", true},
+		{"dba can delete", "dba", "ds_42", "orders", "delete", true},
+		{"dba can insert", "dba", "ds_42", "orders", "insert", true},
+		{"dba can ddl", "dba", "ds_42", "orders", "ddl", true},
+		{"dba can export", "dba", "ds_42", "orders", "export", true},
+		{"developer can select", "developer", "ds_42", "orders", "select", true},
+		{"developer cannot update", "developer", "ds_42", "orders", "update", false},
+		{"developer cannot delete", "developer", "ds_42", "orders", "delete", false},
+		{"developer cannot ddl", "developer", "ds_42", "orders", "ddl", false},
+		{"unknown role denied", "guest", "ds_42", "orders", "select", false},
 	}
 
 	for _, tt := range tests {
@@ -202,6 +198,45 @@ func TestPermissionService_Enforce(t *testing.T) {
 				t.Errorf("Enforce(%q, %q, %q, %q) = %v, want %v", tt.sub, tt.dom, tt.obj, tt.act, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPermissionService_EnforceActor(t *testing.T) {
+	svc, _ := newTestPermissionService(t)
+	ctx := context.Background()
+
+	if err := svc.AddTemporaryPolicy(ctx, "user:42", "ds_9", "orders", "select", time.Now().UTC().Add(time.Hour)); err != nil {
+		t.Fatalf("AddTemporaryPolicy(active): %v", err)
+	}
+	allowed, err := svc.EnforceActor(ctx, 42, "guest", "ds_9", "orders", "select")
+	if err != nil || !allowed {
+		t.Fatalf("active individual grant = %v, err=%v; want allowed", allowed, err)
+	}
+
+	if err := svc.AddTemporaryPolicy(ctx, "user:43", "ds_9", "payroll", "select", time.Now().UTC().Add(-time.Minute)); err != nil {
+		t.Fatalf("AddTemporaryPolicy(expired): %v", err)
+	}
+	allowed, err = svc.EnforceActor(ctx, 43, "guest", "ds_9", "payroll", "select")
+	if err != nil {
+		t.Fatalf("expired individual grant check: %v", err)
+	}
+	if allowed {
+		t.Fatal("expired individual grant must be denied at decision time")
+	}
+
+	if err := svc.AddPolicy("user:44", "ds_9", "schema_only", "metadata:view"); err != nil {
+		t.Fatalf("AddPolicy(metadata): %v", err)
+	}
+	allowed, err = svc.CanViewObject(ctx, 44, "guest", "ds_9", "schema_only")
+	if err != nil || !allowed {
+		t.Fatalf("metadata:view = %v, err=%v; want visible", allowed, err)
+	}
+	allowed, err = svc.EnforceActor(ctx, 44, "guest", "ds_9", "schema_only", "select")
+	if err != nil {
+		t.Fatalf("select check: %v", err)
+	}
+	if allowed {
+		t.Fatal("metadata:view must not grant select")
 	}
 }
 
@@ -309,11 +344,11 @@ func TestPermissionService_GetPolicies(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetPolicies() error: %v", err)
 		}
-		if total != 8 {
-			t.Errorf("total = %d, want 8", total)
+		if total != 10 {
+			t.Errorf("total = %d, want 10", total)
 		}
-		if len(policies) != 8 {
-			t.Errorf("len(policies) = %d, want 8", len(policies))
+		if len(policies) != 10 {
+			t.Errorf("len(policies) = %d, want 10", len(policies))
 		}
 	})
 
@@ -338,8 +373,8 @@ func TestPermissionService_GetPolicies(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetPolicies() error: %v", err)
 		}
-		if total != 6 {
-			t.Errorf("total = %d, want 6", total)
+		if total != 8 {
+			t.Errorf("total = %d, want 8", total)
 		}
 		for _, p := range policies {
 			if p.Sub != "dba" {
@@ -379,8 +414,8 @@ func TestPermissionService_GetPolicies(t *testing.T) {
 		if len(policies) > 3 {
 			t.Errorf("len(policies) = %d, want <= 3", len(policies))
 		}
-		if total != 8 {
-			t.Errorf("total = %d, want 8", total)
+		if total != 10 {
+			t.Errorf("total = %d, want 10", total)
 		}
 	})
 
@@ -389,8 +424,8 @@ func TestPermissionService_GetPolicies(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetPolicies() error: %v", err)
 		}
-		if total != 8 {
-			t.Errorf("total = %d, want 8", total)
+		if total != 10 {
+			t.Errorf("total = %d, want 10", total)
 		}
 		if len(policies) > 3 {
 			t.Errorf("len(policies) = %d, want <= 3", len(policies))
@@ -402,8 +437,8 @@ func TestPermissionService_GetPolicies(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetPolicies() error: %v", err)
 		}
-		if total != 8 {
-			t.Errorf("total = %d, want 8", total)
+		if total != 10 {
+			t.Errorf("total = %d, want 10", total)
 		}
 		if len(policies) != 0 {
 			t.Errorf("len(policies) = %d, want 0", len(policies))
@@ -415,11 +450,11 @@ func TestPermissionService_GetPolicies(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetPolicies() error: %v", err)
 		}
-		if total != 8 {
-			t.Errorf("total = %d, want 8", total)
+		if total != 10 {
+			t.Errorf("total = %d, want 10", total)
 		}
-		if len(policies) != 8 {
-			t.Errorf("len(policies) = %d, want 8", len(policies))
+		if len(policies) != 10 {
+			t.Errorf("len(policies) = %d, want 10", len(policies))
 		}
 	})
 }
@@ -460,8 +495,8 @@ func TestPermissionService_GetPoliciesForRole(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetPoliciesForRole() error: %v", err)
 		}
-		if len(policies) != 6 {
-			t.Fatalf("len(policies) = %d, want 6", len(policies))
+		if len(policies) != 8 {
+			t.Fatalf("len(policies) = %d, want 8", len(policies))
 		}
 		acts := make([]string, 0, len(policies))
 		for _, p := range policies {
@@ -471,7 +506,7 @@ func TestPermissionService_GetPoliciesForRole(t *testing.T) {
 			acts = append(acts, p.Act)
 		}
 		sort.Strings(acts)
-		expected := []string{"ddl", "delete", "desensitize:bypass", "export", "select", "update"}
+		expected := []string{"ddl", "delete", "desensitize:bypass", "export", "insert", "select", "update", "view"}
 		sort.Strings(expected)
 		for i, act := range acts {
 			if act != expected[i] {
@@ -860,8 +895,8 @@ func TestPermissionService_SeedIfEmpty_SkipsWhenNonEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("count casbin_rule: %v", err)
 	}
-	if count != 1 {
-		t.Errorf("expected 1 row (pre-existing only, no seed), got %d", count)
+	if count != 2 {
+		t.Errorf("expected pre-existing row plus platform default, got %d", count)
 	}
 }
 
@@ -904,7 +939,6 @@ func TestPermissionService_GroupingPolicies(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPermissionService_SeedIfEmpty_SeedsFromCSV(t *testing.T) {
-	t.Skip("seedIfEmpty uses relative path via osReadFile, requires specific cwd - known issue")
 	testDB := setupPermissionTestDB(t)
 
 	// Table is empty, so NewPermissionService should trigger seedIfEmpty
@@ -921,8 +955,8 @@ func TestPermissionService_SeedIfEmpty_SeedsFromCSV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("count casbin_rule: %v", err)
 	}
-	if count == 0 {
-		t.Error("expected seed policies to be inserted, got 0 rows")
+	if count != 10 {
+		t.Errorf("expected 10 seed policies, got %d rows", count)
 	}
 
 	// Verify at least the admin wildcard policy exists
@@ -935,6 +969,29 @@ func TestPermissionService_SeedIfEmpty_SeedsFromCSV(t *testing.T) {
 	}
 	if adminCount != 1 {
 		t.Errorf("expected 1 admin wildcard policy, got %d", adminCount)
+	}
+
+	matrix := []struct {
+		role, action string
+		want         bool
+	}{
+		{"admin", "select", true},
+		{"admin", "ddl", true},
+		{"dba", "select", true},
+		{"dba", "insert", true},
+		{"developer", "select", true},
+		{"developer", "update", false},
+	}
+	for _, tt := range matrix {
+		t.Run(tt.role+"_"+tt.action, func(t *testing.T) {
+			got, err := svc.Enforce(tt.role, "ds_17", "orders", tt.action)
+			if err != nil {
+				t.Fatalf("Enforce() error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("Enforce(%s, %s) = %v, want %v", tt.role, tt.action, got, tt.want)
+			}
+		})
 	}
 }
 

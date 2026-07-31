@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
@@ -16,6 +18,7 @@ import (
 type ApprovalHandler struct {
 	engine   *service.ApprovalEngine
 	auditSvc *service.AuditService
+	permSvc  *service.PermissionService
 }
 
 // NewApprovalHandler creates a new ApprovalHandler.
@@ -26,6 +29,10 @@ func NewApprovalHandler(engine *service.ApprovalEngine) *ApprovalHandler {
 // SetAuditService injects the audit service for audit logging.
 func (h *ApprovalHandler) SetAuditService(auditSvc *service.AuditService) {
 	h.auditSvc = auditSvc
+}
+
+func (h *ApprovalHandler) SetPermissionService(permissionSvc *service.PermissionService) {
+	h.permSvc = permissionSvc
 }
 
 // writeAuditLog writes an audit entry for policy management actions.
@@ -67,7 +74,7 @@ func (h *ApprovalHandler) CreatePolicy(c echo.Context) error {
 	}
 
 	// Validate approval chain JSON
-	if err := validateApprovalChainJSON(req.ApprovalChain); err != nil {
+	if err := h.validateApprovalChain(c.Request().Context(), req.ApprovalChain); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
@@ -116,7 +123,7 @@ func (h *ApprovalHandler) UpdatePolicy(c echo.Context) error {
 	}
 
 	// Validate approval chain JSON
-	if err := validateApprovalChainJSON(req.ApprovalChain); err != nil {
+	if err := h.validateApprovalChain(c.Request().Context(), req.ApprovalChain); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
@@ -348,19 +355,41 @@ func validateApprovalChainJSON(chain string) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "审批链 JSON 格式无效: "+err.Error())
 	}
 
-	validRoles := map[string]bool{
-		"admin": true, "dba": true, "team_lead": true, "developer": true,
-	}
-
 	for i, s := range stages {
 		if s.Role == "" {
 			return echo.NewHTTPError(http.StatusBadRequest, "审批链第 "+strconv.Itoa(i+1)+" 阶段缺少角色")
 		}
-		if !validRoles[s.Role] {
+		if !regexp.MustCompile(`^[a-z][a-z0-9_]{1,31}$`).MatchString(s.Role) {
 			return echo.NewHTTPError(http.StatusBadRequest, "审批链第 "+strconv.Itoa(i+1)+" 阶段角色无效: "+s.Role)
 		}
 	}
 
+	return nil
+}
+
+func (h *ApprovalHandler) validateApprovalChain(ctx context.Context, chain string) error {
+	if err := validateApprovalChainJSON(chain); err != nil {
+		return err
+	}
+	if h.permSvc == nil || trimSpace(chain) == "" || trimSpace(chain) == "[]" {
+		return nil
+	}
+	var stages []service.ApprovalChainStage
+	if err := json.Unmarshal([]byte(chain), &stages); err != nil {
+		return err
+	}
+	for i, stage := range stages {
+		active, err := h.permSvc.IsRoleActive(ctx, stage.Role)
+		if err != nil {
+			return err
+		}
+		if !active {
+			return echo.NewHTTPError(
+				http.StatusBadRequest,
+				"审批链第 "+strconv.Itoa(i+1)+" 阶段角色不存在或已停用: "+stage.Role,
+			)
+		}
+	}
 	return nil
 }
 

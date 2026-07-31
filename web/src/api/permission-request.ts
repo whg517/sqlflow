@@ -90,22 +90,33 @@ export async function listPermReqs(page = 1, pageSize = 20, status = "") {
   if (status) params.set("status", status);
   const res = await api.get<{
     code: number;
-    data: { items: PermissionRequest[]; total: number };
-    page: number;
-    page_size: number;
-    total: number;
+    data: PermissionRequest[] | null;
+    page?: number;
+    page_size?: number;
+    total?: number;
   }>(`/permission-requests?${params}`);
-  return { items: res.data.items, total: res.total, page, pageSize };
+  return {
+    items: Array.isArray(res.data) ? res.data : [],
+    total: res.total ?? 0,
+    page: res.page ?? page,
+    pageSize: res.page_size ?? pageSize,
+  };
 }
 
 export async function myPermReqs(): Promise<ActivePermission> {
-  const res = await api.get<{ code: number; data: ActivePermission }>("/permission-requests/mine");
-  return res.data;
+  const res = await api.get<{
+    code: number;
+    data: { items: PermissionRequest[] | null; total?: number } | null;
+  }>("/permission-requests/mine");
+  return {
+    items: Array.isArray(res.data?.items) ? res.data.items : [],
+    total: res.data?.total ?? 0,
+  };
 }
 
 export async function myActivePermissions(): Promise<PermissionRequest[]> {
-  const res = await api.get<{ code: number; data: PermissionRequest[] }>("/permission-requests/active");
-  return res.data;
+  const res = await api.get<{ code: number; data: PermissionRequest[] | null }>("/permission-requests/active");
+  return Array.isArray(res.data) ? res.data : [];
 }
 
 export async function approvePermReq(id: number, comment = ""): Promise<PermissionRequest> {

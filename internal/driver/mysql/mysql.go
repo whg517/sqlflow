@@ -173,6 +173,15 @@ func (d *MySQLDriver) GetColumns(ctx context.Context, database, table string) ([
 
 // ExecuteQuery executes a read-only SQL query.
 func (d *MySQLDriver) ExecuteQuery(ctx context.Context, database string, query string, limit int) (*driver.QueryResult, error) {
+	return d.executeQuery(ctx, query, nil, limit)
+}
+
+// ExecuteQueryWithArgs executes a read-only SQL query with bound parameters.
+func (d *MySQLDriver) ExecuteQueryWithArgs(ctx context.Context, database string, query string, args []interface{}, limit int) (*driver.QueryResult, error) {
+	return d.executeQuery(ctx, query, args, limit)
+}
+
+func (d *MySQLDriver) executeQuery(ctx context.Context, query string, args []interface{}, limit int) (*driver.QueryResult, error) {
 	if d.db == nil {
 		return nil, fmt.Errorf("mysql: not connected")
 	}
@@ -186,7 +195,7 @@ func (d *MySQLDriver) ExecuteQuery(ctx context.Context, database string, query s
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	rows, err := d.db.QueryContext(ctx, query)
+	rows, err := d.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, fmt.Errorf("查询超时")

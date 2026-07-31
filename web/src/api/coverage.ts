@@ -1,11 +1,16 @@
 import { api } from "./client";
 import type {
+  CoverageAvailability,
   CoverageSummary,
   ModuleListResponse,
   ModuleListParams,
   FileListResponse,
   FileListParams,
 } from "@/types/coverage";
+
+export async function getCoverageAvailability(): Promise<CoverageAvailability> {
+  return api.get("/v1/coverage/status");
+}
 
 export async function getCoverageSummary(
   project: string,

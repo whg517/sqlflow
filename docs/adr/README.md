@@ -11,6 +11,9 @@ ADR 用来保存 SQLFlow 中对架构有长期影响的决策背景、选择和�
 | [0003](0003-capability-based-datasource-drivers.md) | 使用能力声明的数据源驱动抽象 | accepted | 2026-07-14（补录） |
 | [0004](0004-ai-is-advisory.md) | AI 评审只作辅助并提供确定性规则降级 | accepted | 2026-07-14（补录） |
 | [0005](0005-server-side-security-enforcement.md) | 在服务端集中执行权限、状态机与脱敏门禁 | accepted | 2026-07-14（补录） |
+| [0006](0006-canonical-casbin-tuples.md) | 统一 Casbin 授权元组与通配语义 | accepted | 2026-07-29 |
+| [0007](0007-unified-authorization-and-data-visibility.md) | 统一授权决策与数据可见性 | accepted | 2026-07-30 |
+| [0008](0008-persisted-roles-and-delegated-platform-permissions.md) | 持久化角色与可委派平台权限 | accepted | 2026-07-30 |
 
 这些 ADR 是依据既有代码重建的历史决策，因此日期标注为“补录”，不代表设计首次发生在该日。
 
@@ -55,4 +58,3 @@ ADR 用来保存 SQLFlow 中对架构有长期影响的决策背景、选择和�
 2. 影响系统边界、数据所有权、依赖方向、安全模型、部署拓扑或不可逆技术选型的变更必须有 ADR。
 3. 单纯实现细节、短期任务列表和 API 字段调整通常不需要 ADR。
 4. ADR 合并后同步更新本索引及架构文档中的当前状态。
-

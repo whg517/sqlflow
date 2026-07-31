@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
@@ -23,7 +24,7 @@ var (
 	ErrCannotEditSelf     = errors.New("不能编辑自己的角色")
 	ErrCannotDeleteSelf   = errors.New("不能删除自己")
 	ErrLastAdmin          = errors.New("不能删除最后一个管理员")
-	ErrInvalidRole        = errors.New("角色必须是 admin、dba 或 developer")
+	ErrInvalidRole        = errors.New("角色不存在或已停用")
 )
 
 var ValidRoles = map[string]bool{"admin": true, "dba": true, "developer": true}
@@ -60,6 +61,9 @@ func (s *AuthService) JWTExpiry() time.Duration {
 
 // CreateUser inserts a new user with a bcrypt-hashed password.
 func (s *AuthService) CreateUser(ctx context.Context, username, password, role string) (*model.User, error) {
+	if err := s.ValidateRole(ctx, role); err != nil {
+		return nil, err
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
@@ -111,6 +115,9 @@ func (s *AuthService) Authenticate(ctx context.Context, username, password strin
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
+		return "", "", nil, ErrInvalidCredentials
+	}
+	if err := s.ValidateRole(ctx, u.Role); err != nil {
 		return "", "", nil, ErrInvalidCredentials
 	}
 
@@ -202,6 +209,9 @@ func (s *AuthService) ListUsers(ctx context.Context, page, pageSize int64) ([]*m
 
 // UpdateUserRole updates a user's role. Returns an error if the user does not exist.
 func (s *AuthService) UpdateUserRole(ctx context.Context, userID int64, role string) (*model.User, error) {
+	if err := s.ValidateRole(ctx, role); err != nil {
+		return nil, err
+	}
 	_, err := s.client.User.UpdateOneID(int(userID)).
 		SetRole(role).
 		Save(ctx)
@@ -212,6 +222,19 @@ func (s *AuthService) UpdateUserRole(ctx context.Context, userID int64, role str
 		return nil, fmt.Errorf("update user role: %w", err)
 	}
 	return s.GetUserByID(ctx, userID)
+}
+
+// ValidateRole verifies that a persisted role exists and is active.
+func (s *AuthService) ValidateRole(ctx context.Context, role string) error {
+	var status string
+	err := s.database.DB.QueryRowContext(ctx, `SELECT status FROM roles WHERE name = ?`, role).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) || status != "active" {
+		return ErrInvalidRole
+	}
+	if err != nil {
+		return fmt.Errorf("validate role: %w", err)
+	}
+	return nil
 }
 
 // DeleteUser deletes a user by ID.

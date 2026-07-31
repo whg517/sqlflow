@@ -158,6 +158,12 @@ func TestQueryHandler_ExecuteQuery_Validation(t *testing.T) {
 			http.StatusBadRequest,
 			"请求格式错误",
 		},
+		{
+			"nested_query_param",
+			`{"datasource_id":1,"sql":"SELECT ?","params":[{"id":1}]}`,
+			http.StatusBadRequest,
+			"查询参数仅支持字符串、数字、布尔值和 null",
+		},
 	}
 
 	for _, tt := range tests {

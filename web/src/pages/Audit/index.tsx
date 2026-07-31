@@ -593,7 +593,7 @@ export default function AuditPage() {
   // Load filter options
   useEffect(() => {
     api
-      .get<{ code: number; data: DataSourceOption[] }>("/datasources")
+      .get<{ code: number; data: DataSourceOption[] }>("/datasources/available")
       .then((res) => {
         setDatasources(res.data ?? []);
       })

@@ -22,7 +22,7 @@ const mockListTickets = vi.fn();
 vi.mock("@/api/ticket", () => ({
   listTickets: (...args: unknown[]) => mockListTickets(...args),
   getStatusLabel: (status: string) => status,
-  getStatusColor: (status: string) => "bg-gray-500/20 text-gray-400",
+  getStatusColor: () => "bg-gray-500/20 text-gray-400",
 }));
 
 // API: audit
@@ -138,7 +138,7 @@ describe("CommandPalette", () => {
     vi.clearAllMocks();
 
     // Default: search APIs succeed with empty results
-    mockSearchQueryHistory.mockImplementation((kw: string) =>
+    mockSearchQueryHistory.mockImplementation(() =>
       Promise.resolve({
         data: [],
         page: 1,
@@ -234,7 +234,7 @@ describe("CommandPalette", () => {
       expect(screen.getByText("变更工单")).toBeInTheDocument();
       expect(screen.getByText("权限管理")).toBeInTheDocument();
       expect(screen.getByText("审计日志")).toBeInTheDocument();
-      expect(screen.getByText("数据源管理")).toBeInTheDocument();
+      expect(screen.getByText("数据源配置")).toBeInTheDocument();
       expect(screen.getByText("脱敏规则")).toBeInTheDocument();
       expect(screen.getByText("AI 配置")).toBeInTheDocument();
     });
@@ -685,10 +685,10 @@ describe("CommandPalette", () => {
       const { onOpenChange } = renderWithOpenTransition();
 
       await waitFor(() => {
-        expect(screen.getByText("数据源管理")).toBeInTheDocument();
+        expect(screen.getByText("数据源配置")).toBeInTheDocument();
       });
 
-      await userEvent.click(screen.getByText("数据源管理"));
+      await userEvent.click(screen.getByText("数据源配置"));
 
       expect(mockNavigate).toHaveBeenCalledWith("/settings/datasource");
       expect(onOpenChange).toHaveBeenCalledWith(false);

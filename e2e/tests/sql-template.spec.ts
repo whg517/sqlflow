@@ -327,6 +327,33 @@ test.describe("SQL 模板库", () => {
     // Should show rendered SQL output
     const pre = dialog.locator("pre");
     await expect(pre).toBeVisible({ timeout: 5000 });
+    await expect(pre).toContainText("WHERE id = ?");
+    await expect(
+      dialog.getByRole("button", { name: "在查询中使用" }),
+    ).toBeVisible();
+  });
+
+  test("渲染预览：可带参数进入查询工作台", async ({ page }) => {
+    await createTemplateViaApi({
+      name: `${PREFIX}use_in_query`,
+      sql_content: "SELECT * FROM users WHERE id = {{uid}}",
+      db_type: "mysql",
+    });
+    await gotoTemplatePage(page);
+
+    const row = page
+      .getByRole("row")
+      .filter({ hasText: `${PREFIX}use_in_query` });
+    await row.getByTitle("渲染模板").click();
+
+    const dialog = page.getByRole("dialog");
+    await dialog.getByPlaceholder("输入参数值").fill("42");
+    await dialog.getByRole("button", { name: "渲染" }).click();
+    await dialog.getByRole("button", { name: "在查询中使用" }).click();
+
+    await expect(page).toHaveURL(/\/query$/, { timeout: 5000 });
+    await expect(page.getByText(/来源模板/)).toBeVisible();
+    await expect(page.getByText(/1 个绑定参数/)).toBeVisible();
   });
 
   test("渲染预览：无参数模板渲染", async ({ page }) => {

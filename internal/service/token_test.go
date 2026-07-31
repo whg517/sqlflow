@@ -197,6 +197,28 @@ func TestTokenService_ListTokens(t *testing.T) {
 	}
 }
 
+func TestTokenService_GetTokenStats_EmptyUser(t *testing.T) {
+	database := setupTokenTestDB(t)
+	svc := NewTokenService(database)
+	userID := createTokenTestUser(t, database, "token_stats_empty")
+
+	total, active, usage, err := svc.GetTokenStats(
+		context.Background(),
+		userID,
+	)
+	if err != nil {
+		t.Fatalf("GetTokenStats failed for empty user: %v", err)
+	}
+	if total != 0 || active != 0 || usage != 0 {
+		t.Fatalf(
+			"GetTokenStats = (%d, %d, %d), want all zeros",
+			total,
+			active,
+			usage,
+		)
+	}
+}
+
 func TestTokenService_HasScope(t *testing.T) {
 	tests := []struct {
 		scopes   []string

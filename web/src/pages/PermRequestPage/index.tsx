@@ -77,9 +77,9 @@ function CreatePermReqDialog({ onCreated }: { onCreated: () => void }) {
 
   useEffect(() => {
     if (open) {
-      api.get<{ code: number; data: { items: { id: number; name: string }[] } }>("/datasources")
-        .then((res) => setDatasources(res.data.items || []))
-        .catch(() => {});
+      api.get<{ code: number; data: { id: number; name: string }[] }>("/datasources/available")
+        .then((res) => setDatasources(res.data || []))
+        .catch((err) => setError(err instanceof Error ? err.message : "数据源加载失败"));
     }
   }, [open]);
 

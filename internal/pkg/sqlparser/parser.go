@@ -45,6 +45,12 @@ func ParseSQL(input string, dbType string) (*SQLParseResult, error) {
 	switch strings.ToLower(dbType) {
 	case "mysql":
 		return parseMySQLUnified(input)
+	case "sqlite", "sqlite3":
+		result, err := parseMySQLUnified(input)
+		if result != nil {
+			result.DBType = "sqlite"
+		}
+		return result, err
 	case "postgresql", "postgres", "pg":
 		return parsePostgreSQLUnified(input)
 	case "mongodb", "mongo":
@@ -591,15 +597,15 @@ type ESQueryRequest struct {
 
 // esDangerousEndpoints ES 禁止访问的危险端点。
 var esDangerousEndpoints = map[string]bool{
-	"_bulk":            true,
-	"_delete_by_query": true,
-	"_update_by_query": true,
-	"_search/scroll":   true,
-	"_reindex":         true,
-	"_update":          true,
-	"_delete":          true,
-	"_mget":            true,
-	"_msearch":         true,
+	"_bulk":             true,
+	"_delete_by_query":  true,
+	"_update_by_query":  true,
+	"_search/scroll":    true,
+	"_reindex":          true,
+	"_update":           true,
+	"_delete":           true,
+	"_mget":             true,
+	"_msearch":          true,
 	"_msearch/template": true,
 }
 
@@ -623,11 +629,11 @@ var esAllowedBodyFields = map[string]bool{
 	"from": true,
 	"size": true,
 	// 排序
-	"sort": true,
+	"sort":            true,
 	"docvalue_fields": true,
 	// 字段选择
-	"_source":           true,
-	"stored_fields":     true,
+	"_source":       true,
+	"stored_fields": true,
 	// 高亮
 	"highlight": true,
 	// 聚合
@@ -639,8 +645,8 @@ var esAllowedBodyFields = map[string]bool{
 	// 超时
 	"timeout": true,
 	// 搜索后 (profile, min_score)
-	"profile":    true,
-	"min_score":  true,
+	"profile":         true,
+	"min_score":       true,
 	"terminate_after": true,
 	// 预过滤
 	"pre_filter_shard_size": true,
@@ -757,7 +763,7 @@ func hasNestedScript(m map[string]interface{}) bool {
 			for _, item := range v {
 				if sub, ok := item.(map[string]interface{}); ok && hasNestedScript(sub) {
 					return true
-			}
+				}
 			}
 		}
 	}

@@ -11,7 +11,7 @@ import (
 type Capability int
 
 const (
-	CapQuery               Capability = 1 << iota // Execute read-only queries
+	CapQuery                Capability = 1 << iota // Execute read-only queries
 	CapTicketExec                                  // Execute DML/DDL via ticket workflow
 	CapMetadata                                    // List databases/tables/columns
 	CapTableLevelPermission                        // Table-level permission control (Casbin)
@@ -148,6 +148,18 @@ type Driver interface {
 
 	// Parse analyzes a query string and returns operation metadata (CapSQLParse).
 	Parse(query string) (*ParseResult, error)
+}
+
+// ParameterizedQueryExecutor is implemented by SQL drivers that can bind
+// template values without interpolating them into the query string.
+type ParameterizedQueryExecutor interface {
+	ExecuteQueryWithArgs(
+		ctx context.Context,
+		database string,
+		query string,
+		args []interface{},
+		limit int,
+	) (*QueryResult, error)
 }
 
 // Config holds the connection configuration for a data source.

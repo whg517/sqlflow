@@ -209,17 +209,21 @@ test.describe('SQL Templates — Render', () => {
       },
     })
     expect(status).toBeLessThan(300)
-    const body = data as { code: number; data: string }
+    const body = data as {
+      code: number
+      data: { rendered_sql: string; param_values: string[] }
+    }
     expect(body.code).toBe(0)
-    // Rendered SQL should have params replaced
-    expect(body.data).toContain('id, name, email')
-    expect(body.data).toContain('users')
-    expect(body.data).toContain('2026-01-01')
-    expect(body.data).toContain('100')
-    expect(body.data).not.toContain('{{')
+    expect(body.data.rendered_sql).toBe('SELECT ? FROM ? WHERE created_at > ? LIMIT ?')
+    expect(body.data.param_values).toEqual([
+      'id, name, email',
+      'users',
+      '2026-01-01',
+      '100',
+    ])
   })
 
-  test('should render with empty params (keep placeholders)', async ({ page }) => {
+  test('should reject missing required params', async ({ page }) => {
     await loginViaUI(page)
 
     const { data: createData } = await apiHelper(page, 'POST', '/sql-templates', {
@@ -233,10 +237,9 @@ test.describe('SQL Templates — Render', () => {
     const { status, data } = await apiHelper(page, 'POST', `/sql-templates/${created.data.id}/render`, {
       params: {},
     })
-    expect(status).toBeLessThan(300)
-    // Empty params should either keep or strip placeholders — backend behavior
-    const body = data as { code: number }
-    expect(body.code).toBe(0)
+    expect(status).toBe(400)
+    const body = data as { code: number; message: string }
+    expect(body.message).toContain('缺少必填参数')
   })
 })
 
@@ -287,8 +290,14 @@ test.describe('SQL Templates — Boundary', () => {
       params: { table: 'orders' },
     })
     expect(status).toBeLessThan(300)
-    const body = data as { code: number; data: string }
-    expect(body.data).toContain('orders')
+    const body = data as {
+      code: number
+      data: { rendered_sql: string; param_values: string[] }
+    }
+    expect(body.data.rendered_sql).toContain('DROP TABLE users')
+    expect(body.data.rendered_sql).toContain('?')
+    expect(body.data.rendered_sql).not.toContain('orders')
+    expect(body.data.param_values).toEqual(['orders'])
   })
 
   test('should return 404 for non-existent template', async ({ page }) => {

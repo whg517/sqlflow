@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
 	"github.com/whg517/sqlflow/internal/model"
@@ -41,7 +42,7 @@ var validSensitivityLevels = map[string]bool{"low": true, "medium": true, "high"
 
 // MaskRuleService handles mask rule CRUD operations.
 type MaskRuleService struct {
-	client *ent.Client
+	client   *ent.Client
 	database *db.DB
 	permSvc  *PermissionService
 	auditSvc *AuditService
@@ -372,7 +373,7 @@ func (s *MaskRuleService) HasDesensitizeBypass(role string, datasourceID int64, 
 	if s.permSvc == nil {
 		return false
 	}
-	dom := fmt.Sprintf("ds_%d", datasourceID)
+	dom := authz.DatasourceDomain(datasourceID)
 
 	for _, table := range tables {
 		if table == "" {

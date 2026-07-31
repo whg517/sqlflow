@@ -34,6 +34,8 @@ interface StatusBarProps {
   datasourceId: number | null;
   database: string;
   sql: string;
+  params?: unknown[];
+  dbType?: string;
   onExecute: () => void;
   onExplain?: () => void;
   explaining?: boolean;
@@ -48,6 +50,8 @@ export default function StatusBar({
   datasourceId,
   database,
   sql,
+  params = [],
+  dbType = "",
   onExecute,
   onExplain,
   explaining,
@@ -113,6 +117,7 @@ export default function StatusBar({
         datasource_id: datasourceId,
         database,
         sql: sql.trim(),
+        params,
         format,
       });
       toast.success("导出完成");
@@ -231,7 +236,7 @@ export default function StatusBar({
       </div>
 
       {/* Explain button */}
-      {!isMongo && onExplain && (
+      {dbType === "mysql" && onExplain && (
         <Button
           variant="ghost"
           size="sm"

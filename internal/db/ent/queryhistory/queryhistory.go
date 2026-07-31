@@ -23,6 +23,8 @@ const (
 	FieldSQLContent = "sql_content"
 	// FieldSQLHash holds the string denoting the sql_hash field in the database.
 	FieldSQLHash = "sql_hash"
+	// FieldParamsJSON holds the string denoting the params_json field in the database.
+	FieldParamsJSON = "params_json"
 	// FieldSQLSummary holds the string denoting the sql_summary field in the database.
 	FieldSQLSummary = "sql_summary"
 	// FieldDbType holds the string denoting the db_type field in the database.
@@ -47,6 +49,7 @@ var Columns = []string{
 	FieldDatabase,
 	FieldSQLContent,
 	FieldSQLHash,
+	FieldParamsJSON,
 	FieldSQLSummary,
 	FieldDbType,
 	FieldExecutionTime,
@@ -72,6 +75,8 @@ var (
 	SQLContentValidator func(string) error
 	// DefaultSQLHash holds the default value on creation for the "sql_hash" field.
 	DefaultSQLHash string
+	// DefaultParamsJSON holds the default value on creation for the "params_json" field.
+	DefaultParamsJSON string
 	// DefaultSQLSummary holds the default value on creation for the "sql_summary" field.
 	DefaultSQLSummary string
 	// DefaultDbType holds the default value on creation for the "db_type" field.
@@ -117,6 +122,11 @@ func BySQLContent(opts ...sql.OrderTermOption) OrderOption {
 // BySQLHash orders the results by the sql_hash field.
 func BySQLHash(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSQLHash, opts...).ToFunc()
+}
+
+// ByParamsJSON orders the results by the params_json field.
+func ByParamsJSON(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParamsJSON, opts...).ToFunc()
 }
 
 // BySQLSummary orders the results by the sql_summary field.

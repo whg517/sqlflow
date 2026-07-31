@@ -15,11 +15,16 @@ import (
 // UserHandler handles user/auth related requests.
 type UserHandler struct {
 	authSvc *service.AuthService
+	permSvc *service.PermissionService
 }
 
 // NewUserHandler creates a new UserHandler.
-func NewUserHandler(authSvc *service.AuthService) *UserHandler {
-	return &UserHandler{authSvc: authSvc}
+func NewUserHandler(authSvc *service.AuthService, permission ...*service.PermissionService) *UserHandler {
+	handler := &UserHandler{authSvc: authSvc}
+	if len(permission) > 0 {
+		handler.permSvc = permission[0]
+	}
+	return handler
 }
 
 type loginRequest struct {
@@ -42,10 +47,11 @@ type userResponse struct {
 }
 
 type userDetailResponse struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	Role      string `json:"role"`
-	CreatedAt string `json:"created_at"`
+	ID          int64    `json:"id"`
+	Username    string   `json:"username"`
+	Role        string   `json:"role"`
+	CreatedAt   string   `json:"created_at"`
+	Permissions []string `json:"permissions,omitempty"`
 }
 
 type changePasswordRequest struct {
@@ -175,11 +181,19 @@ func (h *UserHandler) Me(c echo.Context) error {
 		return resp.Unauthorized(c, "用户不存在")
 	}
 
+	var permissions []string
+	if h.permSvc != nil {
+		permissions, err = h.permSvc.GetPlatformPermissions(user.Role)
+		if err != nil {
+			return resp.InternalError(c, "获取用户权限失败")
+		}
+	}
 	return resp.OK(c, userDetailResponse{
-		ID:        user.ID,
-		Username:  user.Username,
-		Role:      user.Role,
-		CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:          user.ID,
+		Username:    user.Username,
+		Role:        user.Role,
+		CreatedAt:   user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		Permissions: permissions,
 	})
 }
 
@@ -304,12 +318,11 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 	if err := validatePassword(req.Password); err != nil {
 		return resp.BadRequest(c, err.Error())
 	}
-	if !service.ValidRoles[req.Role] {
-		return resp.BadRequest(c, "角色必须是 admin、dba 或 developer")
-	}
-
 	user, err := h.authSvc.CreateUser(c.Request().Context(), req.Username, req.Password, req.Role)
 	if err != nil {
+		if errors.Is(err, service.ErrInvalidRole) {
+			return resp.BadRequest(c, err.Error())
+		}
 		return resp.InternalError(c, "创建用户失败")
 	}
 
@@ -417,10 +430,6 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return resp.BadRequest(c, "请求格式错误")
 	}
-	if !service.ValidRoles[req.Role] {
-		return resp.BadRequest(c, "角色必须是 admin、dba 或 developer")
-	}
-
 	// Check target user is not admin
 	targetUser, err := h.authSvc.GetUserByID(c.Request().Context(), id)
 	if err != nil {
@@ -432,6 +441,9 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 
 	user, err := h.authSvc.UpdateUserRole(c.Request().Context(), id, req.Role)
 	if err != nil {
+		if errors.Is(err, service.ErrInvalidRole) {
+			return resp.BadRequest(c, err.Error())
+		}
 		return resp.InternalError(c, "更新用户失败")
 	}
 

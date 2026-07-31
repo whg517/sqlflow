@@ -6,6 +6,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/whg517/sqlflow/internal/authz"
 )
 
 func createPermTestUser(t *testing.T, db *sql.DB, username string) int64 {
@@ -118,6 +120,20 @@ func TestPermReqService_ApproveAndReject(t *testing.T) {
 	if approved.ApproverID != adminID {
 		t.Errorf("expected approver %d, got %d", adminID, approved.ApproverID)
 	}
+	for _, action := range []string{"select", "update"} {
+		allowed, enforceErr := permSvc.Enforce(
+			authz.UserSubject(userID),
+			authz.DatasourceDomain(1),
+			"users",
+			action,
+		)
+		if enforceErr != nil {
+			t.Fatalf("enforce temporary %s policy: %v", action, enforceErr)
+		}
+		if !allowed {
+			t.Fatalf("approved temporary %s policy was not enforced", action)
+		}
+	}
 
 	// Cannot approve again
 	_, err = svc.ApproveRequest(ctx, pr.ID, adminID, "dup")
@@ -184,6 +200,18 @@ func TestPermReqService_RevokeApproved(t *testing.T) {
 	}
 	if revoked.Status != "REVOKED" {
 		t.Errorf("expected REVOKED, got '%s'", revoked.Status)
+	}
+	allowed, enforceErr := permSvc.Enforce(
+		authz.UserSubject(userID),
+		authz.DatasourceDomain(1),
+		"users",
+		"select",
+	)
+	if enforceErr != nil {
+		t.Fatalf("enforce revoked policy: %v", enforceErr)
+	}
+	if allowed {
+		t.Fatal("revoked temporary policy is still enforced")
 	}
 }
 

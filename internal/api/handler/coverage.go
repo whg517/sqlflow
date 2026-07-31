@@ -26,12 +26,18 @@ func (h *CoverageUploadHandler) UploadReport(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("无法解析上传文件: %v", err)})
 	}
 	file, header, err := c.Request().FormFile("file")
-	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "缺少 file 字段"}) }
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "缺少 file 字段"})
+	}
 	defer file.Close()
 	projectName := c.FormValue("project_name")
-	if projectName == "" { return c.JSON(http.StatusBadRequest, map[string]string{"error": "缺少 project_name 字段"}) }
+	if projectName == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "缺少 project_name 字段"})
+	}
 	branch := c.FormValue("branch")
-	if branch == "" { branch = "main" }
+	if branch == "" {
+		branch = "main"
+	}
 	userID, _ := c.Get("user_id").(int64)
 	username, _ := c.Get("username").(string)
 
@@ -42,7 +48,9 @@ func (h *CoverageUploadHandler) UploadReport(c echo.Context) error {
 	} else {
 		result, reportType, err = h.registry.DetectAndParse(c.Request().Context(), file)
 	}
-	if err != nil { return c.JSON(http.StatusUnprocessableEntity, map[string]string{"error": fmt.Sprintf("解析失败: %v", err)}) }
+	if err != nil {
+		return c.JSON(http.StatusUnprocessableEntity, map[string]string{"error": fmt.Sprintf("解析失败: %v", err)})
+	}
 
 	report := &coverage.CoverageReport{
 		ProjectName: projectName, Branch: branch, CommitHash: c.FormValue("commit_hash"),
@@ -76,16 +84,24 @@ func (h *CoverageUploadHandler) MergeReports(c echo.Context) error {
 		ProjectName string  `json:"project_name"`
 		Branch      string  `json:"branch"`
 	}
-	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "无效的请求体"}) }
-	if len(req.ReportIDs) < 2 { return c.JSON(http.StatusBadRequest, map[string]string{"error": "至少需要 2 个报告"}) }
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "无效的请求体"})
+	}
+	if len(req.ReportIDs) < 2 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "至少需要 2 个报告"})
+	}
 	userID, _ := c.Get("user_id").(int64)
 	username, _ := c.Get("username").(string)
 	var results []*coverage.ParseResult
 	var baseReport *coverage.CoverageReport
 	for _, id := range req.ReportIDs {
 		rpt, err := h.store.GetReport(c.Request().Context(), id)
-		if err != nil { return c.JSON(http.StatusNotFound, map[string]string{"error": fmt.Sprintf("报告 %d 不存在", id)}) }
-		if baseReport == nil { baseReport = rpt }
+		if err != nil {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": fmt.Sprintf("报告 %d 不存在", id)})
+		}
+		if baseReport == nil {
+			baseReport = rpt
+		}
 		modules, _ := h.store.ListModules(c.Request().Context(), rpt.ID)
 		parsed := &coverage.ParseResult{ReportType: rpt.ReportType, Language: rpt.Language,
 			TotalLines: rpt.TotalLines, CoveredLines: rpt.CoveredLines,
@@ -129,41 +145,70 @@ func NewCoverageQueryHandler(store *coverage.Store) *CoverageQueryHandler {
 
 func (h *CoverageQueryHandler) GetProjectCoverage(c echo.Context) error {
 	report, err := h.store.ProjectCoverage(c.Request().Context(), c.Param("project"), c.QueryParam("branch"))
-	if err != nil { return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()}) }
-	if report == nil { return c.JSON(http.StatusNotFound, map[string]string{"error": "未找到覆盖率数据"}) }
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if report == nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "未找到覆盖率数据"})
+	}
 	modules, _ := h.store.ListModules(c.Request().Context(), report.ID)
 	return c.JSON(http.StatusOK, map[string]interface{}{"report": report, "modules": modules})
 }
 
 func (h *CoverageQueryHandler) GetModuleFiles(c echo.Context) error {
 	moduleID, err := strconv.ParseInt(c.Param("moduleID"), 10, 64)
-	if err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "无效的模块 ID"}) }
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "无效的模块 ID"})
+	}
 	files, err := h.store.ListFiles(c.Request().Context(), moduleID)
-	if err != nil { return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()}) }
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
 	role, _ := c.Get("role").(string)
 	if role != "admin" && role != "tech_lead" {
-		for i := range files { files[i].UncoveredLines = nil }
+		for i := range files {
+			files[i].UncoveredLines = nil
+		}
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{"files": files})
 }
 
 func (h *CoverageQueryHandler) GetCoverageHistory(c echo.Context) error {
-	from := time.Now().AddDate(0, -1, 0); to := time.Now()
-	if v := c.QueryParam("from"); v != "" { if t, err := time.Parse(time.RFC3339, v); err == nil { from = t } }
-	if v := c.QueryParam("to"); v != "" { if t, err := time.Parse(time.RFC3339, v); err == nil { to = t } }
+	from := time.Now().AddDate(0, -1, 0)
+	to := time.Now()
+	if v := c.QueryParam("from"); v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			from = t
+		}
+	}
+	if v := c.QueryParam("to"); v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			to = t
+		}
+	}
 	reports, err := h.store.CoverageHistory(c.Request().Context(), c.Param("project"), c.QueryParam("branch"), from, to)
-	if err != nil { return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()}) }
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
 	return c.JSON(http.StatusOK, map[string]interface{}{"reports": reports, "from": from, "to": to})
 }
 
 func (h *CoverageQueryHandler) ListReports(c echo.Context) error {
 	project := c.QueryParam("project")
-	if project == "" { return c.JSON(http.StatusBadRequest, map[string]string{"error": "缺少 project 参数"}) }
+	if project == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "缺少 project 参数"})
+	}
 	limit, offset := 20, 0
-	if v, err := strconv.Atoi(c.QueryParam("limit")); err == nil && v > 0 { limit = v }
-	if v, err := strconv.Atoi(c.QueryParam("offset")); err == nil && v >= 0 { offset = v }
+	if v, err := strconv.Atoi(c.QueryParam("limit")); err == nil && v > 0 {
+		limit = v
+	}
+	if v, err := strconv.Atoi(c.QueryParam("offset")); err == nil && v >= 0 {
+		offset = v
+	}
 	reports, err := h.store.ListReports(c.Request().Context(), project, c.QueryParam("branch"), limit, offset)
-	if err != nil { return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()}) }
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
 	return c.JSON(http.StatusOK, map[string]interface{}{"reports": reports, "limit": limit, "offset": offset})
 }
 
@@ -175,14 +220,19 @@ func NewCoverageGateHandler(store *coverage.Store) *CoverageGateHandler {
 
 func (h *CoverageGateHandler) ListGateConfigs(c echo.Context) error {
 	configs, err := h.store.ListGateConfigs(c.Request().Context(), c.QueryParam("project"))
-	if err != nil { return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()}) }
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
 	return c.JSON(http.StatusOK, map[string]interface{}{"configs": configs})
 }
 
 func (h *CoverageGateHandler) CreateGateConfig(c echo.Context) error {
 	var cfg coverage.GateConfig
-	if err := c.Bind(&cfg); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "无效的请求体"}) }
-	userID, _ := c.Get("user_id").(int64); cfg.CreatedBy = userID
+	if err := c.Bind(&cfg); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "无效的请求体"})
+	}
+	userID, _ := c.Get("user_id").(int64)
+	cfg.CreatedBy = userID
 	if err := h.store.UpsertGateConfig(c.Request().Context(), &cfg); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -192,11 +242,19 @@ func (h *CoverageGateHandler) CreateGateConfig(c echo.Context) error {
 func (h *CoverageGateHandler) UpdateGateConfig(c echo.Context) error {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	existing, err := h.store.GetGateConfig(c.Request().Context(), id)
-	if err != nil { return c.JSON(http.StatusNotFound, map[string]string{"error": "配置不存在"}) }
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "配置不存在"})
+	}
 	var cfg coverage.GateConfig
-	if err := c.Bind(&cfg); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "无效的请求体"}) }
-	cfg.ID = id; cfg.ProjectName = existing.ProjectName; cfg.ModulePattern = existing.ModulePattern
-	cfg.CoverageType = existing.CoverageType; cfg.CreatedBy = existing.CreatedBy; cfg.CreatedAt = existing.CreatedAt
+	if err := c.Bind(&cfg); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "无效的请求体"})
+	}
+	cfg.ID = id
+	cfg.ProjectName = existing.ProjectName
+	cfg.ModulePattern = existing.ModulePattern
+	cfg.CoverageType = existing.CoverageType
+	cfg.CreatedBy = existing.CreatedBy
+	cfg.CreatedAt = existing.CreatedAt
 	if err := h.store.UpsertGateConfig(c.Request().Context(), &cfg); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -213,12 +271,16 @@ func (h *CoverageGateHandler) DeleteGateConfig(c echo.Context) error {
 
 func getActorType(c echo.Context) coverage.ActorType {
 	role, _ := c.Get("role").(string)
-	if role == "api_token" { return coverage.ActorTypeCI }
+	if role == "api_token" {
+		return coverage.ActorTypeCI
+	}
 	return coverage.ActorTypeUser
 }
 
 func SanitizePathForAPI(role, path string) string {
-	if role == "admin" || role == "tech_lead" { return path }
+	if role == "admin" || role == "tech_lead" {
+		return path
+	}
 	if strings.Contains(path, "auth/") || strings.Contains(path, "jwt/") ||
 		strings.Contains(path, "crypto/") || strings.Contains(path, "secret") {
 		parts := strings.Split(path, "/")
@@ -227,16 +289,36 @@ func SanitizePathForAPI(role, path string) string {
 	return path
 }
 
-// MUST-1: nil pgDB guard — returns without registering routes if pgDB is nil.
+type CoverageStatusHandler struct {
+	enabled bool
+}
+
+func NewCoverageStatusHandler(enabled bool) *CoverageStatusHandler {
+	return &CoverageStatusHandler{enabled: enabled}
+}
+
+func (h *CoverageStatusHandler) GetStatus(c echo.Context) error {
+	response := map[string]interface{}{"enabled": h.enabled}
+	if !h.enabled {
+		response["reason"] = "未配置独立的 Coverage PostgreSQL 数据库"
+	}
+	return c.JSON(http.StatusOK, response)
+}
+
+// MUST-1: the status route is always available; data routes require pgDB.
 func RegisterCoverageRoutes(e *echo.Echo, authMW, adminMW echo.MiddlewareFunc, pgDB *sql.DB) {
-	if pgDB == nil { return }
+	g := e.Group("", authMW)
+	g.GET("/api/v1/coverage/status", NewCoverageStatusHandler(pgDB != nil).GetStatus)
+
+	if pgDB == nil {
+		return
+	}
 	store := coverage.NewStore(pgDB)
 	registry := coverage.GlobalRegistry()
 	uh := NewCoverageUploadHandler(store, registry)
 	qh := NewCoverageQueryHandler(store)
 	gh := NewCoverageGateHandler(store)
 
-	g := e.Group("", authMW)
 	g.POST("/api/v1/coverage/reports", uh.UploadReport)
 	g.POST("/api/v1/coverage/reports/merge", uh.MergeReports)
 	g.GET("/api/v1/coverage/reports", qh.ListReports)

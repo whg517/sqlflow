@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/service"
@@ -21,7 +22,7 @@ func setupShareTest(t *testing.T) (*echo.Echo, *service.ShareService, *ShareHand
 	t.Helper()
 	d := testutil.NewDB(t)
 
-	shareSvc := service.NewShareService(d)
+	shareSvc := service.NewShareService(d, "handler-share-test-secret-at-least-32-bytes")
 	h := NewShareHandler(shareSvc)
 	e := echo.New()
 
@@ -241,7 +242,7 @@ func TestShareHandler_GetShare_Success_RoundTrip(t *testing.T) {
 func TestShareHandler_VerifyPassword(t *testing.T) {
 	e, _, h, userID := setupShareTest(t)
 
-	body := `{"columns":["id"],"rows":[{"id":1}],"password":"s3cret"}`
+	body := `{"columns":["id"],"rows":[{"id":1}],"password":"s3cret","sql_summary":"SELECT secret","datasource_name":"prod"}`
 	c1, rec1 := newShareContext(e, http.MethodPost, "/api/query/share", body, userID)
 	c1.SetPath("/api/query/share")
 	if err := h.CreateShare(c1); err != nil {
@@ -255,6 +256,42 @@ func TestShareHandler_VerifyPassword(t *testing.T) {
 		t.Fatalf("decode share: %v", err)
 	}
 	tok, _ := parsed["data"].(map[string]interface{})["token"].(string)
+
+	t.Run("direct read returns metadata only", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/s/"+tok, nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetPath("/s/:token")
+		c.SetParamNames("token")
+		c.SetParamValues(tok)
+		if err := h.GetShare(c); err != nil {
+			t.Fatalf("GetShare: %v", err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+
+		var response map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		data, _ := response["data"].(map[string]interface{})
+		if granted, _ := data["access_granted"].(bool); granted {
+			t.Fatal("direct read unexpectedly granted access")
+		}
+		if rows, _ := data["rows"].([]interface{}); len(rows) != 0 {
+			t.Fatal("direct read leaked rows")
+		}
+		if columns, _ := data["columns"].([]interface{}); len(columns) != 0 {
+			t.Fatal("direct read leaked columns")
+		}
+		if data["sql_summary"] != nil || data["datasource_name"] != nil {
+			t.Fatal("direct read leaked protected metadata")
+		}
+		if cacheControl := rec.Header().Get("Cache-Control"); cacheControl != "no-store" {
+			t.Errorf("Cache-Control = %q, want no-store", cacheControl)
+		}
+	})
 
 	t.Run("wrong password -> 401", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/s/"+tok+"/verify",
@@ -288,10 +325,41 @@ func TestShareHandler_VerifyPassword(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Errorf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
 		}
+
+		cookies := rec.Result().Cookies()
+		if len(cookies) != 1 {
+			t.Fatalf("Set-Cookie count = %d, want 1", len(cookies))
+		}
+		accessCookie := cookies[0]
+		if !accessCookie.HttpOnly || accessCookie.SameSite != http.SameSiteStrictMode {
+			t.Fatalf("access cookie flags = HttpOnly:%v SameSite:%v", accessCookie.HttpOnly, accessCookie.SameSite)
+		}
+
+		getReq := httptest.NewRequest(http.MethodGet, "/s/"+tok, nil)
+		getReq.AddCookie(accessCookie)
+		getRec := httptest.NewRecorder()
+		getCtx := e.NewContext(getReq, getRec)
+		getCtx.SetPath("/s/:token")
+		getCtx.SetParamNames("token")
+		getCtx.SetParamValues(tok)
+		if err := h.GetShare(getCtx); err != nil {
+			t.Fatalf("GetShare after verification: %v", err)
+		}
+		var getResponse map[string]interface{}
+		if err := json.Unmarshal(getRec.Body.Bytes(), &getResponse); err != nil {
+			t.Fatalf("decode verified response: %v", err)
+		}
+		data, _ := getResponse["data"].(map[string]interface{})
+		if granted, _ := data["access_granted"].(bool); !granted {
+			t.Fatal("verified request did not receive access")
+		}
+		if rows, _ := data["rows"].([]interface{}); len(rows) != 1 {
+			t.Fatalf("verified rows len = %d, want 1", len(rows))
+		}
 	})
 }
 
-// TestShareHandler_VerifyPassword_NotFound ensures an unknown token is a 400.
+// TestShareHandler_VerifyPassword_NotFound ensures an unknown token is a 404.
 func TestShareHandler_VerifyPassword_NotFound(t *testing.T) {
 	e, _, h, _ := setupShareTest(t)
 
@@ -306,8 +374,62 @@ func TestShareHandler_VerifyPassword_NotFound(t *testing.T) {
 	if err := h.VerifySharePassword(c); err != nil {
 		t.Fatalf("VerifySharePassword: %v", err)
 	}
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d; body=%s", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+}
+
+func TestShareHandler_GetShare_ExpiredAndRevoked(t *testing.T) {
+	e, shareSvc, h, userID := setupShareTest(t)
+
+	expired, err := shareSvc.CreateShare(t.Context(), &service.CreateShareRequest{
+		UserID:    userID,
+		Username:  "sharer",
+		Columns:   []string{"id"},
+		Rows:      []map[string]interface{}{{"id": 1}},
+		ExpiresAt: time.Now().Add(-time.Hour),
+		Password:  "secret",
+	})
+	if err != nil {
+		t.Fatalf("create expired share: %v", err)
+	}
+
+	revoked, err := shareSvc.CreateShare(t.Context(), &service.CreateShareRequest{
+		UserID:    userID,
+		Username:  "sharer",
+		Columns:   []string{"id"},
+		Rows:      []map[string]interface{}{{"id": 1}},
+		ExpiresAt: time.Now().Add(time.Hour),
+		Password:  "secret",
+	})
+	if err != nil {
+		t.Fatalf("create revoked share: %v", err)
+	}
+	if err := shareSvc.RevokeShare(t.Context(), revoked.ID, userID); err != nil {
+		t.Fatalf("revoke share: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name  string
+		token string
+	}{
+		{name: "expired", token: expired.Token},
+		{name: "revoked", token: revoked.Token},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/s/"+tc.token, nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.SetPath("/s/:token")
+			c.SetParamNames("token")
+			c.SetParamValues(tc.token)
+			if err := h.GetShare(c); err != nil {
+				t.Fatalf("GetShare: %v", err)
+			}
+			if rec.Code != http.StatusGone {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusGone, rec.Body.String())
+			}
+		})
 	}
 }
 

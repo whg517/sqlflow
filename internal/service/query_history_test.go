@@ -20,6 +20,7 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 			DatasourceID:  dsID,
 			Database:      "testdb",
 			SQLContent:    "SELECT * FROM users LIMIT 10",
+			ParamsJSON:    `["42"]`,
 			SQLSummary:    "SELECT * FROM users",
 			DBType:        "mysql",
 			ExecutionTime: 25,
@@ -48,6 +49,9 @@ func TestQueryHistoryService_CreateAndList(t *testing.T) {
 		}
 		if list[0].ExecutionTime != 25 {
 			t.Errorf("ExecutionTime = %d, want 25", list[0].ExecutionTime)
+		}
+		if list[0].ParamsJSON != `["42"]` {
+			t.Errorf("ParamsJSON = %q, want parameter binding", list[0].ParamsJSON)
 		}
 	})
 
