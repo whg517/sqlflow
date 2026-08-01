@@ -1,79 +1,71 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import Layout from "./components/Layout";
-import AuthGuard from "./components/AuthGuard";
-import ErrorPage from "./components/ErrorPage";
-import { lazyPage } from "./components/LazyLoad";
+import { TooltipProvider } from "@/shared/components/ui/tooltip";
+import Layout from "@/shared/components/Layout";
+import AuthGuard from "@/shared/components/AuthGuard";
+import ErrorPage from "@/shared/components/ErrorPage";
+import { lazyPage } from "@/shared/components/LazyLoad";
 
 // ── 路由级懒加载：Vite 会为每个 lazy() 自动拆分独立 chunk ──────────────────
 
-const DashboardPage = lazyPage(() => import("@/pages/Dashboard"), {
+const DashboardPage = lazyPage(() => import("@/features/ops/pages/Dashboard"), {
   title: "仪表盘页面出现了问题",
 });
 
-const LoginPage = lazyPage(() => import("@/pages/Login"), {
+const LoginPage = lazyPage(() => import("@/features/iam/pages/Login"), {
   title: "登录页面出现了问题",
 });
 
-const QueryPage = lazyPage(() => import("@/pages/Query"), {
+const QueryPage = lazyPage(() => import("@/features/query/pages/Query"), {
   title: "查询页面出现了问题",
 });
 
-const PerformancePage = lazyPage(() => import("@/pages/Performance"), {
+const PerformancePage = lazyPage(() => import("@/features/ops/pages/Performance"), {
   title: "性能分析页面出现了问题",
 });
 
-const TicketPage = lazyPage(() => import("@/pages/Ticket"), {
+const TicketPage = lazyPage(() => import("@/features/ticket/pages/Ticket"), {
   title: "工单页面出现了问题",
 });
 
-const TicketNewPage = lazyPage(() => import("@/pages/TicketNew"), {
+const TicketNewPage = lazyPage(() => import("@/features/ticket/pages/TicketNew"), {
   title: "新建工单页面出现了问题",
 });
 
-const AuditPage = lazyPage(() => import("@/pages/Audit"), {
+const AuditPage = lazyPage(() => import("@/features/audit/pages/Audit"), {
   title: "审计页面出现了问题",
 });
 
-const ReportsPage = lazyPage(() => import("@/pages/Reports"), {
+const ReportsPage = lazyPage(() => import("@/features/audit/pages/Reports"), {
   title: "报表页面出现了问题",
 });
 
-const UsersPage = lazyPage(() => import("@/pages/Users"), {
+const UsersPage = lazyPage(() => import("@/features/iam/pages/Users"), {
   title: "用户管理页面出现了问题",
 });
 
-const PermissionsPage = lazyPage(() => import("@/pages/Permissions"), {
+const PermissionsPage = lazyPage(() => import("@/features/security/pages/Permissions"), {
   title: "权限管理页面出现了问题",
 });
 
-const SettingsPage = lazyPage(() => import("@/pages/Settings"), {
+const SettingsPage = lazyPage(() => import("@/features/ops/pages/Settings"), {
   title: "设置页面出现了问题",
 });
 
-const TokenPage = lazyPage(() => import("@/pages/TokenPage"), {
+const TokenPage = lazyPage(() => import("@/features/iam/pages/TokenPage"), {
   title: "Token 管理页面出现了问题",
 });
 
-const PermRequestPage = lazyPage(() => import("@/pages/PermRequestPage"), {
+const PermRequestPage = lazyPage(() => import("@/features/security/pages/PermRequestPage"), {
   title: "临时权限页面出现了问题",
 });
 
-const SQLTemplatePage = lazyPage(() => import("@/pages/SQLTemplatePage"), {
+const SQLTemplatePage = lazyPage(() => import("@/features/query/pages/SQLTemplatePage"), {
   title: "SQL 模板页面出现了问题",
 });
 
-const CoverageSummaryPage = lazyPage(() => import("@/pages/Coverage/CoverageSummaryPage"), {
-  title: "覆盖度审计页面出现了问题",
-});
-
-const SharedResultPage = lazyPage(() => import("@/pages/SharedResultPage"), {
+const SharedResultPage = lazyPage(() => import("@/features/query/pages/SharedResultPage"), {
   title: "共享结果页面出现了问题",
-});
-
-const FileDetailPage = lazyPage(() => import("@/pages/Coverage/FileDetailPage"), {
-  title: "文件覆盖度页面出现了问题",
 });
 
 // ── App ─────────────────────────────────────────────────────────────────────
@@ -109,9 +101,6 @@ function App() {
             <Route path="/tokens" element={<TokenPage />} />
             <Route path="/permission-requests" element={<PermRequestPage />} />
             <Route path="/sql-templates" element={<SQLTemplatePage />} />
-            <Route path="/coverage" element={<CoverageSummaryPage />} />
-            <Route path="/coverage/summary" element={<CoverageSummaryPage />} />
-            <Route path="/coverage/modules/:modulePath" element={<FileDetailPage />} />
             <Route path="/403" element={<ErrorPage code={403} />} />
             <Route path="/404" element={<ErrorPage code={404} />} />
             <Route path="*" element={<Navigate to="/" replace />} />

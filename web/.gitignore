@@ -23,11 +23,5 @@ dist-ssr
 *.sln
 *.sw?
 
-# Playwright output
-test-results/
-playwright-report/
-playwright-report-e2e/
-playwright-report-real/
-
 # Coverage
 coverage/

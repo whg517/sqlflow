@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { QueryResult, AIReviewResult } from "@/api/query";
+import type { QueryResult, AIReviewResult } from "@/features/query/api/query";
 
 // --- Types ---
 

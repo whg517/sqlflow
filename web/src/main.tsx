@@ -1,9 +1,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import ErrorBoundary from "./components/ErrorBoundary";
+import ErrorBoundary from "@/shared/components/ErrorBoundary";
 import "./index.css";
 import App from "./App.tsx";
-import { initWebVitals } from "./lib/web-vitals";
+import { initWebVitals } from "@/shared/lib/web-vitals";
 
 // Initialize Core Web Vitals reporting (production only)
 initWebVitals();
