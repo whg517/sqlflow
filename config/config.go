@@ -6,22 +6,22 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
-	"github.com/whg517/sqlflow/internal/pkg/crypto"
+	"github.com/whg517/sqlflow/internal/platform/crypto"
 )
 
 type Config struct {
-	Server          ServerConfig   `mapstructure:"server"`
-	JWT             JWTConfig      `mapstructure:"jwt"`
-	Admin           AdminConfig    `mapstructure:"admin"`
-	DB              DBConfig       `mapstructure:"db"`
-	AI              AIConfig       `mapstructure:"ai"`
-	Notify          NotifyConfig   `mapstructure:"notify"`
-	Feishu          FeishuConfig   `mapstructure:"feishu"`
-	OIDC            OIDCConfig     `mapstructure:"oidc"`
-	Backup          BackupConfig   `mapstructure:"backup"`
-	Metrics         MetricsConfig  `mapstructure:"metrics"`
-	QueryHistoryMax int            `mapstructure:"query_history_max"`
-	EncryptionKey   string         `mapstructure:"encryption_key"`
+	Server          ServerConfig  `mapstructure:"server"`
+	JWT             JWTConfig     `mapstructure:"jwt"`
+	Admin           AdminConfig   `mapstructure:"admin"`
+	DB              DBConfig      `mapstructure:"db"`
+	AI              AIConfig      `mapstructure:"ai"`
+	Notify          NotifyConfig  `mapstructure:"notify"`
+	Feishu          FeishuConfig  `mapstructure:"feishu"`
+	OIDC            OIDCConfig    `mapstructure:"oidc"`
+	Backup          BackupConfig  `mapstructure:"backup"`
+	Metrics         MetricsConfig `mapstructure:"metrics"`
+	QueryHistoryMax int           `mapstructure:"query_history_max"`
+	EncryptionKey   string        `mapstructure:"encryption_key"`
 }
 
 type ServerConfig struct {
@@ -111,12 +111,12 @@ type BackupConfig struct {
 // one-level-nested keys. For deeper nesting or explicit aliases, we use BindEnv.
 var envBindings = map[string]string{
 	// Server
-	"server.port":                    "SQLFLOW_SERVER_PORT",
-	"server.tls.enable":             "SQLFLOW_TLS_ENABLE",
-	"server.tls.cert_file":          "SQLFLOW_TLS_CERT_FILE",
-	"server.tls.key_file":           "SQLFLOW_TLS_KEY_FILE",
-	"server.tls.redirect_http":      "SQLFLOW_TLS_REDIRECT_HTTP",
-	"server.tls.http_port":          "SQLFLOW_TLS_HTTP_PORT",
+	"server.port":              "SQLFLOW_SERVER_PORT",
+	"server.tls.enable":        "SQLFLOW_TLS_ENABLE",
+	"server.tls.cert_file":     "SQLFLOW_TLS_CERT_FILE",
+	"server.tls.key_file":      "SQLFLOW_TLS_KEY_FILE",
+	"server.tls.redirect_http": "SQLFLOW_TLS_REDIRECT_HTTP",
+	"server.tls.http_port":     "SQLFLOW_TLS_HTTP_PORT",
 	// JWT
 	"jwt.secret":         "SQLFLOW_JWT_SECRET",
 	"jwt.expiry":         "SQLFLOW_JWT_EXPIRY",

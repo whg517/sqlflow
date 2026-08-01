@@ -22,11 +22,6 @@ import (
 	"github.com/whg517/sqlflow/internal/api"
 	"github.com/whg517/sqlflow/internal/app"
 	"github.com/whg517/sqlflow/internal/db"
-	_ "github.com/whg517/sqlflow/internal/driver/elasticsearch"
-	_ "github.com/whg517/sqlflow/internal/driver/mongodb"
-	_ "github.com/whg517/sqlflow/internal/driver/mysql"
-	_ "github.com/whg517/sqlflow/internal/driver/postgresql"
-	_ "github.com/whg517/sqlflow/internal/driver/sqlite"
 )
 
 func main() {

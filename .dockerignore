@@ -45,7 +45,6 @@ AGENTS.md
 
 # Test & coverage
 web/test-results/
-web/playwright-report/
 coverage.txt
 
 # Docker

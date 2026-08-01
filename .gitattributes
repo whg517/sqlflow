@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+# Generated artefacts: collapsed in review, excluded from language stats, and
+# off-limits for hand editing. Regenerate them instead — `make docs` for the
+# OpenAPI package, `go generate ./internal/db/ent/` for ent.
+#
+# internal/db/ent/schema is the exception: those files are the hand-written
+# source the rest of internal/db/ent is generated from.
+internal/db/ent/**            linguist-generated=true
+internal/db/ent/schema/**     linguist-generated=false
+internal/api/openapi/**       linguist-generated=true
+
+go.sum                        linguist-generated=true
+web/package-lock.json         linguist-generated=true
+
+# SQL migrations are hand-written and are the single source of truth for DDL.
+internal/db/migrations/**     linguist-generated=false

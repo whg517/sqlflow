@@ -1,9 +1,14 @@
 # =============================================================================
 # SQLFlow — golangci-lint v2 configuration
 # =============================================================================
-# Conservative baseline: only catch real bugs, not style/formatting.
-# Strict linters (errcheck, govet enable-all) to be enabled gradually
-# as code quality improves. Track in separate requirements.
+# Baseline: catch real bugs and rot, not style/formatting.
+#
+# `unused` is a gate, not a suggestion: dead code is the residue every refactor
+# leaves behind, and it misleads whoever (or whatever) reads the package next.
+# It stays enabled for test files too — orphaned fixtures are the same problem.
+#
+# `errcheck` is still off; enabling it needs ~50 call sites triaged into real
+# bugs versus deliberate ignores. Track separately.
 # =============================================================================
 
 version: "2"
@@ -15,9 +20,9 @@ linters:
   default: standard
   disable:
     - errcheck
-    - unused
   enable:
     - misspell
+    - unused
   settings:
     govet:
       # Only core checks, not fieldalignment/shadow
@@ -57,7 +62,6 @@ linters:
       - path: _test.go
         linters:
           - errcheck
-          - unused
     paths:
       - testdata
       - third_party$
@@ -72,6 +76,10 @@ severity:
   default: warning
 
 formatters:
+  # gofmt as a gate: unformatted files produce diff noise that hides real
+  # changes during review.
+  enable:
+    - gofmt
   exclusions:
     generated: lax
     paths:
