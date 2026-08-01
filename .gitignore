@@ -72,3 +72,4 @@ HEARTBEAT.md
 
 # Release packages
 release/
+scripts/__pycache__/
