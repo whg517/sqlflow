@@ -11,11 +11,12 @@
 //
 //	// returns *db.DB (ent + raw sql) with migrations applied + t.Cleanup
 //	d := testutil.NewDB(t)
-//	// returns the underlying *sql.DB for tests that need raw SQL
-//	rawDB := testutil.NewSQLDB(t)
+//	// for constructors that take a raw *sql.DB
+//	raw := testutil.NewDB(t).DB
 package testutil
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
 
@@ -42,9 +43,17 @@ func NewDB(t *testing.T) *db.DB {
 	return database
 }
 
-// NewSQLDB returns the *sql.DB of a migrated per-test SQLite database.
-// Equivalent to NewDB(t).DB but convenient for tests that only need raw SQL.
-// The connection is closed automatically via t.Cleanup (via the *db.DB).
-func NewSQLDB(t *testing.T) *db.DB {
-	return NewDB(t)
+// WrapSQL wraps a raw *sql.DB into a *db.DB for ent-based constructors.
+//
+// Tests that already hold a *sql.DB — usually because the service under test
+// takes one — need the ent-backed handle for a collaborator. Failure is fatal
+// rather than returned: it can only mean the driver is misconfigured, which is
+// a broken test rather than a case worth asserting on.
+func WrapSQL(t *testing.T, conn *sql.DB) *db.DB {
+	t.Helper()
+	wrapped, err := db.WrapSQL(conn)
+	if err != nil {
+		t.Fatalf("testutil: wrap sql db: %v", err)
+	}
+	return wrapped
 }
