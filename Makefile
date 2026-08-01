@@ -4,7 +4,7 @@
 
 .PHONY: help build dev test lint fmt clean verify \
         docker-up docker-down docker-build docker-up-dev docker-down-dev docker-build-dev \
-        merge-cleanup e2e-setup e2e-test e2e-teardown e2e-all docs \
+        merge-cleanup docs \
         cover go-cover web-cover
 
 ##@ Build
@@ -69,6 +69,9 @@ go-lint: ## Run golangci-lint
 go-vet: ## Run Go vet (superseded by golangci-lint, kept for compat)
 	go vet ./...
 
+arch: ## Check package layering (also runs as part of `make test`)
+	go test ./internal/arch/ -count=1
+
 web-lint: ## Run ESLint
 	cd web && npm run lint
 
@@ -81,20 +84,6 @@ docs: ## Generate OpenAPI package used by Swagger UI
 
 verify: ## Full CI check (lint + build + test)
 verify: lint build test
-
-##@ E2E Tests (SF-QA0027)
-
-e2e-setup: ## Start E2E test environment (docker-compose.test.yml)
-	docker compose --env-file .env.test -f docker-compose.test.yml up -d --build --wait
-
-e2e-test: ## Run E2E tests against test environment (unified real mode)
-	cd e2e && npm run test:e2e
-
-e2e-teardown: ## Stop E2E test environment
-	docker compose --env-file .env.test -f docker-compose.test.yml down -v
-
-e2e-all: ## Full E2E: setup + test + teardown (teardown always runs)
-	$(MAKE) e2e-setup && $(MAKE) e2e-test; $(MAKE) e2e-teardown
 
 ##@ Docker
 
@@ -128,7 +117,7 @@ docker-ps: ## Show running containers
 ##@ Maintenance
 
 clean: ## Remove build artifacts and caches
-	rm -rf web/dist web/node_modules/.vite e2e/test-results
+	rm -rf web/dist web/node_modules/.vite
 	go clean -cache
 
 merge-cleanup: ## Remove worktree and branch (BRANCH=feat/xxx)

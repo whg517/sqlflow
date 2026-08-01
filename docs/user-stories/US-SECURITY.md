@@ -13,7 +13,7 @@
 - Given 非 Admin，When 调用策略管理 API，Then 操作被拒绝。
 - Then 通配符策略的域、对象和动作匹配必须符合 Casbin 模型，不因字符串近似而越权。
 
-**代表性验证**：`internal/service/permission_test.go`、`e2e/tests/rbac-policies.spec.ts`、`e2e/tests/permission-isolation.spec.ts`。
+**代表性验证**：`internal/security/permission_test.go`。
 
 ## US-SEC-002：申请临时权限
 
@@ -28,7 +28,7 @@
 - Given 申请被拒绝、撤销或过期，Then 对应临时策略不再授权。
 - Given 用户查看申请，Then 普通用户只能看到自己的申请，Admin 可查看待处理队列。
 
-**代表性验证**：`internal/service/permission_request_test.go`、`e2e/tests/permission-requests.spec.ts`。
+**代表性验证**：`internal/security/permission_request_test.go`。
 
 ## US-SEC-003：配置字段脱敏与敏感表
 
@@ -43,7 +43,7 @@
 - Given 用户具有显式豁免，When 返回未脱敏结果，Then 豁免行为可审计。
 - Given 规则包含自定义正则/模板，When 配置无效，Then 保存被拒绝而不是在查询时静默失效。
 
-**代表性验证**：`internal/service/mask_rule_test.go`、`e2e/tests/mask-rules*.spec.ts`、`e2e/tests/sensitive-tables.spec.ts`。
+**代表性验证**：`internal/security/mask_rule_test.go`。
 
 ## US-SEC-004：阻止跨用户与跨角色访问
 
@@ -57,7 +57,7 @@
 - Given 非审批角色，When 直接调用批准、拒绝或执行端点，Then 工单状态不改变。
 - Given 未认证请求，When 访问受保护路由，Then 返回认证错误而不是业务数据。
 
-**代表性验证**：`e2e/tests/auth-boundary.spec.ts`、`e2e/tests/ticket-audit-boundary.spec.ts`、`e2e/tests/approval-permission-ui.spec.ts`。
+**代表性验证**：`internal/ticket/ticket_test.go`、`internal/security/permission_test.go`。
 
 ## US-SEC-005：按权限发现数据源对象与字段
 
@@ -72,4 +72,4 @@
 - Given Admin 配置字段脱敏规则，When 选择目标字段，Then 候选项来自服务端授权后的真实字段元数据。
 - Given 用户拥有 `select` 但没有 `unmask`，When 查询命中脱敏规则的字段，Then 数据可查询但返回值保持脱敏。
 
-**代表性验证**：`internal/api/handler/datasource_test.go`、`internal/service/query_test.go`、`e2e/tests/permission-isolation.spec.ts`。
+**代表性验证**：`internal/datasource/datasource_test.go`、`internal/query/query_test.go`。

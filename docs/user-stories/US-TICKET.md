@@ -13,7 +13,7 @@
 - Given 审批策略匹配，Then 按优先级应用审批链或满足条件的自动审批；无匹配时使用默认策略。
 - Then 创建、策略应用和通知结果不允许绕过工单状态机。
 
-**代表性验证**：`internal/service/ticket_test.go`、`internal/service/approval_engine_test.go`、`e2e/tests/login-query-ticket.spec.ts`。
+**代表性验证**：`internal/ticket/ticket_test.go`、`internal/ticket/approval_engine_test.go`。
 
 ## US-TKT-002：分级审批工单
 
@@ -28,7 +28,7 @@
 - Given 审批人拒绝，When 提交非空原因，Then 工单进入 `REJECTED` 并保留审批记录。
 - Given 批量批准/拒绝，Then 每个工单独立返回成功或失败，单项失败不伪装成整体成功。
 
-**代表性验证**：`e2e/tests/multi-stage-approval.spec.ts`、`e2e/tests/batch-approval-ui.spec.ts`、`e2e/tests/approval-security.spec.ts`。
+**代表性验证**：`internal/ticket/approval_engine_test.go`、`internal/ticket/ticket_governance_test.go`。
 
 ## US-TKT-003：执行或定时执行已批准工单
 
@@ -43,7 +43,7 @@
 - Given 全部执行成功，Then 工单为 `DONE` 并保存每条语句的耗时和影响行数。
 - Given 执行失败，Then 工单为 `FAILED` 并保存受控错误；事务/回滚语义按驱动明确呈现。
 
-**代表性验证**：`internal/service/ticket_executor_tx_test.go`、`internal/service/scheduler_test.go`、`e2e/tests/ticket-approve-execute.spec.ts`。
+**代表性验证**：`internal/ticket/ticket_executor_tx_test.go`、`internal/ticket/scheduler_test.go`。
 
 ## US-TKT-004：修订被拒绝工单
 
@@ -57,7 +57,7 @@
 - Given 用户不是提交人或工单不在 `REJECTED`，When 尝试修订，Then 操作被拒绝。
 - Given 多次拒绝和修订，Then Revision 单调递增且可按时间查看全部版本。
 
-**代表性验证**：`internal/service/ticket_resubmit_test.go`、`e2e/tests/resubmit.spec.ts`。
+**代表性验证**：`internal/ticket/ticket_resubmit_test.go`。
 
 ## US-TKT-005：协作、SLA 与代码关联
 
@@ -72,4 +72,4 @@
 - Given 工单超过 SLA 阈值，Then 系统按配置提醒、升级或自动拒绝，并避免重复发送同一阶段动作。
 - Given 合法 Commit/PR 信息，When 关联工单，Then 可查看和删除关联且记录创建者。
 
-**代表性验证**：`internal/service/comment_test.go`、`internal/service/sla_auto_reject_test.go`、`internal/service/git_test.go`。
+**代表性验证**：`internal/ticket/comment_test.go`、`internal/ticket/sla_auto_reject_test.go`、`internal/ops/git_test.go`。

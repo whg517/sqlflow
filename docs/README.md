@@ -1,8 +1,8 @@
 # SQLFlow 文档中心
 
-本目录记录 SQLFlow 的产品需求、系统架构、关键技术决策、用户故事和实现评审。文档以 `2026-07-14` 仓库实现为初始基线，并在 `2026-07-26` 经过架构、运维和开发视角的交叉评审。
+本目录记录 SQLFlow 的产品需求、系统架构、关键技术决策、用户故事和实现评审。文档以 `2026-07-14` 仓库实现为初始基线，在 `2026-07-26` 经过架构、运维和开发视角的交叉评审，并在 `2026-07-31` 对全部 P0/P1 问题做了实现复核。
 
-> 当前评审结论为**有条件不通过 / L0 开发验证**。系统设计方向可行，但在分享安全、默认授权、普通用户主流程、调度执行和备份恢复方面存在发布阻断问题。详见[评审报告](reviews/2026-07-26-cross-functional-review.md)与[整改路线图](ROADMAP.md)。
+> 当前评审结论为**有条件不通过 / L0 开发验证**。分享安全、默认授权与临时权限已修复；多语句门禁、调度执行、审批原子性、客户端风险等级、导出目录、进程生命周期和备份恢复仍是发布阻断问题。详见[原评审报告](reviews/2026-07-26-cross-functional-review.md)、[整改进度复核](reviews/2026-07-31-implementation-verification.md)与[整改路线图](ROADMAP.md)。
 
 ## 阅读路径
 
@@ -41,10 +41,10 @@ docs/
 | 产品范围与业务规则 | `docs/REQUIREMENTS.md` | 定义系统应提供什么能力 |
 | 用户可观察行为 | `docs/user-stories/` | 定义角色、场景和可验收结果 |
 | API 契约 | Handler 注解生成的 OpenAPI | 文档仅描述边界，不复制完整端点清单 |
-| 工单状态与领域规则 | `internal/model/`、`internal/service/` | 架构文档解释流程和责任归属 |
-| 组件和依赖方向 | `internal/app/`、`internal/api/`、`internal/service/`、`internal/driver/` | 架构文档描述约束 |
+| 工单状态与领域规则 | `internal/model/`、`internal/ticket/` | 架构文档解释流程和责任归属 |
+| 组件和依赖方向 | `internal/app/`、`internal/api/`、各领域包、`internal/arch/` | 架构文档描述约束 |
 | 已作出的架构取舍 | `docs/adr/` | 一项决策一个 ADR |
-| 验证证据 | Go、Vitest、Playwright 测试 | User Story 引用代表性测试范围 |
+| 验证证据 | Go 测试、Vitest | User Story 引用代表性测试范围 |
 | 差距与发布风险 | `docs/reviews/` | 固化阶段性评审证据和关闭标准 |
 | 修复顺序与发布门禁 | `docs/ROADMAP.md` | 把问题组织为可验收工作包 |
 
@@ -72,8 +72,14 @@ docs/
 
 ## 当前已知边界
 
-- 覆盖度审计前端页面存在，但后端路由因需要独立 PostgreSQL 且当前启动时传入 `nil` 而被设计性禁用，因此不计入已交付产品范围。
 - 平台元数据使用 SQLite；MySQL、PostgreSQL、MongoDB 和 Elasticsearch 是受治理的目标数据源，不是平台元数据库。
-- `internal/connpool` 与统一 `internal/driver` 连接池目前并存，属于驱动迁移期兼容状态。
+- `internal/connpool` 仅剩一处用途：Elasticsearch 索引与字段浏览需要原生客户端做分页 `_cat/indices` 和 mapping 调用，`Driver` 接口尚未建模该能力。查询、导出、工单执行、元数据与连接测试均已走 `internal/driver`。
 - Ent Schema 与 SQL migration 双轨并存，当前仍由 `golang-migrate` 执行 DDL。
 - 2026-07-26 评审确认当前版本仅达到隔离开发验证等级；在路线图阶段 0 完成前，不应连接高价值生产数据源或开放公开分享。
+- 2026-07-31 复核确认定时工单执行能力此前完全不可用（`REV-P1-003`）；主体已修复并补齐回归，但执行租约与崩溃恢复仍未实现，进程在执行期间崩溃仍会使工单卡在 `EXECUTING`。
+- 工单审批后的 SQL 篡改检测此前不生效（`REV-P1-017`，`sql_hash` 只写不读），2026-07-31 已修复并补齐回归。
+- `POST /api/tickets` 自 2026-07-31 起不再接受 `risk_level` 与 `ai_review_result`：风险等级由服务端从 SQL 派生（它决定审批策略），AI 结论不接受客户端提供。
+- 2026-07-31 清理移除了覆盖度审计（前后端全栈）与 Playwright E2E 套件（`e2e/`、CI workflow、Compose 测试栈）。覆盖度不再是产品范围；端到端验证目前只有 Go 测试与 Vitest，浏览器级回归是已知缺口。
+- 数据源差异由驱动的能力位、查询形态与结果形态三组声明表达，前端读 `GET /api/datasources/:id/capabilities`。新增数据源类型不应改动查询、导出、AI 评审或前端工作台。
+- 存在生效脱敏规则时，服务端拒绝聚合查询：聚合负载任意嵌套，按行脱敏器无法进入。
+- SQL 模板可为任意已注册数据源类型创建；但查询工作台目前只能打开 SQL 形态的模板——`openTemplateAsTab` 仅填充 `sql` 字段，document/dsl 模式读取各自的字段，MongoDB/Elasticsearch 模板因此是预览/工单专用。

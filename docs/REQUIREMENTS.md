@@ -9,6 +9,8 @@
 | 事实来源 | README、HTTP 路由、Service、数据模型、迁移、自动化测试 |
 
 > **评审提示（2026-07-26）**：跨角色评审确认多项能力只有局部实现，且存在发布阻断问题。本文状态已按端到端可用性校正；完整证据见[评审报告](reviews/2026-07-26-cross-functional-review.md)，修复顺序见[整改路线图](ROADMAP.md)。阶段 0 完成前，系统仅适合隔离的开发验证环境。
+>
+> **复核提示（2026-07-31）**：[整改进度复核](reviews/2026-07-31-implementation-verification.md) 逐项验证了上述评审的全部 P0/P1 问题。本文的需求状态**未随之调整**——复核为静态代码审查，未执行测试套件或 E2E，不足以把任何需求升级为 `implemented`。已确认关闭的问题（REV-P0-001、003，REV-P1-001、004、005）对应的需求状态，应在补齐端到端验收证据后单独更新。另需注意：定时工单执行当前完全不可用（REV-P1-003），相关需求不应被视为 `partial` 以上。
 
 ## 1. 产品定义
 
@@ -38,7 +40,6 @@ SQLFlow 是面向开发团队和 DBA 的数据访问治理平台。它将日常�
 - 不保证跨异构数据源的分布式事务。
 - 不允许在线查询入口绕过工单执行任意写操作。
 - 不把 AI 结论作为唯一授权或执行依据。
-- 当前不交付独立 PostgreSQL 支撑的覆盖度审计后端。
 
 ## 2. 角色与利益相关者
 
@@ -188,7 +189,6 @@ stateDiagram-v2
 | FR-OPS-004 | Admin 可触发、列出、下载和删除平台 SQLite 备份，并可启用定时备份与保留策略。 | 备份仅覆盖平台元数据，不覆盖目标数据源。 | partial |
 | FR-OPS-005 | 服务提供存活、就绪、健康和可选 Prometheus 指标端点。 | `/healthz` 不依赖外部依赖；`/readyz` 检查就绪依赖。 | partial |
 | FR-OPS-006 | 服务记录前端 Core Web Vitals 用于体验分析。 | 采集入口公开但受限流；数据不作为身份认证依据。 | partial |
-| FR-OPS-007 | 覆盖度审计页面和独立 PostgreSQL 数据模型可作为后续能力。 | 当前默认容器未注入 PostgreSQL，相关后端路由不注册。 | partial |
 
 对应 User Stories：[审计与运维](user-stories/US-OPERATIONS.md)。
 
@@ -213,7 +213,7 @@ stateDiagram-v2
 | NFR-PERF-001 | 查询保护 | 查询默认 30 秒超时和 1000 行上限；连接参数可配置；大文件导出可异步。 | partial |
 | NFR-OBS-001 | 可观测性 | 提供结构化请求日志、健康探针、可选 Prometheus 指标和 Web Vitals。 | partial |
 | NFR-MNT-001 | 可维护性 | 后端遵循 Handler → Service → DB/Driver 依赖方向；数据源差异通过 Driver/Capability 隔离。 | partial |
-| NFR-TST-001 | 可测试性 | 变更应通过 Go 单元/集成测试、Vitest 和关键 Playwright 场景验证；CI 执行 lint、test、build。 | partial |
+| NFR-TST-001 | 可测试性 | 变更应通过 Go 单元/集成测试和 Vitest 验证；CI 执行 lint、test、build。浏览器级端到端验证当前缺失。 | partial |
 | NFR-DEP-001 | 可部署性 | 提供多阶段 Docker 镜像和 Docker Compose；Go 服务统一托管 API 与 React SPA。 | partial |
 | NFR-SCL-001 | 扩展边界 | 当前目标是单实例/小团队部署；SQLite 单写者和进程内调度器不承诺水平扩展。 | implemented |
 
@@ -230,12 +230,12 @@ stateDiagram-v2
 
 | 需求域 | User Story | 主要实现位置 | 主要验证位置 |
 |---|---|---|---|
-| IAM | [US-IAM](user-stories/US-IAM.md) | `internal/service/auth.go`、`token.go`、`oidc.go` | `internal/service/*_test.go`、`e2e/tests/auth*.spec.ts` |
-| 数据源 | [US-DATASOURCE](user-stories/US-DATASOURCE.md) | `internal/service/datasource.go`、`internal/driver/` | `datasource*_test.go`、`e2e/tests/datasource*.spec.ts` |
-| 查询 | [US-QUERY](user-stories/US-QUERY.md) | `internal/service/query.go`、`sql_analyzer.go` | `query*_test.go`、`e2e/tests/query*.spec.ts` |
-| 工单 | [US-TICKET](user-stories/US-TICKET.md) | `ticket*.go`、`approval_engine.go`、`scheduler.go` | `ticket*_test.go`、`e2e/tests/ticket*.spec.ts` |
-| 安全 | [US-SECURITY](user-stories/US-SECURITY.md) | `permission*.go`、`mask_rule.go`、鉴权中间件 | `permission*_test.go`、`e2e/tests/rbac*.spec.ts` |
-| 运维 | [US-OPERATIONS](user-stories/US-OPERATIONS.md) | `audit*.go`、`backup.go`、通知/Webhook 服务 | 对应 Go 测试、`e2e/tests/audit*.spec.ts` |
+| IAM | [US-IAM](user-stories/US-IAM.md) | `internal/iam/auth.go`、`token.go`、`oidc.go` | `各领域包的 *_test.go` |
+| 数据源 | [US-DATASOURCE](user-stories/US-DATASOURCE.md) | `internal/datasource/datasource.go`、`internal/driver/` | `datasource*_test.go` |
+| 查询 | [US-QUERY](user-stories/US-QUERY.md) | `internal/query/query.go`、`sql_analyzer.go` | `query*_test.go` |
+| 工单 | [US-TICKET](user-stories/US-TICKET.md) | `ticket*.go`、`approval_engine.go`、`scheduler.go` | `ticket*_test.go` |
+| 安全 | [US-SECURITY](user-stories/US-SECURITY.md) | `permission*.go`、`mask_rule.go`、鉴权中间件 | `permission*_test.go` |
+| 运维 | [US-OPERATIONS](user-stories/US-OPERATIONS.md) | `audit*.go`、`backup.go`、通知/Webhook 服务 | 对应 Go 测试 |
 
 ## 9. 变更与验收原则
 

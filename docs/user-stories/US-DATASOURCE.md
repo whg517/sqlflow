@@ -13,7 +13,7 @@
 - Given 数据源包含密码/API Key，When 持久化并再次读取，Then API 响应不包含明文或密文凭据。
 - Given 非 Admin，When 调用数据源写入或删除 API，Then 操作被拒绝。
 
-**代表性验证**：`internal/service/datasource_test.go`、`e2e/tests/datasources.spec.ts`、`e2e/tests/datasource-full-management.spec.ts`。
+**代表性验证**：`internal/datasource/datasource_test.go`。
 
 ## US-DS-002：更新或禁用数据源
 
@@ -39,5 +39,5 @@
 - Given 驱动不支持所请求能力，When 请求元数据，Then 返回明确的不支持错误，而不是空成功伪装。
 - Given 用户未认证，When 直接访问元数据 API，Then 请求被拒绝。
 
-**代表性验证**：`e2e/tests/datasource-edges.spec.ts`、`e2e/tests/query/autocomplete.spec.ts`。
+**代表性验证**：`internal/datasource/datasource_test.go`、`internal/datasource/datasource_test.go`。
 

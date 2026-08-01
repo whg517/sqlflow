@@ -1,0 +1,144 @@
+# SQLFlow
+
+数据访问治理平台：低风险查询开发者自助，高风险变更走「工单 → 审批 → 执行 → 审计」闭环。
+Go 1.25 + Echo 后端，React 19 + TypeScript 前端，平台元数据存 SQLite。
+
+**当前发布等级 L0（仅隔离开发验证）**，存在未关闭的发布阻断项。改动前先读
+[docs/ROADMAP.md](docs/ROADMAP.md) 的阶段 0 与
+[最新复核](docs/reviews/2026-07-31-implementation-verification.md)。
+
+## 验证
+
+```
+make verify        # lint + build + test，提交前跑这个
+make arch          # 只查分包依赖方向，秒级
+go test ./internal/ticket/      # 单包验证，比全量快一个数量级
+golangci-lint run ./internal/... ./cmd/...
+cd web && npx tsc -b && npm run test
+```
+
+`go test ./internal/...` 全量约 2 分钟，`internal/ticket` 单包就占 40 秒。
+改动集中时请只跑相关包，别用全量当默认反馈回路。
+
+## 不可违反的不变量
+
+这些是被真实缺陷验证过的规则，不是风格偏好。破坏它们的改动会被拒绝。
+
+1. **服务端是授权的唯一裁决者。** 前端隐藏菜单、禁用按钮只是体验优化。每个入口
+   都要独立鉴权，不能依赖上游已经查过。
+2. **状态迁移只能用 CAS。** 工单状态的每次变更都是
+   `Update().Where(id, 期望状态)` 并检查影响行数。读-改-写曾让 4 个并发审批
+   同时成功。
+3. **失败路径也要写审计。** 连接失败、权限拒绝、执行出错都必须留下记录——
+   查不到的那些查询恰恰是运维最需要的证据。
+4. **脱敏不能被绕过。** 查询、导出、分享共用同一套规则。无法施加脱敏的结果形态
+   （如聚合载荷）必须拒绝返回，而不是放行。
+5. **客户端不得影响风险等级或审批路径。** 风险由服务端从 SQL 派生，它决定审批
+   策略；AI 结论不接受客户端提供。
+
+## 数据源抽象
+
+差异由三组正交声明表达，Service 与 UI 只读声明，**不按类型名分支**：
+
+| 轴 | 载体 | 回答 |
+|---|---|---|
+| 能力位 | `Capabilities() CapabilitySet` | 能不能做 |
+| 查询形态 | `QueryForm() QueryForm` | 查询怎么写（`sql`/`document`/`dsl`） |
+| 结果形态 | `QueryResult.Shape` | 结果怎么读（`table`/`documents`/`aggregation`） |
+
+结构性能力用**可选接口**而非能力位，由类型系统检查：`ParameterizedQueryExecutor`、
+`ParameterBinder`、`QueryExplainer`、`ConfigValidator`。
+
+**每个驱动必须写编译期断言**（`internal/driver/*/`）：
+
+```go
+var (
+	_ driver.Driver          = (*MySQLDriver)(nil)
+	_ driver.QueryExplainer  = (*MySQLDriver)(nil)
+)
+```
+
+可选接口是结构化满足的。曾经有一次重构把两个 `ExplainQuery` 方法整个漏掉，
+`go build` 照样通过，症状只是所有数据源静默上报 `explain=false`。断言把这类
+问题变成编译失败。
+
+**新增数据源类型的改动面应当只有两处**：实现 `driver.Driver`、在
+`internal/driver/all` 注册。查询、导出、AI 评审、元数据、连接测试、前端工作台
+都不该改。如果你发现必须改，说明抽象漏了一个轴——先讨论再动手。
+
+前端读 `GET /api/datasources/:id/capabilities` 决定编辑器、可用操作与渲染器，
+见 `web/src/features/query/pages/Query/queryModes.ts`。
+
+## 目录
+
+按 feature 垂直切分：每个领域包自带 service、HTTP handler 和测试。
+
+```
+cmd/server/          进程入口
+internal/app/        组合根：唯一知道全部具体实现的地方
+internal/api/        路由、中间件、跨域聚合端点（health、settings）
+
+内部领域（各自含 service + handler + test）
+internal/audit/      审计写入、检索、报表、用户行为分析
+internal/datasource/ 数据源 CRUD、连接测试、元数据浏览
+internal/iam/        认证、JWT、API token、OIDC
+internal/security/   Casbin 权限、权限申请、脱敏规则
+internal/query/      查询执行、历史、导出、分享、SQL 模板
+internal/ticket/     工单状态机、审批引擎、SLA、AI 评审、调度
+internal/notify/     Webhook、飞书、通知偏好与订阅
+internal/ops/        备份、仪表盘、Git 关联、前端性能指标
+
+共享
+internal/driver/     数据源端口 + 5 个驱动 + 注册表 + 连接池
+internal/db/         SQLite、ent、SQL migration
+internal/model/      跨领域的持久化模型
+internal/authz/      Casbin 元组的唯一构造点
+internal/platform/   领域无关能力：auditlog、httpx、crypto、mask、metrics、sqlparser、sqlutil、perf
+internal/testutil/   跨包共享的测试夹具与驱动注册
+internal/arch/       分包依赖方向的可执行约束（只有测试，无代码）
+
+web/src/features/    前端按 feature 垂直切分，与后端领域同名
+web/src/shared/      HTTP client、设计系统、布局外壳、通用工具
+docs/                需求、架构、ADR、评审、路线图
+```
+
+**依赖方向由 `internal/arch` 的测试强制**，不是口头约定：
+
+- `internal/platform/*` 不得依赖任何领域包
+- 领域包不得依赖 `internal/api`（领域自带 handler，但不反向依赖传输层）
+- 跨领域依赖必须在 `allowedDomainEdges` 中显式登记并说明理由；条目失效也会报错
+- 只有 `internal/app` 可以认识全部领域
+
+只用到对方一两个方法时，**在消费侧声明接口**而不是加一条边——
+见 `datasource.ObjectViewChecker`、`iam.PlatformPermissionLister`、`auditlog.Writer`。
+
+前端同构：`web/src/features/<name>` 与后端领域同名，跨 feature 导入由
+`eslint.config.js` 的 `allowedFeatureEdges` 登记，未登记的会 lint 报错。
+共用部分提到 `@/shared`，不要在 feature 之间互相 import。
+
+## 已知边界
+
+- **`internal/db/ent/` 是生成代码，不要手改。** 改 `internal/db/ent/schema/`
+  后跑 `go generate ./internal/db/ent/` 重新生成。SQL migration 是 DDL 的唯一事实来源，ent 自动迁移未启用——
+  改表结构要同时评估 migration、ent schema 和测试夹具。
+- **`internal/connpool` 只剩一处用途**：ES 索引与字段浏览需要原生客户端。
+  不要扩大它；其余路径一律走 `internal/driver.PoolManager`。
+- **平台 SQLite 是 `MaxOpenConns(1)`。** 持有 `rows` 游标期间发起写操作会阻塞
+  到 ctx 超时。先把游标读尽再写。
+- 浏览器级端到端验证目前缺失（Playwright 套件已移除）。
+- **前端单测套件对负载敏感**，`findByText` / `waitFor` 在并行压力下会超时，同一份
+  代码连跑三次可能 0、2、48 个失败。这是既有问题（在重组前的树上同样复现），
+  不是某次改动的回归。判断一次失败是否真实，先单独重跑该文件。
+- 工单执行缺租约与崩溃恢复，进程在 `EXECUTING` 期间崩溃会使工单卡住。
+
+## 约定
+
+- **注释写「为什么」，不写「做了什么」。** 尤其是非显然的取舍——为什么拒绝而不是
+  降级、为什么这里不能加锁。
+- **测试要有真实断言。** 「调用不 panic」不算覆盖。曾经有个只在空库上跑的
+  调度器测试，让三个致命缺陷长期不被发现。修 bug 时先写会失败的用例。
+- **死代码是门禁级问题。** `unused` 已在 `.golangci.yml` 中启用（含测试文件）。
+- **共享常量而非重复字面量。** 工单列清单曾在四处手工维护，drift 导致过两个缺陷；
+  现在收敛为 `ticketColumns`。
+- 错误信息面向用户用中文，代码注释与标识符用英文。
+- 领域错误在 Service 层定义，Handler 负责映射为 HTTP 状态码。

@@ -30,6 +30,7 @@ SQLFlow 同时包含认证、查询、工单、审批、审计、通知和运维
 ## 验证
 
 - `internal/app.Container` 统一装配和管理生命周期。
-- `internal/api`、`internal/service`、`internal/driver` 和 `internal/db` 保持职责分离。
+- `internal/api`、八个领域包、`internal/driver` 和 `internal/db` 保持职责分离；
+  依赖方向由 `internal/arch` 的测试强制，而非仅靠约定。
 - Dockerfile 产出包含 Go 服务和 `web/dist` 的单一运行镜像。
 

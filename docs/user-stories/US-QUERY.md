@@ -13,7 +13,7 @@
 - Given 用户缺少表级权限或临时权限已过期，When 查询目标对象，Then 请求被拒绝并留下必要审计上下文。
 - Given 目标数据源不可达或查询超过 30 秒，When 执行，Then 请求受控失败且不会泄露连接凭据。
 
-**代表性验证**：`internal/service/query_test.go`、`e2e/tests/query-execution.spec.ts`、`e2e/tests/query-boundary.spec.ts`。
+**代表性验证**：`internal/query/query_test.go`。
 
 ## US-QRY-002：获得查询分析与 AI 建议
 
@@ -28,7 +28,7 @@
 - Given AI 未配置、超时或失败，When 发起评审，Then 返回确定性规则结果且核心查询功能仍可用。
 - Then AI 建议不得改变服务端权限判断或直接触发执行。
 
-**代表性验证**：`internal/service/ai_review_test.go`、`internal/service/sql_analyzer_test.go`、`e2e/tests/ai-risk-display.spec.ts`。
+**代表性验证**：`internal/ticket/ai_review_test.go`、`internal/ticket/sql_analyzer_test.go`。
 
 ## US-QRY-003：查看和管理查询历史
 
@@ -43,7 +43,7 @@
 - Given 历史量超过配置上限，Then 系统按用户执行保留限制。
 - When 查看慢查询/性能统计，Then 数据来源和时间范围清晰，不宣称为目标数据库全局指标。
 
-**代表性验证**：`internal/service/query_history_test.go`、`internal/service/performance_test.go`、`e2e/tests/query-history-search.spec.ts`。
+**代表性验证**：`internal/query/query_history_test.go`、`internal/query/performance_test.go`。
 
 ## US-QRY-004：导出受保护结果
 
@@ -58,7 +58,7 @@
 - Given 普通用户请求 Admin 审计导出或他人任务文件，Then 操作被拒绝。
 - Given 导出失败，Then 任务状态为 failed，并返回不含本地文件路径和凭据的错误。
 
-**代表性验证**：`internal/service/query_export_test.go`、`internal/service/export_async_test.go`、`e2e/tests/export.spec.ts`。
+**代表性验证**：`internal/query/query_export_test.go`、`internal/query/export_async_test.go`。
 
 ## US-QRY-005：安全分享结果快照
 
@@ -73,7 +73,7 @@
 - Given 分享过期、撤销或密码错误，When 访问，Then 不返回结果内容。
 - Given 创建者撤销分享，Then 后续公开访问立即失败。
 
-**代表性验证**：`internal/service/share_test.go`、`e2e/tests/query-share.spec.ts`。
+**代表性验证**：`internal/query/share_test.go`。
 
 ## US-QRY-006：复用 SQL 模板
 
@@ -92,4 +92,4 @@
 - Given 用户编辑从模板带入的 SQL，Then 原参数绑定立即解除，避免参数位置与新语句错配。
 - Given 模板是 MongoDB 或变更语句，Then 只提供渲染预览和复制，不绕过查询只读门禁或工单流程。
 
-**代表性验证**：`internal/service/sql_template_test.go`、`internal/driver/mysql/mysql_test.go`、`internal/driver/postgresql/postgresql_test.go`、`web/src/store/__tests__/queryStore.test.ts`、`e2e/tests/sql-template.spec.ts`。
+**代表性验证**：`internal/query/sql_template_test.go`、`internal/driver/mysql/mysql_test.go`、`internal/driver/postgresql/postgresql_test.go`、`web/src/store/__tests__/queryStore.test.ts`。

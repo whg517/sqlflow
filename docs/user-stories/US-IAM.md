@@ -13,7 +13,7 @@
 - Given Access Token 过期且 Refresh Token 有效，When 刷新会话，Then 签发新令牌并执行令牌轮换。
 - Given Refresh Token 已撤销或过期，When 再次刷新，Then 请求被拒绝。
 
-**代表性验证**：`internal/service/auth_test.go`、`internal/service/refresh_token_test.go`、`e2e/tests/auth.spec.ts`。
+**代表性验证**：`internal/iam/auth_test.go`、`internal/iam/refresh_token_test.go`。
 
 ## US-IAM-002：修改个人密码
 
@@ -40,7 +40,7 @@
 - Given 目标是系统中唯一 Admin，When 尝试删除或降级该账号，Then 操作被拒绝。
 - Given Admin 重置密码，Then 只返回操作结果，不返回服务端存储的密码材料。
 
-**代表性验证**：`internal/service/auth_test.go`、`e2e/tests/admin-user-crud.spec.ts`、`e2e/tests/user-management*.spec.ts`。
+**代表性验证**：`internal/iam/auth_test.go`。
 
 ## US-IAM-003A：管理动态角色
 
@@ -56,7 +56,7 @@
 - Given 用户角色被调整或角色被停用，When 使用既有 JWT 或 API Token 再次请求，Then 服务端使用当前有效角色裁决而非令牌中的旧角色。
 - Given 自定义审批角色不存在或已停用，When 保存审批链，Then 配置被拒绝。
 
-**代表性验证**：`internal/service/role_test.go`、`internal/api/handler/permission_test.go`、角色管理页面测试。
+**代表性验证**：`internal/security/role_test.go`、`internal/security/permission_test.go`、角色管理页面测试。
 
 ## US-IAM-004：管理个人 API Token
 
@@ -71,7 +71,7 @@
 - Given 普通用户查看 Token 列表，Then 只能看到自己的 Token 元数据和前缀。
 - Given Admin 撤销任意 Token，Then 该 Token 后续请求立即失效。
 
-**代表性验证**：`internal/service/token_test.go`、`e2e/tests/admin-tokens.spec.ts`。
+**代表性验证**：`internal/iam/token_test.go`。
 
 ## US-IAM-005：通过 OIDC 登录
 
@@ -85,4 +85,4 @@
 - Given Provider 未启用、state 不匹配或回调失败，When 返回系统，Then 不创建已认证会话。
 - Given 首次登录用户未配置特权映射，Then 默认角色为 Developer。
 
-**代表性验证**：`internal/service/oidc_test.go`、`internal/api/handler/oidc_test.go`。
+**代表性验证**：`internal/iam/oidc_test.go`、`internal/iam/oidc_test.go`。

@@ -83,32 +83,63 @@ flowchart TB
 | `cmd/server` | 读取配置、打开数据库、迁移、装配容器、启动/关闭 HTTP 服务 | `config`、`internal/app`、`internal/api`、`internal/db` |
 | `config` | YAML/环境变量绑定、默认值和启动期校验 | 通用安全工具 |
 | `internal/app` | 构造 Service、连接池、调度器及其生命周期 | Service、DB、Driver、Config |
-| `internal/api` | Echo 路由、中间件、请求/响应适配、OpenAPI 注解、SPA 托管 | `internal/app`、Handler、Service 接口 |
-| `internal/service` | 用例编排、授权、状态机、审计、事务边界和外部集成 | DB/Ent、Driver、领域模型、pkg |
+| `internal/api` | Echo 路由、中间件、跨域聚合端点（health/settings）、OpenAPI 注解、SPA 托管 | `internal/app`、各领域包 |
+| 领域包（`audit`/`datasource`/`iam`/`security`/`query`/`ticket`/`notify`/`ops`） | 各自的用例编排、授权、状态机、审计与 HTTP handler | DB/Ent、Driver、`internal/model`、`internal/platform`，以及 `allowedDomainEdges` 中登记的跨领域依赖 |
+| `internal/arch` | 分包依赖方向的可执行约束（仅测试） | 标准库 |
 | `internal/driver` | 数据源统一接口、能力声明、注册表和驱动连接池 | 数据库客户端库，不依赖 API |
 | `internal/db` | SQLite 打开、migration、Ent Client 与 Schema | SQLite、Ent、golang-migrate |
 | `internal/model` | 跨层使用的领域数据结构与状态枚举 | 标准库 |
-| `internal/pkg` | SQL parser、加密、脱敏、Casbin、指标等可复用能力 | 尽量不依赖业务层 |
+| `internal/platform` | auditlog、httpx、SQL parser、加密、脱敏、指标等领域无关能力 | 不依赖任何领域包 |
+| `internal/testutil` | 跨包共享的测试夹具与驱动注册 | DB、driver（仅测试期）|
 | `web/src` | SPA 页面、状态、API Client 和 UI 组件 | `/api` HTTP 契约 |
 
 目标依赖方向：
 
+代码按 feature 垂直切分：每个领域包自带 service、HTTP handler 和测试，
+而不是按技术分层横切成 handler/service/repository 三个大包。
+
 ```mermaid
-flowchart LR
-    UI["React UI / API Client"] --> API["Middleware + Handler"]
-    API --> Service["Application Service"]
-    Service --> Domain["Model / Rules"]
-    Service --> Ports["DB / Driver / External adapters"]
-    Ports --> Infrastructure["SQLite / Target DB / Third-party API"]
+flowchart TB
+    UI["React UI / API Client"] --> Router["internal/api：路由 + 中间件"]
+    Router --> Domains
+
+    subgraph Domains["领域包（各自含 service + handler）"]
+        direction LR
+        Ticket["ticket"]
+        Query["query"]
+        DS["datasource"]
+        Sec["security"]
+        IAM["iam"]
+        Audit["audit"]
+        Notify["notify"]
+        Ops["ops"]
+    end
+
+    Ticket -.登记的跨领域边.-> DS & Sec & Notify & Ops
+    Query -.登记的跨领域边.-> DS & Sec
+
+    Domains --> Platform["internal/platform：auditlog、httpx、crypto、mask、sqlparser…"]
+    Domains --> Ports["internal/db · internal/driver · internal/model"]
+    Ports --> Infrastructure["SQLite / 目标库 / 第三方 API"]
+
+    App["internal/app：组合根"] -.构造.-> Domains
 ```
 
-关键约束：
+关键约束（前四条由 `internal/arch` 的测试强制，违反即 CI 失败）：
 
+- `internal/platform/*` 不得依赖任何领域包——它是基础设施，不能认识业务。
+- 领域包不得依赖 `internal/api`：领域自带 handler，但不反向依赖传输层。
+- 跨领域依赖必须在 `allowedDomainEdges` 显式登记并写明理由；条目失效同样报错，
+  避免过期条目成为默许耦合的许可。
+- 只有 `internal/app` 认识全部领域实现；其余包最多依赖两个领域。
+- 只用到对方一两个方法时，**在消费侧声明接口**而不是新增一条边。已有三例：
+  `datasource.ObjectViewChecker`、`iam.PlatformPermissionLister`、`auditlog.Writer`。
 - Handler 只做协议适配、身份上下文提取和响应映射，不承载核心授权与状态迁移。
 - Service 是业务规则和事务边界的所有者；前端角色可见性只是体验优化。
 - Driver 不依赖 API 或具体页面模型；新增数据源通过实现接口并注册完成。
-- `app.Container` 负责依赖装配和启动/关闭副作用，避免在路由中构造服务。
-- 新代码不应扩大 `internal/connpool` 兼容层；优先收敛至 `internal/driver.PoolManager`。
+- `app.Container` 负责依赖装配和启动/关闭副作用，避免在路由中构造服务；
+  各 service 构造完成后即不可变（无 Set* 注入方法）。
+- 不得扩大 `internal/connpool`：它只保留 Elasticsearch 元数据浏览一处用途，所有连接均由 `internal/driver.PoolManager` 管理。
 
 ## 5. 后端运行时架构
 
@@ -181,7 +212,7 @@ sequenceDiagram
     T->>A: persist result, audit and notify
 ```
 
-状态机定义于 `internal/model`，合法迁移定义于 `internal/service/ticket.go`。状态更新应使用前置状态条件，防止并发审批或重复执行。数据库执行语义按驱动区分：PostgreSQL 批量语句支持事务回滚；MySQL 尤其 DDL 可能逐条提交；MongoDB/Elasticsearch 以声明能力为准。
+状态机定义于 `internal/model`，合法迁移定义于 `internal/ticket/ticket.go`。状态更新应使用前置状态条件，防止并发审批或重复执行。数据库执行语义按驱动区分：PostgreSQL 批量语句支持事务回滚；MySQL 尤其 DDL 可能逐条提交；MongoDB/Elasticsearch 以声明能力为准。
 
 ### 5.4 后台任务
 
@@ -204,9 +235,37 @@ sequenceDiagram
 - `CapSQLParse`
 - `CapExport`
 
-启动入口通过空导入加载 MySQL、PostgreSQL、MongoDB 和 Elasticsearch 驱动的 `init()` 注册。`PoolManager` 以数据源 ID 缓存已连接驱动；数据源更新或应用关闭时应移除并关闭连接。
+驱动注册由 `internal/driver/all` 的空导入完成，`internal/app.Container` 引入它。注册发生在各驱动的 `init()` 中，遗漏空导入只会在运行时查表失败，因此注册集合必须只有这一个来源。`PoolManager` 以数据源 ID 缓存已连接驱动；数据源更新或应用关闭时应移除并关闭连接。
 
-能力声明是产品行为的一部分：Service 和 UI 应根据能力选择路径或返回明确的不支持错误，不应假定所有数据库都具有 SQL 事务、表字段或 EXPLAIN。
+### 6.1 三个正交的差异轴
+
+数据源之间的差异由三组独立声明表达，Service 与 UI 只读这些声明，不按类型名分支：
+
+| 轴 | 载体 | 回答的问题 |
+|---|---|---|
+| 能力位 | `Capabilities() CapabilitySet` | 能不能做（查询/工单执行/元数据/表级权限/脱敏/解析/导出） |
+| 查询形态 | `QueryForm() QueryForm` | 查询怎么写（`sql` / `document` / `dsl`） |
+| 结果形态 | `QueryResult.Shape` | 结果怎么读（`table` / `documents` / `aggregation`） |
+
+能力位与查询形态是正交的：Elasticsearch 与 MySQL 都声明 `CapQuery`，但前者是 `dsl` 形态，编辑器、请求载荷和结果渲染全不相同。
+
+结构性能力用可选接口而非能力位表达，由类型系统检查：`ParameterizedQueryExecutor`（参数绑定）、`QueryExplainer`（查询计划）。`driver.Describe` 把三者合成 `Descriptor`。
+
+### 6.2 契约
+
+- `GET /api/datasources/:id/capabilities` 返回 `Descriptor`，是前端决定编辑器、可用操作和结果渲染的唯一依据。它只描述驱动能做什么，从不表示调用方被允许做什么——每个操作仍各自鉴权。
+- 查询解析走 `driver.ParseFor(type, query)`，operation/risk/target 语义归驱动所有；Service 与 Handler 不再向解析器传数据源类型。
+- SQL 模板的参数占位符方言由驱动的可选接口 `ParameterBinder` 声明（`?` / `$N`），不绑定参数的驱动不实现它，渲染器改为转义内联。模板可用的数据源类型以注册表为准，不维护白名单。
+- 配置校验由驱动的可选接口 `ConfigValidator` 承担：字段含义归驱动所有，Service 不为任何类型代写校验。它不建立连接——保存数据源时目标可能尚不可达，因此只检查形态与传输约束（如 ES 的 HTTPS 要求），运行时事实（如 SQLite 文件是否存在）留给 `Connect`。
+- 元数据浏览按 `CapMetadata` 路由；不声明该能力的驱动返回明确的不支持错误。数据库/索引作用域原样传给驱动，Service 不代填默认值——空作用域的含义由驱动定义。
+- 连接失效按数据源 ID 统一处理（`PoolManager.Remove`），与类型无关，因此数据源改类型也无需特殊处理。
+- 新增数据源类型的改动面应当是：实现 `Driver`、在 `driver/all` 注册。查询、导出、AI 评审、元数据、连接测试与前端工作台都不需要改。
+
+### 6.3 结果形态
+
+关系型结果是 `Columns`/`Rows` 的表格。文档型（ES hits、Mongo 文档）保留嵌套结构，前端以 JSON 呈现单元格而非 `String()`。聚合型结果没有固定列集，`Aggregations` 原样透传驱动负载。
+
+聚合结果不经过按行脱敏器：其结构由驱动定义且任意嵌套，行掩码无法进入。因此当目标存在生效的脱敏规则时，服务端拒绝聚合查询而不是返回未经检查的结果。
 
 ## 7. 数据架构
 
@@ -284,11 +343,13 @@ Casbin 使用 [ADR-0006](adr/0006-canonical-casbin-tuples.md) 定义的唯一元
 
 前端约束：
 
-- `web/src/api/client.ts` 统一处理 API 前缀、Token 和刷新流程。
+- `web/src/shared/api/client.ts` 统一处理 API 前缀、Token 和刷新流程。
+- 查询工作台按 `query_form` 选择查询模式（`web/src/features/query/pages/Query/queryModes.ts`），由模式对象负责校验与请求载荷构造；不得在页面里按数据源类型名分支。
+- 结果区按 `QueryResult.shape` 分发渲染器；表格视图对嵌套值使用 JSON 呈现，筛选与显示保持同一套格式化。
+- 能力相关的按钮（EXPLAIN、变更工单等）读 `useDatasourceCapabilities`，禁用或隐藏只是体验优化，服务端仍独立裁决。
 - 服务端返回是授权事实来源；菜单显示和按钮禁用不代替 API 鉴权。
 - 从 SQL 模板进入查询工作台时，标签状态同时保存模板来源、有序参数和数据库类型；用户编辑 SQL 后必须清除旧参数绑定。
 - 页面级异步状态应显式处理 loading、empty、error 和 retry。
-- 覆盖度页面当前不代表后端已启用，必须由独立后端接入后才进入正式导航能力基线。
 
 ## 10. 可观测性与故障处理
 
@@ -308,8 +369,8 @@ Casbin 使用 [ADR-0006](adr/0006-canonical-casbin-tuples.md) 定义的唯一元
 
 - Go 测试覆盖 Service、Handler、Driver、DB、权限、解析和性能辅助包。
 - Vitest 覆盖页面、组件、状态和 API 行为。
-- Playwright 使用 Docker 测试栈验证真实登录、查询、工单、审批、审计和管理流程。
-- CI 将 Lint、Test/Build 和 E2E 分开；发布 Tag 触发多架构镜像、Trivy 扫描和 GitHub Release。
+- CI 分为 Lint 与 Test/Build；发布 Tag 触发多架构镜像、Trivy 扫描和 GitHub Release。
+- 浏览器级端到端验证当前缺失：Playwright 套件已于 2026-07-31 移除，尚无替代方案。
 - OpenAPI 由 `make docs` 从 Handler 注解生成，禁止手工维护重复端点表。
 
 ## 12. 架构风险与演进方向
@@ -318,10 +379,9 @@ Casbin 使用 [ADR-0006](adr/0006-canonical-casbin-tuples.md) 定义的唯一元
 |---|---|---|
 | SQLite 单写者与进程内任务 | 限制写吞吐、多副本和故障接管 | 当出现明确容量需求时评估外部元数据库和分布式任务租约 |
 | 原始 SQL / Ent 双轨 | 模型漂移和迁移成本 | 分域迁移 Service，保持 SQL migration 为唯一 DDL 来源直到正式切换 |
-| 两套连接池并存 | 生命周期和行为不一致 | 新路径统一使用 Driver/PoolManager，逐步移除 `connpool` |
+| `connpool` 残留于 ES 元数据浏览 | 该路径的连接生命周期不受 `PoolManager` 管理 | 为 `Driver` 增加索引/字段浏览能力后移除 |
 | 路由层 Admin 分组覆盖 DBA 可见性 | 角色语义与注释可能不完全一致 | 为审计/报表定义明确的策略中间件，而不是复用 Admin 中间件 |
 | 外部集成在进程内调用 | 慢调用和失败可能影响延迟 | 强化超时、重试、幂等与 outbox/队列边界 |
-| 覆盖度 UI 与禁用后端并存 | 用户预期不一致 | 未启用时隐藏导航，或完成独立 PostgreSQL 依赖注入和部署方案 |
 
 ### 12.1 已确认的实现偏差
 

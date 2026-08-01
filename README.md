@@ -2,7 +2,7 @@
 
 SQLFlow 是面向开发团队和 DBA 的数据访问治理平台。它把低风险查询交给开发者自助完成，把高风险变更纳入评审、审批、执行和审计闭环。
 
-> 当前发布标签：`v1.0.0`。主分包含 MySQL、PostgreSQL、MongoDB 和 Elasticsearch 适配，平台元数据默认存储在 SQLite。2026-07-26 跨角色评审发现发布阻断问题，当前仅建议用于隔离开发验证；生产采用前请完成[阶段 0 整改](docs/ROADMAP.md#阶段-0安全止血与主流程恢复p0)。
+> 当前发布标签：`v1.0.0`。主分包含 MySQL、PostgreSQL、MongoDB 和 Elasticsearch 适配，平台元数据默认存储在 SQLite。2026-07-26 跨角色评审发现发布阻断问题，2026-07-31 复核确认其中多项仍未修复（含定时工单执行完全不可用）。当前仅建议用于隔离开发验证；生产采用前请完成[阶段 0 整改](docs/ROADMAP.md#阶段-0安全止血与主流程恢复p0)。
 
 ## 为什么需要 SQLFlow
 
@@ -76,7 +76,6 @@ make build       # Go + React 生产构建
 make test        # Go race test + 前端单元测试
 make lint        # golangci-lint + ESLint
 make verify      # lint + build + test
-make e2e-all     # 启动 Docker 测试环境并运行 Playwright
 make docs        # 从 handler 注解生成 OpenAPI 包
 ```
 
@@ -105,14 +104,15 @@ flowchart LR
 ```text
 cmd/server/              进程入口
 config/                  配置加载与示例
-internal/app/            应用依赖装配和生命周期
-internal/api/            Echo 路由、Handler、中间件和 OpenAPI 生成包
-internal/service/        查询、工单、权限、审计等业务规则
+internal/app/            应用依赖装配和生命周期（组合根）
+internal/api/            Echo 路由、中间件、跨域聚合端点和 OpenAPI 生成包
+internal/{audit,datasource,iam,security,query,ticket,notify,ops}/
+                         八个领域包，各自含 service + HTTP handler + 测试
+internal/platform/       领域无关能力：auditlog、httpx、crypto、mask、sqlparser 等
+internal/arch/           分包依赖方向的可执行约束（仅测试）
 internal/db/             SQLite、Ent 和迁移
 internal/driver/         数据源接口、能力声明、注册表和连接池
-internal/connpool/       迁移期兼容连接层
 web/src/                 React 前端
-e2e/                     Playwright 端到端测试
 docs/                    需求、架构、ADR、设计和运维文档
 ```
 
@@ -124,6 +124,7 @@ docs/                    需求、架构、ADR、设计和运维文档
 - [架构决策记录](docs/adr/README.md)
 - [User Stories](docs/user-stories/README.md)
 - [跨角色评审记录](docs/reviews/2026-07-26-cross-functional-review.md)
+- [整改进度复核（2026-07-31）](docs/reviews/2026-07-31-implementation-verification.md)
 - [整改与交付路线图](docs/ROADMAP.md)
 
 ## License
