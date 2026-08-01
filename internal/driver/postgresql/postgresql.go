@@ -12,7 +12,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/whg517/sqlflow/internal/driver"
-	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
+	"github.com/whg517/sqlflow/internal/platform/sqlparser"
 )
 
 func init() {
@@ -23,6 +23,18 @@ func init() {
 type PostgreSQLDriver struct {
 	db *sql.DB
 }
+
+// Compile-time proof of the contracts this driver claims.
+//
+// The optional interfaces are satisfied structurally, so a method that is
+// renamed or never lands would otherwise only surface as a capability that
+// silently reports false. These assertions turn that into a build failure.
+var (
+	_ driver.Driver                     = (*PostgreSQLDriver)(nil)
+	_ driver.ParameterizedQueryExecutor = (*PostgreSQLDriver)(nil)
+	_ driver.ParameterBinder            = (*PostgreSQLDriver)(nil)
+	_ driver.QueryExplainer             = (*PostgreSQLDriver)(nil)
+)
 
 // Type returns "postgresql".
 func (d *PostgreSQLDriver) Type() string { return "postgresql" }
@@ -39,6 +51,17 @@ func (d *PostgreSQLDriver) Capabilities() driver.CapabilitySet {
 			driver.CapExport,
 	)
 }
+
+// QueryForm declares how read queries are composed for this data source.
+func (d *PostgreSQLDriver) QueryForm() driver.QueryForm { return driver.QueryFormSQL }
+
+// Placeholder reports PostgreSQL's numbered parameter token.
+func (d *PostgreSQLDriver) Placeholder(position int) string {
+	return fmt.Sprintf("$%d", position)
+}
+
+// explainRowLimit caps plan rows; a plan is per node, never large.
+const explainRowLimit = 200
 
 // Connect establishes a connection pool to the PostgreSQL server.
 func (d *PostgreSQLDriver) Connect(ctx context.Context, cfg *driver.Config) error {
@@ -299,7 +322,7 @@ func (d *PostgreSQLDriver) ExecuteStatement(ctx context.Context, database string
 
 // ExecuteStatements 在单个事务中批量执行多条语句（PostgreSQL 事务性 DDL）。
 // 任一语句失败立即停止并回滚，已成功执行的语句标记为 "rolled_back"。
-// 严格对齐 service.TicketService.executeSQLTransactional 的事务语义。
+// 所有语句包在单个事务中，任一语句失败即回滚（PostgreSQL 的 DDL 可回滚）。
 func (d *PostgreSQLDriver) ExecuteStatements(ctx context.Context, database string, statements []string) ([]driver.StatementResult, error) {
 	if d.db == nil {
 		return nil, fmt.Errorf("postgresql: not connected")
@@ -370,6 +393,17 @@ func (d *PostgreSQLDriver) ExecuteStatements(ctx context.Context, database strin
 
 	return results, nil
 }
+
+// ExplainQuery returns PostgreSQL's query plan.
+//
+// PostgreSQL reports a plan as a single "QUERY PLAN" text column with one row
+// per plan node, a different shape from MySQL's step table. Keeping that
+// difference inside the driver is what lets the service stop asking which
+// engine it is talking to.
+func (d *PostgreSQLDriver) ExplainQuery(ctx context.Context, database string, query string, args []interface{}) (*driver.QueryResult, error) {
+	return d.executeQuery(ctx, "EXPLAIN "+query, args, explainRowLimit)
+}
+
 func (d *PostgreSQLDriver) Parse(query string) (*driver.ParseResult, error) {
 	result, err := sqlparser.ParseSQL(query, "postgresql")
 	if err != nil {

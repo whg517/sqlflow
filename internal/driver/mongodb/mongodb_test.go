@@ -69,19 +69,19 @@ func TestMongoDBDriver_Parse(t *testing.T) {
 			wantOp: "dml", wantTargets: []string{"users"},
 		},
 		{
-			name:        "update with empty filter multi blocked",
-			body:        `{"operation":"update","collection":"users","multi":true,"filter":{},"update":{"$set":{"x":1}}}`,
-			wantOp:      "update", wantBlocked: true, wantRisk: "high",
+			name:   "update with empty filter multi blocked",
+			body:   `{"operation":"update","collection":"users","multi":true,"filter":{},"update":{"$set":{"x":1}}}`,
+			wantOp: "update", wantBlocked: true, wantRisk: "high",
 		},
 		{
-			name:        "delete empty filter blocked",
-			body:        `{"operation":"delete","collection":"logs","filter":{}}`,
-			wantOp:      "delete", wantBlocked: true, wantRisk: "high",
+			name:   "delete empty filter blocked",
+			body:   `{"operation":"delete","collection":"logs","filter":{}}`,
+			wantOp: "delete", wantBlocked: true, wantRisk: "high",
 		},
 		{
-			name:        "aggregate with $out blocked",
-			body:        `{"operation":"aggregate","collection":"users","pipeline":[{"$out":"backup"}]}`,
-			wantOp:      "select", wantBlocked: true, wantRisk: "high",
+			name:   "aggregate with $out blocked",
+			body:   `{"operation":"aggregate","collection":"users","pipeline":[{"$out":"backup"}]}`,
+			wantOp: "select", wantBlocked: true, wantRisk: "high",
 		},
 	}
 
@@ -208,14 +208,14 @@ func TestExtractURI(t *testing.T) {
 		want   string
 	}{
 		{
-			name: "uri from host field (full URI)",
+			name:   "uri from host field (full URI)",
 			config: &driver.Config{Host: "mongodb://user:pass@host:27017/db"},
-			want:  "mongodb://user:pass@host:27017/db",
+			want:   "mongodb://user:pass@host:27017/db",
 		},
 		{
-			name: "uri from Extra",
+			name:   "uri from Extra",
 			config: &driver.Config{Extra: map[string]interface{}{"uri": "mongodb://localhost:27017"}},
-			want:  "mongodb://localhost:27017",
+			want:   "mongodb://localhost:27017",
 		},
 		{
 			name:   "built from components",

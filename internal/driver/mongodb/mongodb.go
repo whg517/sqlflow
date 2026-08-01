@@ -15,7 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/whg517/sqlflow/internal/driver"
-	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
+	"github.com/whg517/sqlflow/internal/platform/sqlparser"
 )
 
 func init() {
@@ -29,6 +29,15 @@ type Document = map[string]interface{}
 type MongoDBDriver struct {
 	client *mongo.Client
 }
+
+// Compile-time proof of the contracts this driver claims.
+//
+// The optional interfaces are satisfied structurally, so a method that is
+// renamed or never lands would otherwise only surface as a capability that
+// silently reports false. These assertions turn that into a build failure.
+var (
+	_ driver.Driver = (*MongoDBDriver)(nil)
+)
 
 // Type returns "mongodb".
 func (d *MongoDBDriver) Type() string { return "mongodb" }
@@ -44,6 +53,9 @@ func (d *MongoDBDriver) Capabilities() driver.CapabilitySet {
 			driver.CapFieldMasking,
 	)
 }
+
+// QueryForm declares how read queries are composed for this data source.
+func (d *MongoDBDriver) QueryForm() driver.QueryForm { return driver.QueryFormDocument }
 
 // Connect establishes a connection to the MongoDB server.
 func (d *MongoDBDriver) Connect(ctx context.Context, cfg *driver.Config) error {
@@ -371,7 +383,7 @@ func (d *MongoDBDriver) ExecuteStatement(ctx context.Context, database string, s
 
 // ExecuteStatements 逐条执行多条 MongoDB 命令（MongoDB 无跨文档事务语义，逐条独立执行）。
 // 任一语句失败后继续执行剩余语句，首错通过 error 返回。
-// 降级实现：循环调用 ExecuteStatement，与 service.executeMongoStatements 行为一致。
+// 降级实现：MongoDB 无跨命令事务，逐条调用 ExecuteStatement。
 func (d *MongoDBDriver) ExecuteStatements(ctx context.Context, database string, statements []string) ([]driver.StatementResult, error) {
 	if d.client == nil {
 		return nil, fmt.Errorf("mongodb: not connected")

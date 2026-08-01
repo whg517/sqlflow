@@ -9,35 +9,35 @@ import (
 
 // mockDataSource implements driver.DataSourceInfo for testing.
 type mockDataSource struct {
-	id           int64
-	dsType       string
-	host         string
-	port         int
-	username     string
-	database     string
-	sslMode      string
-	schemaName   string
-	maxOpen      int
-	maxIdle      int
-	maxLifetime  int
-	maxIdleTime  int
-	extras       map[string]string
-	extraBools   map[string]bool
+	id          int64
+	dsType      string
+	host        string
+	port        int
+	username    string
+	database    string
+	sslMode     string
+	schemaName  string
+	maxOpen     int
+	maxIdle     int
+	maxLifetime int
+	maxIdleTime int
+	extras      map[string]string
+	extraBools  map[string]bool
 }
 
-func (m *mockDataSource) GetID() int64                  { return m.id }
-func (m *mockDataSource) GetType() string               { return m.dsType }
-func (m *mockDataSource) GetHost() string                { return m.host }
-func (m *mockDataSource) GetPort() int                  { return m.port }
-func (m *mockDataSource) GetUsername() string           { return m.username }
-func (m *mockDataSource) GetDatabase() string           { return m.database }
-func (m *mockDataSource) GetSSLMode() string             { return m.sslMode }
-func (m *mockDataSource) GetSchemaName() string          { return m.schemaName }
-func (m *mockDataSource) GetMaxOpen() int                { return m.maxOpen }
-func (m *mockDataSource) GetMaxIdle() int                { return m.maxIdle }
-func (m *mockDataSource) GetMaxLifetime() int            { return m.maxLifetime }
-func (m *mockDataSource) GetMaxIdleTime() int             { return m.maxIdleTime }
-func (m *mockDataSource) GetExtraConfig() string            { return "" }
+func (m *mockDataSource) GetID() int64           { return m.id }
+func (m *mockDataSource) GetType() string        { return m.dsType }
+func (m *mockDataSource) GetHost() string        { return m.host }
+func (m *mockDataSource) GetPort() int           { return m.port }
+func (m *mockDataSource) GetUsername() string    { return m.username }
+func (m *mockDataSource) GetDatabase() string    { return m.database }
+func (m *mockDataSource) GetSSLMode() string     { return m.sslMode }
+func (m *mockDataSource) GetSchemaName() string  { return m.schemaName }
+func (m *mockDataSource) GetMaxOpen() int        { return m.maxOpen }
+func (m *mockDataSource) GetMaxIdle() int        { return m.maxIdle }
+func (m *mockDataSource) GetMaxLifetime() int    { return m.maxLifetime }
+func (m *mockDataSource) GetMaxIdleTime() int    { return m.maxIdleTime }
+func (m *mockDataSource) GetExtraConfig() string { return "" }
 func (m *mockDataSource) GetExtra(key string) string {
 	if m.extras != nil {
 		return m.extras[key]
@@ -133,8 +133,8 @@ func TestBuildConfigFromDataSource_Elasticsearch(t *testing.T) {
 		host:   "es-host",
 		port:   9200,
 		extras: map[string]string{
-			"es_urls":         "http://es1:9200,http://es2:9200",
-			"es_auth_type":    "api_key",
+			"es_urls":          "http://es1:9200,http://es2:9200",
+			"es_auth_type":     "api_key",
 			"es_index_pattern": "logs-*",
 		},
 		extraBools: map[string]bool{

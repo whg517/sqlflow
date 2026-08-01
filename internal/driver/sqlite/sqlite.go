@@ -5,11 +5,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/whg517/sqlflow/internal/driver"
-	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
+	"github.com/whg517/sqlflow/internal/platform/sqlparser"
 	_ "modernc.org/sqlite"
 )
 
@@ -22,6 +23,18 @@ func init() {
 type Driver struct {
 	db *sql.DB
 }
+
+// Compile-time proof of the contracts this driver claims.
+//
+// The optional interfaces are satisfied structurally, so a method that is
+// renamed or never lands would otherwise only surface as a capability that
+// silently reports false. These assertions turn that into a build failure.
+var (
+	_ driver.Driver                     = (*Driver)(nil)
+	_ driver.ParameterizedQueryExecutor = (*Driver)(nil)
+	_ driver.ParameterBinder            = (*Driver)(nil)
+	_ driver.ConfigValidator            = (*Driver)(nil)
+)
 
 func (d *Driver) Type() string { return "sqlite" }
 
@@ -36,9 +49,48 @@ func (d *Driver) Capabilities() driver.CapabilitySet {
 	)
 }
 
+// QueryForm declares how read queries are composed for this data source.
+func (d *Driver) QueryForm() driver.QueryForm { return driver.QueryFormSQL }
+
+// Placeholder reports SQLite's positional parameter token.
+func (d *Driver) Placeholder(int) string { return "?" }
+
+// ValidateConfig checks the parts of a SQLite configuration that can be judged
+// without touching the filesystem.
+//
+// Whether the file exists is deliberately not checked here: ValidateConfig also
+// runs before a datasource is saved, and a path that is not populated yet is a
+// legitimate configuration. The file is checked when connecting.
+func (d *Driver) ValidateConfig(cfg *driver.Config) error {
+	if cfg.Database == "" {
+		return fmt.Errorf("sqlite: 必须指定数据库文件路径")
+	}
+	return nil
+}
+
+// checkDatabaseFile reports whether the configured path is a usable database
+// file. Connect calls it so a missing file produces a message the user can act
+// on instead of a driver-level open error.
+func checkDatabaseFile(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("SQLite 文件不存在: %s", path)
+		}
+		return fmt.Errorf("无法访问 SQLite 文件: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("SQLite 地址必须指向数据库文件")
+	}
+	return nil
+}
+
 func (d *Driver) Connect(ctx context.Context, cfg *driver.Config) error {
 	if strings.TrimSpace(cfg.Database) == "" {
 		return fmt.Errorf("sqlite database path is required")
+	}
+	if err := checkDatabaseFile(cfg.Database); err != nil {
+		return err
 	}
 
 	dsn := fmt.Sprintf("file:%s?mode=ro&_pragma=query_only(1)&_pragma=busy_timeout(5000)", cfg.Database)

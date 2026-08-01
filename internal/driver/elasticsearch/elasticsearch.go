@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -16,7 +18,7 @@ import (
 	es "github.com/elastic/go-elasticsearch/v8"
 
 	"github.com/whg517/sqlflow/internal/driver"
-	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
+	"github.com/whg517/sqlflow/internal/platform/sqlparser"
 )
 
 func init() {
@@ -26,7 +28,21 @@ func init() {
 // ESDriver implements driver.Driver for Elasticsearch.
 type ESDriver struct {
 	client *es.Client
+
+	// defaultIndex is the datasource's configured index pattern, used when a
+	// query omits its own index.
+	defaultIndex string
 }
+
+// Compile-time proof of the contracts this driver claims.
+//
+// The optional interfaces are satisfied structurally, so a method that is
+// renamed or never lands would otherwise only surface as a capability that
+// silently reports false. These assertions turn that into a build failure.
+var (
+	_ driver.Driver          = (*ESDriver)(nil)
+	_ driver.ConfigValidator = (*ESDriver)(nil)
+)
 
 // Type returns "elasticsearch".
 func (d *ESDriver) Type() string { return "elasticsearch" }
@@ -41,6 +57,54 @@ func (d *ESDriver) Capabilities() driver.CapabilitySet {
 			driver.CapFieldMasking |
 			driver.CapExport,
 	)
+}
+
+// QueryForm declares how read queries are composed for this data source.
+func (d *ESDriver) QueryForm() driver.QueryForm { return driver.QueryFormDSL }
+
+// trimNonEmpty trims each entry and drops the blanks. A whitespace-only entry
+// is not an address, and letting one through turns a configuration mistake into
+// an opaque URL parse error.
+func trimNonEmpty(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, v := range values {
+		if trimmed := strings.TrimSpace(v); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+// ValidateConfig enforces Elasticsearch's transport rules.
+//
+// A cluster must be reachable over HTTPS unless it is on a private or loopback
+// address: Elasticsearch credentials travel in the request, so plaintext HTTP
+// to a public host would expose them.
+func (d *ESDriver) ValidateConfig(cfg *driver.Config) error {
+	urls := extractURLs(cfg)
+	if len(urls) == 0 {
+		return fmt.Errorf("elasticsearch: 至少需要一个连接地址")
+	}
+	for _, raw := range urls {
+		parsed, err := url.Parse(raw)
+		if err != nil || parsed.Hostname() == "" {
+			return fmt.Errorf("Elasticsearch 连接地址无效: %s", raw)
+		}
+		switch strings.ToLower(parsed.Scheme) {
+		case "https":
+			continue
+		case "http":
+			host := strings.ToLower(parsed.Hostname())
+			ip := net.ParseIP(host)
+			if host == "localhost" || (ip != nil && (ip.IsPrivate() || ip.IsLoopback())) {
+				continue
+			}
+			return fmt.Errorf("公网 Elasticsearch 连接地址必须使用 HTTPS，当前地址 %s 使用了 HTTP", raw)
+		default:
+			return fmt.Errorf("Elasticsearch 连接地址必须使用 HTTP 或 HTTPS: %s", raw)
+		}
+	}
+	return nil
 }
 
 // Connect establishes a connection to the Elasticsearch cluster.
@@ -87,6 +151,12 @@ func (d *ESDriver) Connect(ctx context.Context, cfg *driver.Config) error {
 	if !verifyCerts {
 		esConfig.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
+	if cfg.Extra != nil {
+		if v, ok := cfg.Extra["index_pattern"].(string); ok {
+			d.defaultIndex = v
 		}
 	}
 
@@ -316,6 +386,9 @@ func (d *ESDriver) ExecuteQuery(ctx context.Context, database string, query stri
 
 	index := strings.TrimSpace(req.Index)
 	if index == "" {
+		index = strings.TrimSpace(d.defaultIndex)
+	}
+	if index == "" {
 		return nil, fmt.Errorf("elasticsearch query must specify an index")
 	}
 
@@ -434,10 +507,28 @@ func (d *ESDriver) executeSearch(ctx context.Context, index string, bodyJSON []b
 				Source map[string]interface{} `json:"_source"`
 			} `json:"hits"`
 		} `json:"hits"`
+		Aggregations json.RawMessage `json:"aggregations"`
 	}
 
 	if err := json.Unmarshal(bodyBytes, &esResp); err != nil {
 		return nil, fmt.Errorf("parse response: %w", err)
+	}
+
+	elapsed := time.Since(start).Milliseconds()
+
+	// An aggregation request typically sets size:0 and carries all of its output
+	// in `aggregations`. Flattening only `hits` would return an empty table and
+	// silently drop the actual answer, so aggregations get their own shape and
+	// are passed through untouched.
+	if len(esResp.Aggregations) > 0 {
+		return &driver.QueryResult{
+			Shape:         driver.ShapeAggregation,
+			Columns:       []string{},
+			Rows:          []map[string]interface{}{},
+			Total:         esResp.Hits.Total.Value,
+			ExecutionTime: elapsed,
+			Aggregations:  esResp.Aggregations,
+		}, nil
 	}
 
 	resultRows := make([]map[string]interface{}, 0, len(esResp.Hits.Hits))
@@ -459,17 +550,20 @@ func (d *ESDriver) executeSearch(ctx context.Context, index string, bodyJSON []b
 		resultRows = append(resultRows, row)
 	}
 
-	// Column order: _id, _index, _score, then remaining keys
-	columns := []string{"_id", "_index", "_score"}
+	// Metadata columns first, then source fields in sorted order. Ranging over
+	// the set directly would inherit Go's randomized map iteration and shuffle
+	// the user's columns between two runs of the same query.
+	source := make([]string, 0, len(columnSet))
 	for k := range columnSet {
 		if k != "_id" && k != "_index" && k != "_score" {
-			columns = append(columns, k)
+			source = append(source, k)
 		}
 	}
-
-	elapsed := time.Since(start).Milliseconds()
+	sort.Strings(source)
+	columns := append([]string{"_id", "_index", "_score"}, source...)
 
 	return &driver.QueryResult{
+		Shape:         driver.ShapeDocuments,
 		Columns:       columns,
 		Rows:          resultRows,
 		Total:         esResp.Hits.Total.Value,
@@ -523,26 +617,20 @@ func (d *ESDriver) executeCount(ctx context.Context, index string, bodyJSON []by
 
 func extractURLs(cfg *driver.Config) []string {
 	if cfg.Extra != nil {
-		if urls, ok := cfg.Extra["urls"].([]string); ok {
-			result := make([]string, 0, len(urls))
-			for _, u := range urls {
-				if u != "" {
-					result = append(result, u)
+		switch raw := cfg.Extra["urls"].(type) {
+		case []string:
+			return trimNonEmpty(raw)
+		case []interface{}:
+			strs := make([]string, 0, len(raw))
+			for _, u := range raw {
+				if s, ok := u.(string); ok {
+					strs = append(strs, s)
 				}
 			}
-			return result
-		}
-		if urls, ok := cfg.Extra["urls"].([]interface{}); ok {
-			result := make([]string, 0, len(urls))
-			for _, u := range urls {
-				if s, ok := u.(string); ok && s != "" {
-					result = append(result, s)
-				}
-			}
-			return result
-		}
-		if s, ok := cfg.Extra["urls"].(string); ok && s != "" {
-			return []string{s}
+			return trimNonEmpty(strs)
+		case string:
+			// A single comma-separated value, as stored on the datasource.
+			return trimNonEmpty(strings.Split(raw, ","))
 		}
 	}
 

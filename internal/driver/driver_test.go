@@ -18,18 +18,31 @@ type mockDriver struct {
 	typ string
 }
 
-func (m *mockDriver) Type() string                                                    { return m.typ }
-func (m *mockDriver) Capabilities() driver.CapabilitySet                              { return driver.CapabilitySet(driver.CapQuery | driver.CapMetadata) }
-func (m *mockDriver) Connect(ctx context.Context, cfg *driver.Config) error           { return nil }
-func (m *mockDriver) Close() error                                                    { return nil }
-func (m *mockDriver) Ping(ctx context.Context) error                                  { return nil }
-func (m *mockDriver) ListDatabases(ctx context.Context) ([]string, error)             { return nil, nil }
-func (m *mockDriver) ListTables(ctx context.Context, db string) ([]driver.TableInfo, error) { return nil, nil }
-func (m *mockDriver) GetColumns(ctx context.Context, db, tbl string) ([]driver.ColumnInfo, error) { return nil, nil }
-func (m *mockDriver) ExecuteQuery(ctx context.Context, db, q string, l int) (*driver.QueryResult, error) { return nil, nil }
-func (m *mockDriver) ExecuteStatement(ctx context.Context, db, s string) (*driver.StatementResult, error) { return nil, nil }
-func (m *mockDriver) ExecuteStatements(ctx context.Context, db string, s []string) ([]driver.StatementResult, error) { return nil, nil }
-func (m *mockDriver) Parse(q string) (*driver.ParseResult, error)                    { return nil, nil }
+func (m *mockDriver) Type() string { return m.typ }
+func (m *mockDriver) Capabilities() driver.CapabilitySet {
+	return driver.CapabilitySet(driver.CapQuery | driver.CapMetadata)
+}
+func (m *mockDriver) QueryForm() driver.QueryForm                           { return driver.QueryFormSQL }
+func (m *mockDriver) Connect(ctx context.Context, cfg *driver.Config) error { return nil }
+func (m *mockDriver) Close() error                                          { return nil }
+func (m *mockDriver) Ping(ctx context.Context) error                        { return nil }
+func (m *mockDriver) ListDatabases(ctx context.Context) ([]string, error)   { return nil, nil }
+func (m *mockDriver) ListTables(ctx context.Context, db string) ([]driver.TableInfo, error) {
+	return nil, nil
+}
+func (m *mockDriver) GetColumns(ctx context.Context, db, tbl string) ([]driver.ColumnInfo, error) {
+	return nil, nil
+}
+func (m *mockDriver) ExecuteQuery(ctx context.Context, db, q string, l int) (*driver.QueryResult, error) {
+	return nil, nil
+}
+func (m *mockDriver) ExecuteStatement(ctx context.Context, db, s string) (*driver.StatementResult, error) {
+	return nil, nil
+}
+func (m *mockDriver) ExecuteStatements(ctx context.Context, db string, s []string) ([]driver.StatementResult, error) {
+	return nil, nil
+}
+func (m *mockDriver) Parse(q string) (*driver.ParseResult, error) { return nil, nil }
 
 func TestCapabilitySet_Has(t *testing.T) {
 	cs := driver.CapabilitySet(driver.CapQuery | driver.CapMetadata | driver.CapExport)

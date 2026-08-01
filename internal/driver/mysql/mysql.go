@@ -11,7 +11,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/whg517/sqlflow/internal/driver"
-	"github.com/whg517/sqlflow/internal/pkg/sqlparser"
+	"github.com/whg517/sqlflow/internal/platform/sqlparser"
 )
 
 func init() {
@@ -22,6 +22,18 @@ func init() {
 type MySQLDriver struct {
 	db *sql.DB
 }
+
+// Compile-time proof of the contracts this driver claims.
+//
+// The optional interfaces are satisfied structurally, so a method that is
+// renamed or never lands would otherwise only surface as a capability that
+// silently reports false. These assertions turn that into a build failure.
+var (
+	_ driver.Driver                     = (*MySQLDriver)(nil)
+	_ driver.ParameterizedQueryExecutor = (*MySQLDriver)(nil)
+	_ driver.ParameterBinder            = (*MySQLDriver)(nil)
+	_ driver.QueryExplainer             = (*MySQLDriver)(nil)
+)
 
 // Type returns "mysql".
 func (d *MySQLDriver) Type() string { return "mysql" }
@@ -38,6 +50,15 @@ func (d *MySQLDriver) Capabilities() driver.CapabilitySet {
 			driver.CapExport,
 	)
 }
+
+// QueryForm declares how read queries are composed for this data source.
+func (d *MySQLDriver) QueryForm() driver.QueryForm { return driver.QueryFormSQL }
+
+// Placeholder reports MySQL's positional parameter token.
+func (d *MySQLDriver) Placeholder(int) string { return "?" }
+
+// explainRowLimit caps plan rows; a plan is per access step, never large.
+const explainRowLimit = 200
 
 // Connect establishes a connection pool to the MySQL server.
 func (d *MySQLDriver) Connect(ctx context.Context, cfg *driver.Config) error {
@@ -116,14 +137,18 @@ func (d *MySQLDriver) ListTables(ctx context.Context, database string) ([]driver
 		return nil, fmt.Errorf("mysql: not connected")
 	}
 
-	// Switch database context if needed
+	// An empty database means "whatever the connection is bound to", which is
+	// what SHOW TABLES reports. Callers must not substitute a default such as
+	// information_schema — that would list the server's own catalog instead of
+	// the user's tables.
 	query := "SHOW TABLES"
+	var args []interface{}
 	if database != "" {
-		// Use table_schema filter for explicit database
-		query = fmt.Sprintf("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '%s'", database)
+		query = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ?"
+		args = append(args, database)
 	}
 
-	rows, err := d.db.QueryContext(ctx, query)
+	rows, err := d.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list tables: %w", err)
 	}
@@ -321,6 +346,15 @@ func (d *MySQLDriver) ExecuteStatements(ctx context.Context, database string, st
 
 	return results, firstErr
 }
+
+// ExplainQuery returns MySQL's tabular query plan.
+//
+// The driver owns the EXPLAIN dialect: MySQL prefixes the statement and returns
+// one row per access step, which is not how every SQL engine reports a plan.
+func (d *MySQLDriver) ExplainQuery(ctx context.Context, database string, query string, args []interface{}) (*driver.QueryResult, error) {
+	return d.executeQuery(ctx, "EXPLAIN "+query, args, explainRowLimit)
+}
+
 func (d *MySQLDriver) Parse(query string) (*driver.ParseResult, error) {
 	result, err := sqlparser.ParseSQL(query, "mysql")
 	if err != nil {
