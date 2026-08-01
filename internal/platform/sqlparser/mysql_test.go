@@ -204,56 +204,6 @@ func TestParseMySQL_Subqueries(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UNION
-// ---------------------------------------------------------------------------
-
-func TestParseMySQL_Union(t *testing.T) {
-	t.Skip("pingcap/parser UNION support requires additional AST handling")
-	tests := []struct {
-		name       string
-		sql        string
-		wantOp     OperationType
-		wantTables []string
-	}{
-		{
-			name:       "union_all",
-			sql:        "SELECT id FROM users UNION ALL SELECT id FROM admins",
-			wantOp:     OpSelect,
-			wantTables: []string{"users", "admins"},
-		},
-		{
-			name:       "union_distinct",
-			sql:        "SELECT id FROM users UNION SELECT id FROM admins",
-			wantOp:     OpSelect,
-			wantTables: []string{"users", "admins"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := ParseMySQL(tt.sql)
-			if err != nil {
-				t.Fatalf("ParseMySQL(%q) error: %v", tt.sql, err)
-			}
-			if result.Operation != tt.wantOp {
-				t.Errorf("Operation = %q, want %q", result.Operation, tt.wantOp)
-			}
-			if !equalStringSlices(result.Tables, tt.wantTables) {
-				t.Errorf("Tables = %v, want %v", result.Tables, tt.wantTables)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// CTE (WITH) — skipped due to parser limitation
-// ---------------------------------------------------------------------------
-
-func TestParseMySQL_CTE(t *testing.T) {
-	t.Skip("pingcap/parser CTE support requires MySQL 8.0 mode")
-}
-
-// ---------------------------------------------------------------------------
 // DML: INSERT / UPDATE / DELETE
 // ---------------------------------------------------------------------------
 
@@ -577,40 +527,6 @@ func TestParseMySQL_Comments(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Limit Count extraction
-// ---------------------------------------------------------------------------
-
-func TestParseMySQL_LimitCount(t *testing.T) {
-	t.Skip("LimitCount extraction requires driver value expr init; HasLimit is tested elsewhere")
-	tests := []struct {
-		name         string
-		sql          string
-		wantHasLimit bool
-		wantLimitCnt int64
-	}{
-		{"limit_10", "SELECT * FROM users LIMIT 10", true, 10},
-		{"limit_1", "SELECT * FROM users LIMIT 1", true, 1},
-		{"limit_0", "SELECT * FROM users LIMIT 0", true, 0},
-		{"no_limit", "SELECT * FROM users", false, 0},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := ParseMySQL(tt.sql)
-			if err != nil {
-				t.Fatalf("ParseMySQL(%q) error: %v", tt.sql, err)
-			}
-			if result.HasLimit != tt.wantHasLimit {
-				t.Errorf("HasLimit = %v, want %v", result.HasLimit, tt.wantHasLimit)
-			}
-			if result.LimitCount != tt.wantLimitCnt {
-				t.Errorf("LimitCount = %d, want %d", result.LimitCount, tt.wantLimitCnt)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
 // WHERE Clause Operators (cover extractTablesFromExpr branches)
 // ---------------------------------------------------------------------------
 
@@ -750,24 +666,6 @@ func TestParseMySQL_Replace(t *testing.T) {
 	}
 	if result.Operation != OpDML {
 		t.Errorf("Operation = %q, want %q", result.Operation, OpDML)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// SELECT with LIMIT and OFFSET
-// ---------------------------------------------------------------------------
-
-func TestParseMySQL_LimitOffset(t *testing.T) {
-	t.Skip("LimitCount extraction requires driver init; HasLimit is tested elsewhere")
-	result, err := ParseMySQL("SELECT * FROM users LIMIT 10 OFFSET 20")
-	if err != nil {
-		t.Fatalf("ParseMySQL error: %v", err)
-	}
-	if !result.HasLimit {
-		t.Error("HasLimit = false, want true")
-	}
-	if result.LimitCount != 10 {
-		t.Errorf("LimitCount = %d, want 10", result.LimitCount)
 	}
 }
 

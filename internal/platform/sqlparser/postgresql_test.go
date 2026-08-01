@@ -361,10 +361,10 @@ func TestParseSQL_PostgreSQLUnified(t *testing.T) {
 
 func TestParseSQL_MySQLStillWorksAfterPGChanges(t *testing.T) {
 	tests := []struct {
-		name    string
-		sql     string
-		wantOp  OperationType
-		wantOK  bool
+		name   string
+		sql    string
+		wantOp OperationType
+		wantOK bool
 	}{
 		{"select", "SELECT * FROM users LIMIT 10", OpSelect, true},
 		{"insert", "INSERT INTO users (id) VALUES (1)", OpDML, true},

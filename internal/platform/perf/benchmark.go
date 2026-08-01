@@ -1,7 +1,7 @@
-// Package performance provides benchmarking utilities for sqlflow.
+// Package perf provides benchmarking utilities for sqlflow.
 // It includes concurrent HTTP endpoint benchmarks, database query benchmarks,
 // and automated report generation with baseline comparison.
-package performance
+package perf
 
 import (
 	"crypto/tls"

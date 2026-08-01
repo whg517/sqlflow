@@ -36,70 +36,70 @@ var allowedAggStages = map[string]bool{
 	"$match": true,
 
 	// Grouping & accumulation
-	"$group": true,
-	"$count": true,
-	"$bucket": true,
+	"$group":      true,
+	"$count":      true,
+	"$bucket":     true,
 	"$bucketAuto": true,
-	"$densify": true,
-	"$fill": true,
+	"$densify":    true,
+	"$fill":       true,
 
 	// Projection & shaping
-	"$project": true,
-	"$addFields": true,
-	"$set": true,       // $set is an alias for $addFields (MongoDB 4.2+)
-	"$unset": true,     // $unset removes fields (safe, read-only transform)
-	"$unsetField": true,
-	"$setField": true,
-	"$replaceRoot": true,
-	"$replaceWith": true, // alias for $replaceRoot
+	"$project":         true,
+	"$addFields":       true,
+	"$set":             true, // $set is an alias for $addFields (MongoDB 4.2+)
+	"$unset":           true, // $unset removes fields (safe, read-only transform)
+	"$unsetField":      true,
+	"$setField":        true,
+	"$replaceRoot":     true,
+	"$replaceWith":     true, // alias for $replaceRoot
 	"$setWindowFields": true,
 
 	// Sorting & pagination
-	"$sort": true,
+	"$sort":  true,
 	"$limit": true,
-	"$skip": true,
+	"$skip":  true,
 
 	// Unwinding arrays
 	"$unwind": true,
 
 	// Joining collections (read-only lookup)
-	"$lookup": true,
+	"$lookup":      true,
 	"$graphLookup": true,
 
 	// Faceted search / multiple pipelines
 	"$facet": true,
 
 	// Statistical / geo
-	"$geoNear": true,
-	"$near": true,
-	"$nearSphere": true,
-	"$sample": true,
-	"$search": true,
-	"$searchMeta": true,
+	"$geoNear":      true,
+	"$near":         true,
+	"$nearSphere":   true,
+	"$sample":       true,
+	"$search":       true,
+	"$searchMeta":   true,
 	"$vectorSearch": true,
 
 	// Date / expression helpers (used inside stages, but also valid as stages in some contexts)
 	"$documents": true,
 	"$sortArray": true,
-	"$reduce": true,
-	"$map": true,
-	"$filter": true,
+	"$reduce":    true,
+	"$map":       true,
+	"$filter":    true,
 
 	// Collation / plan hints (meta directives)
-	"$collStats": true,
-	"$indexStats": true,
+	"$collStats":      true,
+	"$indexStats":     true,
 	"$planCacheStats": true,
 }
 
 // blockedAggStages are explicitly blocked stages that would modify data or pose security risk.
 // Even if someone tries to use them, they will be caught as dangerous.
 var blockedAggStages = map[string]bool{
-	"$out":            true, // writes to collection
-	"$merge":          true, // writes to collection
-	"$currentOp":      true, // exposes system operations
+	"$out":               true, // writes to collection
+	"$merge":             true, // writes to collection
+	"$currentOp":         true, // exposes system operations
 	"$listLocalSessions": true,
-	"$listSessions":   true,
-	"$changeStream":   true,
+	"$listSessions":      true,
+	"$changeStream":      true,
 }
 
 // ParseMongo parses a MongoDB command JSON body and returns structured result.

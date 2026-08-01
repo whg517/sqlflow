@@ -1,8 +1,8 @@
-// Command performance runs the full performance test suite against a running sqlflow server.
+// Command benchmark runs the full performance test suite against a running sqlflow server.
 //
 // Usage:
 //
-//	go run ./internal/pkg/performance/cmd/... -url http://localhost:8080 -reqs 200 -concurrency 20
+//	go run ./internal/platform/perf/cmd/... -url http://localhost:8080 -reqs 200 -concurrency 20
 //
 // Flags:
 //
@@ -20,7 +20,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/whg517/sqlflow/internal/pkg/performance"
+	"github.com/whg517/sqlflow/internal/platform/perf"
 )
 
 var (
@@ -37,14 +37,14 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("sqlflow-performance %s (built %s)\n", version, buildTime)
+		fmt.Printf("sqlflow-benchmark %s (built %s)\n", version, buildTime)
 		return
 	}
 
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
 	log.SetOutput(os.Stderr)
 
-	report := performance.RunFullBenchmark(*baseURL, *totalReqs, *concurrency)
+	report := perf.RunFullBenchmark(*baseURL, *totalReqs, *concurrency)
 
 	// Output JSON report
 	jsonBytes, err := json.MarshalIndent(report, "", "  ")
