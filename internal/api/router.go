@@ -6,10 +6,18 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/api/handler"
 	"github.com/whg517/sqlflow/internal/api/middleware"
-	"github.com/whg517/sqlflow/internal/pkg/metrics"
+	"github.com/whg517/sqlflow/internal/platform/metrics"
 
 	echoSwagger "github.com/swaggo/echo-swagger"
 	_ "github.com/whg517/sqlflow/internal/api/openapi"
+	"github.com/whg517/sqlflow/internal/audit"
+	"github.com/whg517/sqlflow/internal/datasource"
+	"github.com/whg517/sqlflow/internal/iam"
+	"github.com/whg517/sqlflow/internal/notify"
+	"github.com/whg517/sqlflow/internal/ops"
+	"github.com/whg517/sqlflow/internal/query"
+	"github.com/whg517/sqlflow/internal/security"
+	"github.com/whg517/sqlflow/internal/ticket"
 )
 
 // NewRouter creates and configures an Echo instance with middleware and routes.
@@ -45,36 +53,36 @@ func NewRouter(c *app.Container) *echo.Echo {
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	// Auth handlers
-	userHandler := handler.NewUserHandler(c.Auth, c.Permission)
-	dsHandler := handler.NewDatasourceHandler(c.Datasource, c.Permission)
-	permHandler := handler.NewPermissionHandler(c.Permission)
-	queryHandler := handler.NewQueryHandler(c.Query, c.History)
-	ticketHandler := handler.NewTicketHandler(c.Ticket)
-	approvalHandler := handler.NewApprovalHandler(c.ApprovalEngine)
+	userHandler := iam.NewUserHandler(c.Auth, c.Permission)
+	dsHandler := datasource.NewHandler(c.Datasource, c.Permission)
+	permHandler := security.NewHandler(c.Permission)
+	queryHandler := query.NewHandler(c.Query, c.History)
+	ticketHandler := ticket.NewHandler(c.Ticket)
+	approvalHandler := ticket.NewApprovalHandler(c.ApprovalEngine)
 	approvalHandler.SetAuditService(c.Audit)
 	approvalHandler.SetPermissionService(c.Permission)
-	maskRuleHandler := handler.NewMaskRuleHandler(c.MaskRule)
-	aiReviewHandler := handler.NewAIReviewHandler(c.AIReview, c.Datasource)
-	auditHandler := handler.NewAuditHandler(c.Audit)
-	exportHandler := handler.NewExportHandler(c.Export, c.ExportAsync)
-	dashboardHandler := handler.NewDashboardHandler(c.Dashboard)
-	backupHandler := handler.NewBackupHandler(c.Backup)
-	performanceHandler := handler.NewPerformanceHandler(c.History)
-	gitHandler := handler.NewGitHandler(c.Git)
-	tokenHandler := handler.NewTokenHandler(c.Token)
-	reportHandler := handler.NewAuditReportHandler(c.Report)
-	permReqHandler := handler.NewPermReqHandler(c.PermRequest)
-	sqlTemplateHandler := handler.NewSQLTemplateHandler(c.SQLTemplate)
+	maskRuleHandler := security.NewMaskHandler(c.MaskRule)
+	aiReviewHandler := ticket.NewAIReviewHandler(c.AIReview, c.Datasource)
+	auditHandler := audit.NewHandler(c.Audit)
+	exportHandler := query.NewExportHandler(c.Export, c.ExportAsync)
+	dashboardHandler := ops.NewDashboardHandler(c.Dashboard)
+	backupHandler := ops.NewBackupHandler(c.Backup)
+	performanceHandler := query.NewPerformanceHandler(c.History)
+	gitHandler := ops.NewGitHandler(c.Git)
+	tokenHandler := iam.NewTokenHandler(c.Token)
+	reportHandler := audit.NewReportHandler(c.Report)
+	permReqHandler := security.NewRequestHandler(c.PermRequest)
+	sqlTemplateHandler := query.NewTemplateHandler(c.SQLTemplate)
 
-	shareHandler := handler.NewShareHandler(c.Share)
-	webVitalsHandler := handler.NewWebVitalsHandler(c.WebVitals)
+	shareHandler := query.NewShareHandler(c.Share)
+	webVitalsHandler := ops.NewWebVitalsHandler(c.WebVitals)
 
 	// Public routes
 	e.POST("/api/auth/login", userHandler.Login)
 	e.POST("/api/auth/refresh", userHandler.Refresh)
 
 	// OIDC (public)
-	oidcHandler := handler.NewOIDCHandler(c.OIDC)
+	oidcHandler := iam.NewOIDCHandler(c.OIDC)
 	e.GET("/api/auth/oidc/:provider", oidcHandler.Login)
 	e.GET("/api/auth/oidc/:provider/callback", oidcHandler.Callback)
 	e.GET("/api/auth/providers", oidcHandler.Providers)
@@ -95,6 +103,7 @@ func NewRouter(c *app.Container) *echo.Echo {
 
 	// Datasource discovery and metadata: authenticated users can access safe summaries.
 	authGroup.GET("/api/datasources/available", dsHandler.ListAvailableDatasources, middleware.RequireScope("read:datasource"))
+	authGroup.GET("/api/datasources/:id/capabilities", dsHandler.GetDatasourceCapabilities, middleware.RequireScope("read:datasource"))
 	authGroup.GET("/api/datasources/:id/tables", dsHandler.GetTables, middleware.RequireScope("read:datasource"))
 	authGroup.GET("/api/datasources/:id/tables/:name/columns", dsHandler.GetTableColumns, middleware.RequireScope("read:datasource"))
 	authGroup.GET("/api/datasources/:id/es/indices", dsHandler.GetESIndices, middleware.RequireScope("read:datasource"))
@@ -136,7 +145,7 @@ func NewRouter(c *app.Container) *echo.Echo {
 	authGroup.GET("/api/tickets/:id/revisions", ticketHandler.ListRevisions, middleware.RequireScope("read:ticket"))
 
 	// Comment routes (authenticated users)
-	commentHandler := handler.NewCommentHandler(c.Comment)
+	commentHandler := ticket.NewCommentHandler(c.Comment)
 	authGroup.GET("/api/tickets/:id/comments", commentHandler.ListComments)
 	authGroup.POST("/api/tickets/:id/comments", commentHandler.CreateComment)
 	authGroup.DELETE("/api/comments/:id", commentHandler.DeleteComment)
@@ -247,11 +256,11 @@ func NewRouter(c *app.Container) *echo.Echo {
 	adminGroup.DELETE("/api/backups/:filename", backupHandler.DeleteBackup)
 
 	// Notification & Settings (admin)
-	notifyHandler := handler.NewNotifyHandler(c.Notify, c.AIReview)
+	notifyHandler := handler.NewSettingsHandler(c.Notify, c.AIReview)
 	settingsAdminGroup := e.Group("", middleware.Auth(c.Auth, c.Token), middleware.RequireScope("admin"), middleware.SystemPermission(c.Permission, "settings", "manage"))
 
 	// Feishu webhook CRUD (admin)
-	feishuWebhookHandler := handler.NewFeishuWebhookHandler(c.FeishuWebhook)
+	feishuWebhookHandler := notify.NewFeishuHandler(c.FeishuWebhook)
 
 	settingsAdminGroup.GET("/api/settings", notifyHandler.GetSettings)
 	settingsAdminGroup.PUT("/api/settings/notify/webhook", notifyHandler.UpdateNotifyConfig)
@@ -261,7 +270,7 @@ func NewRouter(c *app.Container) *echo.Echo {
 	settingsAdminGroup.POST("/api/settings/feishu/test", notifyHandler.TestFeishuNotify)
 
 	// Notification preferences (auth)
-	notifPrefHandler := handler.NewNotificationPreferenceHandler(c.NotificationPreference)
+	notifPrefHandler := notify.NewPreferenceHandler(c.NotificationPreference)
 	authGroup.GET("/api/notifications/preferences", notifPrefHandler.GetPreferences)
 	authGroup.PUT("/api/notifications/preferences", notifPrefHandler.UpdatePreferences)
 
@@ -278,7 +287,7 @@ func NewRouter(c *app.Container) *echo.Echo {
 	adminGroup.DELETE("/api/admin/tokens/:id", tokenHandler.RevokeAnyToken)
 
 	// SLA configuration management (admin only)
-	slaHandler := handler.NewSLAHandler(c.SLA)
+	slaHandler := ticket.NewSLAHandler(c.SLA)
 
 	settingsAdminGroup.GET("/api/settings/sla", slaHandler.ListSLAConfigs)
 	settingsAdminGroup.POST("/api/settings/sla", slaHandler.CreateSLAConfig)
@@ -309,7 +318,7 @@ func NewRouter(c *app.Container) *echo.Echo {
 	settingsAdminGroup.GET("/api/sla-notifications", slaHandler.ListSLANotifications)
 
 	// Webhook subscription management (admin)
-	webhookSubHandler := handler.NewWebhookSubscriptionHandler(c.WebhookSubscription)
+	webhookSubHandler := notify.NewSubscriptionHandler(c.WebhookSubscription)
 	settingsAdminGroup.GET("/api/admin/webhooks/subscriptions", webhookSubHandler.List)
 	settingsAdminGroup.POST("/api/admin/webhooks/subscriptions", webhookSubHandler.Create)
 	settingsAdminGroup.GET("/api/admin/webhooks/subscriptions/:id", webhookSubHandler.Get)
@@ -320,10 +329,6 @@ func NewRouter(c *app.Container) *echo.Echo {
 
 	// Ticket SLA status query (authenticated users)
 	authGroup.GET("/api/tickets/sla-status", slaHandler.GetTicketSLAStatuses)
-
-	// Coverage audit system (SF-QA0025) — MUST-1: nil pgDB guard inside RegisterCoverageRoutes
-	// coverage 需独立 PG 库，平台为 SQLite，此处传 nil 表示禁用（设计性禁用，非 bug）
-	handler.RegisterCoverageRoutes(e, middleware.Auth(c.Auth, c.Token), middleware.Admin(), nil)
 
 	// Frontend SPA (must be after API routes)
 	serveFrontend(e)

@@ -1,0 +1,179 @@
+package ticket
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/whg517/sqlflow/internal/db/ent"
+	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
+)
+
+// ResubmitTicket resubmits a rejected ticket with optional SQL and reason changes.
+// The ticket must be in REJECTED status. Only the original submitter can resubmit.
+func (s *Service) ResubmitTicket(ctx context.Context, ticketID, submitterID int64, sqlContent, changeReason string) (*model.Ticket, error) {
+	if strings.TrimSpace(sqlContent) == "" {
+		return nil, ErrTicketSQLRequired
+	}
+
+	t, err := s.GetTicket(ctx, ticketID)
+	if err != nil {
+		return nil, err
+	}
+
+	if t.Status != model.TicketStatusRejected {
+		return nil, ErrTicketNotResubmittable
+	}
+
+	if t.SubmitterID != submitterID {
+		return nil, ErrNoPermission
+	}
+
+	// A resubmission is a new proposal, not an edit: re-derive every
+	// server-owned fact from the new SQL. Carrying the previous revision's
+	// analysis forward would show approvers the impact of the SQL they already
+	// rejected. Done before the transaction opens — these are pure functions,
+	// but the platform pool holds a single connection, so no query may run
+	// while the transaction is open.
+	analysis := NewSQLAnalyzer().Analyze(sqlContent)
+	riskLevel := NewRiskEvaluator().Evaluate(analysis).Level
+	tablesJSON := affectedTablesToJSON(analysis.AffectedTables)
+
+	now := time.Now()
+	summary := auditlog.Summarize(sqlContent)
+	newRevision := t.Revision + 1
+
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("重提工单失败: %w", err)
+	}
+
+	// Snapshot the rejected version and advance the ticket as one unit: a
+	// snapshot without the update would leave a duplicate revision, and an
+	// update without the snapshot would lose the rejected history.
+	if _, err := tx.TicketRevision.Create().
+		SetTicketID(t.ID).
+		SetRevision(t.Revision).
+		SetSQLContent(t.SQLContent).
+		SetSQLSummary(t.SQLSummary).
+		SetChangeReason(t.ChangeReason).
+		SetRiskLevel(t.RiskLevel).
+		SetAiReviewResult(t.AIReviewResult).
+		SetReviewerID(t.ReviewerID).
+		SetReviewComment(t.ReviewComment).
+		SetStatus(string(t.Status)).
+		SetCreatedAt(t.UpdatedAt).
+		Save(ctx); err != nil {
+		return nil, rollbackOn(tx, fmt.Errorf("保存历史版本失败: %w", err))
+	}
+
+	swapped, err := casTicketStatus(ctx, tx.Ticket, ticketID,
+		model.TicketStatusRejected, model.TicketStatusSubmitted, now,
+		func(u *ent.TicketUpdate) *ent.TicketUpdate {
+			return u.SetSQLContent(sqlContent).
+				SetSQLSummary(summary).
+				SetChangeReason(changeReason).
+				SetRiskLevel(riskLevel).
+				SetSQLType(analysis.SQLType).
+				SetAffectedTables(tablesJSON).
+				SetAiReviewResult("").
+				SetReviewerID(0).
+				SetReviewComment("").
+				// The hash pins an approved SQL body; this revision has not
+				// been approved, so carrying it over would let the integrity
+				// check pass against a stale approval.
+				SetSQLHash("").
+				SetRevision(newRevision)
+		},
+	)
+	if err != nil {
+		return nil, rollbackOn(tx, fmt.Errorf("重提工单失败: %w", err))
+	}
+	if !swapped {
+		// The ticket left REJECTED between the read and the write.
+		return nil, rollbackOn(tx, ErrTicketNotResubmittable)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("重提工单失败: %w", err)
+	}
+
+	s.auditSvc.Write(ctx, auditlog.Record{
+		UserID:     submitterID,
+		Action:     "ticket_resubmit",
+		SQLContent: sqlContent,
+		SQLSummary: summary,
+	})
+
+	t.SQLContent = sqlContent
+	t.SQLSummary = summary
+	t.ChangeReason = changeReason
+	t.Status = model.TicketStatusSubmitted
+	t.RiskLevel = riskLevel
+	t.SQLType = analysis.SQLType
+	t.AffectedTables = tablesJSON
+	t.AIReviewResult = ""
+	t.ReviewerID = 0
+	t.ReviewComment = ""
+	t.SQLHash = ""
+	t.Revision = newRevision
+	t.UpdatedAt = now
+	s.populateTicketNames(ctx, t)
+
+	// Re-run policy matching on the new revision, outside the transaction:
+	// ApplyPolicy writes, and the single-connection pool cannot serve it while
+	// the transaction is open. Matching failure leaves the ticket in SUBMITTED
+	// for manual review, same as ticket creation.
+	s.applyApprovalPolicy(ctx, t)
+
+	return t, nil
+}
+
+// rollbackOn rolls back tx and returns cause, folding in any rollback failure.
+func rollbackOn(tx *ent.Tx, cause error) error {
+	if rbErr := tx.Rollback(); rbErr != nil {
+		return fmt.Errorf("%w (rollback failed: %v)", cause, rbErr)
+	}
+	return cause
+}
+
+// ListRevisions returns the revision history for a ticket.
+func (s *Service) ListRevisions(ctx context.Context, ticketID int64) ([]model.TicketRevision, error) {
+	rows, err := s.database.DB.QueryContext(ctx,
+		`SELECT id, ticket_id, revision, sql_content, sql_summary, change_reason, risk_level, ai_review_result, reviewer_id, review_comment, status, created_at
+		 FROM ticket_revisions WHERE ticket_id = ? ORDER BY revision ASC`,
+		ticketID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("查询历史版本失败: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	// Read all rows first before populating names, since MaxOpenConns(1)
+	// means the rows cursor holds the only connection.
+	revisions := make([]model.TicketRevision, 0)
+	for rows.Next() {
+		var rev model.TicketRevision
+		if err := rows.Scan(
+			&rev.ID, &rev.TicketID, &rev.Revision, &rev.SQLContent,
+			&rev.SQLSummary, &rev.ChangeReason, &rev.RiskLevel,
+			&rev.AIReviewResult, &rev.ReviewerID, &rev.ReviewComment,
+			&rev.Status, &rev.CreatedAt,
+		); err != nil {
+			continue
+		}
+		revisions = append(revisions, rev)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("遍历历史版本失败: %w", err)
+	}
+
+	// Now populate user names (requires additional queries)
+	for i := range revisions {
+		revisions[i].ReviewerName = s.lookupUsername(ctx, revisions[i].ReviewerID)
+	}
+
+	return revisions, nil
+}

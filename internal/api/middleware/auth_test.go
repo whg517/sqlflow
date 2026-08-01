@@ -15,7 +15,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/db"
-	"github.com/whg517/sqlflow/internal/service"
+	"github.com/whg517/sqlflow/internal/iam"
+	"github.com/whg517/sqlflow/internal/platform/httpx"
 )
 
 // setupEnforcer creates a Casbin enforcer with a proper RBAC model and test policies.
@@ -109,7 +110,7 @@ func TestPermission_FromPathParams(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
-			c.Set(ContextKeyRole, tt.role)
+			c.Set(httpx.ContextKeyRole, tt.role)
 			c.SetParamNames(tt.paramNames...)
 			c.SetParamValues(tt.paramValues...)
 
@@ -183,7 +184,7 @@ func TestPermission_FromJSONBody(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
-			c.Set(ContextKeyRole, tt.role)
+			c.Set(httpx.ContextKeyRole, tt.role)
 
 			handler := Permission(enforcer, "select")(okHandler)
 			err := handler(c)
@@ -238,7 +239,7 @@ func TestPermission_FromQueryParams(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/api/test"+tt.query, nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
-			c.Set(ContextKeyRole, tt.role)
+			c.Set(httpx.ContextKeyRole, tt.role)
 
 			handler := Permission(enforcer, "select")(okHandler)
 			err := handler(c)
@@ -272,7 +273,7 @@ func TestPermission_BodyRestoredForDownstream(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.Set(ContextKeyRole, "developer")
+	c.Set(httpx.ContextKeyRole, "developer")
 
 	var downstreamBody map[string]interface{}
 	handler := Permission(enforcer, "select")(func(c echo.Context) error {
@@ -409,7 +410,7 @@ func TestBodyField(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // newTestAuthSvc creates a real AuthService backed by a temp SQLite DB.
-func newTestAuthSvc(t *testing.T) *service.AuthService {
+func newTestAuthSvc(t *testing.T) *iam.Service {
 	t.Helper()
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -420,13 +421,13 @@ func newTestAuthSvc(t *testing.T) *service.AuthService {
 	if err := database.Migrate(); err != nil {
 		t.Fatalf("migrate test db: %v", err)
 	}
-	return service.NewAuthService(database, "test-secret-key", 1*time.Hour)
+	return iam.NewService(database, "test-secret-key", 1*time.Hour)
 }
 
 // generateToken creates a signed JWT with the given claims and secret.
 func generateToken(t *testing.T, secret []byte, userID int64, username, role string, expiresAt, issuedAt time.Time) string {
 	t.Helper()
-	claims := &service.Claims{
+	claims := &iam.Claims{
 		UserID:   userID,
 		Username: username,
 		Role:     role,
@@ -571,9 +572,9 @@ func TestJWT_ValidToken(t *testing.T) {
 	// handler that captures context values
 	var gotUserID, gotUsername, gotRole interface{}
 	handler := JWT(authSvc)(func(c echo.Context) error {
-		gotUserID = c.Get(ContextKeyUserID)
-		gotUsername = c.Get(ContextKeyUsername)
-		gotRole = c.Get(ContextKeyRole)
+		gotUserID = c.Get(httpx.ContextKeyUserID)
+		gotUsername = c.Get(httpx.ContextKeyUsername)
+		gotRole = c.Get(httpx.ContextKeyRole)
 		return c.String(http.StatusOK, "ok")
 	})
 
@@ -631,7 +632,7 @@ func TestAdmin_AllowsAdminRole(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.Set(ContextKeyRole, "admin")
+	c.Set(httpx.ContextKeyRole, "admin")
 
 	handler := Admin()(okHandler)
 	err := handler(c)
@@ -660,7 +661,7 @@ func TestAdmin_RejectsNonAdminRole(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
-			c.Set(ContextKeyRole, tt.role)
+			c.Set(httpx.ContextKeyRole, tt.role)
 
 			handler := Admin()(okHandler)
 			err := handler(c)
@@ -679,7 +680,7 @@ func TestAdmin_NoRoleSet(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	// deliberately do NOT set ContextKeyRole
+	// deliberately do NOT set httpx.ContextKeyRole
 
 	handler := Admin()(okHandler)
 	err := handler(c)
@@ -696,7 +697,7 @@ func TestAdmin_RoleSetToNonString(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.Set(ContextKeyRole, 12345) // int, not string
+	c.Set(httpx.ContextKeyRole, 12345) // int, not string
 
 	handler := Admin()(okHandler)
 	err := handler(c)

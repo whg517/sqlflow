@@ -1,9 +1,13 @@
-// Package app 聚合应用依赖，封装 service 的构造、循环依赖注入与生命周期管理。
+// Package app 是组合根：它构造所有领域 service 并管理其生命周期。
 //
 // 它替代了 cmd/server/main.go 中 ~100 行手工 wiring，以及 api.NewRouter 的 28 个位置参数。
-// NewContainer 负责按正确顺序构造所有 service，处理 TicketService 的循环依赖 setter，
-// 执行启动副作用（scheduler / backup / admin seed / OIDC providers / default policy），
-// 并通过 Close() 提供优雅关闭。
+// NewContainer 按依赖顺序构造 service——依赖图是 DAG，不存在循环，早期版本的
+// setter 注入只是构造顺序的产物而非真实的循环依赖——并执行启动副作用
+// （scheduler / backup / admin seed / OIDC providers / default policy），
+// 通过 Close() 提供优雅关闭。
+//
+// 这是唯一知道各领域具体实现的地方。领域包之间只通过消费方定义的窄接口
+// （如 datasource.ObjectViewChecker）相互引用。
 package app
 
 import (
@@ -13,15 +17,23 @@ import (
 	"time"
 
 	"github.com/whg517/sqlflow/config"
+	"github.com/whg517/sqlflow/internal/audit"
 	"github.com/whg517/sqlflow/internal/connpool"
+	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/driver"
-	"github.com/whg517/sqlflow/internal/service"
+	_ "github.com/whg517/sqlflow/internal/driver/all"
+	"github.com/whg517/sqlflow/internal/iam"
+	"github.com/whg517/sqlflow/internal/notify"
+	"github.com/whg517/sqlflow/internal/ops"
+	"github.com/whg517/sqlflow/internal/query"
+	"github.com/whg517/sqlflow/internal/security"
+	"github.com/whg517/sqlflow/internal/ticket"
 )
 
 // Container 聚合应用启动所需的所有依赖。
-// 字段按 router/handler 的消费顺序排列，service 之间的循环依赖通过 Set* 方法在
-// NewContainer 内部完成注入，调用方无需关心顺序。
+// 字段按 router/handler 的消费顺序排列；每个 service 在 NewContainer 内构造完成后
+// 即不可变，调用方无需关心构造顺序。
 type Container struct {
 	// 基础设施
 	DB      *db.DB
@@ -30,60 +42,59 @@ type Container struct {
 	PoolMgr *driver.PoolManager
 
 	// 认证 & 用户
-	Auth *service.AuthService
+	Auth *iam.Service
 
 	// 数据源 & 权限
-	Datasource *service.DatasourceService
-	Permission *service.PermissionService
+	Datasource *datasource.Service
+	Permission *security.Service
 
 	// 查询
-	Query   *service.QueryService
-	History *service.QueryHistoryService
+	Query   *query.Service
+	History *query.HistoryService
 
 	// 工单 & 审批
-	Ticket         *service.TicketService
-	ApprovalEngine *service.ApprovalEngine
+	Ticket         *ticket.Service
+	ApprovalEngine *ticket.ApprovalEngine
 
 	// 脱敏 & 审计
-	MaskRule *service.MaskRuleService
-	Audit    *service.AuditService
+	MaskRule *security.MaskService
+	Audit    *audit.Service
 
 	// 导出
-	Export      *service.ExportService
-	ExportAsync *service.ExportAsyncService
+	Export      *query.ExportService
+	ExportAsync *query.AsyncExportService
 
 	// 通知
-	Notify                 *service.NotifyService
-	FeishuWebhook          *service.FeishuWebhookService
-	NotificationPreference *service.NotificationPreferenceService
-	WebhookSubscription    *service.WebhookSubscriptionService
+	Notify                 *notify.Service
+	FeishuWebhook          *notify.FeishuService
+	NotificationPreference *notify.PreferenceService
+	WebhookSubscription    *notify.WebhookSubscriptionService
 
 	// SLA
-	SLA *service.SLAService
+	SLA *ticket.SLAService
 
 	// 其他 service
-	Dashboard   *service.DashboardService
-	Comment     *service.CommentService
-	OIDC        *service.OIDCService
-	Backup      *service.BackupService
-	Git         *service.GitService
-	Token       *service.TokenService
-	Report      *service.AuditReportService
-	PermRequest *service.PermissionRequestService
-	SQLTemplate *service.TemplateService
-	Share       *service.ShareService
-	WebVitals   *service.WebVitalsService
-	AIReview    *service.AIReviewService
+	Dashboard   *ops.DashboardService
+	Comment     *ticket.CommentService
+	OIDC        *iam.OIDCService
+	Backup      *ops.BackupService
+	Git         *ops.GitService
+	Token       *iam.TokenService
+	Report      *audit.ReportService
+	PermRequest *security.RequestService
+	SQLTemplate *query.TemplateService
+	Share       *query.ShareService
+	WebVitals   *ops.WebVitalsService
+	AIReview    *ticket.AIReviewService
 
 	// 调度器（需在 Close 时停止）
-	ticketScheduler *service.Scheduler
-	slaScheduler    *service.SLAScheduler
+	ticketScheduler *ticket.Scheduler
+	slaScheduler    *ticket.SLAScheduler
 }
 
 // NewContainer 构造并装配整个应用依赖图。
 //
 // 它复刻了原 main.go 的构造顺序，保留所有启动副作用：
-//   - TicketService 的 6 个循环依赖 setter
 //   - ticket scheduler + SLA scheduler 的启动
 //   - backup scheduler 的启动
 //   - admin 用户 seed
@@ -96,21 +107,21 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	poolMgr := driver.NewPoolManager()
 
 	// --- 基础 service（无循环依赖）---
-	authSvc := service.NewAuthService(database, cfg.JWT.Secret, cfg.JWT.Expiry)
+	authSvc := iam.NewService(database, cfg.JWT.Secret, cfg.JWT.Expiry)
 
-	permSvc, err := service.NewPermissionService(database)
+	permSvc, err := security.NewService(database)
 	if err != nil {
 		connMgr.Close()
 		poolMgr.Close()
 		return nil, err
 	}
 
-	historySvc := service.NewQueryHistoryService(database)
-	auditSvc := service.NewAuditService(database, 0, 0)
-	exportSvc := service.NewExportService(database, auditSvc)
-	exportAsyncSvc := service.NewExportAsyncService(database, exportSvc, auditSvc, cfg.DB.Path)
+	historySvc := query.NewHistoryService(database)
+	auditSvc := audit.NewService(database, 0, 0)
+	exportSvc := query.NewExportService(database, auditSvc)
+	exportAsyncSvc := query.NewAsyncExportService(database, exportSvc, auditSvc, cfg.DB.Path)
 
-	dsSvc := service.NewDatasourceService(database, cfg.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(database, cfg.EncryptionKey, connMgr, poolMgr)
 	internalDBPath, err := filepath.Abs(cfg.DB.Path)
 	if err != nil {
 		connMgr.Close()
@@ -123,56 +134,53 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 		return nil, err
 	}
 
-	// NotifyService 先构造（TicketService 依赖它，但它又依赖后续的 FeishuWebhook）
-	notifySvc := service.NewNotifyService(cfg.Notify.WebhookURL, cfg.Notify.Secret)
-	notifySvc.SetFeishuWebhook(cfg.Feishu.WebhookURL)
-	notifySvc.SetDB(database.DB)
-
-	// TicketService 构造（依赖 audit + notify）
-	ticketSvc := service.NewTicketService(database, auditSvc, nil)
-
-	// --- 循环依赖 setter（严格遵循原 main.go 顺序）---
-	ticketSvc.SetNotifyService(notifySvc)
-	ticketSvc.SetDatasourceService(dsSvc, connMgr, poolMgr, cfg.EncryptionKey)
-	ticketSvc.SetPermissionService(permSvc)
+	// Feishu 多 webhook service 不依赖 NotifyService，先构造它就能让 NotifyService
+	// 一次性拿全依赖，不再需要事后 setter。
+	feishuWebhookSvc := notify.NewFeishuService(database.DB, cfg.EncryptionKey)
+	notifySvc := notify.NewService(notify.Deps{
+		WebhookURL: cfg.Notify.WebhookURL,
+		Secret:     cfg.Notify.Secret,
+		FeishuURL:  cfg.Feishu.WebhookURL,
+		Feishu:     feishuWebhookSvc,
+		DB:         database.DB,
+	})
 
 	// QueryService 依赖 ds/perm/audit + 连接池
-	querySvc := service.NewQueryService(database, dsSvc, historySvc, permSvc, auditSvc, cfg.EncryptionKey, connMgr, poolMgr)
+	querySvc := query.NewService(database, dsSvc, historySvc, permSvc, auditSvc, cfg.EncryptionKey, poolMgr)
 
 	// MaskRule / PermissionRequest
-	maskRuleSvc := service.NewMaskRuleService(database, permSvc, auditSvc)
-	permReqSvc := service.NewPermissionRequestService(database, permSvc, auditSvc)
+	maskRuleSvc := security.NewMaskService(database, permSvc, auditSvc)
+	permReqSvc := security.NewRequestService(database, permSvc, auditSvc)
 
 	// AI / Dashboard
-	aiReviewSvc := service.NewAIReviewService(database.DB, cfg.AI.Provider, cfg.AI.Model, cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Timeout)
-	dashboardSvc := service.NewDashboardService(database)
+	aiReviewSvc := ticket.NewAIReviewService(database.DB, cfg.AI.Provider, cfg.AI.Model, cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Timeout)
+	dashboardSvc := ops.NewDashboardService(database)
 
 	// Backup（需 Start）
-	backupSvc := service.NewBackupService(database, cfg.DB.Path, cfg.Backup)
+	backupSvc := ops.NewBackupService(database, cfg.DB.Path, cfg.Backup)
 
 	// AuditReport
-	reportSvc := service.NewAuditReportService(database)
+	reportSvc := audit.NewReportService(database)
 
 	// Comment / Git
-	commentSvc := service.NewCommentService(database)
-	gitSvc := service.NewGitService(database)
+	commentSvc := ticket.NewCommentService(database)
+	gitSvc := ops.NewGitService(database)
 
 	// SLA（ticket 依赖它，它依赖 notify）
-	slaSvc := service.NewSLAService(database, notifySvc)
-	ticketSvc.SetSLAService(slaSvc)
+	slaSvc := ticket.NewSLAService(database, notifySvc)
 
 	// API Token / SQL Template / Share / WebVitals
-	tokenSvc := service.NewTokenService(database)
-	templateSvc := service.NewSQLTemplateService(database)
-	shareSvc := service.NewShareService(database, cfg.JWT.Secret)
-	vitalsSvc := service.NewWebVitalsService(database)
+	tokenSvc := iam.NewTokenService(database)
+	templateSvc := query.NewTemplateService(database)
+	shareSvc := query.NewShareService(database, cfg.JWT.Secret)
+	vitalsSvc := ops.NewWebVitalsService(database)
 
 	// OIDC（依赖 auth）
-	oidcSvc := service.NewOIDCService(database, authSvc)
+	oidcSvc := iam.NewOIDCService(database, authSvc)
 	if len(cfg.OIDC.Providers) > 0 {
-		configProviders := make([]service.ConfigOIDCProvider, 0, len(cfg.OIDC.Providers))
+		configProviders := make([]iam.ConfigOIDCProvider, 0, len(cfg.OIDC.Providers))
 		for _, p := range cfg.OIDC.Providers {
-			configProviders = append(configProviders, service.ConfigOIDCProvider{
+			configProviders = append(configProviders, iam.ConfigOIDCProvider{
 				Name: p.Name, Issuer: p.Issuer, ClientID: p.ClientID,
 				ClientSecret: p.ClientSecret, RedirectURL: p.RedirectURL,
 				Scopes: p.Scopes, Enabled: p.Enabled,
@@ -184,19 +192,30 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	}
 
 	// ApprovalEngine（ticket + notify 依赖它）
-	approvalEngine := service.NewApprovalEngine(database)
-	approvalEngine.SetNotifyService(notifySvc)
+	approvalEngine := ticket.NewApprovalEngine(database, notifySvc)
 	if err := approvalEngine.EnsureDefaultPolicy(context.Background()); err != nil {
 		log.Printf("warn: failed to ensure default approval policy: %v", err)
 	}
-	ticketSvc.SetApprovalEngine(approvalEngine)
-	ticketSvc.SetGitService(gitSvc)
+
+	// TicketService 最后构造：它是依赖图的汇点，所有协作者到此都已就绪。
+	// 之前这里是「先 new 再六个 setter」，服务在整个生命周期里都可变；现在依赖
+	// 在构造时全部固定，忘记接线会是编译期就能看见的空字段而非运行期的 nil。
+	ticketSvc := ticket.New(ticket.Deps{
+		DB:             database,
+		Audit:          auditSvc,
+		Notify:         notifySvc,
+		Git:            gitSvc,
+		SLA:            slaSvc,
+		Datasource:     dsSvc,
+		PoolManager:    poolMgr,
+		EncryptionKey:  cfg.EncryptionKey,
+		Permission:     permSvc,
+		ApprovalEngine: approvalEngine,
+	})
 
 	// router 内部曾各自 new 的 service（提到 Container，消除重复实例）
-	feishuWebhookSvc := service.NewFeishuWebhookService(database.DB, cfg.EncryptionKey)
-	notifySvc.SetFeishuWebhookService(feishuWebhookSvc)
-	notifPrefSvc := service.NewNotificationPreferenceService(database)
-	webhookSubSvc := service.NewWebhookSubscriptionService(database.DB, cfg.EncryptionKey)
+	notifPrefSvc := notify.NewPreferenceService(database)
+	webhookSubSvc := notify.NewWebhookSubscriptionService(database.DB, cfg.EncryptionKey)
 	// slaSvc 已在上面构造，复用同一个实例（修复原 router.go 重复 new 的隐患）
 
 	// --- admin seed ---
@@ -217,12 +236,12 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	}
 
 	// --- 启动调度器与后台 service ---
-	ticketScheduler := service.NewScheduler(ticketSvc, 1*time.Minute)
+	ticketScheduler := ticket.NewScheduler(ticketSvc, 1*time.Minute)
 	ticketScheduler.Start()
 
 	backupSvc.Start()
 
-	slaScheduler := service.NewSLAScheduler(slaSvc, 10*time.Minute)
+	slaScheduler := ticket.NewSLAScheduler(slaSvc, 10*time.Minute)
 	slaScheduler.Start()
 
 	return &Container{

@@ -10,7 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
-	"github.com/whg517/sqlflow/internal/pkg/metrics"
+	"github.com/whg517/sqlflow/internal/platform/metrics"
 )
 
 func TestHealthHandler_Health(t *testing.T) {

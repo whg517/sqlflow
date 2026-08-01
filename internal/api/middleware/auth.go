@@ -10,13 +10,9 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/authz"
-	"github.com/whg517/sqlflow/internal/service"
-)
-
-const (
-	ContextKeyUserID   = "user_id"
-	ContextKeyUsername = "username"
-	ContextKeyRole     = "role"
+	"github.com/whg517/sqlflow/internal/iam"
+	"github.com/whg517/sqlflow/internal/platform/httpx"
+	"github.com/whg517/sqlflow/internal/security"
 )
 
 // ContextKeyTokenID is the context key for the authenticated API token ID.
@@ -29,7 +25,7 @@ const ContextKeyTokenScopes = "token_scopes"
 // and API Token authentication (tokens prefixed with "sqlflow_").
 // The Authorization header is inspected: if the bearer token starts with
 // "sqlflow_", it is validated via TokenService; otherwise it is treated as a JWT.
-func Auth(authSvc *service.AuthService, tokenSvc *service.TokenService) echo.MiddlewareFunc {
+func Auth(authSvc *iam.Service, tokenSvc *iam.TokenService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			authHeader := c.Request().Header.Get("Authorization")
@@ -56,9 +52,9 @@ func Auth(authSvc *service.AuthService, tokenSvc *service.TokenService) echo.Mid
 						"error": "API Token 无效或已过期",
 					})
 				}
-				c.Set(ContextKeyUserID, userID)
-				c.Set(ContextKeyUsername, username)
-				c.Set(ContextKeyRole, role)
+				c.Set(httpx.ContextKeyUserID, userID)
+				c.Set(httpx.ContextKeyUsername, username)
+				c.Set(httpx.ContextKeyRole, role)
 				c.Set(ContextKeyTokenID, true)
 				c.Set(ContextKeyTokenScopes, scopes)
 				return next(c)
@@ -77,9 +73,9 @@ func Auth(authSvc *service.AuthService, tokenSvc *service.TokenService) echo.Mid
 					"error": "用户角色已变更或停用，请重新登录",
 				})
 			}
-			c.Set(ContextKeyUserID, user.ID)
-			c.Set(ContextKeyUsername, user.Username)
-			c.Set(ContextKeyRole, user.Role)
+			c.Set(httpx.ContextKeyUserID, user.ID)
+			c.Set(httpx.ContextKeyUsername, user.Username)
+			c.Set(httpx.ContextKeyRole, user.Role)
 
 			return next(c)
 		}
@@ -89,11 +85,11 @@ func Auth(authSvc *service.AuthService, tokenSvc *service.TokenService) echo.Mid
 // JWT returns a middleware that validates JWT tokens from the Authorization header.
 // NOTE: Prefer Auth() for new code — it handles both JWT and API Token in one middleware.
 // This middleware is kept for backward compatibility.
-func JWT(authSvc *service.AuthService) echo.MiddlewareFunc {
+func JWT(authSvc *iam.Service) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Skip if already authenticated by a preceding middleware (e.g. APITokenAuth)
-			if _, ok := c.Get(ContextKeyUserID).(int64); ok {
+			if _, ok := c.Get(httpx.ContextKeyUserID).(int64); ok {
 				return next(c)
 			}
 
@@ -117,9 +113,9 @@ func JWT(authSvc *service.AuthService) echo.MiddlewareFunc {
 					"error": "登录已过期，请重新登录",
 				})
 			}
-			c.Set(ContextKeyUserID, claims.UserID)
-			c.Set(ContextKeyUsername, claims.Username)
-			c.Set(ContextKeyRole, claims.Role)
+			c.Set(httpx.ContextKeyUserID, claims.UserID)
+			c.Set(httpx.ContextKeyUsername, claims.Username)
+			c.Set(httpx.ContextKeyRole, claims.Role)
 
 			return next(c)
 		}
@@ -132,7 +128,7 @@ func JWT(authSvc *service.AuthService) echo.MiddlewareFunc {
 // with "sqlflow_"), the middleware passes through to the next handler
 // (allowing JWT middleware downstream to handle it).
 // NOTE: Prefer Auth() for new code — this middleware is kept for backward compatibility.
-func APITokenAuth(tokenSvc *service.TokenService) echo.MiddlewareFunc {
+func APITokenAuth(tokenSvc *iam.TokenService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			authHeader := c.Request().Header.Get("Authorization")
@@ -160,9 +156,9 @@ func APITokenAuth(tokenSvc *service.TokenService) echo.MiddlewareFunc {
 			}
 
 			// Set context values compatible with JWT middleware
-			c.Set(ContextKeyUserID, userID)
-			c.Set(ContextKeyUsername, username)
-			c.Set(ContextKeyRole, role)
+			c.Set(httpx.ContextKeyUserID, userID)
+			c.Set(httpx.ContextKeyUsername, username)
+			c.Set(httpx.ContextKeyRole, role)
 			c.Set(ContextKeyTokenID, true)
 			c.Set(ContextKeyTokenScopes, scopes)
 
@@ -183,7 +179,7 @@ func RequireScope(requiredScope string) echo.MiddlewareFunc {
 			}
 
 			scopes, _ := c.Get(ContextKeyTokenScopes).([]string)
-			if !service.HasScope(scopes, requiredScope) {
+			if !iam.HasScope(scopes, requiredScope) {
 				return c.JSON(http.StatusForbidden, map[string]string{
 					"error": "API Token 权限不足",
 				})
@@ -198,7 +194,7 @@ func RequireScope(requiredScope string) echo.MiddlewareFunc {
 func Admin() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			role, ok := c.Get(ContextKeyRole).(string)
+			role, ok := c.Get(httpx.ContextKeyRole).(string)
 			if !ok || role != "admin" {
 				return c.JSON(http.StatusForbidden, map[string]string{
 					"error": "权限不足，需要管理员权限",
@@ -212,10 +208,10 @@ func Admin() echo.MiddlewareFunc {
 // SystemPermission authorizes a platform-management operation through Casbin.
 // The built-in admin wildcard remains effective, while custom roles can receive
 // narrowly delegated control-plane permissions.
-func SystemPermission(permissionSvc *service.PermissionService, object, action string) echo.MiddlewareFunc {
+func SystemPermission(permissionSvc *security.Service, object, action string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			role, _ := c.Get(ContextKeyRole).(string)
+			role, _ := c.Get(httpx.ContextKeyRole).(string)
 			allowed, err := permissionSvc.Enforce(role, "system", object, action)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -241,7 +237,7 @@ func SystemPermission(permissionSvc *service.PermissionService, object, action s
 func Permission(enforcer *casbin.Enforcer, action string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			role, _ := c.Get(ContextKeyRole).(string)
+			role, _ := c.Get(httpx.ContextKeyRole).(string)
 			sub, dom, obj, act, err := authz.NormalizeTuple(
 				role,
 				extractDatasource(c),

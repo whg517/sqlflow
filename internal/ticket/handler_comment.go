@@ -1,0 +1,139 @@
+package ticket
+
+import (
+	"log"
+	"strconv"
+
+	"github.com/labstack/echo/v4"
+	"github.com/whg517/sqlflow/internal/platform/httpx"
+	"github.com/whg517/sqlflow/internal/resp"
+)
+
+// CommentHandler handles comment-related requests.
+type CommentHandler struct {
+	commentSvc *CommentService
+}
+
+// NewCommentHandler creates a new CommentHandler.
+func NewCommentHandler(commentSvc *CommentService) *CommentHandler {
+	return &CommentHandler{commentSvc: commentSvc}
+}
+
+type createCommentRequest struct {
+	Content  string `json:"content"`
+	ParentID int64  `json:"parent_id"`
+}
+
+// ListComments handles GET /api/tickets/:id/comments.
+//
+// @Summary 获取工单评论列表
+// @Description 获取指定工单的所有评论
+// @Tags 评论
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "工单ID"
+// @Success 200 {object} resp.SuccessResponse "成功"
+// @Failure 400 {object} resp.ErrorResponse "无效的工单ID"
+// @Failure 500 {object} resp.ErrorResponse "获取评论失败"
+// @Router /tickets/{id}/comments [get]
+func (h *CommentHandler) ListComments(c echo.Context) error {
+	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return resp.BadRequest(c, "无效的工单ID")
+	}
+
+	comments, err := h.commentSvc.ListComments(c.Request().Context(), orderID)
+	if err != nil {
+		log.Printf("ListComments failed: %v", err)
+		return resp.InternalError(c, "获取评论失败")
+	}
+
+	return resp.OK(c, comments)
+}
+
+// CreateComment handles POST /api/tickets/:id/comments.
+//
+// @Summary 创建评论
+// @Description 在指定工单下创建评论
+// @Tags 评论
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "工单ID"
+// @Param body body createCommentRequest true "评论请求"
+// @Success 201 {object} resp.SuccessResponse "创建成功"
+// @Failure 400 {object} resp.ErrorResponse "请求格式错误"
+// @Failure 404 {object} resp.ErrorResponse "工单不存在"
+// @Router /tickets/{id}/comments [post]
+func (h *CommentHandler) CreateComment(c echo.Context) error {
+	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return resp.BadRequest(c, "无效的工单ID")
+	}
+
+	var req createCommentRequest
+	if err := c.Bind(&req); err != nil {
+		return resp.BadRequest(c, "请求格式错误")
+	}
+
+	if req.Content == "" {
+		return resp.BadRequest(c, "评论内容不能为空")
+	}
+
+	userID := httpx.UserID(c)
+
+	comment, err := h.commentSvc.CreateComment(c.Request().Context(), orderID, userID, req.Content, req.ParentID)
+	if err != nil {
+		switch err {
+		case ErrCommentContentEmpty:
+			return resp.BadRequest(c, err.Error())
+		case ErrOrderNotFound:
+			return resp.NotFound(c, err.Error())
+		case ErrCommentNotFound:
+			return resp.BadRequest(c, "回复的评论不存在")
+		default:
+			log.Printf("CreateComment failed: %v", err)
+			return resp.InternalError(c, "创建评论失败")
+		}
+	}
+
+	return resp.Created(c, comment)
+}
+
+// DeleteComment handles DELETE /api/comments/:id.
+//
+// @Summary 删除评论
+// @Description 删除指定的评论（仅作者或管理员可操作）
+// @Tags 评论
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "评论ID"
+// @Success 200 {object} resp.SuccessResponse "评论已删除"
+// @Failure 400 {object} resp.ErrorResponse "无效的评论ID"
+// @Failure 403 {object} resp.ErrorResponse "无权限"
+// @Failure 404 {object} resp.ErrorResponse "评论不存在"
+// @Router /comments/{id} [delete]
+func (h *CommentHandler) DeleteComment(c echo.Context) error {
+	commentID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return resp.BadRequest(c, "无效的评论ID")
+	}
+
+	userID := httpx.UserID(c)
+	userRole := httpx.Role(c)
+
+	err = h.commentSvc.DeleteComment(c.Request().Context(), commentID, userID, userRole)
+	if err != nil {
+		switch err {
+		case ErrCommentNotFound:
+			return resp.NotFound(c, err.Error())
+		case ErrCommentNotOwner:
+			return resp.Forbidden(c, err.Error())
+		default:
+			log.Printf("DeleteComment failed: %v", err)
+			return resp.InternalError(c, "删除评论失败")
+		}
+	}
+
+	return resp.OKWithMessage(c, "评论已删除", nil)
+}

@@ -10,7 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/driver"
-	"github.com/whg517/sqlflow/internal/pkg/metrics"
+	"github.com/whg517/sqlflow/internal/platform/metrics"
 )
 
 // HealthHandler handles health check and metrics endpoints.
@@ -50,11 +50,11 @@ func (h *HealthHandler) SetPoolManager(pm *driver.PoolManager) {
 
 // HealthResponse is the JSON response for /health and /healthz.
 type HealthResponse struct {
-	Status    string            `json:"status"`
-	Version   string            `json:"version"`
-	Uptime    int64             `json:"uptime"`
-	DB        string            `json:"db,omitempty"`
-	Checks    map[string]string `json:"checks,omitempty"`
+	Status  string            `json:"status"`
+	Version string            `json:"version"`
+	Uptime  int64             `json:"uptime"`
+	DB      string            `json:"db,omitempty"`
+	Checks  map[string]string `json:"checks,omitempty"`
 }
 
 // Health godoc
