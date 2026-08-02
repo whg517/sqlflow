@@ -16,6 +16,9 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/whg517/sqlflow/internal/db/ent"
 
+	"sort"
+	"strings"
+
 	"github.com/golang-migrate/migrate/v4"
 	migratepg "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
@@ -116,4 +119,58 @@ func MigrateDB(conn *sql.DB) error {
 		return fmt.Errorf("run migrations: %w", err)
 	}
 	return nil
+}
+
+// ApplySchema executes the migration SQL directly, skipping golang-migrate's
+// version table and advisory lock.
+//
+// It exists for tests, which build a fresh schema per case: going through the
+// migration runner cost roughly five seconds each, almost all of it lock
+// acquisition and version bookkeeping that a brand-new schema has no use for.
+//
+// Production must keep using MigrateDB — this skips exactly the machinery that
+// makes migrating an existing database safe. It is only equivalent to MigrateDB
+// on an empty schema, and only while the migrations remain a single file;
+// SchemaFiles enforces the latter.
+func ApplySchema(conn *sql.DB) error {
+	names, err := SchemaFiles()
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		stmt, err := migrationsFS.ReadFile("migrations/" + name)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", name, err)
+		}
+		if _, err := conn.Exec(string(stmt)); err != nil {
+			return fmt.Errorf("apply %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// SchemaFiles lists the up-migrations in order.
+//
+// It returns an error when there is more than one, because ApplySchema executes
+// them without recording a version: with several files the shortcut would
+// silently diverge from MigrateDB the first time someone adds an incremental
+// migration.
+func SchemaFiles() ([]string, error) {
+	entries, err := migrationsFS.ReadDir("migrations")
+	if err != nil {
+		return nil, fmt.Errorf("read migrations: %w", err)
+	}
+	var ups []string
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".up.sql") {
+			ups = append(ups, e.Name())
+		}
+	}
+	sort.Strings(ups)
+	if len(ups) != 1 {
+		return nil, fmt.Errorf(
+			"ApplySchema supports a single migration file, found %d — "+
+				"add version tracking or switch tests back to MigrateDB", len(ups))
+	}
+	return ups, nil
 }

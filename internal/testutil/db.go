@@ -115,8 +115,12 @@ func NewDB(t *testing.T) *db.DB {
 		}
 	})
 
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("testutil: migrate schema %s: %v", schema, err)
+	// ApplySchema rather than Migrate: the migration runner's advisory lock and
+	// version bookkeeping cost about five seconds per test, and a schema created
+	// moments ago has no version history to reconcile. internal/db's own tests
+	// still exercise Migrate.
+	if err := db.ApplySchema(conn); err != nil {
+		t.Fatalf("testutil: apply schema %s: %v", schema, err)
 	}
 	return database
 }
