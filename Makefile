@@ -30,7 +30,7 @@ dev: ## Start full dev environment (Go backend + Vite)
 		wait
 
 dev-backend: ## Start Go backend server (port 8080)
-	go run ./cmd/... serve
+	go run ./cmd/server serve
 
 dev-frontend: ## Start frontend dev server (Vite :5173)
 	cd web && npm run dev
@@ -71,6 +71,7 @@ go-vet: ## Run Go vet (superseded by golangci-lint, kept for compat)
 
 arch: ## Check package layering (also runs as part of `make test`)
 	go test ./internal/arch/ -count=1
+
 
 web-lint: ## Run ESLint
 	cd web && npm run lint
