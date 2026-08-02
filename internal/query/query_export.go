@@ -155,6 +155,22 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 		return nil, ErrExportRowLimit
 	}
 
+	// Export is a second entrance to the same data, so it consults the same
+	// decision about shapes the masker cannot process. Without this an
+	// aggregation exported over a protected target would ship unmasked.
+	if err := s.refuseUnmaskableShape(ctx, result.Shape, userID, role, datasourceID, database, parseResult.Targets); err != nil {
+		s.auditSvc.Write(ctx, auditlog.Record{
+			UserID:       userID,
+			Action:       "export_failed",
+			DatasourceID: datasourceID,
+			Database:     database,
+			SQLContent:   sqlContent,
+			SQLSummary:   auditlog.Summarize(sqlContent),
+			ErrorMessage: err.Error(),
+		})
+		return nil, err
+	}
+
 	// Apply desensitization
 	desensitized, maskedFields := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, database, parseResult.Targets)
 	result.Desensitized = desensitized

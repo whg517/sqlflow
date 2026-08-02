@@ -69,7 +69,7 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, userID int64, name
 
 	result, err := s.database.ExecContext(ctx,
 		`INSERT INTO sql_templates (user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		userID, name, description, sqlContent, dbType, category, paramsJSON, pub, now, now,
 	)
 	if err != nil {
@@ -109,10 +109,10 @@ func (s *TemplateService) getTemplate(ctx context.Context, id, userID int64, enf
 	t := &model.SQLTemplate{}
 	var pub int
 	query := `SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at
-		 FROM sql_templates WHERE id = ?`
+		 FROM sql_templates WHERE id = $1`
 	args := []interface{}{id}
 	if enforceAccess {
-		query += " AND (user_id = ? OR is_public = 1)"
+		query += " AND (user_id = $1 OR is_public = 1)"
 		args = append(args, userID)
 	}
 	err := s.database.QueryRowContext(ctx,
@@ -148,8 +148,8 @@ func (s *TemplateService) ListTemplates(ctx context.Context, userID int64, categ
 		args := []interface{}{}
 		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE is_public = 1"
 		if category != "" {
-			countQuery += " AND category = ?"
-			listQuery += " AND category = ?"
+			countQuery += " AND category = $1"
+			listQuery += " AND category = $1"
 			args = append(args, category)
 		}
 		listQuery += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
@@ -163,12 +163,12 @@ func (s *TemplateService) ListTemplates(ctx context.Context, userID int64, categ
 		rows, err = s.database.QueryContext(ctx, listQuery, listArgs...)
 	} else {
 		// User's own + all public
-		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE (user_id = ? OR is_public = 1)"
+		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE (user_id = $1 OR is_public = 1)"
 		args := []interface{}{userID}
-		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE (user_id = ? OR is_public = 1)"
+		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE (user_id = $1 OR is_public = 1)"
 		if category != "" {
-			countQuery += " AND category = ?"
-			listQuery += " AND category = ?"
+			countQuery += " AND category = $1"
+			listQuery += " AND category = $1"
 			args = append(args, category)
 		}
 		listQuery += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
@@ -222,8 +222,8 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id, userID int64, 
 	}
 
 	result, err := s.database.ExecContext(ctx,
-		`UPDATE sql_templates SET name=?, description=?, sql_content=?, db_type=?, category=?, params_json=?, is_public=?, updated_at=?
-		 WHERE id = ? AND user_id = ?`,
+		`UPDATE sql_templates SET name=$1, description=$2, sql_content=$3, db_type=$4, category=$5, params_json=$6, is_public=$7, updated_at=$8
+		 WHERE id = $9 AND user_id = $10`,
 		name, description, sqlContent, dbType, category, paramsJSON, pub, time.Now(), id, userID,
 	)
 	if err != nil {
@@ -242,7 +242,7 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id, userID int64, 
 
 // DeleteTemplate deletes a template (only the creator can delete).
 func (s *TemplateService) DeleteTemplate(ctx context.Context, id, userID int64) error {
-	result, err := s.database.ExecContext(ctx, `DELETE FROM sql_templates WHERE id = ? AND user_id = ?`, id, userID)
+	result, err := s.database.ExecContext(ctx, `DELETE FROM sql_templates WHERE id = $1 AND user_id = $2`, id, userID)
 	if err != nil {
 		return fmt.Errorf("delete template: %w", err)
 	}

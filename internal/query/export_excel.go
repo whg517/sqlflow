@@ -75,7 +75,7 @@ func (s *ExportService) StreamExportAuditLogsExcel(ctx context.Context, w io.Wri
 		        COALESCE(u.username, '') AS username
 		 FROM audit_logs a
 		 LEFT JOIN users u ON a.user_id = u.id
-		 %s ORDER BY a.created_at DESC LIMIT ?`,
+		 %s ORDER BY a.created_at DESC LIMIT $1`,
 		whereClause,
 	)
 	queryArgs := append(args, ExportMaxRows)
@@ -201,7 +201,7 @@ func (s *ExportService) StreamExportTicketsExcel(ctx context.Context, w io.Write
 		 FROM tickets t
 		 LEFT JOIN users su ON t.submitter_id = su.id
 		 LEFT JOIN users rev ON t.reviewer_id = rev.id
-		 %s ORDER BY t.created_at DESC LIMIT ?`,
+		 %s ORDER BY t.created_at DESC LIMIT $1`,
 		whereClause,
 	)
 	queryArgs := append(args, ExportMaxRows)

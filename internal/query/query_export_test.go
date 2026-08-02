@@ -354,7 +354,7 @@ func TestExportQuery_SuccessWithDesensitization(t *testing.T) {
 	now := time.Now()
 	_, err := testDB.Exec(
 		`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type, custom_regex, custom_template, created_at, updated_at)
-		 VALUES (?, ?, '*', 'phone', 'phone', '', '', ?, ?)`,
+		 VALUES ($1, $2, '*', 'phone', 'phone', '', '', $3, $4)`,
 		dsID, "testdb", now, now,
 	)
 	if err != nil {
@@ -480,7 +480,7 @@ func TestExportQuery_AuditOnSuccess(t *testing.T) {
 
 	var count int
 	err = testDB.QueryRow(
-		`SELECT COUNT(*) FROM audit_logs WHERE user_id = ? AND action = 'export'`,
+		`SELECT COUNT(*) FROM audit_logs WHERE user_id = $1 AND action = 'export'`,
 		userID,
 	).Scan(&count)
 	if err != nil {
@@ -518,7 +518,7 @@ func TestExportQuery_AuditOnFailure(t *testing.T) {
 
 	var count int
 	err = testDB.QueryRow(
-		`SELECT COUNT(*) FROM audit_logs WHERE user_id = ? AND action = 'export_failed'`,
+		`SELECT COUNT(*) FROM audit_logs WHERE user_id = $1 AND action = 'export_failed'`,
 		userID,
 	).Scan(&count)
 	if err != nil {

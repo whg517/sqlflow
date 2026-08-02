@@ -182,10 +182,10 @@ func (s *HistoryService) GetFrequentQueries(ctx context.Context, userID int64) (
 			COUNT(*) as execution_count,
 			MAX(created_at) as last_executed_at
 		FROM query_history
-		WHERE user_id = ? AND sql_hash != ''
+		WHERE user_id = $1 AND sql_hash != ''
 		GROUP BY sql_hash
 		ORDER BY execution_count DESC
-		LIMIT ?`,
+		LIMIT $2`,
 		userID, frequentQueryLimit,
 	)
 	if err != nil {
@@ -229,8 +229,8 @@ func InvalidateFrequentQueryCache() {
 // Uses raw SQL for the subquery-based DELETE (ent doesn't support this pattern directly).
 func (s *HistoryService) cleanupOldRecords(userID int64) {
 	_, _ = s.database.Exec(
-		`DELETE FROM query_history WHERE user_id = ? AND id NOT IN (
-			SELECT id FROM query_history WHERE user_id = ? ORDER BY id DESC LIMIT ?
+		`DELETE FROM query_history WHERE user_id = $1 AND id NOT IN (
+			SELECT id FROM query_history WHERE user_id = $2 ORDER BY id DESC LIMIT $3
 		)`,
 		userID, userID, maxHistoryPerUser,
 	)

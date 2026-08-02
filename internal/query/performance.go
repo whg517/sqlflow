@@ -93,7 +93,7 @@ func (s *HistoryService) ListSlowQueries(ctx context.Context, params SlowQueryPa
 	}
 
 	querySQL := fmt.Sprintf(
-		"SELECT qh.id, qh.user_id, qh.datasource_id, qh.database, qh.sql_content, qh.sql_summary, qh.db_type, qh.execution_time, qh.result_rows, qh.affected_rows, qh.created_at FROM query_history qh %s ORDER BY qh.execution_time DESC LIMIT ? OFFSET ?",
+		"SELECT qh.id, qh.user_id, qh.datasource_id, qh.database, qh.sql_content, qh.sql_summary, qh.db_type, qh.execution_time, qh.result_rows, qh.affected_rows, qh.created_at FROM query_history qh %s ORDER BY qh.execution_time DESC LIMIT $1 OFFSET $2",
 		whereClause,
 	)
 	queryArgs := sqlutil.AppendLimitArgs(args, p)
@@ -133,7 +133,7 @@ func (s *HistoryService) GetPerformanceStats(ctx context.Context, days int) (*Pe
 	var avgTime sql.NullFloat64
 	err := s.database.QueryRowContext(ctx,
 		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN execution_time >= 1000 THEN 1 ELSE 0 END), 0), CAST(COALESCE(AVG(execution_time), 0) AS REAL)
-		 FROM query_history WHERE created_at >= ?`, startDate,
+		 FROM query_history WHERE created_at >= $1`, startDate,
 	).Scan(&totalQueries, &slowQueries, &avgTime)
 	if err != nil {
 		return nil, fmt.Errorf("get overall stats: %w", err)
@@ -149,7 +149,7 @@ func (s *HistoryService) GetPerformanceStats(ctx context.Context, days int) (*Pe
 		`SELECT COALESCE(DATE(created_at), '') as date, COUNT(*) as count,
 		        CAST(COALESCE(AVG(execution_time), 0) AS INTEGER) as avg_time,
 		        SUM(CASE WHEN execution_time >= 1000 THEN 1 ELSE 0 END) as slow_count
-		 FROM query_history WHERE created_at >= ?
+		 FROM query_history WHERE created_at >= $1
 		 GROUP BY COALESCE(DATE(created_at), '') ORDER BY date`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("get daily trend: %w", err)
@@ -174,7 +174,7 @@ func (s *HistoryService) GetPerformanceStats(ctx context.Context, days int) (*Pe
 		        CAST(COALESCE(AVG(qh.execution_time), 0) AS INTEGER) as avg_time
 		 FROM query_history qh
 		 LEFT JOIN datasources ds ON qh.datasource_id = ds.id
-		 WHERE qh.created_at >= ?
+		 WHERE qh.created_at >= $1
 		 GROUP BY qh.datasource_id, ds.name
 		 ORDER BY count DESC`, startDate)
 	if err != nil {
@@ -199,7 +199,7 @@ func (s *HistoryService) GetPerformanceStats(ctx context.Context, days int) (*Pe
 		`SELECT qh.id, qh.sql_summary, qh.execution_time, COALESCE(ds.name, '未知'), qh.created_at
 		 FROM query_history qh
 		 LEFT JOIN datasources ds ON qh.datasource_id = ds.id
-		 WHERE qh.created_at >= ?
+		 WHERE qh.created_at >= $1
 		 ORDER BY qh.execution_time DESC LIMIT 10`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("get top slow queries: %w", err)

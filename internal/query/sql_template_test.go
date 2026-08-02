@@ -27,7 +27,7 @@ func TestTemplateServiceRenderParameterizedSQL(t *testing.T) {
 			dbType:     "mysql",
 			sql:        "SELECT * FROM users WHERE id = {{ id }} AND status = {{status: active}}",
 			params:     map[string]string{"id": "42"},
-			wantSQL:    "SELECT * FROM users WHERE id = ? AND status = ?",
+			wantSQL:    "SELECT * FROM users WHERE id = $1 AND status = $2",
 			wantParams: []interface{}{"42", "active"},
 		},
 		{
@@ -45,7 +45,7 @@ func TestTemplateServiceRenderParameterizedSQL(t *testing.T) {
 			dbType:     "sqlite",
 			sql:        "SELECT * FROM users WHERE id = {{id}}",
 			params:     map[string]string{"id": "9"},
-			wantSQL:    "SELECT * FROM users WHERE id = ?",
+			wantSQL:    "SELECT * FROM users WHERE id = $1",
 			wantParams: []interface{}{"9"},
 		},
 		{

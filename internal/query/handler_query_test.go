@@ -53,7 +53,7 @@ func seedTestUser(t *testing.T, database *db.DB, username, role string) int64 {
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
 	res, err := database.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES (?, 'testhash', ?)`,
+		`INSERT INTO users (username, password_hash, role) VALUES ($1, 'testhash', $2)`,
 		username, role,
 	)
 	if err != nil {
@@ -87,7 +87,7 @@ func seedQueryHistory(t *testing.T, database *db.DB, userID, dsID int64, sqlCont
 	ctx := testutil.ContextWithTimeout(t)
 	res, err := database.ExecContext(ctx,
 		`INSERT INTO query_history (user_id, datasource_id, database, sql_content, sql_summary, db_type, execution_time, result_rows, affected_rows)
-		 VALUES (?, ?, 'testdb', ?, 'summary', 'mysql', 10, 5, 0)`,
+		 VALUES ($1, $2, 'testdb', $3, 'summary', 'mysql', 10, 5, 0)`,
 		userID, dsID, sqlContent,
 	)
 	if err != nil {
@@ -148,7 +148,7 @@ func TestQueryHandler_ExecuteQuery_Validation(t *testing.T) {
 		},
 		{
 			"nested_query_param",
-			`{"datasource_id":1,"sql":"SELECT ?","params":[{"id":1}]}`,
+			`{"datasource_id":1,"sql":"SELECT $1","params":[{"id":1}]}`,
 			http.StatusBadRequest,
 			"查询参数仅支持字符串、数字、布尔值和 null",
 		},

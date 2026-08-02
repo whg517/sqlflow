@@ -15,6 +15,8 @@ import (
 	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entmaskrule "github.com/whg517/sqlflow/internal/db/ent/maskrule"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
@@ -72,6 +74,7 @@ type QueryResult struct {
 // Service handles SQL query execution logic.
 type Service struct {
 	database      *db.DB
+	client        *ent.Client
 	dsSvc         *datasource.Service
 	historySvc    *HistoryService
 	permSvc       *security.Service
@@ -84,6 +87,7 @@ type Service struct {
 func NewService(database *db.DB, dsSvc *datasource.Service, historySvc *HistoryService, permSvc *security.Service, auditSvc auditlog.Writer, encryptionKey string, poolMgr *driver.PoolManager) *Service {
 	return &Service{
 		database:      database,
+		client:        database.Client(),
 		dsSvc:         dsSvc,
 		historySvc:    historySvc,
 		permSvc:       permSvc,
@@ -249,13 +253,8 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 		return nil, err
 	}
 
-	// Aggregation payloads are driver-native and arbitrarily nested, so the
-	// row-oriented masker cannot reach inside them. Returning one unmasked
-	// would turn an aggregation into a way to read protected fields, so refuse
-	// it instead of shipping a result the masking rules never inspected.
-	if result.Shape == driver.ShapeAggregation &&
-		s.maskingApplies(ctx, userID, role, datasourceID, database, parseResult.Targets) {
-		return nil, ErrAggregationMaskingUnsupported
+	if err := s.refuseUnmaskableShape(ctx, result.Shape, userID, role, datasourceID, database, parseResult.Targets); err != nil {
+		return nil, err
 	}
 
 	// Apply desensitization
@@ -360,6 +359,28 @@ func (s *Service) applyDesensitizationForActor(ctx context.Context, result *Quer
 	return true, allMaskedFields
 }
 
+// refuseUnmaskableShape rejects a result whose shape the masker cannot process
+// when masking rules apply to the actor.
+//
+// Aggregation payloads are driver-native and arbitrarily nested, so the
+// row-oriented masker cannot reach inside them — applyDesensitizationForActor
+// only ever walks result.Rows. Returning one unmasked turns an aggregation into
+// a way to read protected fields through bucket keys and aggregate values.
+//
+// Every entrance that returns query results must call this. It is one function
+// rather than a condition repeated per caller because the export path was
+// missing that condition: a user refused a protected field at the query
+// entrance could obtain it by exporting an aggregation over the same target.
+func (s *Service) refuseUnmaskableShape(ctx context.Context, shape driver.ResultShape, userID int64, role string, datasourceID int64, database string, tables []string) error {
+	if shape != driver.ShapeAggregation {
+		return nil
+	}
+	if s.maskingApplies(ctx, userID, role, datasourceID, database, tables) {
+		return ErrAggregationMaskingUnsupported
+	}
+	return nil
+}
+
 // maskingApplies reports whether masking would alter a result for this actor:
 // the actor lacks an unmask grant and at least one rule matches the targets.
 //
@@ -399,50 +420,43 @@ func (s *Service) maskingApplies(ctx context.Context, userID int64, role string,
 
 // loadMaskRules loads mask rules from the database for the given context.
 func (s *Service) loadMaskRules(ctx context.Context, datasourceID int64, database string, tables []string) []mask.Rule {
-	query := `SELECT datasource_id, database, table_name, field, mask_type, custom_regex, custom_template
-			  FROM mask_rules WHERE datasource_id = ?`
-	args := []interface{}{datasourceID}
+	q := s.client.MaskRule.Query().Where(entmaskrule.DatasourceIDEQ(datasourceID))
 
+	// An empty database or table on a rule means "any": a rule scoped to the
+	// datasource applies wherever it is not overridden by a narrower one.
 	if database != "" {
-		query += ` AND (database = ? OR database = '')`
-		args = append(args, database)
+		q = q.Where(entmaskrule.Or(
+			entmaskrule.DatabaseEQ(database),
+			entmaskrule.DatabaseEQ(""),
+		))
 	}
-
 	if len(tables) > 0 {
-		placeholders := make([]string, len(tables))
-		for i, t := range tables {
-			placeholders[i] = "?"
-			args = append(args, t)
-		}
-		query += fmt.Sprintf(` AND (table_name IN (%s) OR table_name = '*')`, strings.Join(placeholders, ","))
+		q = q.Where(entmaskrule.Or(
+			entmaskrule.TableNameIn(tables...),
+			entmaskrule.TableNameEQ("*"),
+		))
 	}
 
-	rows, err := s.database.QueryContext(ctx, query, args...)
+	found, err := q.All(ctx)
 	if err != nil {
+		// Returning nil rules would silently unmask. Callers treat an empty rule
+		// set as "nothing to protect", so a failure here must be loud in the log
+		// even though it cannot be returned.
 		log.Printf("load mask rules: %v", err)
 		return nil
 	}
-	defer func() { _ = rows.Close() }()
 
-	var rules []mask.Rule
-	for rows.Next() {
-		var r mask.Rule
-		var dbName, tbl, field, maskType, customRegex, customTemplate string
-		var dsID int64
-		if err := rows.Scan(&dsID, &dbName, &tbl, &field, &maskType, &customRegex, &customTemplate); err != nil {
-			continue
-		}
-		r.DatasourceID = dsID
-		r.Database = dbName
-		r.TableName = tbl
-		r.Field = field
-		r.MaskType = mask.MaskType(maskType)
-		r.CustomRegex = customRegex
-		r.CustomTemplate = customTemplate
-		rules = append(rules, r)
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("iterate mask rules: %v", err)
+	rules := make([]mask.Rule, 0, len(found))
+	for _, r := range found {
+		rules = append(rules, mask.Rule{
+			DatasourceID:   r.DatasourceID,
+			Database:       r.Database,
+			TableName:      r.TableName,
+			Field:          r.Field,
+			MaskType:       mask.MaskType(r.MaskType),
+			CustomRegex:    r.CustomRegex,
+			CustomTemplate: r.CustomTemplate,
+		})
 	}
 	return rules
 }

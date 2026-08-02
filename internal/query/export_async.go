@@ -279,7 +279,7 @@ func (s *AsyncExportService) executeExport(task *model.ExportTask, username, rol
 // Uses raw SQL (no context) to match Phase 3 Scheduler pattern for background goroutines.
 func (s *AsyncExportService) updateTaskStatus(taskID int64, status model.ExportTaskStatus, errMsg string, totalRows, fileBytes int64, completedAt *time.Time) {
 	_, err := s.database.Exec(
-		`UPDATE export_tasks SET status = ?, error_msg = ?, total_rows = ?, file_bytes = ?, completed_at = ? WHERE id = ?`,
+		`UPDATE export_tasks SET status = $1, error_msg = $2, total_rows = $3, file_bytes = $4, completed_at = $5 WHERE id = $6`,
 		string(status), errMsg, totalRows, fileBytes, completedAt, taskID,
 	)
 	if err != nil {
@@ -301,7 +301,7 @@ func (s *AsyncExportService) updateTaskStatus(taskID int64, status model.ExportT
 // Uses raw SQL — same pattern as Phase 3 Scheduler.
 func (s *AsyncExportService) recoverPendingTasks() {
 	_, err := s.database.Exec(
-		`UPDATE export_tasks SET status = ?, error_msg = ? WHERE status IN (?, ?)`,
+		`UPDATE export_tasks SET status = $1, error_msg = $2 WHERE status IN ($3, $4)`,
 		string(model.ExportTaskStatusFailed), "服务器重启，任务中断", string(model.ExportTaskStatusPending), string(model.ExportTaskStatusProcessing),
 	)
 	if err != nil {
@@ -331,7 +331,7 @@ func (s *AsyncExportService) cleanupExpiredFiles() {
 
 	// Find expired completed tasks
 	rows, err := s.database.Query(
-		`SELECT id, file_path FROM export_tasks WHERE status = ? AND completed_at < ?`,
+		`SELECT id, file_path FROM export_tasks WHERE status = $1 AND completed_at < $2`,
 		string(model.ExportTaskStatusCompleted), cutoff,
 	)
 	if err != nil {
@@ -357,7 +357,7 @@ func (s *AsyncExportService) cleanupExpiredFiles() {
 	// Mark as failed (archived) to indicate file no longer available
 	for _, id := range taskIDs {
 		_, _ = s.database.Exec(
-			`UPDATE export_tasks SET status = ?, error_msg = ? WHERE id = ?`,
+			`UPDATE export_tasks SET status = $1, error_msg = $2 WHERE id = $3`,
 			string(model.ExportTaskStatusFailed), "导出文件已过期清理（24小时）", id,
 		)
 		s.tasks.Delete(id)

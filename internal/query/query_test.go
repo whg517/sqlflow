@@ -49,7 +49,7 @@ func seedCasbinRules(t *testing.T, testDB *sql.DB) {
 	}
 	for _, p := range policies {
 		_, err := testDB.Exec(
-			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES (?, ?, ?, ?, ?)`,
+			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES ($1, $2, $3, $4, $5)`,
 			p.ptype, p.v0, p.v1, p.v2, p.v3,
 		)
 		if err != nil {
@@ -108,7 +108,7 @@ func seedMaskRule(t *testing.T, testDB *sql.DB, dsID int64, database, tableName,
 	now := time.Now()
 	_, err := testDB.Exec(
 		`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type, custom_regex, custom_template, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, '', '', ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, '', '', $6, $7)`,
 		dsID, database, tableName, field, maskType, now, now,
 	)
 	if err != nil {
@@ -120,7 +120,7 @@ func seedMaskRule(t *testing.T, testDB *sql.DB, dsID int64, database, tableName,
 func seedPolicy(t *testing.T, testDB *sql.DB, permSvc *security.Service, sub, dom, obj, act string) {
 	t.Helper()
 	_, err := testDB.Exec(
-		`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES ('p', ?, ?, ?, ?)`,
+		`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES ('p', $1, $2, $3, $4)`,
 		sub, dom, obj, act,
 	)
 	if err != nil {
@@ -135,7 +135,7 @@ func seedPolicy(t *testing.T, testDB *sql.DB, permSvc *security.Service, sub, do
 func seedUser(t *testing.T, testDB *sql.DB, username, role string) int64 {
 	t.Helper()
 	result, err := testDB.Exec(
-		`INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)`,
+		`INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
 		username, "$2a$10$fakehash", role,
 	)
 	if err != nil {
@@ -604,7 +604,7 @@ func TestApplyDesensitization_MultipleMaskTypes(t *testing.T) {
 	for _, r := range rules {
 		_, err := testDB.Exec(
 			`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type, custom_regex, custom_template, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, '', '', ?, ?)`,
+			 VALUES ($1, $2, $3, $4, $5, '', '', $6, $7)`,
 			dsID, "testdb", r.table, r.field, r.maskType, now, now,
 		)
 		if err != nil {
@@ -666,7 +666,7 @@ func TestApplyDesensitization_WildcardTableRule(t *testing.T) {
 	now := time.Now()
 	_, err := testDB.Exec(
 		`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type, custom_regex, custom_template, created_at, updated_at)
-		 VALUES (?, ?, '*', 'secret_field', 'full', '', '', ?, ?)`,
+		 VALUES ($1, $2, '*', 'secret_field', 'full', '', '', $3, $4)`,
 		dsID, "testdb", now, now,
 	)
 	if err != nil {
@@ -895,7 +895,7 @@ func TestExecuteQuery_AuditOnFailure(t *testing.T) {
 
 	var count int
 	err = testDB.QueryRow(
-		`SELECT COUNT(*) FROM audit_logs WHERE user_id = ? AND action = 'query_failed'`,
+		`SELECT COUNT(*) FROM audit_logs WHERE user_id = $1 AND action = 'query_failed'`,
 		userID,
 	).Scan(&count)
 	if err != nil {

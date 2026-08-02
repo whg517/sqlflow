@@ -264,7 +264,7 @@ func TestExportAsyncService_CleanupExpiredFiles(t *testing.T) {
 
 	// Manually set completed_at to the past to simulate expiry
 	past := time.Now().Add(-ExportFileTTL - 1*time.Hour)
-	_, _ = db.Exec(`UPDATE export_tasks SET completed_at = ? WHERE id = ?`, past, task.ID)
+	_, _ = db.Exec(`UPDATE export_tasks SET completed_at = $1 WHERE id = $2`, past, task.ID)
 
 	// Run cleanup
 	asyncSvc.cleanupExpiredFiles()
