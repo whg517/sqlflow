@@ -175,7 +175,7 @@ func (a *sqliteAdapter) SavePolicy(model casbinModel.Model) error {
 	for ptype, ast := range model["p"] {
 		for _, rule := range ast.Policy {
 			_, err := tx.ExecContext(context.Background(),
-				`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 				ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
 			)
 			if err != nil {
@@ -190,7 +190,7 @@ func (a *sqliteAdapter) SavePolicy(model casbinModel.Model) error {
 	for ptype, ast := range model["g"] {
 		for _, rule := range ast.Policy {
 			_, err := tx.ExecContext(context.Background(),
-				`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 				ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
 			)
 			if err != nil {
@@ -207,7 +207,7 @@ func (a *sqliteAdapter) SavePolicy(model casbinModel.Model) error {
 
 func (a *sqliteAdapter) AddPolicy(sec string, ptype string, rule []string) error {
 	_, err := a.db.ExecContext(context.Background(),
-		`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
 	)
 	return err
@@ -215,7 +215,7 @@ func (a *sqliteAdapter) AddPolicy(sec string, ptype string, rule []string) error
 
 func (a *sqliteAdapter) RemovePolicy(sec string, ptype string, rule []string) error {
 	_, err := a.db.ExecContext(context.Background(),
-		`DELETE FROM casbin_rule WHERE ptype=? AND v0=? AND v1=? AND v2=? AND v3=? AND v4=? AND v5=?`,
+		`DELETE FROM casbin_rule WHERE ptype=$1 AND v0=$2 AND v1=$3 AND v2=$4 AND v3=$5 AND v4=$6 AND v5=$7`,
 		ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
 	)
 	return err
@@ -372,7 +372,7 @@ func (s *Service) EnforceActor(ctx context.Context, userID int64, role, dom, obj
 	var expiresAt time.Time
 	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT expires_at FROM temp_policies
-		 WHERE sub = ? AND dom = ? AND obj = ? AND act = ?`,
+		 WHERE sub = $1 AND dom = $2 AND obj = $3 AND act = $4`,
 		userSub, dom, obj, act,
 	).Scan(&expiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -431,7 +431,7 @@ func (s *Service) AddPolicy(sub, dom, obj, act string) error {
 func (s *Service) RemovePolicy(ctx context.Context, id int64) error {
 	var r CasbinRule
 	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT id, ptype, v0, v1, v2, v3, v4, v5 FROM casbin_rule WHERE id = ?`, id,
+		`SELECT id, ptype, v0, v1, v2, v3, v4, v5 FROM casbin_rule WHERE id = $1`, id,
 	).Scan(&r.ID, &r.PType, &r.V0, &r.V1, &r.V2, &r.V3, &r.V4, &r.V5)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -467,7 +467,7 @@ func (s *Service) GetPolicies(ctx context.Context, page, pageSize int64, ptype, 
 	}
 
 	querySQL := fmt.Sprintf(
-		`SELECT id, ptype, v0, v1, v2, v3 FROM casbin_rule %s ORDER BY id LIMIT ? OFFSET ?`,
+		`SELECT id, ptype, v0, v1, v2, v3 FROM casbin_rule %s ORDER BY id LIMIT $1 OFFSET $2`,
 		whereClause,
 	)
 	queryArgs := sqlutil.AppendLimitArgs(args, p)
@@ -492,7 +492,7 @@ func (s *Service) GetPolicies(ctx context.Context, page, pageSize int64, ptype, 
 // RAW_SQL: casbin_rule table — no ent schema.
 func (s *Service) GetPoliciesForRole(ctx context.Context, role string) ([]Policy, error) {
 	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT id, ptype, v0, v1, v2, v3 FROM casbin_rule WHERE ptype = 'p' AND v0 = ? ORDER BY id`, role,
+		`SELECT id, ptype, v0, v1, v2, v3 FROM casbin_rule WHERE ptype = 'p' AND v0 = $1 ORDER BY id`, role,
 	)
 	if err != nil {
 		return nil, err
@@ -558,7 +558,7 @@ func (s *Service) GetRole(ctx context.Context, name string) (*Role, error) {
 		       r.created_at, r.updated_at,
 		       (SELECT COUNT(*) FROM users u WHERE u.role = r.name),
 		       (SELECT COUNT(*) FROM casbin_rule c WHERE c.ptype = 'p' AND c.v0 = r.name)
-		FROM roles r WHERE r.name = ?`, name).
+		FROM roles r WHERE r.name = $1`, name).
 		Scan(
 			&role.ID, &role.Name, &role.DisplayName, &role.Description,
 			&role.IsBuiltin, &role.Status, &role.CreatedAt, &role.UpdatedAt,
@@ -616,7 +616,7 @@ func (s *Service) SetPlatformPermissions(ctx context.Context, roleName string, p
 	}
 	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM casbin_rule WHERE ptype = 'p' AND v0 = ? AND v1 = 'system'`,
+		`DELETE FROM casbin_rule WHERE ptype = 'p' AND v0 = $1 AND v1 = 'system'`,
 		roleName,
 	); err != nil {
 		return err
@@ -627,7 +627,7 @@ func (s *Service) SetPlatformPermissions(ctx context.Context, roleName string, p
 		}
 		definition := platformPermissions[key]
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES ('p', ?, 'system', ?, ?)`,
+			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES ('p', $1, 'system', $2, $3)`,
 			roleName, definition[0], definition[1],
 		); err != nil {
 			return err
@@ -642,7 +642,7 @@ func (s *Service) SetPlatformPermissions(ctx context.Context, roleName string, p
 // IsRoleActive checks whether a role exists and can be assigned or authenticated.
 func (s *Service) IsRoleActive(ctx context.Context, name string) (bool, error) {
 	var status string
-	err := s.database.DB.QueryRowContext(ctx, `SELECT status FROM roles WHERE name = ?`, name).Scan(&status)
+	err := s.database.DB.QueryRowContext(ctx, `SELECT status FROM roles WHERE name = $1`, name).Scan(&status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -664,7 +664,7 @@ func (s *Service) CreateRole(ctx context.Context, name, displayName, description
 	}
 	_, err := s.database.DB.ExecContext(ctx, `
 		INSERT INTO roles (name, display_name, description, is_builtin, status)
-		VALUES (?, ?, ?, 0, 'active')`, name, displayName, strings.TrimSpace(description))
+		VALUES ($1, $2, $3, 0, 'active')`, name, displayName, strings.TrimSpace(description))
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {
 			return nil, ErrRoleExists
@@ -695,8 +695,8 @@ func (s *Service) UpdateRole(ctx context.Context, name, displayName, description
 	}
 	result, err := s.database.DB.ExecContext(ctx, `
 		UPDATE roles
-		SET display_name = ?, description = ?, status = ?, updated_at = datetime('now')
-		WHERE name = ?`, displayName, strings.TrimSpace(description), status, name)
+		SET display_name = $1, description = $2, status = $3, updated_at = datetime('now')
+		WHERE name = $4`, displayName, strings.TrimSpace(description), status, name)
 	if err != nil {
 		return nil, fmt.Errorf("update role: %w", err)
 	}
@@ -725,10 +725,10 @@ func (s *Service) DeleteRole(ctx context.Context, name string) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM casbin_rule WHERE v0 = ? AND ptype IN ('p', 'g')`, name); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM casbin_rule WHERE v0 = $1 AND ptype IN ('p', 'g')`, name); err != nil {
 		return fmt.Errorf("delete role policies: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM roles WHERE name = ?`, name); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM roles WHERE name = $1`, name); err != nil {
 		return fmt.Errorf("delete role: %w", err)
 	}
 	if err := tx.Commit(); err != nil {

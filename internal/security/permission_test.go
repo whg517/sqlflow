@@ -42,7 +42,7 @@ func seedTestPolicies(t *testing.T, testDB *sql.DB) {
 	ctx := context.Background()
 	for _, p := range seedPolicies {
 		_, err := testDB.ExecContext(ctx,
-			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES ('p', ?, ?, ?, ?, '', '')`,
+			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES ('p', $1, $2, $3, $4, '', '')`,
 			p.sub, p.dom, p.obj, p.act,
 		)
 		if err != nil {
@@ -54,7 +54,7 @@ func seedTestPolicies(t *testing.T, testDB *sql.DB) {
 	// We add g, role, role, domain so that enforce(sub=role, dom=domain) matches.
 	for _, role := range seedRoles {
 		_, err := testDB.ExecContext(ctx,
-			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES ('g', ?, ?, ?, '', '', '')`,
+			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES ('g', $1, $2, $3, '', '', '')`,
 			role, role, "*",
 		)
 		if err != nil {

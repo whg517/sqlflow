@@ -14,15 +14,7 @@ import (
 func setupDashboardTest(t *testing.T) (*echo.Echo, *DashboardHandler, *db.DB) {
 	t.Helper()
 
-	database, err := db.Open(t.TempDir() + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	svc := NewDashboardService(database)
 	handler := NewDashboardHandler(svc)

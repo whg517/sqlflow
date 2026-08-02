@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
@@ -20,15 +19,7 @@ import (
 func setupPermissionTest(t *testing.T) (*echo.Echo, *Service, *Handler) {
 	t.Helper()
 
-	database, err := db.Open(t.TempDir() + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	// Seed initial policies directly into casbin_rule so that
 	// PermissionService.seedsIfEmpty sees count > 0 and skips file read.
@@ -44,7 +35,7 @@ func setupPermissionTest(t *testing.T) (*echo.Echo, *Service, *Handler) {
 	}
 	for _, sp := range seedPolicies {
 		_, err := database.Exec(
-			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES (?, ?, ?, ?, ?)`,
+			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES ($1, $2, $3, $4, $5)`,
 			sp.ptype, sp.v0, sp.v1, sp.v2, sp.v3,
 		)
 		if err != nil {
@@ -880,17 +871,11 @@ func TestPermissionHandler_CRUDLifecycle(t *testing.T) {
 // ─── SyncPolicies Error Path ────────────────────────────────────────────────
 
 func TestPermissionHandler_SyncPolicies_LoadPolicyError(t *testing.T) {
-	database, err := db.Open(t.TempDir() + "/test_sync_err.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	// Seed a policy so the service initializes correctly
 	_, _ = database.Exec(
-		`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES (?, ?, ?, ?, ?)`,
+		`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES ($1, $2, $3, $4, $5)`,
 		"p", "admin", "*", "*", "*",
 	)
 

@@ -12,7 +12,6 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/connpool"
-	"github.com/whg517/sqlflow/internal/db"
 	_ "github.com/whg517/sqlflow/internal/driver/all"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/testutil"
@@ -24,15 +23,7 @@ import (
 func setupDatasourceTest(t *testing.T) (*echo.Echo, *Service, *Handler) {
 	t.Helper()
 
-	database, err := db.Open(t.TempDir() + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	encKey := "0123456789abcdef0123456789abcdef" // 32 bytes for AES-256
 	connMgr := connpool.NewManager()

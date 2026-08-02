@@ -21,15 +21,7 @@ import (
 func setupMaskRuleHandlerTest(t *testing.T) (*echo.Echo, *MaskHandler, *db.DB) {
 	t.Helper()
 
-	database, err := db.Open(t.TempDir() + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	auditSvc := audit.NewService(database, 10, 5*time.Second)
 	t.Cleanup(func() { auditSvc.Close() })
@@ -53,7 +45,7 @@ func seedMaskRuleDatasource(t *testing.T, database *db.DB, name string) int64 {
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
 	res, err := database.ExecContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES (?, 'mysql', 'localhost', 3306, 'root', '', 'active')`,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active')`,
 		name,
 	)
 	if err != nil {
@@ -68,7 +60,7 @@ func seedMaskRule(t *testing.T, database *db.DB, dsID int64, db_, table, field, 
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
 	res, err := database.ExecContext(ctx,
-		`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type, custom_regex, custom_template) VALUES (?, ?, ?, ?, ?, '', '')`,
+		`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type, custom_regex, custom_template) VALUES ($1, $2, $3, $4, $5, '', '')`,
 		dsID, db_, table, field, maskType,
 	)
 	if err != nil {
@@ -83,7 +75,7 @@ func seedSensitiveTable(t *testing.T, database *db.DB, dsID int64, db_, table, l
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
 	res, err := database.ExecContext(ctx,
-		`INSERT INTO sensitive_tables (datasource_id, database, table_name, sensitivity_level) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO sensitive_tables (datasource_id, database, table_name, sensitivity_level) VALUES ($1, $2, $3, $4)`,
 		dsID, db_, table, level,
 	)
 	if err != nil {
@@ -1140,13 +1132,7 @@ func TestMaskRuleHandler_DeleteSensitiveTable_InvalidID(t *testing.T) {
 // ─── DeleteMaskRule Error Path ────────────────────────────────────────────────
 
 func TestMaskRuleHandler_DeleteMaskRule_DBError(t *testing.T) {
-	database, err := db.Open(t.TempDir() + "/test_del_rule_err.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	auditSvc := audit.NewService(database, 10, 5*time.Second)
 	maskRuleSvc := NewMaskService(database, nil, auditSvc)
@@ -1182,13 +1168,7 @@ func TestMaskRuleHandler_DeleteMaskRule_DBError(t *testing.T) {
 // ─── DeleteSensitiveTable Error Path ─────────────────────────────────────────
 
 func TestMaskRuleHandler_DeleteSensitiveTable_DBError(t *testing.T) {
-	database, err := db.Open(t.TempDir() + "/test_del_st_err.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	auditSvc := audit.NewService(database, 10, 5*time.Second)
 	maskRuleSvc := NewMaskService(database, nil, auditSvc)

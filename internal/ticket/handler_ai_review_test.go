@@ -17,6 +17,7 @@ import (
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/httpx"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -27,15 +28,7 @@ import (
 func setupAIReviewTest(t *testing.T) (*echo.Echo, *AIReviewService, *datasource.Service, *AIReviewHandler, *db.DB) {
 	t.Helper()
 
-	database, err := db.Open(t.TempDir() + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	encKey := "0123456789abcdef0123456789abcdef"
 	connMgr := connpool.NewManager()
@@ -51,15 +44,7 @@ func setupAIReviewTest(t *testing.T) (*echo.Echo, *AIReviewService, *datasource.
 func setupAIReviewTestWithMockLLM(t *testing.T, handler http.HandlerFunc) (*echo.Echo, *AIReviewService, *datasource.Service, *AIReviewHandler, *db.DB) {
 	t.Helper()
 
-	database, err := db.Open(t.TempDir() + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	encKey := "0123456789abcdef0123456789abcdef"
 	connMgr := connpool.NewManager()
@@ -609,11 +594,7 @@ func TestAIReviewHandler_ReviewStream_LLMNetworkError(t *testing.T) {
 	server := httptest.NewServer(http.NotFoundHandler())
 	server.Close()
 
-	database, err := db.Open(t.TempDir() + "/test_net_err.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
+	database := testutil.NewDB(t)
 	if err := database.Migrate(); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -633,7 +614,7 @@ func TestAIReviewHandler_ReviewStream_LLMNetworkError(t *testing.T) {
 	// Override username for this test
 	c.Set(httpx.ContextKeyUsername, "testuser2")
 
-	err = h.ReviewStream(c)
+	err := h.ReviewStream(c)
 	if err != nil {
 		t.Fatalf("ReviewStream returned error: %v", err)
 	}

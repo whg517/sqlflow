@@ -18,15 +18,7 @@ import (
 func setupCommentHandlerTest(t *testing.T) (*echo.Echo, *CommentService, *CommentHandler, int64) {
 	t.Helper()
 
-	database, err := db.Open(t.TempDir() + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	// Insert a test user
 	userRes, err := database.Exec("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", "commenter", "hash", "developer")

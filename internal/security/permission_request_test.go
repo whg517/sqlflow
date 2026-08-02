@@ -14,12 +14,12 @@ import (
 
 func createPermTestUser(t *testing.T, db *sql.DB, username string) int64 {
 	t.Helper()
-	_, err := db.Exec(`INSERT INTO users (username, password_hash, role) VALUES (?, 'hashed', 'admin')`, username)
+	_, err := db.Exec(`INSERT INTO users (username, password_hash, role) VALUES ($1, 'hashed', 'admin')`, username)
 	if err != nil {
 		t.Fatalf("create test user: %v", err)
 	}
 	var id int64
-	err = db.QueryRow(`SELECT id FROM users WHERE username = ?`, username).Scan(&id)
+	err = db.QueryRow(`SELECT id FROM users WHERE username = $1`, username).Scan(&id)
 	if err != nil {
 		t.Fatalf("get test user id: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestPermReqService_ExpireOverdue(t *testing.T) {
 
 	// Force req1 into the past (expired), leave req2 still valid.
 	if _, err := db.ExecContext(ctx,
-		`UPDATE permission_requests SET expires_at = datetime('now','-1 hour') WHERE id = ?`,
+		`UPDATE permission_requests SET expires_at = datetime('now','-1 hour') WHERE id = $1`,
 		req1.ID); err != nil {
 		t.Fatalf("force expiry: %v", err)
 	}

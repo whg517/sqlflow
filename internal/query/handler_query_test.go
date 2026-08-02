@@ -29,15 +29,7 @@ import (
 func setupQueryTest(t *testing.T) (*echo.Echo, *Service, *HistoryService, *datasource.Service, *Handler, *db.DB) {
 	t.Helper()
 
-	database, err := db.Open(t.TempDir() + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	encKey := "0123456789abcdef0123456789abcdef"
 	connMgr := connpool.NewManager()
@@ -521,11 +513,7 @@ func TestQueryHandler_ListHistory_UserIsolation(t *testing.T) {
 
 func TestQueryHandler_DeleteHistory_Success(t *testing.T) {
 	// Separate DB for this test to avoid interference
-	database, err := db.Open(t.TempDir() + "/test2.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
+	database := testutil.NewDB(t)
 	if err := database.Migrate(); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -611,11 +599,7 @@ func TestQueryHandler_DeleteHistory_NotFound(t *testing.T) {
 }
 
 func TestQueryHandler_DeleteHistory_WrongUser(t *testing.T) {
-	database, err := db.Open(t.TempDir() + "/test3.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
+	database := testutil.NewDB(t)
 	if err := database.Migrate(); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -664,11 +648,7 @@ func TestQueryHandler_DeleteHistory_WrongUser(t *testing.T) {
 // ─── ClearHistory Tests ──────────────────────────────────────────────────────
 
 func TestQueryHandler_ClearHistory_Success(t *testing.T) {
-	database, err := db.Open(t.TempDir() + "/test4.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
+	database := testutil.NewDB(t)
 	if err := database.Migrate(); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -1069,13 +1049,7 @@ func TestWriteExportJSON(t *testing.T) {
 // ─── ClearHistory Error Path ─────────────────────────────────────────────────
 
 func TestQueryHandler_ClearHistory_Error(t *testing.T) {
-	database, err := db.Open(t.TempDir() + "/test_clear_err.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	encKey := "0123456789abcdef0123456789abcdef"
 	connMgr := connpool.NewManager()
