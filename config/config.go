@@ -50,8 +50,17 @@ type AdminConfig struct {
 	Password string `mapstructure:"password"`
 }
 
+// DBConfig configures the platform metadata store (PostgreSQL, see ADR-0009).
 type DBConfig struct {
-	Path string `mapstructure:"path"`
+	// DSN is a libpq-style connection string, e.g.
+	// postgres://user:pass@host:5432/sqlflow?sslmode=disable
+	DSN string `mapstructure:"dsn"`
+
+	// DataDir holds files the platform writes to disk — async export artifacts
+	// and backup dumps. It used to be derived from the SQLite file's path, which
+	// conflated "where the database lives" with "where our files go"; those were
+	// never the same thing, and with PostgreSQL they cannot be.
+	DataDir string `mapstructure:"data_dir"`
 }
 
 // AIConfig holds AI review service configuration.
@@ -125,7 +134,8 @@ var envBindings = map[string]string{
 	"admin.username": "SQLFLOW_ADMIN_USERNAME",
 	"admin.password": "SQLFLOW_ADMIN_PASSWORD",
 	// DB
-	"db.path": "SQLFLOW_DB_PATH",
+	"db.dsn":      "SQLFLOW_DB_DSN",
+	"db.data_dir": "SQLFLOW_DB_DATA_DIR",
 	// AI
 	"ai.provider": "SQLFLOW_AI_PROVIDER",
 	"ai.model":    "SQLFLOW_AI_MODEL",
@@ -202,8 +212,11 @@ func Load(configPath string) (*Config, error) {
 	if cfg.JWT.RefreshExpiry == 0 {
 		cfg.JWT.RefreshExpiry = 7 * 24 * time.Hour
 	}
-	if cfg.DB.Path == "" {
-		cfg.DB.Path = "./data/sqlflow.db"
+	if cfg.DB.DSN == "" {
+		cfg.DB.DSN = "postgres://sqlflow:sqlflow@localhost:5432/sqlflow?sslmode=disable"
+	}
+	if cfg.DB.DataDir == "" {
+		cfg.DB.DataDir = "./data"
 	}
 	if cfg.QueryHistoryMax == 0 {
 		cfg.QueryHistoryMax = 200

@@ -31,7 +31,7 @@ func main() {
 	}
 
 	// Initialize database
-	database, err := db.Open(cfg.DB.Path)
+	database, err := db.Open(cfg.DB.DSN)
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
 	}

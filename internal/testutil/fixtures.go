@@ -33,15 +33,12 @@ func ContextWithTimeout(t *testing.T) context.Context {
 // Tests that need a real password hash or a token must use the auth service.
 func CreateUser(t *testing.T, conn *sql.DB, username string) int64 {
 	t.Helper()
-	if _, err := conn.Exec(
-		`INSERT INTO users (username, password_hash, role) VALUES (?, 'hashed', 'developer')`,
-		username,
-	); err != nil {
-		t.Fatalf("testutil: create user %q: %v", username, err)
-	}
 	var id int64
-	if err := conn.QueryRow(`SELECT id FROM users WHERE username = ?`, username).Scan(&id); err != nil {
-		t.Fatalf("testutil: read id of user %q: %v", username, err)
+	if err := conn.QueryRow(
+		`INSERT INTO users (username, password_hash, role) VALUES ($1, 'hashed', 'developer') RETURNING id`,
+		username,
+	).Scan(&id); err != nil {
+		t.Fatalf("testutil: create user %q: %v", username, err)
 	}
 	return id
 }
@@ -80,15 +77,16 @@ func DecodeJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]interfa
 // behavior need to pick one.
 func SeedUser(t *testing.T, conn *sql.DB, username, role string) int64 {
 	t.Helper()
-	result, err := conn.Exec(
+	// RETURNING rather than LastInsertId: PostgreSQL's driver does not implement
+	// the latter, since the value only exists for the sequence the row used.
+	var id int64
+	if err := conn.QueryRow(
 		`INSERT INTO users (username, password_hash, role, created_at, updated_at)
-		 VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
+		 VALUES ($1, $2, $3, now(), now()) RETURNING id`,
 		username, "$2a$10$testhash", role,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("testutil: seed user %s: %v", username, err)
 	}
-	id, _ := result.LastInsertId()
 	return id
 }
 
@@ -99,14 +97,13 @@ func SeedUser(t *testing.T, conn *sql.DB, username, role string) int64 {
 // that actually connect.
 func SeedDatasource(t *testing.T, conn *sql.DB, name string) int64 {
 	t.Helper()
-	result, err := conn.Exec(
+	var id int64
+	if err := conn.QueryRow(
 		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at)
-		 VALUES (?, 'mysql', 'localhost', 3306, 'root', '', 'active', datetime('now'), datetime('now'))`,
+		 VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active', now(), now()) RETURNING id`,
 		name,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("testutil: seed datasource %s: %v", name, err)
 	}
-	id, _ := result.LastInsertId()
 	return id
 }

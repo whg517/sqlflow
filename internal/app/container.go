@@ -13,7 +13,6 @@ package app
 import (
 	"context"
 	"log"
-	"path/filepath"
 	"time"
 
 	"github.com/whg517/sqlflow/config"
@@ -119,16 +118,10 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	historySvc := query.NewHistoryService(database)
 	auditSvc := audit.NewService(database, 0, 0)
 	exportSvc := query.NewExportService(database, auditSvc)
-	exportAsyncSvc := query.NewAsyncExportService(database, exportSvc, auditSvc, cfg.DB.Path)
+	exportAsyncSvc := query.NewAsyncExportService(database, exportSvc, auditSvc, cfg.DB.DataDir)
 
 	dsSvc := datasource.NewService(database, cfg.EncryptionKey, connMgr, poolMgr)
-	internalDBPath, err := filepath.Abs(cfg.DB.Path)
-	if err != nil {
-		connMgr.Close()
-		poolMgr.Close()
-		return nil, err
-	}
-	if _, err := dsSvc.EnsureInternalDataSource(context.Background(), internalDBPath); err != nil {
+	if _, err := dsSvc.EnsureInternalDataSource(context.Background(), cfg.DB.DSN); err != nil {
 		connMgr.Close()
 		poolMgr.Close()
 		return nil, err
@@ -157,7 +150,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	dashboardSvc := ops.NewDashboardService(database)
 
 	// Backup（需 Start）
-	backupSvc := ops.NewBackupService(database, cfg.DB.Path, cfg.Backup)
+	backupSvc := ops.NewBackupService(database, cfg.DB.DataDir, cfg.Backup)
 
 	// AuditReport
 	reportSvc := audit.NewReportService(database)

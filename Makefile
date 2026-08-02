@@ -72,6 +72,21 @@ go-vet: ## Run Go vet (superseded by golangci-lint, kept for compat)
 arch: ## Check package layering (also runs as part of `make test`)
 	go test ./internal/arch/ -count=1
 
+##@ Database
+
+PG_CONTAINER := sqlflow-pg
+PG_PORT      := 55433
+
+dev-db: ## Start the PostgreSQL container used by dev and tests
+	@docker start $(PG_CONTAINER) 2>/dev/null || \
+		docker run -d --name $(PG_CONTAINER) \
+			-e POSTGRES_USER=sqlflow -e POSTGRES_PASSWORD=sqlflow -e POSTGRES_DB=sqlflow \
+			-p $(PG_PORT):5432 postgres:17-alpine
+	@until docker exec $(PG_CONTAINER) pg_isready -U sqlflow >/dev/null 2>&1; do sleep 1; done
+	@echo "PostgreSQL ready on localhost:$(PG_PORT)"
+
+dev-db-stop: ## Stop the PostgreSQL container
+	@docker stop $(PG_CONTAINER) >/dev/null 2>&1 || true
 
 web-lint: ## Run ESLint
 	cd web && npm run lint

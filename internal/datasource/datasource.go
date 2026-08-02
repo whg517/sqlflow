@@ -180,25 +180,42 @@ func (s *Service) CreateDataSource(ctx context.Context, ds *model.DataSource) er
 	return nil
 }
 
-// EnsureInternalDataSource registers SQLFlow's own SQLite database as a
-// read-only datasource. The operation is idempotent across restarts.
-func (s *Service) EnsureInternalDataSource(ctx context.Context, databasePath string) (*model.DataSource, error) {
+// internalDatasourceType is the driver the platform's own store speaks.
+//
+// It follows the platform database, not the other way round: since ADR-0009 the
+// platform stores its metadata in PostgreSQL, so browsing that metadata is a
+// PostgreSQL connection. Note this is datasource *configuration* — the fact that
+// its value happens to match the platform's storage choice is a consequence, not
+// a coupling between the two modules.
+const internalDatasourceType = "postgresql"
+
+// EnsureInternalDataSource registers SQLFlow's own database as a read-only
+// datasource, so operators can query platform metadata through the workbench.
+//
+// dsn is the platform's own connection string. The operation is idempotent
+// across restarts, and re-points the datasource when the DSN changes.
+func (s *Service) EnsureInternalDataSource(ctx context.Context, dsn string) (*model.DataSource, error) {
 	const name = "SQLFlow 元数据库"
+
+	parsed, err := parseInternalDSN(dsn)
+	if err != nil {
+		return nil, err
+	}
+
 	existing, err := s.client.DataSource.Query().
 		Where(datasource.NameEQ(name)).
 		Only(ctx)
 	if err == nil {
-		if existing.Type != "sqlite" || existing.ExtraConfig != internalDatasourceExtraConfig {
+		if existing.Type != internalDatasourceType || existing.ExtraConfig != internalDatasourceExtraConfig {
 			return nil, fmt.Errorf("datasource name %q is already used by a non-system datasource", name)
 		}
-		if existing.Database != databasePath || existing.Status != "active" {
+		if existing.Database != parsed.Database || existing.Host != parsed.Host || existing.Port != parsed.Port || existing.Status != "active" {
 			existing, err = s.client.DataSource.UpdateOneID(existing.ID).
-				SetDatabase(databasePath).
-				SetHost("localhost").
-				SetPort(0).
+				SetDatabase(parsed.Database).
+				SetHost(parsed.Host).
+				SetPort(parsed.Port).
+				SetUsername(parsed.Username).
 				SetStatus("active").
-				SetMaxOpen(1).
-				SetMaxIdle(1).
 				Save(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("update internal datasource: %w", err)
@@ -214,20 +231,43 @@ func (s *Service) EnsureInternalDataSource(ctx context.Context, databasePath str
 		return nil, fmt.Errorf("query internal datasource: %w", err)
 	}
 
-	ds := &model.DataSource{
-		Name:        name,
-		Type:        "sqlite",
-		Host:        "localhost",
-		Database:    databasePath,
-		MaxOpen:     1,
-		MaxIdle:     1,
-		Status:      "active",
-		ExtraConfig: internalDatasourceExtraConfig,
-	}
-	if err := s.CreateDataSource(ctx, ds); err != nil {
+	if err := s.CreateDataSource(ctx, parsed); err != nil {
 		return nil, err
 	}
-	return ds, nil
+	return parsed, nil
+}
+
+// parseInternalDSN turns the platform's connection string into datasource
+// fields.
+//
+// CreateDataSource encrypts PasswordEncrypted on the way in, so the plaintext
+// password is handed over as-is here rather than being stored directly.
+func parseInternalDSN(dsn string) (*model.DataSource, error) {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse platform dsn: %w", err)
+	}
+	port := 5432
+	if p := u.Port(); p != "" {
+		if n, err := strconv.Atoi(p); err == nil {
+			port = n
+		}
+	}
+	password, _ := u.User.Password()
+	return &model.DataSource{
+		Name:              "SQLFlow 元数据库",
+		Type:              internalDatasourceType,
+		Host:              u.Hostname(),
+		Port:              port,
+		Username:          u.User.Username(),
+		PasswordEncrypted: password,
+		Database:          strings.TrimPrefix(u.Path, "/"),
+		SSLMode:           u.Query().Get("sslmode"),
+		MaxOpen:           2,
+		MaxIdle:           1,
+		Status:            "active",
+		ExtraConfig:       internalDatasourceExtraConfig,
+	}, nil
 }
 
 // ListDataSources returns all datasources without encrypted passwords.

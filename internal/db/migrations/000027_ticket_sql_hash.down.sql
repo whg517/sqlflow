@@ -1,2 +1,0 @@
--- SQLite doesn't support DROP COLUMN, so we leave sql_hash in place.
--- On databases that support it: ALTER TABLE tickets DROP COLUMN sql_hash;

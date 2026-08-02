@@ -159,8 +159,8 @@ encryption_key: "0123456789abcdef0123456789abcdef"
 		}
 	})
 	t.Run("default_db_path", func(t *testing.T) {
-		if cfg.DB.Path != "./data/sqlflow.db" {
-			t.Errorf("DB.Path = %q, want default ./data/sqlflow.db", cfg.DB.Path)
+		if cfg.DB.DSN != "postgres://sqlflow:sqlflow@localhost:5432/sqlflow?sslmode=disable" {
+			t.Errorf("DB.Path = %q, want default ./data/sqlflow.db", cfg.DB.DSN)
 		}
 	})
 	t.Run("default_jwt_expiry", func(t *testing.T) {
@@ -241,15 +241,28 @@ encryption_key: "0123456789abcdef0123456789abcdef"
 	}
 }
 
-func TestLoad_EnvOverride_DBPath(t *testing.T) {
-	t.Setenv("SQLFLOW_DB_PATH", "/tmp/envtest.db")
+func TestLoad_EnvOverride_DBDSN(t *testing.T) {
+	const want = "postgres://envuser:envpass@db.example.com:5432/envdb?sslmode=require"
+	t.Setenv("SQLFLOW_DB_DSN", want)
 	dir := writeTestConfig(t, minimalValidConfig)
 	cfg, err := Load(dir)
 	if err != nil {
 		t.Fatalf("Load() failed: %v", err)
 	}
-	if cfg.DB.Path != "/tmp/envtest.db" {
-		t.Errorf("DB.Path = %q, want /tmp/envtest.db (from env)", cfg.DB.Path)
+	if cfg.DB.DSN != want {
+		t.Errorf("DB.DSN = %q, want %q (from env)", cfg.DB.DSN, want)
+	}
+}
+
+func TestLoad_EnvOverride_DBDataDir(t *testing.T) {
+	t.Setenv("SQLFLOW_DB_DATA_DIR", "/tmp/envdata")
+	dir := writeTestConfig(t, minimalValidConfig)
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	if cfg.DB.DataDir != "/tmp/envdata" {
+		t.Errorf("DB.DataDir = %q, want /tmp/envdata (from env)", cfg.DB.DataDir)
 	}
 }
 

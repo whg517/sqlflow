@@ -1,1 +1,0 @@
-ALTER TABLE tickets ADD COLUMN sql_hash TEXT NOT NULL DEFAULT '';
