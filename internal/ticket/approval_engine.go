@@ -253,9 +253,42 @@ func (e *ApprovalEngine) ApplyPolicy(ctx context.Context, ticketID int64, policy
 			result.AutoReason = "策略自动审批"
 		}
 
-		// Write auto-approve record
+		sqlHash, err := e.pinnedSQLHash(ctx, ticketID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Move the ticket first, guarding on the state it is leaving.
+		//
+		// A bare UpdateOneID here would be a read-modify-write: two concurrent
+		// applications — a resubmission racing a retry, say — would both write
+		// an approval record and both claim to have approved. Invariant 2 exists
+		// because that shape once let four concurrent approvals through.
 		now := time.Now()
-		_, err := e.client.ApprovalRecord.Create().
+		moved, err := casTicketStatus(ctx, e.client.Ticket, ticketID,
+			model.TicketStatusSubmitted, model.TicketStatusApproved, now,
+			func(u *ent.TicketUpdate) *ent.TicketUpdate {
+				return u.SetPolicyID(policy.ID).
+					SetCurrentStage(0).
+					SetTotalStages(0).
+					SetAutoApproved(true).
+					SetAutoApproveReason(result.AutoReason).
+					SetSQLHash(sqlHash)
+			})
+		if err != nil {
+			return nil, fmt.Errorf("更新工单自动审批状态失败: %w", err)
+		}
+		if !moved {
+			// Someone else applied a policy to this ticket. Not an error, but
+			// this call decided nothing, so it must not leave a record saying it
+			// did.
+			return result, nil
+		}
+
+		// The record is written only by the caller that actually moved the
+		// ticket, so the count of approval records matches the number of
+		// decisions taken.
+		if _, err := e.client.ApprovalRecord.Create().
 			SetTicketID(ticketID).
 			SetPolicyID(policy.ID).
 			SetStage(0).
@@ -265,47 +298,31 @@ func (e *ApprovalEngine) ApplyPolicy(ctx context.Context, ticketID int64, policy
 			SetAutoApproved(true).
 			SetAutoReason(result.AutoReason).
 			SetCreatedAt(now).
-			Save(ctx)
-		if err != nil {
+			Save(ctx); err != nil {
 			return nil, fmt.Errorf("写入自动审批记录失败: %w", err)
 		}
 
-		sqlHash, err := e.pinnedSQLHash(ctx, ticketID)
-		if err != nil {
-			return nil, err
-		}
-
-		// Update ticket
-		_, err = e.client.Ticket.UpdateOneID(int(ticketID)).
-			SetPolicyID(policy.ID).
-			SetCurrentStage(0).
-			SetTotalStages(0).
-			SetAutoApproved(true).
-			SetAutoApproveReason(result.AutoReason).
-			SetStatus("APPROVED").
-			SetSQLHash(sqlHash).
-			SetUpdatedAt(now).
-			Save(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("更新工单自动审批状态失败: %w", err)
-		}
-
+		result.Applied = true
 		return result, nil
 	}
 
-	// Not auto-approved: set up multi-stage approval
+	// Not auto-approved: set up multi-stage approval, guarded the same way.
 	now := time.Now()
-	_, err := e.client.Ticket.UpdateOneID(int(ticketID)).
-		SetPolicyID(policy.ID).
-		SetCurrentStage(1).
-		SetTotalStages(len(chain)).
-		SetAutoApproved(false).
-		SetStatus("PENDING_APPROVAL").
-		SetUpdatedAt(now).
-		Save(ctx)
+	moved, err := casTicketStatus(ctx, e.client.Ticket, ticketID,
+		model.TicketStatusSubmitted, model.TicketStatusPendingApproval, now,
+		func(u *ent.TicketUpdate) *ent.TicketUpdate {
+			return u.SetPolicyID(policy.ID).
+				SetCurrentStage(1).
+				SetTotalStages(len(chain)).
+				SetAutoApproved(false)
+		})
 	if err != nil {
 		return nil, fmt.Errorf("更新工单审批阶段失败: %w", err)
 	}
+	if !moved {
+		return result, nil
+	}
+	result.Applied = true
 
 	// Notify approvers about pending approval
 	if e.notifySvc != nil {
@@ -324,6 +341,14 @@ type ApprovalApplyResult struct {
 	TotalStages  int    `json:"total_stages"`
 	AutoApproved bool   `json:"auto_approved"`
 	AutoReason   string `json:"auto_reason,omitempty"`
+
+	// Applied reports whether this call performed the transition.
+	//
+	// A policy application that finds the ticket already moved is not an error —
+	// a resubmission or a retry can legitimately race — but the caller must be
+	// able to tell the two apart, or a second caller would write a duplicate
+	// approval record for a decision it did not make.
+	Applied bool `json:"applied"`
 }
 
 // ProcessApproval handles an approval action at the current stage.
