@@ -44,7 +44,7 @@ func (ExportTask) Fields() []ent.Field {
 		field.String("error_msg").
 			Default(""),
 		field.Time("created_at").
-			Default(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			Default(timeNow).Annotations(entsql.DefaultExpr("now()")),
 		field.Time("completed_at").
 			Optional().
 			Nillable(),

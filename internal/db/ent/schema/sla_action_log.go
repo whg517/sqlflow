@@ -31,7 +31,7 @@ func (SLAActionLog) Fields() []ent.Field {
 		field.String("notified_user").
 			Default(""),
 		field.Time("created_at").
-			Default(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			Default(timeNow).Annotations(entsql.DefaultExpr("now()")),
 		field.Int64("sla_config_id").
 			Optional().
 			Nillable(),

@@ -50,7 +50,7 @@ func (AuditLog) Fields() []ent.Field {
 		field.Int64("ticket_id").
 			Default(0),
 		field.Time("created_at").
-			Default(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			Default(timeNow).Annotations(entsql.DefaultExpr("now()")),
 	}
 }
 

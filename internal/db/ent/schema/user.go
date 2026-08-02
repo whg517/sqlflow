@@ -46,10 +46,10 @@ func (User) Fields() []ent.Field {
 		field.String("oidc_provider").
 			Default(""),
 		field.Time("created_at").
-			Default(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			Default(timeNow).Annotations(entsql.DefaultExpr("now()")),
 		field.Time("updated_at").
 			Default(timeNow).
-			UpdateDefault(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			UpdateDefault(timeNow).Annotations(entsql.DefaultExpr("now()")),
 	}
 }
 

@@ -57,6 +57,18 @@ func (f AuditLogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuditLogMutation", m)
 }
 
+// The CasbinRuleFunc type is an adapter to allow the use of ordinary
+// function as CasbinRule mutator.
+type CasbinRuleFunc func(context.Context, *ent.CasbinRuleMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CasbinRuleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CasbinRuleMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CasbinRuleMutation", m)
+}
+
 // The CommentFunc type is an adapter to allow the use of ordinary
 // function as Comment mutator.
 type CommentFunc func(context.Context, *ent.CommentMutation) (ent.Value, error)
@@ -105,6 +117,30 @@ func (f ExportTaskFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, 
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExportTaskMutation", m)
 }
 
+// The FeishuDeadLetterFunc type is an adapter to allow the use of ordinary
+// function as FeishuDeadLetter mutator.
+type FeishuDeadLetterFunc func(context.Context, *ent.FeishuDeadLetterMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f FeishuDeadLetterFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.FeishuDeadLetterMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.FeishuDeadLetterMutation", m)
+}
+
+// The FeishuWebhookFunc type is an adapter to allow the use of ordinary
+// function as FeishuWebhook mutator.
+type FeishuWebhookFunc func(context.Context, *ent.FeishuWebhookMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f FeishuWebhookFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.FeishuWebhookMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.FeishuWebhookMutation", m)
+}
+
 // The GitLinkFunc type is an adapter to allow the use of ordinary
 // function as GitLink mutator.
 type GitLinkFunc func(context.Context, *ent.GitLinkMutation) (ent.Value, error)
@@ -127,6 +163,18 @@ func (f MaskRuleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MaskRuleMutation", m)
+}
+
+// The NotificationPreferenceFunc type is an adapter to allow the use of ordinary
+// function as NotificationPreference mutator.
+type NotificationPreferenceFunc func(context.Context, *ent.NotificationPreferenceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f NotificationPreferenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.NotificationPreferenceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.NotificationPreferenceMutation", m)
 }
 
 // The OIDCProviderFunc type is an adapter to allow the use of ordinary
@@ -175,6 +223,18 @@ func (f RefreshTokenFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.RefreshTokenMutation", m)
+}
+
+// The RoleFunc type is an adapter to allow the use of ordinary
+// function as Role mutator.
+type RoleFunc func(context.Context, *ent.RoleMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f RoleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.RoleMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.RoleMutation", m)
 }
 
 // The SLAActionLogFunc type is an adapter to allow the use of ordinary
@@ -261,6 +321,18 @@ func (f TicketFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TicketMutation", m)
 }
 
+// The TicketNotificationLogFunc type is an adapter to allow the use of ordinary
+// function as TicketNotificationLog mutator.
+type TicketNotificationLogFunc func(context.Context, *ent.TicketNotificationLogMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f TicketNotificationLogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.TicketNotificationLogMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TicketNotificationLogMutation", m)
+}
+
 // The TicketRevisionFunc type is an adapter to allow the use of ordinary
 // function as TicketRevision mutator.
 type TicketRevisionFunc func(context.Context, *ent.TicketRevisionMutation) (ent.Value, error)
@@ -295,6 +367,18 @@ func (f WebVitalFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WebVitalMutation", m)
+}
+
+// The WebhookSubscriptionFunc type is an adapter to allow the use of ordinary
+// function as WebhookSubscription mutator.
+type WebhookSubscriptionFunc func(context.Context, *ent.WebhookSubscriptionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f WebhookSubscriptionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.WebhookSubscriptionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WebhookSubscriptionMutation", m)
 }
 
 // Condition is a hook condition function.

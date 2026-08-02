@@ -18,16 +18,21 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent/approvalpolicy"
 	"github.com/whg517/sqlflow/internal/db/ent/approvalrecord"
 	"github.com/whg517/sqlflow/internal/db/ent/auditlog"
+	"github.com/whg517/sqlflow/internal/db/ent/casbinrule"
 	"github.com/whg517/sqlflow/internal/db/ent/comment"
 	"github.com/whg517/sqlflow/internal/db/ent/datasource"
 	"github.com/whg517/sqlflow/internal/db/ent/executionresult"
 	"github.com/whg517/sqlflow/internal/db/ent/exporttask"
+	"github.com/whg517/sqlflow/internal/db/ent/feishudeadletter"
+	"github.com/whg517/sqlflow/internal/db/ent/feishuwebhook"
 	"github.com/whg517/sqlflow/internal/db/ent/gitlink"
 	"github.com/whg517/sqlflow/internal/db/ent/maskrule"
+	"github.com/whg517/sqlflow/internal/db/ent/notificationpreference"
 	"github.com/whg517/sqlflow/internal/db/ent/oidcprovider"
 	"github.com/whg517/sqlflow/internal/db/ent/permissionrequest"
 	"github.com/whg517/sqlflow/internal/db/ent/queryhistory"
 	"github.com/whg517/sqlflow/internal/db/ent/refreshtoken"
+	"github.com/whg517/sqlflow/internal/db/ent/role"
 	"github.com/whg517/sqlflow/internal/db/ent/sensitivetable"
 	"github.com/whg517/sqlflow/internal/db/ent/sharedresult"
 	"github.com/whg517/sqlflow/internal/db/ent/slaactionlog"
@@ -35,8 +40,10 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent/sqltemplate"
 	"github.com/whg517/sqlflow/internal/db/ent/temppolicy"
 	"github.com/whg517/sqlflow/internal/db/ent/ticket"
+	"github.com/whg517/sqlflow/internal/db/ent/ticketnotificationlog"
 	"github.com/whg517/sqlflow/internal/db/ent/ticketrevision"
 	"github.com/whg517/sqlflow/internal/db/ent/user"
+	"github.com/whg517/sqlflow/internal/db/ent/webhooksubscription"
 	"github.com/whg517/sqlflow/internal/db/ent/webvital"
 )
 
@@ -53,6 +60,8 @@ type Client struct {
 	ApprovalRecord *ApprovalRecordClient
 	// AuditLog is the client for interacting with the AuditLog builders.
 	AuditLog *AuditLogClient
+	// CasbinRule is the client for interacting with the CasbinRule builders.
+	CasbinRule *CasbinRuleClient
 	// Comment is the client for interacting with the Comment builders.
 	Comment *CommentClient
 	// DataSource is the client for interacting with the DataSource builders.
@@ -61,10 +70,16 @@ type Client struct {
 	ExecutionResult *ExecutionResultClient
 	// ExportTask is the client for interacting with the ExportTask builders.
 	ExportTask *ExportTaskClient
+	// FeishuDeadLetter is the client for interacting with the FeishuDeadLetter builders.
+	FeishuDeadLetter *FeishuDeadLetterClient
+	// FeishuWebhook is the client for interacting with the FeishuWebhook builders.
+	FeishuWebhook *FeishuWebhookClient
 	// GitLink is the client for interacting with the GitLink builders.
 	GitLink *GitLinkClient
 	// MaskRule is the client for interacting with the MaskRule builders.
 	MaskRule *MaskRuleClient
+	// NotificationPreference is the client for interacting with the NotificationPreference builders.
+	NotificationPreference *NotificationPreferenceClient
 	// OIDCProvider is the client for interacting with the OIDCProvider builders.
 	OIDCProvider *OIDCProviderClient
 	// PermissionRequest is the client for interacting with the PermissionRequest builders.
@@ -73,6 +88,8 @@ type Client struct {
 	QueryHistory *QueryHistoryClient
 	// RefreshToken is the client for interacting with the RefreshToken builders.
 	RefreshToken *RefreshTokenClient
+	// Role is the client for interacting with the Role builders.
+	Role *RoleClient
 	// SLAActionLog is the client for interacting with the SLAActionLog builders.
 	SLAActionLog *SLAActionLogClient
 	// SLAConfig is the client for interacting with the SLAConfig builders.
@@ -87,12 +104,16 @@ type Client struct {
 	TempPolicy *TempPolicyClient
 	// Ticket is the client for interacting with the Ticket builders.
 	Ticket *TicketClient
+	// TicketNotificationLog is the client for interacting with the TicketNotificationLog builders.
+	TicketNotificationLog *TicketNotificationLogClient
 	// TicketRevision is the client for interacting with the TicketRevision builders.
 	TicketRevision *TicketRevisionClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 	// WebVital is the client for interacting with the WebVital builders.
 	WebVital *WebVitalClient
+	// WebhookSubscription is the client for interacting with the WebhookSubscription builders.
+	WebhookSubscription *WebhookSubscriptionClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -108,16 +129,21 @@ func (c *Client) init() {
 	c.ApprovalPolicy = NewApprovalPolicyClient(c.config)
 	c.ApprovalRecord = NewApprovalRecordClient(c.config)
 	c.AuditLog = NewAuditLogClient(c.config)
+	c.CasbinRule = NewCasbinRuleClient(c.config)
 	c.Comment = NewCommentClient(c.config)
 	c.DataSource = NewDataSourceClient(c.config)
 	c.ExecutionResult = NewExecutionResultClient(c.config)
 	c.ExportTask = NewExportTaskClient(c.config)
+	c.FeishuDeadLetter = NewFeishuDeadLetterClient(c.config)
+	c.FeishuWebhook = NewFeishuWebhookClient(c.config)
 	c.GitLink = NewGitLinkClient(c.config)
 	c.MaskRule = NewMaskRuleClient(c.config)
+	c.NotificationPreference = NewNotificationPreferenceClient(c.config)
 	c.OIDCProvider = NewOIDCProviderClient(c.config)
 	c.PermissionRequest = NewPermissionRequestClient(c.config)
 	c.QueryHistory = NewQueryHistoryClient(c.config)
 	c.RefreshToken = NewRefreshTokenClient(c.config)
+	c.Role = NewRoleClient(c.config)
 	c.SLAActionLog = NewSLAActionLogClient(c.config)
 	c.SLAConfig = NewSLAConfigClient(c.config)
 	c.SQLTemplate = NewSQLTemplateClient(c.config)
@@ -125,9 +151,11 @@ func (c *Client) init() {
 	c.SharedResult = NewSharedResultClient(c.config)
 	c.TempPolicy = NewTempPolicyClient(c.config)
 	c.Ticket = NewTicketClient(c.config)
+	c.TicketNotificationLog = NewTicketNotificationLogClient(c.config)
 	c.TicketRevision = NewTicketRevisionClient(c.config)
 	c.User = NewUserClient(c.config)
 	c.WebVital = NewWebVitalClient(c.config)
+	c.WebhookSubscription = NewWebhookSubscriptionClient(c.config)
 }
 
 type (
@@ -218,32 +246,39 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:               ctx,
-		config:            cfg,
-		APIToken:          NewAPITokenClient(cfg),
-		ApprovalPolicy:    NewApprovalPolicyClient(cfg),
-		ApprovalRecord:    NewApprovalRecordClient(cfg),
-		AuditLog:          NewAuditLogClient(cfg),
-		Comment:           NewCommentClient(cfg),
-		DataSource:        NewDataSourceClient(cfg),
-		ExecutionResult:   NewExecutionResultClient(cfg),
-		ExportTask:        NewExportTaskClient(cfg),
-		GitLink:           NewGitLinkClient(cfg),
-		MaskRule:          NewMaskRuleClient(cfg),
-		OIDCProvider:      NewOIDCProviderClient(cfg),
-		PermissionRequest: NewPermissionRequestClient(cfg),
-		QueryHistory:      NewQueryHistoryClient(cfg),
-		RefreshToken:      NewRefreshTokenClient(cfg),
-		SLAActionLog:      NewSLAActionLogClient(cfg),
-		SLAConfig:         NewSLAConfigClient(cfg),
-		SQLTemplate:       NewSQLTemplateClient(cfg),
-		SensitiveTable:    NewSensitiveTableClient(cfg),
-		SharedResult:      NewSharedResultClient(cfg),
-		TempPolicy:        NewTempPolicyClient(cfg),
-		Ticket:            NewTicketClient(cfg),
-		TicketRevision:    NewTicketRevisionClient(cfg),
-		User:              NewUserClient(cfg),
-		WebVital:          NewWebVitalClient(cfg),
+		ctx:                    ctx,
+		config:                 cfg,
+		APIToken:               NewAPITokenClient(cfg),
+		ApprovalPolicy:         NewApprovalPolicyClient(cfg),
+		ApprovalRecord:         NewApprovalRecordClient(cfg),
+		AuditLog:               NewAuditLogClient(cfg),
+		CasbinRule:             NewCasbinRuleClient(cfg),
+		Comment:                NewCommentClient(cfg),
+		DataSource:             NewDataSourceClient(cfg),
+		ExecutionResult:        NewExecutionResultClient(cfg),
+		ExportTask:             NewExportTaskClient(cfg),
+		FeishuDeadLetter:       NewFeishuDeadLetterClient(cfg),
+		FeishuWebhook:          NewFeishuWebhookClient(cfg),
+		GitLink:                NewGitLinkClient(cfg),
+		MaskRule:               NewMaskRuleClient(cfg),
+		NotificationPreference: NewNotificationPreferenceClient(cfg),
+		OIDCProvider:           NewOIDCProviderClient(cfg),
+		PermissionRequest:      NewPermissionRequestClient(cfg),
+		QueryHistory:           NewQueryHistoryClient(cfg),
+		RefreshToken:           NewRefreshTokenClient(cfg),
+		Role:                   NewRoleClient(cfg),
+		SLAActionLog:           NewSLAActionLogClient(cfg),
+		SLAConfig:              NewSLAConfigClient(cfg),
+		SQLTemplate:            NewSQLTemplateClient(cfg),
+		SensitiveTable:         NewSensitiveTableClient(cfg),
+		SharedResult:           NewSharedResultClient(cfg),
+		TempPolicy:             NewTempPolicyClient(cfg),
+		Ticket:                 NewTicketClient(cfg),
+		TicketNotificationLog:  NewTicketNotificationLogClient(cfg),
+		TicketRevision:         NewTicketRevisionClient(cfg),
+		User:                   NewUserClient(cfg),
+		WebVital:               NewWebVitalClient(cfg),
+		WebhookSubscription:    NewWebhookSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -261,32 +296,39 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:               ctx,
-		config:            cfg,
-		APIToken:          NewAPITokenClient(cfg),
-		ApprovalPolicy:    NewApprovalPolicyClient(cfg),
-		ApprovalRecord:    NewApprovalRecordClient(cfg),
-		AuditLog:          NewAuditLogClient(cfg),
-		Comment:           NewCommentClient(cfg),
-		DataSource:        NewDataSourceClient(cfg),
-		ExecutionResult:   NewExecutionResultClient(cfg),
-		ExportTask:        NewExportTaskClient(cfg),
-		GitLink:           NewGitLinkClient(cfg),
-		MaskRule:          NewMaskRuleClient(cfg),
-		OIDCProvider:      NewOIDCProviderClient(cfg),
-		PermissionRequest: NewPermissionRequestClient(cfg),
-		QueryHistory:      NewQueryHistoryClient(cfg),
-		RefreshToken:      NewRefreshTokenClient(cfg),
-		SLAActionLog:      NewSLAActionLogClient(cfg),
-		SLAConfig:         NewSLAConfigClient(cfg),
-		SQLTemplate:       NewSQLTemplateClient(cfg),
-		SensitiveTable:    NewSensitiveTableClient(cfg),
-		SharedResult:      NewSharedResultClient(cfg),
-		TempPolicy:        NewTempPolicyClient(cfg),
-		Ticket:            NewTicketClient(cfg),
-		TicketRevision:    NewTicketRevisionClient(cfg),
-		User:              NewUserClient(cfg),
-		WebVital:          NewWebVitalClient(cfg),
+		ctx:                    ctx,
+		config:                 cfg,
+		APIToken:               NewAPITokenClient(cfg),
+		ApprovalPolicy:         NewApprovalPolicyClient(cfg),
+		ApprovalRecord:         NewApprovalRecordClient(cfg),
+		AuditLog:               NewAuditLogClient(cfg),
+		CasbinRule:             NewCasbinRuleClient(cfg),
+		Comment:                NewCommentClient(cfg),
+		DataSource:             NewDataSourceClient(cfg),
+		ExecutionResult:        NewExecutionResultClient(cfg),
+		ExportTask:             NewExportTaskClient(cfg),
+		FeishuDeadLetter:       NewFeishuDeadLetterClient(cfg),
+		FeishuWebhook:          NewFeishuWebhookClient(cfg),
+		GitLink:                NewGitLinkClient(cfg),
+		MaskRule:               NewMaskRuleClient(cfg),
+		NotificationPreference: NewNotificationPreferenceClient(cfg),
+		OIDCProvider:           NewOIDCProviderClient(cfg),
+		PermissionRequest:      NewPermissionRequestClient(cfg),
+		QueryHistory:           NewQueryHistoryClient(cfg),
+		RefreshToken:           NewRefreshTokenClient(cfg),
+		Role:                   NewRoleClient(cfg),
+		SLAActionLog:           NewSLAActionLogClient(cfg),
+		SLAConfig:              NewSLAConfigClient(cfg),
+		SQLTemplate:            NewSQLTemplateClient(cfg),
+		SensitiveTable:         NewSensitiveTableClient(cfg),
+		SharedResult:           NewSharedResultClient(cfg),
+		TempPolicy:             NewTempPolicyClient(cfg),
+		Ticket:                 NewTicketClient(cfg),
+		TicketNotificationLog:  NewTicketNotificationLogClient(cfg),
+		TicketRevision:         NewTicketRevisionClient(cfg),
+		User:                   NewUserClient(cfg),
+		WebVital:               NewWebVitalClient(cfg),
+		WebhookSubscription:    NewWebhookSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -316,11 +358,13 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.APIToken, c.ApprovalPolicy, c.ApprovalRecord, c.AuditLog, c.Comment,
-		c.DataSource, c.ExecutionResult, c.ExportTask, c.GitLink, c.MaskRule,
-		c.OIDCProvider, c.PermissionRequest, c.QueryHistory, c.RefreshToken,
+		c.APIToken, c.ApprovalPolicy, c.ApprovalRecord, c.AuditLog, c.CasbinRule,
+		c.Comment, c.DataSource, c.ExecutionResult, c.ExportTask, c.FeishuDeadLetter,
+		c.FeishuWebhook, c.GitLink, c.MaskRule, c.NotificationPreference,
+		c.OIDCProvider, c.PermissionRequest, c.QueryHistory, c.RefreshToken, c.Role,
 		c.SLAActionLog, c.SLAConfig, c.SQLTemplate, c.SensitiveTable, c.SharedResult,
-		c.TempPolicy, c.Ticket, c.TicketRevision, c.User, c.WebVital,
+		c.TempPolicy, c.Ticket, c.TicketNotificationLog, c.TicketRevision, c.User,
+		c.WebVital, c.WebhookSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -330,11 +374,13 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.APIToken, c.ApprovalPolicy, c.ApprovalRecord, c.AuditLog, c.Comment,
-		c.DataSource, c.ExecutionResult, c.ExportTask, c.GitLink, c.MaskRule,
-		c.OIDCProvider, c.PermissionRequest, c.QueryHistory, c.RefreshToken,
+		c.APIToken, c.ApprovalPolicy, c.ApprovalRecord, c.AuditLog, c.CasbinRule,
+		c.Comment, c.DataSource, c.ExecutionResult, c.ExportTask, c.FeishuDeadLetter,
+		c.FeishuWebhook, c.GitLink, c.MaskRule, c.NotificationPreference,
+		c.OIDCProvider, c.PermissionRequest, c.QueryHistory, c.RefreshToken, c.Role,
 		c.SLAActionLog, c.SLAConfig, c.SQLTemplate, c.SensitiveTable, c.SharedResult,
-		c.TempPolicy, c.Ticket, c.TicketRevision, c.User, c.WebVital,
+		c.TempPolicy, c.Ticket, c.TicketNotificationLog, c.TicketRevision, c.User,
+		c.WebVital, c.WebhookSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -351,6 +397,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ApprovalRecord.mutate(ctx, m)
 	case *AuditLogMutation:
 		return c.AuditLog.mutate(ctx, m)
+	case *CasbinRuleMutation:
+		return c.CasbinRule.mutate(ctx, m)
 	case *CommentMutation:
 		return c.Comment.mutate(ctx, m)
 	case *DataSourceMutation:
@@ -359,10 +407,16 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ExecutionResult.mutate(ctx, m)
 	case *ExportTaskMutation:
 		return c.ExportTask.mutate(ctx, m)
+	case *FeishuDeadLetterMutation:
+		return c.FeishuDeadLetter.mutate(ctx, m)
+	case *FeishuWebhookMutation:
+		return c.FeishuWebhook.mutate(ctx, m)
 	case *GitLinkMutation:
 		return c.GitLink.mutate(ctx, m)
 	case *MaskRuleMutation:
 		return c.MaskRule.mutate(ctx, m)
+	case *NotificationPreferenceMutation:
+		return c.NotificationPreference.mutate(ctx, m)
 	case *OIDCProviderMutation:
 		return c.OIDCProvider.mutate(ctx, m)
 	case *PermissionRequestMutation:
@@ -371,6 +425,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.QueryHistory.mutate(ctx, m)
 	case *RefreshTokenMutation:
 		return c.RefreshToken.mutate(ctx, m)
+	case *RoleMutation:
+		return c.Role.mutate(ctx, m)
 	case *SLAActionLogMutation:
 		return c.SLAActionLog.mutate(ctx, m)
 	case *SLAConfigMutation:
@@ -385,12 +441,16 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.TempPolicy.mutate(ctx, m)
 	case *TicketMutation:
 		return c.Ticket.mutate(ctx, m)
+	case *TicketNotificationLogMutation:
+		return c.TicketNotificationLog.mutate(ctx, m)
 	case *TicketRevisionMutation:
 		return c.TicketRevision.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
 	case *WebVitalMutation:
 		return c.WebVital.mutate(ctx, m)
+	case *WebhookSubscriptionMutation:
+		return c.WebhookSubscription.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -928,6 +988,139 @@ func (c *AuditLogClient) mutate(ctx context.Context, m *AuditLogMutation) (Value
 	}
 }
 
+// CasbinRuleClient is a client for the CasbinRule schema.
+type CasbinRuleClient struct {
+	config
+}
+
+// NewCasbinRuleClient returns a client for the CasbinRule from the given config.
+func NewCasbinRuleClient(c config) *CasbinRuleClient {
+	return &CasbinRuleClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `casbinrule.Hooks(f(g(h())))`.
+func (c *CasbinRuleClient) Use(hooks ...Hook) {
+	c.hooks.CasbinRule = append(c.hooks.CasbinRule, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `casbinrule.Intercept(f(g(h())))`.
+func (c *CasbinRuleClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CasbinRule = append(c.inters.CasbinRule, interceptors...)
+}
+
+// Create returns a builder for creating a CasbinRule entity.
+func (c *CasbinRuleClient) Create() *CasbinRuleCreate {
+	mutation := newCasbinRuleMutation(c.config, OpCreate)
+	return &CasbinRuleCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CasbinRule entities.
+func (c *CasbinRuleClient) CreateBulk(builders ...*CasbinRuleCreate) *CasbinRuleCreateBulk {
+	return &CasbinRuleCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CasbinRuleClient) MapCreateBulk(slice any, setFunc func(*CasbinRuleCreate, int)) *CasbinRuleCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CasbinRuleCreateBulk{err: fmt.Errorf("calling to CasbinRuleClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CasbinRuleCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CasbinRuleCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CasbinRule.
+func (c *CasbinRuleClient) Update() *CasbinRuleUpdate {
+	mutation := newCasbinRuleMutation(c.config, OpUpdate)
+	return &CasbinRuleUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CasbinRuleClient) UpdateOne(_m *CasbinRule) *CasbinRuleUpdateOne {
+	mutation := newCasbinRuleMutation(c.config, OpUpdateOne, withCasbinRule(_m))
+	return &CasbinRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CasbinRuleClient) UpdateOneID(id int) *CasbinRuleUpdateOne {
+	mutation := newCasbinRuleMutation(c.config, OpUpdateOne, withCasbinRuleID(id))
+	return &CasbinRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CasbinRule.
+func (c *CasbinRuleClient) Delete() *CasbinRuleDelete {
+	mutation := newCasbinRuleMutation(c.config, OpDelete)
+	return &CasbinRuleDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CasbinRuleClient) DeleteOne(_m *CasbinRule) *CasbinRuleDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CasbinRuleClient) DeleteOneID(id int) *CasbinRuleDeleteOne {
+	builder := c.Delete().Where(casbinrule.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CasbinRuleDeleteOne{builder}
+}
+
+// Query returns a query builder for CasbinRule.
+func (c *CasbinRuleClient) Query() *CasbinRuleQuery {
+	return &CasbinRuleQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCasbinRule},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CasbinRule entity by its id.
+func (c *CasbinRuleClient) Get(ctx context.Context, id int) (*CasbinRule, error) {
+	return c.Query().Where(casbinrule.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CasbinRuleClient) GetX(ctx context.Context, id int) *CasbinRule {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CasbinRuleClient) Hooks() []Hook {
+	return c.hooks.CasbinRule
+}
+
+// Interceptors returns the client interceptors.
+func (c *CasbinRuleClient) Interceptors() []Interceptor {
+	return c.inters.CasbinRule
+}
+
+func (c *CasbinRuleClient) mutate(ctx context.Context, m *CasbinRuleMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CasbinRuleCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CasbinRuleUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CasbinRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CasbinRuleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CasbinRule mutation op: %q", m.Op())
+	}
+}
+
 // CommentClient is a client for the Comment schema.
 type CommentClient struct {
 	config
@@ -1460,6 +1653,272 @@ func (c *ExportTaskClient) mutate(ctx context.Context, m *ExportTaskMutation) (V
 	}
 }
 
+// FeishuDeadLetterClient is a client for the FeishuDeadLetter schema.
+type FeishuDeadLetterClient struct {
+	config
+}
+
+// NewFeishuDeadLetterClient returns a client for the FeishuDeadLetter from the given config.
+func NewFeishuDeadLetterClient(c config) *FeishuDeadLetterClient {
+	return &FeishuDeadLetterClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `feishudeadletter.Hooks(f(g(h())))`.
+func (c *FeishuDeadLetterClient) Use(hooks ...Hook) {
+	c.hooks.FeishuDeadLetter = append(c.hooks.FeishuDeadLetter, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `feishudeadletter.Intercept(f(g(h())))`.
+func (c *FeishuDeadLetterClient) Intercept(interceptors ...Interceptor) {
+	c.inters.FeishuDeadLetter = append(c.inters.FeishuDeadLetter, interceptors...)
+}
+
+// Create returns a builder for creating a FeishuDeadLetter entity.
+func (c *FeishuDeadLetterClient) Create() *FeishuDeadLetterCreate {
+	mutation := newFeishuDeadLetterMutation(c.config, OpCreate)
+	return &FeishuDeadLetterCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of FeishuDeadLetter entities.
+func (c *FeishuDeadLetterClient) CreateBulk(builders ...*FeishuDeadLetterCreate) *FeishuDeadLetterCreateBulk {
+	return &FeishuDeadLetterCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *FeishuDeadLetterClient) MapCreateBulk(slice any, setFunc func(*FeishuDeadLetterCreate, int)) *FeishuDeadLetterCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &FeishuDeadLetterCreateBulk{err: fmt.Errorf("calling to FeishuDeadLetterClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*FeishuDeadLetterCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &FeishuDeadLetterCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for FeishuDeadLetter.
+func (c *FeishuDeadLetterClient) Update() *FeishuDeadLetterUpdate {
+	mutation := newFeishuDeadLetterMutation(c.config, OpUpdate)
+	return &FeishuDeadLetterUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *FeishuDeadLetterClient) UpdateOne(_m *FeishuDeadLetter) *FeishuDeadLetterUpdateOne {
+	mutation := newFeishuDeadLetterMutation(c.config, OpUpdateOne, withFeishuDeadLetter(_m))
+	return &FeishuDeadLetterUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *FeishuDeadLetterClient) UpdateOneID(id int) *FeishuDeadLetterUpdateOne {
+	mutation := newFeishuDeadLetterMutation(c.config, OpUpdateOne, withFeishuDeadLetterID(id))
+	return &FeishuDeadLetterUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for FeishuDeadLetter.
+func (c *FeishuDeadLetterClient) Delete() *FeishuDeadLetterDelete {
+	mutation := newFeishuDeadLetterMutation(c.config, OpDelete)
+	return &FeishuDeadLetterDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *FeishuDeadLetterClient) DeleteOne(_m *FeishuDeadLetter) *FeishuDeadLetterDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *FeishuDeadLetterClient) DeleteOneID(id int) *FeishuDeadLetterDeleteOne {
+	builder := c.Delete().Where(feishudeadletter.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &FeishuDeadLetterDeleteOne{builder}
+}
+
+// Query returns a query builder for FeishuDeadLetter.
+func (c *FeishuDeadLetterClient) Query() *FeishuDeadLetterQuery {
+	return &FeishuDeadLetterQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeFeishuDeadLetter},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a FeishuDeadLetter entity by its id.
+func (c *FeishuDeadLetterClient) Get(ctx context.Context, id int) (*FeishuDeadLetter, error) {
+	return c.Query().Where(feishudeadletter.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *FeishuDeadLetterClient) GetX(ctx context.Context, id int) *FeishuDeadLetter {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *FeishuDeadLetterClient) Hooks() []Hook {
+	return c.hooks.FeishuDeadLetter
+}
+
+// Interceptors returns the client interceptors.
+func (c *FeishuDeadLetterClient) Interceptors() []Interceptor {
+	return c.inters.FeishuDeadLetter
+}
+
+func (c *FeishuDeadLetterClient) mutate(ctx context.Context, m *FeishuDeadLetterMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&FeishuDeadLetterCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&FeishuDeadLetterUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&FeishuDeadLetterUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&FeishuDeadLetterDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown FeishuDeadLetter mutation op: %q", m.Op())
+	}
+}
+
+// FeishuWebhookClient is a client for the FeishuWebhook schema.
+type FeishuWebhookClient struct {
+	config
+}
+
+// NewFeishuWebhookClient returns a client for the FeishuWebhook from the given config.
+func NewFeishuWebhookClient(c config) *FeishuWebhookClient {
+	return &FeishuWebhookClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `feishuwebhook.Hooks(f(g(h())))`.
+func (c *FeishuWebhookClient) Use(hooks ...Hook) {
+	c.hooks.FeishuWebhook = append(c.hooks.FeishuWebhook, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `feishuwebhook.Intercept(f(g(h())))`.
+func (c *FeishuWebhookClient) Intercept(interceptors ...Interceptor) {
+	c.inters.FeishuWebhook = append(c.inters.FeishuWebhook, interceptors...)
+}
+
+// Create returns a builder for creating a FeishuWebhook entity.
+func (c *FeishuWebhookClient) Create() *FeishuWebhookCreate {
+	mutation := newFeishuWebhookMutation(c.config, OpCreate)
+	return &FeishuWebhookCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of FeishuWebhook entities.
+func (c *FeishuWebhookClient) CreateBulk(builders ...*FeishuWebhookCreate) *FeishuWebhookCreateBulk {
+	return &FeishuWebhookCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *FeishuWebhookClient) MapCreateBulk(slice any, setFunc func(*FeishuWebhookCreate, int)) *FeishuWebhookCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &FeishuWebhookCreateBulk{err: fmt.Errorf("calling to FeishuWebhookClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*FeishuWebhookCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &FeishuWebhookCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for FeishuWebhook.
+func (c *FeishuWebhookClient) Update() *FeishuWebhookUpdate {
+	mutation := newFeishuWebhookMutation(c.config, OpUpdate)
+	return &FeishuWebhookUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *FeishuWebhookClient) UpdateOne(_m *FeishuWebhook) *FeishuWebhookUpdateOne {
+	mutation := newFeishuWebhookMutation(c.config, OpUpdateOne, withFeishuWebhook(_m))
+	return &FeishuWebhookUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *FeishuWebhookClient) UpdateOneID(id int) *FeishuWebhookUpdateOne {
+	mutation := newFeishuWebhookMutation(c.config, OpUpdateOne, withFeishuWebhookID(id))
+	return &FeishuWebhookUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for FeishuWebhook.
+func (c *FeishuWebhookClient) Delete() *FeishuWebhookDelete {
+	mutation := newFeishuWebhookMutation(c.config, OpDelete)
+	return &FeishuWebhookDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *FeishuWebhookClient) DeleteOne(_m *FeishuWebhook) *FeishuWebhookDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *FeishuWebhookClient) DeleteOneID(id int) *FeishuWebhookDeleteOne {
+	builder := c.Delete().Where(feishuwebhook.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &FeishuWebhookDeleteOne{builder}
+}
+
+// Query returns a query builder for FeishuWebhook.
+func (c *FeishuWebhookClient) Query() *FeishuWebhookQuery {
+	return &FeishuWebhookQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeFeishuWebhook},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a FeishuWebhook entity by its id.
+func (c *FeishuWebhookClient) Get(ctx context.Context, id int) (*FeishuWebhook, error) {
+	return c.Query().Where(feishuwebhook.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *FeishuWebhookClient) GetX(ctx context.Context, id int) *FeishuWebhook {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *FeishuWebhookClient) Hooks() []Hook {
+	return c.hooks.FeishuWebhook
+}
+
+// Interceptors returns the client interceptors.
+func (c *FeishuWebhookClient) Interceptors() []Interceptor {
+	return c.inters.FeishuWebhook
+}
+
+func (c *FeishuWebhookClient) mutate(ctx context.Context, m *FeishuWebhookMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&FeishuWebhookCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&FeishuWebhookUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&FeishuWebhookUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&FeishuWebhookDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown FeishuWebhook mutation op: %q", m.Op())
+	}
+}
+
 // GitLinkClient is a client for the GitLink schema.
 type GitLinkClient struct {
 	config
@@ -1723,6 +2182,139 @@ func (c *MaskRuleClient) mutate(ctx context.Context, m *MaskRuleMutation) (Value
 		return (&MaskRuleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown MaskRule mutation op: %q", m.Op())
+	}
+}
+
+// NotificationPreferenceClient is a client for the NotificationPreference schema.
+type NotificationPreferenceClient struct {
+	config
+}
+
+// NewNotificationPreferenceClient returns a client for the NotificationPreference from the given config.
+func NewNotificationPreferenceClient(c config) *NotificationPreferenceClient {
+	return &NotificationPreferenceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `notificationpreference.Hooks(f(g(h())))`.
+func (c *NotificationPreferenceClient) Use(hooks ...Hook) {
+	c.hooks.NotificationPreference = append(c.hooks.NotificationPreference, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `notificationpreference.Intercept(f(g(h())))`.
+func (c *NotificationPreferenceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.NotificationPreference = append(c.inters.NotificationPreference, interceptors...)
+}
+
+// Create returns a builder for creating a NotificationPreference entity.
+func (c *NotificationPreferenceClient) Create() *NotificationPreferenceCreate {
+	mutation := newNotificationPreferenceMutation(c.config, OpCreate)
+	return &NotificationPreferenceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of NotificationPreference entities.
+func (c *NotificationPreferenceClient) CreateBulk(builders ...*NotificationPreferenceCreate) *NotificationPreferenceCreateBulk {
+	return &NotificationPreferenceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *NotificationPreferenceClient) MapCreateBulk(slice any, setFunc func(*NotificationPreferenceCreate, int)) *NotificationPreferenceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &NotificationPreferenceCreateBulk{err: fmt.Errorf("calling to NotificationPreferenceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*NotificationPreferenceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &NotificationPreferenceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for NotificationPreference.
+func (c *NotificationPreferenceClient) Update() *NotificationPreferenceUpdate {
+	mutation := newNotificationPreferenceMutation(c.config, OpUpdate)
+	return &NotificationPreferenceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *NotificationPreferenceClient) UpdateOne(_m *NotificationPreference) *NotificationPreferenceUpdateOne {
+	mutation := newNotificationPreferenceMutation(c.config, OpUpdateOne, withNotificationPreference(_m))
+	return &NotificationPreferenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *NotificationPreferenceClient) UpdateOneID(id int) *NotificationPreferenceUpdateOne {
+	mutation := newNotificationPreferenceMutation(c.config, OpUpdateOne, withNotificationPreferenceID(id))
+	return &NotificationPreferenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for NotificationPreference.
+func (c *NotificationPreferenceClient) Delete() *NotificationPreferenceDelete {
+	mutation := newNotificationPreferenceMutation(c.config, OpDelete)
+	return &NotificationPreferenceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *NotificationPreferenceClient) DeleteOne(_m *NotificationPreference) *NotificationPreferenceDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *NotificationPreferenceClient) DeleteOneID(id int) *NotificationPreferenceDeleteOne {
+	builder := c.Delete().Where(notificationpreference.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &NotificationPreferenceDeleteOne{builder}
+}
+
+// Query returns a query builder for NotificationPreference.
+func (c *NotificationPreferenceClient) Query() *NotificationPreferenceQuery {
+	return &NotificationPreferenceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeNotificationPreference},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a NotificationPreference entity by its id.
+func (c *NotificationPreferenceClient) Get(ctx context.Context, id int) (*NotificationPreference, error) {
+	return c.Query().Where(notificationpreference.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *NotificationPreferenceClient) GetX(ctx context.Context, id int) *NotificationPreference {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *NotificationPreferenceClient) Hooks() []Hook {
+	return c.hooks.NotificationPreference
+}
+
+// Interceptors returns the client interceptors.
+func (c *NotificationPreferenceClient) Interceptors() []Interceptor {
+	return c.inters.NotificationPreference
+}
+
+func (c *NotificationPreferenceClient) mutate(ctx context.Context, m *NotificationPreferenceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&NotificationPreferenceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&NotificationPreferenceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&NotificationPreferenceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&NotificationPreferenceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown NotificationPreference mutation op: %q", m.Op())
 	}
 }
 
@@ -2255,6 +2847,139 @@ func (c *RefreshTokenClient) mutate(ctx context.Context, m *RefreshTokenMutation
 		return (&RefreshTokenDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown RefreshToken mutation op: %q", m.Op())
+	}
+}
+
+// RoleClient is a client for the Role schema.
+type RoleClient struct {
+	config
+}
+
+// NewRoleClient returns a client for the Role from the given config.
+func NewRoleClient(c config) *RoleClient {
+	return &RoleClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `role.Hooks(f(g(h())))`.
+func (c *RoleClient) Use(hooks ...Hook) {
+	c.hooks.Role = append(c.hooks.Role, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `role.Intercept(f(g(h())))`.
+func (c *RoleClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Role = append(c.inters.Role, interceptors...)
+}
+
+// Create returns a builder for creating a Role entity.
+func (c *RoleClient) Create() *RoleCreate {
+	mutation := newRoleMutation(c.config, OpCreate)
+	return &RoleCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Role entities.
+func (c *RoleClient) CreateBulk(builders ...*RoleCreate) *RoleCreateBulk {
+	return &RoleCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RoleClient) MapCreateBulk(slice any, setFunc func(*RoleCreate, int)) *RoleCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RoleCreateBulk{err: fmt.Errorf("calling to RoleClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RoleCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RoleCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Role.
+func (c *RoleClient) Update() *RoleUpdate {
+	mutation := newRoleMutation(c.config, OpUpdate)
+	return &RoleUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RoleClient) UpdateOne(_m *Role) *RoleUpdateOne {
+	mutation := newRoleMutation(c.config, OpUpdateOne, withRole(_m))
+	return &RoleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RoleClient) UpdateOneID(id int) *RoleUpdateOne {
+	mutation := newRoleMutation(c.config, OpUpdateOne, withRoleID(id))
+	return &RoleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Role.
+func (c *RoleClient) Delete() *RoleDelete {
+	mutation := newRoleMutation(c.config, OpDelete)
+	return &RoleDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RoleClient) DeleteOne(_m *Role) *RoleDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RoleClient) DeleteOneID(id int) *RoleDeleteOne {
+	builder := c.Delete().Where(role.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RoleDeleteOne{builder}
+}
+
+// Query returns a query builder for Role.
+func (c *RoleClient) Query() *RoleQuery {
+	return &RoleQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRole},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Role entity by its id.
+func (c *RoleClient) Get(ctx context.Context, id int) (*Role, error) {
+	return c.Query().Where(role.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RoleClient) GetX(ctx context.Context, id int) *Role {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *RoleClient) Hooks() []Hook {
+	return c.hooks.Role
+}
+
+// Interceptors returns the client interceptors.
+func (c *RoleClient) Interceptors() []Interceptor {
+	return c.inters.Role
+}
+
+func (c *RoleClient) mutate(ctx context.Context, m *RoleMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RoleCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RoleUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RoleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RoleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Role mutation op: %q", m.Op())
 	}
 }
 
@@ -3189,6 +3914,139 @@ func (c *TicketClient) mutate(ctx context.Context, m *TicketMutation) (Value, er
 	}
 }
 
+// TicketNotificationLogClient is a client for the TicketNotificationLog schema.
+type TicketNotificationLogClient struct {
+	config
+}
+
+// NewTicketNotificationLogClient returns a client for the TicketNotificationLog from the given config.
+func NewTicketNotificationLogClient(c config) *TicketNotificationLogClient {
+	return &TicketNotificationLogClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `ticketnotificationlog.Hooks(f(g(h())))`.
+func (c *TicketNotificationLogClient) Use(hooks ...Hook) {
+	c.hooks.TicketNotificationLog = append(c.hooks.TicketNotificationLog, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `ticketnotificationlog.Intercept(f(g(h())))`.
+func (c *TicketNotificationLogClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TicketNotificationLog = append(c.inters.TicketNotificationLog, interceptors...)
+}
+
+// Create returns a builder for creating a TicketNotificationLog entity.
+func (c *TicketNotificationLogClient) Create() *TicketNotificationLogCreate {
+	mutation := newTicketNotificationLogMutation(c.config, OpCreate)
+	return &TicketNotificationLogCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TicketNotificationLog entities.
+func (c *TicketNotificationLogClient) CreateBulk(builders ...*TicketNotificationLogCreate) *TicketNotificationLogCreateBulk {
+	return &TicketNotificationLogCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TicketNotificationLogClient) MapCreateBulk(slice any, setFunc func(*TicketNotificationLogCreate, int)) *TicketNotificationLogCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TicketNotificationLogCreateBulk{err: fmt.Errorf("calling to TicketNotificationLogClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TicketNotificationLogCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TicketNotificationLogCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TicketNotificationLog.
+func (c *TicketNotificationLogClient) Update() *TicketNotificationLogUpdate {
+	mutation := newTicketNotificationLogMutation(c.config, OpUpdate)
+	return &TicketNotificationLogUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TicketNotificationLogClient) UpdateOne(_m *TicketNotificationLog) *TicketNotificationLogUpdateOne {
+	mutation := newTicketNotificationLogMutation(c.config, OpUpdateOne, withTicketNotificationLog(_m))
+	return &TicketNotificationLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TicketNotificationLogClient) UpdateOneID(id int) *TicketNotificationLogUpdateOne {
+	mutation := newTicketNotificationLogMutation(c.config, OpUpdateOne, withTicketNotificationLogID(id))
+	return &TicketNotificationLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TicketNotificationLog.
+func (c *TicketNotificationLogClient) Delete() *TicketNotificationLogDelete {
+	mutation := newTicketNotificationLogMutation(c.config, OpDelete)
+	return &TicketNotificationLogDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TicketNotificationLogClient) DeleteOne(_m *TicketNotificationLog) *TicketNotificationLogDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TicketNotificationLogClient) DeleteOneID(id int) *TicketNotificationLogDeleteOne {
+	builder := c.Delete().Where(ticketnotificationlog.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TicketNotificationLogDeleteOne{builder}
+}
+
+// Query returns a query builder for TicketNotificationLog.
+func (c *TicketNotificationLogClient) Query() *TicketNotificationLogQuery {
+	return &TicketNotificationLogQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTicketNotificationLog},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TicketNotificationLog entity by its id.
+func (c *TicketNotificationLogClient) Get(ctx context.Context, id int) (*TicketNotificationLog, error) {
+	return c.Query().Where(ticketnotificationlog.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TicketNotificationLogClient) GetX(ctx context.Context, id int) *TicketNotificationLog {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TicketNotificationLogClient) Hooks() []Hook {
+	return c.hooks.TicketNotificationLog
+}
+
+// Interceptors returns the client interceptors.
+func (c *TicketNotificationLogClient) Interceptors() []Interceptor {
+	return c.inters.TicketNotificationLog
+}
+
+func (c *TicketNotificationLogClient) mutate(ctx context.Context, m *TicketNotificationLogMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TicketNotificationLogCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TicketNotificationLogUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TicketNotificationLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TicketNotificationLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TicketNotificationLog mutation op: %q", m.Op())
+	}
+}
+
 // TicketRevisionClient is a client for the TicketRevision schema.
 type TicketRevisionClient struct {
 	config
@@ -3588,20 +4446,155 @@ func (c *WebVitalClient) mutate(ctx context.Context, m *WebVitalMutation) (Value
 	}
 }
 
+// WebhookSubscriptionClient is a client for the WebhookSubscription schema.
+type WebhookSubscriptionClient struct {
+	config
+}
+
+// NewWebhookSubscriptionClient returns a client for the WebhookSubscription from the given config.
+func NewWebhookSubscriptionClient(c config) *WebhookSubscriptionClient {
+	return &WebhookSubscriptionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `webhooksubscription.Hooks(f(g(h())))`.
+func (c *WebhookSubscriptionClient) Use(hooks ...Hook) {
+	c.hooks.WebhookSubscription = append(c.hooks.WebhookSubscription, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `webhooksubscription.Intercept(f(g(h())))`.
+func (c *WebhookSubscriptionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.WebhookSubscription = append(c.inters.WebhookSubscription, interceptors...)
+}
+
+// Create returns a builder for creating a WebhookSubscription entity.
+func (c *WebhookSubscriptionClient) Create() *WebhookSubscriptionCreate {
+	mutation := newWebhookSubscriptionMutation(c.config, OpCreate)
+	return &WebhookSubscriptionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of WebhookSubscription entities.
+func (c *WebhookSubscriptionClient) CreateBulk(builders ...*WebhookSubscriptionCreate) *WebhookSubscriptionCreateBulk {
+	return &WebhookSubscriptionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *WebhookSubscriptionClient) MapCreateBulk(slice any, setFunc func(*WebhookSubscriptionCreate, int)) *WebhookSubscriptionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &WebhookSubscriptionCreateBulk{err: fmt.Errorf("calling to WebhookSubscriptionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*WebhookSubscriptionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &WebhookSubscriptionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for WebhookSubscription.
+func (c *WebhookSubscriptionClient) Update() *WebhookSubscriptionUpdate {
+	mutation := newWebhookSubscriptionMutation(c.config, OpUpdate)
+	return &WebhookSubscriptionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *WebhookSubscriptionClient) UpdateOne(_m *WebhookSubscription) *WebhookSubscriptionUpdateOne {
+	mutation := newWebhookSubscriptionMutation(c.config, OpUpdateOne, withWebhookSubscription(_m))
+	return &WebhookSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *WebhookSubscriptionClient) UpdateOneID(id int) *WebhookSubscriptionUpdateOne {
+	mutation := newWebhookSubscriptionMutation(c.config, OpUpdateOne, withWebhookSubscriptionID(id))
+	return &WebhookSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for WebhookSubscription.
+func (c *WebhookSubscriptionClient) Delete() *WebhookSubscriptionDelete {
+	mutation := newWebhookSubscriptionMutation(c.config, OpDelete)
+	return &WebhookSubscriptionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *WebhookSubscriptionClient) DeleteOne(_m *WebhookSubscription) *WebhookSubscriptionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *WebhookSubscriptionClient) DeleteOneID(id int) *WebhookSubscriptionDeleteOne {
+	builder := c.Delete().Where(webhooksubscription.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &WebhookSubscriptionDeleteOne{builder}
+}
+
+// Query returns a query builder for WebhookSubscription.
+func (c *WebhookSubscriptionClient) Query() *WebhookSubscriptionQuery {
+	return &WebhookSubscriptionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeWebhookSubscription},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a WebhookSubscription entity by its id.
+func (c *WebhookSubscriptionClient) Get(ctx context.Context, id int) (*WebhookSubscription, error) {
+	return c.Query().Where(webhooksubscription.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *WebhookSubscriptionClient) GetX(ctx context.Context, id int) *WebhookSubscription {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *WebhookSubscriptionClient) Hooks() []Hook {
+	return c.hooks.WebhookSubscription
+}
+
+// Interceptors returns the client interceptors.
+func (c *WebhookSubscriptionClient) Interceptors() []Interceptor {
+	return c.inters.WebhookSubscription
+}
+
+func (c *WebhookSubscriptionClient) mutate(ctx context.Context, m *WebhookSubscriptionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&WebhookSubscriptionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&WebhookSubscriptionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&WebhookSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&WebhookSubscriptionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown WebhookSubscription mutation op: %q", m.Op())
+	}
+}
+
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		APIToken, ApprovalPolicy, ApprovalRecord, AuditLog, Comment, DataSource,
-		ExecutionResult, ExportTask, GitLink, MaskRule, OIDCProvider,
-		PermissionRequest, QueryHistory, RefreshToken, SLAActionLog, SLAConfig,
-		SQLTemplate, SensitiveTable, SharedResult, TempPolicy, Ticket, TicketRevision,
-		User, WebVital []ent.Hook
+		APIToken, ApprovalPolicy, ApprovalRecord, AuditLog, CasbinRule, Comment,
+		DataSource, ExecutionResult, ExportTask, FeishuDeadLetter, FeishuWebhook,
+		GitLink, MaskRule, NotificationPreference, OIDCProvider, PermissionRequest,
+		QueryHistory, RefreshToken, Role, SLAActionLog, SLAConfig, SQLTemplate,
+		SensitiveTable, SharedResult, TempPolicy, Ticket, TicketNotificationLog,
+		TicketRevision, User, WebVital, WebhookSubscription []ent.Hook
 	}
 	inters struct {
-		APIToken, ApprovalPolicy, ApprovalRecord, AuditLog, Comment, DataSource,
-		ExecutionResult, ExportTask, GitLink, MaskRule, OIDCProvider,
-		PermissionRequest, QueryHistory, RefreshToken, SLAActionLog, SLAConfig,
-		SQLTemplate, SensitiveTable, SharedResult, TempPolicy, Ticket, TicketRevision,
-		User, WebVital []ent.Interceptor
+		APIToken, ApprovalPolicy, ApprovalRecord, AuditLog, CasbinRule, Comment,
+		DataSource, ExecutionResult, ExportTask, FeishuDeadLetter, FeishuWebhook,
+		GitLink, MaskRule, NotificationPreference, OIDCProvider, PermissionRequest,
+		QueryHistory, RefreshToken, Role, SLAActionLog, SLAConfig, SQLTemplate,
+		SensitiveTable, SharedResult, TempPolicy, Ticket, TicketNotificationLog,
+		TicketRevision, User, WebVital, WebhookSubscription []ent.Interceptor
 	}
 )

@@ -34,10 +34,10 @@ func (SLAConfig) Fields() []ent.Field {
 		field.Bool("enabled").
 			Default(true),
 		field.Time("created_at").
-			Default(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			Default(timeNow).Annotations(entsql.DefaultExpr("now()")),
 		field.Time("updated_at").
 			Default(timeNow).
-			UpdateDefault(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			UpdateDefault(timeNow).Annotations(entsql.DefaultExpr("now()")),
 	}
 }
 

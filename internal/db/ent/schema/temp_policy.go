@@ -32,7 +32,7 @@ func (TempPolicy) Fields() []ent.Field {
 			NotEmpty(),
 		field.Time("expires_at"),
 		field.Time("created_at").
-			Default(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			Default(timeNow).Annotations(entsql.DefaultExpr("now()")),
 	}
 }
 

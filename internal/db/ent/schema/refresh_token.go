@@ -30,7 +30,7 @@ func (RefreshToken) Fields() []ent.Field {
 		field.Bool("revoked").
 			Default(false),
 		field.Time("created_at").
-			Default(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			Default(timeNow).Annotations(entsql.DefaultExpr("now()")),
 	}
 }
 

@@ -20,6 +20,8 @@ type Tx struct {
 	ApprovalRecord *ApprovalRecordClient
 	// AuditLog is the client for interacting with the AuditLog builders.
 	AuditLog *AuditLogClient
+	// CasbinRule is the client for interacting with the CasbinRule builders.
+	CasbinRule *CasbinRuleClient
 	// Comment is the client for interacting with the Comment builders.
 	Comment *CommentClient
 	// DataSource is the client for interacting with the DataSource builders.
@@ -28,10 +30,16 @@ type Tx struct {
 	ExecutionResult *ExecutionResultClient
 	// ExportTask is the client for interacting with the ExportTask builders.
 	ExportTask *ExportTaskClient
+	// FeishuDeadLetter is the client for interacting with the FeishuDeadLetter builders.
+	FeishuDeadLetter *FeishuDeadLetterClient
+	// FeishuWebhook is the client for interacting with the FeishuWebhook builders.
+	FeishuWebhook *FeishuWebhookClient
 	// GitLink is the client for interacting with the GitLink builders.
 	GitLink *GitLinkClient
 	// MaskRule is the client for interacting with the MaskRule builders.
 	MaskRule *MaskRuleClient
+	// NotificationPreference is the client for interacting with the NotificationPreference builders.
+	NotificationPreference *NotificationPreferenceClient
 	// OIDCProvider is the client for interacting with the OIDCProvider builders.
 	OIDCProvider *OIDCProviderClient
 	// PermissionRequest is the client for interacting with the PermissionRequest builders.
@@ -40,6 +48,8 @@ type Tx struct {
 	QueryHistory *QueryHistoryClient
 	// RefreshToken is the client for interacting with the RefreshToken builders.
 	RefreshToken *RefreshTokenClient
+	// Role is the client for interacting with the Role builders.
+	Role *RoleClient
 	// SLAActionLog is the client for interacting with the SLAActionLog builders.
 	SLAActionLog *SLAActionLogClient
 	// SLAConfig is the client for interacting with the SLAConfig builders.
@@ -54,12 +64,16 @@ type Tx struct {
 	TempPolicy *TempPolicyClient
 	// Ticket is the client for interacting with the Ticket builders.
 	Ticket *TicketClient
+	// TicketNotificationLog is the client for interacting with the TicketNotificationLog builders.
+	TicketNotificationLog *TicketNotificationLogClient
 	// TicketRevision is the client for interacting with the TicketRevision builders.
 	TicketRevision *TicketRevisionClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 	// WebVital is the client for interacting with the WebVital builders.
 	WebVital *WebVitalClient
+	// WebhookSubscription is the client for interacting with the WebhookSubscription builders.
+	WebhookSubscription *WebhookSubscriptionClient
 
 	// lazily loaded.
 	client     *Client
@@ -195,16 +209,21 @@ func (tx *Tx) init() {
 	tx.ApprovalPolicy = NewApprovalPolicyClient(tx.config)
 	tx.ApprovalRecord = NewApprovalRecordClient(tx.config)
 	tx.AuditLog = NewAuditLogClient(tx.config)
+	tx.CasbinRule = NewCasbinRuleClient(tx.config)
 	tx.Comment = NewCommentClient(tx.config)
 	tx.DataSource = NewDataSourceClient(tx.config)
 	tx.ExecutionResult = NewExecutionResultClient(tx.config)
 	tx.ExportTask = NewExportTaskClient(tx.config)
+	tx.FeishuDeadLetter = NewFeishuDeadLetterClient(tx.config)
+	tx.FeishuWebhook = NewFeishuWebhookClient(tx.config)
 	tx.GitLink = NewGitLinkClient(tx.config)
 	tx.MaskRule = NewMaskRuleClient(tx.config)
+	tx.NotificationPreference = NewNotificationPreferenceClient(tx.config)
 	tx.OIDCProvider = NewOIDCProviderClient(tx.config)
 	tx.PermissionRequest = NewPermissionRequestClient(tx.config)
 	tx.QueryHistory = NewQueryHistoryClient(tx.config)
 	tx.RefreshToken = NewRefreshTokenClient(tx.config)
+	tx.Role = NewRoleClient(tx.config)
 	tx.SLAActionLog = NewSLAActionLogClient(tx.config)
 	tx.SLAConfig = NewSLAConfigClient(tx.config)
 	tx.SQLTemplate = NewSQLTemplateClient(tx.config)
@@ -212,9 +231,11 @@ func (tx *Tx) init() {
 	tx.SharedResult = NewSharedResultClient(tx.config)
 	tx.TempPolicy = NewTempPolicyClient(tx.config)
 	tx.Ticket = NewTicketClient(tx.config)
+	tx.TicketNotificationLog = NewTicketNotificationLogClient(tx.config)
 	tx.TicketRevision = NewTicketRevisionClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 	tx.WebVital = NewWebVitalClient(tx.config)
+	tx.WebhookSubscription = NewWebhookSubscriptionClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

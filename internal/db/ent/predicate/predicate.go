@@ -18,6 +18,9 @@ type ApprovalRecord func(*sql.Selector)
 // AuditLog is the predicate function for auditlog builders.
 type AuditLog func(*sql.Selector)
 
+// CasbinRule is the predicate function for casbinrule builders.
+type CasbinRule func(*sql.Selector)
+
 // Comment is the predicate function for comment builders.
 type Comment func(*sql.Selector)
 
@@ -30,11 +33,20 @@ type ExecutionResult func(*sql.Selector)
 // ExportTask is the predicate function for exporttask builders.
 type ExportTask func(*sql.Selector)
 
+// FeishuDeadLetter is the predicate function for feishudeadletter builders.
+type FeishuDeadLetter func(*sql.Selector)
+
+// FeishuWebhook is the predicate function for feishuwebhook builders.
+type FeishuWebhook func(*sql.Selector)
+
 // GitLink is the predicate function for gitlink builders.
 type GitLink func(*sql.Selector)
 
 // MaskRule is the predicate function for maskrule builders.
 type MaskRule func(*sql.Selector)
+
+// NotificationPreference is the predicate function for notificationpreference builders.
+type NotificationPreference func(*sql.Selector)
 
 // OIDCProvider is the predicate function for oidcprovider builders.
 type OIDCProvider func(*sql.Selector)
@@ -47,6 +59,9 @@ type QueryHistory func(*sql.Selector)
 
 // RefreshToken is the predicate function for refreshtoken builders.
 type RefreshToken func(*sql.Selector)
+
+// Role is the predicate function for role builders.
+type Role func(*sql.Selector)
 
 // SLAActionLog is the predicate function for slaactionlog builders.
 type SLAActionLog func(*sql.Selector)
@@ -69,6 +84,9 @@ type TempPolicy func(*sql.Selector)
 // Ticket is the predicate function for ticket builders.
 type Ticket func(*sql.Selector)
 
+// TicketNotificationLog is the predicate function for ticketnotificationlog builders.
+type TicketNotificationLog func(*sql.Selector)
+
 // TicketRevision is the predicate function for ticketrevision builders.
 type TicketRevision func(*sql.Selector)
 
@@ -77,3 +95,6 @@ type User func(*sql.Selector)
 
 // WebVital is the predicate function for webvital builders.
 type WebVital func(*sql.Selector)
+
+// WebhookSubscription is the predicate function for webhooksubscription builders.
+type WebhookSubscription func(*sql.Selector)

@@ -41,7 +41,7 @@ func (TicketRevision) Fields() []ent.Field {
 		field.String("status").
 			Default(""),
 		field.Time("created_at").
-			Default(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			Default(timeNow).Annotations(entsql.DefaultExpr("now()")),
 	}
 }
 

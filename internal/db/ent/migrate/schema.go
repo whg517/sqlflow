@@ -22,8 +22,8 @@ var (
 		{Name: "use_count", Type: field.TypeInt64, Default: 0},
 		{Name: "is_active", Type: field.TypeBool, Default: true},
 		{Name: "description", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
-		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// APITokensTable holds the schema information for the "api_tokens" table.
 	APITokensTable = &schema.Table{
@@ -55,8 +55,8 @@ var (
 		{Name: "auto_approve_enabled", Type: field.TypeBool, Default: false},
 		{Name: "auto_approve_reason", Type: field.TypeString, Nullable: true},
 		{Name: "is_default", Type: field.TypeBool, Default: false},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
-		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// ApprovalPoliciesTable holds the schema information for the "approval_policies" table.
 	ApprovalPoliciesTable = &schema.Table{
@@ -85,7 +85,7 @@ var (
 		{Name: "comment", Type: field.TypeString, Nullable: true},
 		{Name: "auto_approved", Type: field.TypeBool, Default: false},
 		{Name: "auto_reason", Type: field.TypeString, Nullable: true},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// ApprovalRecordsTable holds the schema information for the "approval_records" table.
 	ApprovalRecordsTable = &schema.Table{
@@ -122,7 +122,7 @@ var (
 		{Name: "ip_address", Type: field.TypeString, Default: ""},
 		{Name: "ai_review_result", Type: field.TypeString, Default: ""},
 		{Name: "ticket_id", Type: field.TypeInt64, Default: 0},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// AuditLogsTable holds the schema information for the "audit_logs" table.
 	AuditLogsTable = &schema.Table{
@@ -157,6 +157,30 @@ var (
 			},
 		},
 	}
+	// CasbinRuleColumns holds the columns for the "casbin_rule" table.
+	CasbinRuleColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "ptype", Type: field.TypeString, Default: ""},
+		{Name: "v0", Type: field.TypeString, Default: ""},
+		{Name: "v1", Type: field.TypeString, Default: ""},
+		{Name: "v2", Type: field.TypeString, Default: ""},
+		{Name: "v3", Type: field.TypeString, Default: ""},
+		{Name: "v4", Type: field.TypeString, Default: ""},
+		{Name: "v5", Type: field.TypeString, Default: ""},
+	}
+	// CasbinRuleTable holds the schema information for the "casbin_rule" table.
+	CasbinRuleTable = &schema.Table{
+		Name:       "casbin_rule",
+		Columns:    CasbinRuleColumns,
+		PrimaryKey: []*schema.Column{CasbinRuleColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "casbinrule_ptype_v0",
+				Unique:  false,
+				Columns: []*schema.Column{CasbinRuleColumns[1], CasbinRuleColumns[2]},
+			},
+		},
+	}
 	// CommentsColumns holds the columns for the "comments" table.
 	CommentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -164,7 +188,7 @@ var (
 		{Name: "user_id", Type: field.TypeInt64},
 		{Name: "content", Type: field.TypeString},
 		{Name: "parent_id", Type: field.TypeInt64, Default: 0},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// CommentsTable holds the schema information for the "comments" table.
 	CommentsTable = &schema.Table{
@@ -208,8 +232,8 @@ var (
 		{Name: "es_index_pattern", Type: field.TypeString, Default: ""},
 		{Name: "es_verify_certs", Type: field.TypeBool, Default: true},
 		{Name: "extra_config", Type: field.TypeString, Nullable: true, Default: ""},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
-		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// DatasourcesTable holds the schema information for the "datasources" table.
 	DatasourcesTable = &schema.Table{
@@ -227,7 +251,7 @@ var (
 		{Name: "rows_affected", Type: field.TypeInt64, Default: 0},
 		{Name: "error", Type: field.TypeString, Default: ""},
 		{Name: "duration_ms", Type: field.TypeInt64, Default: 0},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// ExecutionResultsTable holds the schema information for the "execution_results" table.
 	ExecutionResultsTable = &schema.Table{
@@ -256,7 +280,7 @@ var (
 		{Name: "file_bytes", Type: field.TypeInt64, Default: 0},
 		{Name: "filters_json", Type: field.TypeString, Default: "{}"},
 		{Name: "error_msg", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 	}
 	// ExportTasksTable holds the schema information for the "export_tasks" table.
@@ -277,6 +301,53 @@ var (
 			},
 		},
 	}
+	// FeishuDeadLettersColumns holds the columns for the "feishu_dead_letters" table.
+	FeishuDeadLettersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "webhook_id", Type: field.TypeInt64},
+		{Name: "payload", Type: field.TypeString},
+		{Name: "error_message", Type: field.TypeString, Default: ""},
+		{Name: "attempt_count", Type: field.TypeInt64, Default: 0},
+		{Name: "last_attempt_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+	}
+	// FeishuDeadLettersTable holds the schema information for the "feishu_dead_letters" table.
+	FeishuDeadLettersTable = &schema.Table{
+		Name:       "feishu_dead_letters",
+		Columns:    FeishuDeadLettersColumns,
+		PrimaryKey: []*schema.Column{FeishuDeadLettersColumns[0]},
+	}
+	// FeishuWebhooksColumns holds the columns for the "feishu_webhooks" table.
+	FeishuWebhooksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "name", Type: field.TypeString},
+		{Name: "encrypted_url", Type: field.TypeString},
+		{Name: "url_hash", Type: field.TypeString},
+		{Name: "scene", Type: field.TypeString, Default: "general"},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "rate_limit_rps", Type: field.TypeFloat64, Default: 1},
+		{Name: "created_by", Type: field.TypeString, Default: ""},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+	}
+	// FeishuWebhooksTable holds the schema information for the "feishu_webhooks" table.
+	FeishuWebhooksTable = &schema.Table{
+		Name:       "feishu_webhooks",
+		Columns:    FeishuWebhooksColumns,
+		PrimaryKey: []*schema.Column{FeishuWebhooksColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "feishuwebhook_url_hash",
+				Unique:  true,
+				Columns: []*schema.Column{FeishuWebhooksColumns[3]},
+			},
+			{
+				Name:    "feishuwebhook_enabled",
+				Unique:  false,
+				Columns: []*schema.Column{FeishuWebhooksColumns[5]},
+			},
+		},
+	}
 	// GitLinksColumns holds the columns for the "git_links" table.
 	GitLinksColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -293,7 +364,7 @@ var (
 		{Name: "repo_url", Type: field.TypeString, Default: ""},
 		{Name: "branch", Type: field.TypeString, Default: ""},
 		{Name: "created_by", Type: field.TypeInt64, Default: 0},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// GitLinksTable holds the schema information for the "git_links" table.
 	GitLinksTable = &schema.Table{
@@ -318,14 +389,35 @@ var (
 		{Name: "mask_type", Type: field.TypeString, Default: ""},
 		{Name: "custom_regex", Type: field.TypeString, Default: ""},
 		{Name: "custom_template", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
-		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// MaskRulesTable holds the schema information for the "mask_rules" table.
 	MaskRulesTable = &schema.Table{
 		Name:       "mask_rules",
 		Columns:    MaskRulesColumns,
 		PrimaryKey: []*schema.Column{MaskRulesColumns[0]},
+	}
+	// NotificationPreferencesColumns holds the columns for the "notification_preferences" table.
+	NotificationPreferencesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "event_type", Type: field.TypeString},
+		{Name: "channels", Type: field.TypeString, Default: "[]"},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+	}
+	// NotificationPreferencesTable holds the schema information for the "notification_preferences" table.
+	NotificationPreferencesTable = &schema.Table{
+		Name:       "notification_preferences",
+		Columns:    NotificationPreferencesColumns,
+		PrimaryKey: []*schema.Column{NotificationPreferencesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "notificationpreference_user_id_event_type",
+				Unique:  true,
+				Columns: []*schema.Column{NotificationPreferencesColumns[1], NotificationPreferencesColumns[2]},
+			},
+		},
 	}
 	// OidcProvidersColumns holds the columns for the "oidc_providers" table.
 	OidcProvidersColumns = []*schema.Column{
@@ -336,8 +428,8 @@ var (
 		{Name: "client_secret", Type: field.TypeString, Default: ""},
 		{Name: "scopes", Type: field.TypeString, Default: "openid profile email"},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
-		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// OidcProvidersTable holds the schema information for the "oidc_providers" table.
 	OidcProvidersTable = &schema.Table{
@@ -362,8 +454,8 @@ var (
 		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
 		{Name: "revoked_by", Type: field.TypeInt64, Nullable: true},
 		{Name: "revoke_reason", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
-		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// PermissionRequestsTable holds the schema information for the "permission_requests" table.
 	PermissionRequestsTable = &schema.Table{
@@ -402,7 +494,7 @@ var (
 		{Name: "execution_time", Type: field.TypeInt64, Default: 0},
 		{Name: "result_rows", Type: field.TypeInt64, Default: 0},
 		{Name: "affected_rows", Type: field.TypeInt64, Default: 0},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// QueryHistoryTable holds the schema information for the "query_history" table.
 	QueryHistoryTable = &schema.Table{
@@ -439,7 +531,7 @@ var (
 		{Name: "token", Type: field.TypeString, Unique: true},
 		{Name: "expires_at", Type: field.TypeTime},
 		{Name: "revoked", Type: field.TypeBool, Default: false},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// RefreshTokensTable holds the schema information for the "refresh_tokens" table.
 	RefreshTokensTable = &schema.Table{
@@ -459,6 +551,30 @@ var (
 			},
 		},
 	}
+	// RolesColumns holds the columns for the "roles" table.
+	RolesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "name", Type: field.TypeString, Unique: true},
+		{Name: "display_name", Type: field.TypeString},
+		{Name: "description", Type: field.TypeString, Default: ""},
+		{Name: "is_builtin", Type: field.TypeBool, Default: false},
+		{Name: "status", Type: field.TypeString, Default: "active"},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+	}
+	// RolesTable holds the schema information for the "roles" table.
+	RolesTable = &schema.Table{
+		Name:       "roles",
+		Columns:    RolesColumns,
+		PrimaryKey: []*schema.Column{RolesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "role_name",
+				Unique:  true,
+				Columns: []*schema.Column{RolesColumns[1]},
+			},
+		},
+	}
 	// SLAActionLogColumns holds the columns for the "sla_action_log" table.
 	SLAActionLogColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -466,7 +582,7 @@ var (
 		{Name: "action_type", Type: field.TypeString},
 		{Name: "dedup_key", Type: field.TypeString, Unique: true},
 		{Name: "notified_user", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 		{Name: "sla_config_id", Type: field.TypeInt64, Nullable: true},
 	}
 	// SLAActionLogTable holds the schema information for the "sla_action_log" table.
@@ -496,8 +612,8 @@ var (
 		{Name: "escalate_to_role", Type: field.TypeString, Default: "admin"},
 		{Name: "escalate_to_user", Type: field.TypeString, Default: ""},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
-		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// SLAConfigTable holds the schema information for the "sla_config" table.
 	SLAConfigTable = &schema.Table{
@@ -523,8 +639,8 @@ var (
 		{Name: "category", Type: field.TypeString, Default: "general"},
 		{Name: "params_json", Type: field.TypeString, Default: "[]"},
 		{Name: "is_public", Type: field.TypeBool, Default: false},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
-		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// SQLTemplatesTable holds the schema information for the "sql_templates" table.
 	SQLTemplatesTable = &schema.Table{
@@ -556,8 +672,8 @@ var (
 		{Name: "database", Type: field.TypeString, Default: ""},
 		{Name: "table_name", Type: field.TypeString, Default: ""},
 		{Name: "sensitivity_level", Type: field.TypeString, Default: "medium"},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
-		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// SensitiveTablesTable holds the schema information for the "sensitive_tables" table.
 	SensitiveTablesTable = &schema.Table{
@@ -587,7 +703,7 @@ var (
 		{Name: "datasource_name", Type: field.TypeString, Default: ""},
 		{Name: "revoked", Type: field.TypeBool, Default: false},
 		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// SharedResultsTable holds the schema information for the "shared_results" table.
 	SharedResultsTable = &schema.Table{
@@ -620,7 +736,7 @@ var (
 		{Name: "obj", Type: field.TypeString},
 		{Name: "act", Type: field.TypeString},
 		{Name: "expires_at", Type: field.TypeTime},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// TempPoliciesTable holds the schema information for the "temp_policies" table.
 	TempPoliciesTable = &schema.Table{
@@ -668,8 +784,8 @@ var (
 		{Name: "executed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "sla_deadline", Type: field.TypeTime, Nullable: true},
 		{Name: "sla_status", Type: field.TypeString, Default: "normal"},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
-		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// TicketsTable holds the schema information for the "tickets" table.
 	TicketsTable = &schema.Table{
@@ -704,6 +820,27 @@ var (
 			},
 		},
 	}
+	// TicketNotificationLogsColumns holds the columns for the "ticket_notification_logs" table.
+	TicketNotificationLogsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "ticket_id", Type: field.TypeInt64},
+		{Name: "event_type", Type: field.TypeString},
+		{Name: "sent_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "status", Type: field.TypeString, Default: "sent"},
+	}
+	// TicketNotificationLogsTable holds the schema information for the "ticket_notification_logs" table.
+	TicketNotificationLogsTable = &schema.Table{
+		Name:       "ticket_notification_logs",
+		Columns:    TicketNotificationLogsColumns,
+		PrimaryKey: []*schema.Column{TicketNotificationLogsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "ticketnotificationlog_ticket_id_event_type",
+				Unique:  false,
+				Columns: []*schema.Column{TicketNotificationLogsColumns[1], TicketNotificationLogsColumns[2]},
+			},
+		},
+	}
 	// TicketRevisionsColumns holds the columns for the "ticket_revisions" table.
 	TicketRevisionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -717,7 +854,7 @@ var (
 		{Name: "reviewer_id", Type: field.TypeInt64, Default: 0},
 		{Name: "review_comment", Type: field.TypeString, Default: ""},
 		{Name: "status", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// TicketRevisionsTable holds the schema information for the "ticket_revisions" table.
 	TicketRevisionsTable = &schema.Table{
@@ -747,8 +884,8 @@ var (
 		{Name: "dingtalk_union_id", Type: field.TypeString, Nullable: true, Default: ""},
 		{Name: "oidc_subject", Type: field.TypeString, Default: ""},
 		{Name: "oidc_provider", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
-		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// UsersTable holds the schema information for the "users" table.
 	UsersTable = &schema.Table{
@@ -772,7 +909,7 @@ var (
 		{Name: "path", Type: field.TypeString, Default: ""},
 		{Name: "navigation_type", Type: field.TypeString, Default: ""},
 		{Name: "user_agent", Type: field.TypeString, Default: ""},
-		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("datetime('now')")},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// WebVitalsTable holds the schema information for the "web_vitals" table.
 	WebVitalsTable = &schema.Table{
@@ -792,22 +929,54 @@ var (
 			},
 		},
 	}
+	// WebhookSubscriptionsColumns holds the columns for the "webhook_subscriptions" table.
+	WebhookSubscriptionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "name", Type: field.TypeString},
+		{Name: "url", Type: field.TypeString},
+		{Name: "encrypted_secret", Type: field.TypeString},
+		{Name: "events", Type: field.TypeString, Default: "[]"},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "failure_count", Type: field.TypeInt64, Default: 0},
+		{Name: "last_triggered_at", Type: field.TypeTime, Nullable: true},
+		{Name: "created_by", Type: field.TypeString, Default: ""},
+		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+	}
+	// WebhookSubscriptionsTable holds the schema information for the "webhook_subscriptions" table.
+	WebhookSubscriptionsTable = &schema.Table{
+		Name:       "webhook_subscriptions",
+		Columns:    WebhookSubscriptionsColumns,
+		PrimaryKey: []*schema.Column{WebhookSubscriptionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "webhooksubscription_enabled",
+				Unique:  false,
+				Columns: []*schema.Column{WebhookSubscriptionsColumns[5]},
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		APITokensTable,
 		ApprovalPoliciesTable,
 		ApprovalRecordsTable,
 		AuditLogsTable,
+		CasbinRuleTable,
 		CommentsTable,
 		DatasourcesTable,
 		ExecutionResultsTable,
 		ExportTasksTable,
+		FeishuDeadLettersTable,
+		FeishuWebhooksTable,
 		GitLinksTable,
 		MaskRulesTable,
+		NotificationPreferencesTable,
 		OidcProvidersTable,
 		PermissionRequestsTable,
 		QueryHistoryTable,
 		RefreshTokensTable,
+		RolesTable,
 		SLAActionLogTable,
 		SLAConfigTable,
 		SQLTemplatesTable,
@@ -815,9 +984,11 @@ var (
 		SharedResultsTable,
 		TempPoliciesTable,
 		TicketsTable,
+		TicketNotificationLogsTable,
 		TicketRevisionsTable,
 		UsersTable,
 		WebVitalsTable,
+		WebhookSubscriptionsTable,
 	}
 )
 
@@ -834,6 +1005,9 @@ func init() {
 	AuditLogsTable.Annotation = &entsql.Annotation{
 		Table: "audit_logs",
 	}
+	CasbinRuleTable.Annotation = &entsql.Annotation{
+		Table: "casbin_rule",
+	}
 	CommentsTable.Annotation = &entsql.Annotation{
 		Table: "comments",
 	}
@@ -846,11 +1020,20 @@ func init() {
 	ExportTasksTable.Annotation = &entsql.Annotation{
 		Table: "export_tasks",
 	}
+	FeishuDeadLettersTable.Annotation = &entsql.Annotation{
+		Table: "feishu_dead_letters",
+	}
+	FeishuWebhooksTable.Annotation = &entsql.Annotation{
+		Table: "feishu_webhooks",
+	}
 	GitLinksTable.Annotation = &entsql.Annotation{
 		Table: "git_links",
 	}
 	MaskRulesTable.Annotation = &entsql.Annotation{
 		Table: "mask_rules",
+	}
+	NotificationPreferencesTable.Annotation = &entsql.Annotation{
+		Table: "notification_preferences",
 	}
 	OidcProvidersTable.Annotation = &entsql.Annotation{
 		Table: "oidc_providers",
@@ -863,6 +1046,9 @@ func init() {
 	}
 	RefreshTokensTable.Annotation = &entsql.Annotation{
 		Table: "refresh_tokens",
+	}
+	RolesTable.Annotation = &entsql.Annotation{
+		Table: "roles",
 	}
 	SLAActionLogTable.Annotation = &entsql.Annotation{
 		Table: "sla_action_log",
@@ -885,6 +1071,9 @@ func init() {
 	TicketsTable.Annotation = &entsql.Annotation{
 		Table: "tickets",
 	}
+	TicketNotificationLogsTable.Annotation = &entsql.Annotation{
+		Table: "ticket_notification_logs",
+	}
 	TicketRevisionsTable.Annotation = &entsql.Annotation{
 		Table: "ticket_revisions",
 	}
@@ -893,5 +1082,8 @@ func init() {
 	}
 	WebVitalsTable.Annotation = &entsql.Annotation{
 		Table: "web_vitals",
+	}
+	WebhookSubscriptionsTable.Annotation = &entsql.Annotation{
+		Table: "webhook_subscriptions",
 	}
 }

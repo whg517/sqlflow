@@ -69,10 +69,10 @@ func (DataSource) Fields() []ent.Field {
 			Default("").
 			Optional(),
 		field.Time("created_at").
-			Default(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			Default(timeNow).Annotations(entsql.DefaultExpr("now()")),
 		field.Time("updated_at").
 			Default(timeNow).
-			UpdateDefault(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			UpdateDefault(timeNow).Annotations(entsql.DefaultExpr("now()")),
 	}
 }
 

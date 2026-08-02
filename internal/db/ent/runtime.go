@@ -9,16 +9,21 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent/approvalpolicy"
 	"github.com/whg517/sqlflow/internal/db/ent/approvalrecord"
 	"github.com/whg517/sqlflow/internal/db/ent/auditlog"
+	"github.com/whg517/sqlflow/internal/db/ent/casbinrule"
 	"github.com/whg517/sqlflow/internal/db/ent/comment"
 	"github.com/whg517/sqlflow/internal/db/ent/datasource"
 	"github.com/whg517/sqlflow/internal/db/ent/executionresult"
 	"github.com/whg517/sqlflow/internal/db/ent/exporttask"
+	"github.com/whg517/sqlflow/internal/db/ent/feishudeadletter"
+	"github.com/whg517/sqlflow/internal/db/ent/feishuwebhook"
 	"github.com/whg517/sqlflow/internal/db/ent/gitlink"
 	"github.com/whg517/sqlflow/internal/db/ent/maskrule"
+	"github.com/whg517/sqlflow/internal/db/ent/notificationpreference"
 	"github.com/whg517/sqlflow/internal/db/ent/oidcprovider"
 	"github.com/whg517/sqlflow/internal/db/ent/permissionrequest"
 	"github.com/whg517/sqlflow/internal/db/ent/queryhistory"
 	"github.com/whg517/sqlflow/internal/db/ent/refreshtoken"
+	"github.com/whg517/sqlflow/internal/db/ent/role"
 	"github.com/whg517/sqlflow/internal/db/ent/schema"
 	"github.com/whg517/sqlflow/internal/db/ent/sensitivetable"
 	"github.com/whg517/sqlflow/internal/db/ent/sharedresult"
@@ -27,8 +32,10 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent/sqltemplate"
 	"github.com/whg517/sqlflow/internal/db/ent/temppolicy"
 	"github.com/whg517/sqlflow/internal/db/ent/ticket"
+	"github.com/whg517/sqlflow/internal/db/ent/ticketnotificationlog"
 	"github.com/whg517/sqlflow/internal/db/ent/ticketrevision"
 	"github.com/whg517/sqlflow/internal/db/ent/user"
+	"github.com/whg517/sqlflow/internal/db/ent/webhooksubscription"
 	"github.com/whg517/sqlflow/internal/db/ent/webvital"
 )
 
@@ -200,6 +207,36 @@ func init() {
 	auditlogDescCreatedAt := auditlogFields[14].Descriptor()
 	// auditlog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	auditlog.DefaultCreatedAt = auditlogDescCreatedAt.Default.(func() time.Time)
+	casbinruleFields := schema.CasbinRule{}.Fields()
+	_ = casbinruleFields
+	// casbinruleDescPtype is the schema descriptor for ptype field.
+	casbinruleDescPtype := casbinruleFields[0].Descriptor()
+	// casbinrule.DefaultPtype holds the default value on creation for the ptype field.
+	casbinrule.DefaultPtype = casbinruleDescPtype.Default.(string)
+	// casbinruleDescV0 is the schema descriptor for v0 field.
+	casbinruleDescV0 := casbinruleFields[1].Descriptor()
+	// casbinrule.DefaultV0 holds the default value on creation for the v0 field.
+	casbinrule.DefaultV0 = casbinruleDescV0.Default.(string)
+	// casbinruleDescV1 is the schema descriptor for v1 field.
+	casbinruleDescV1 := casbinruleFields[2].Descriptor()
+	// casbinrule.DefaultV1 holds the default value on creation for the v1 field.
+	casbinrule.DefaultV1 = casbinruleDescV1.Default.(string)
+	// casbinruleDescV2 is the schema descriptor for v2 field.
+	casbinruleDescV2 := casbinruleFields[3].Descriptor()
+	// casbinrule.DefaultV2 holds the default value on creation for the v2 field.
+	casbinrule.DefaultV2 = casbinruleDescV2.Default.(string)
+	// casbinruleDescV3 is the schema descriptor for v3 field.
+	casbinruleDescV3 := casbinruleFields[4].Descriptor()
+	// casbinrule.DefaultV3 holds the default value on creation for the v3 field.
+	casbinrule.DefaultV3 = casbinruleDescV3.Default.(string)
+	// casbinruleDescV4 is the schema descriptor for v4 field.
+	casbinruleDescV4 := casbinruleFields[5].Descriptor()
+	// casbinrule.DefaultV4 holds the default value on creation for the v4 field.
+	casbinrule.DefaultV4 = casbinruleDescV4.Default.(string)
+	// casbinruleDescV5 is the schema descriptor for v5 field.
+	casbinruleDescV5 := casbinruleFields[6].Descriptor()
+	// casbinrule.DefaultV5 holds the default value on creation for the v5 field.
+	casbinrule.DefaultV5 = casbinruleDescV5.Default.(string)
 	commentFields := schema.Comment{}.Fields()
 	_ = commentFields
 	// commentDescContent is the schema descriptor for content field.
@@ -382,6 +419,52 @@ func init() {
 	exporttaskDescCreatedAt := exporttaskFields[11].Descriptor()
 	// exporttask.DefaultCreatedAt holds the default value on creation for the created_at field.
 	exporttask.DefaultCreatedAt = exporttaskDescCreatedAt.Default.(func() time.Time)
+	feishudeadletterFields := schema.FeishuDeadLetter{}.Fields()
+	_ = feishudeadletterFields
+	// feishudeadletterDescErrorMessage is the schema descriptor for error_message field.
+	feishudeadletterDescErrorMessage := feishudeadletterFields[2].Descriptor()
+	// feishudeadletter.DefaultErrorMessage holds the default value on creation for the error_message field.
+	feishudeadletter.DefaultErrorMessage = feishudeadletterDescErrorMessage.Default.(string)
+	// feishudeadletterDescAttemptCount is the schema descriptor for attempt_count field.
+	feishudeadletterDescAttemptCount := feishudeadletterFields[3].Descriptor()
+	// feishudeadletter.DefaultAttemptCount holds the default value on creation for the attempt_count field.
+	feishudeadletter.DefaultAttemptCount = feishudeadletterDescAttemptCount.Default.(int64)
+	// feishudeadletterDescLastAttemptAt is the schema descriptor for last_attempt_at field.
+	feishudeadletterDescLastAttemptAt := feishudeadletterFields[4].Descriptor()
+	// feishudeadletter.DefaultLastAttemptAt holds the default value on creation for the last_attempt_at field.
+	feishudeadletter.DefaultLastAttemptAt = feishudeadletterDescLastAttemptAt.Default.(func() time.Time)
+	// feishudeadletterDescCreatedAt is the schema descriptor for created_at field.
+	feishudeadletterDescCreatedAt := feishudeadletterFields[5].Descriptor()
+	// feishudeadletter.DefaultCreatedAt holds the default value on creation for the created_at field.
+	feishudeadletter.DefaultCreatedAt = feishudeadletterDescCreatedAt.Default.(func() time.Time)
+	feishuwebhookFields := schema.FeishuWebhook{}.Fields()
+	_ = feishuwebhookFields
+	// feishuwebhookDescScene is the schema descriptor for scene field.
+	feishuwebhookDescScene := feishuwebhookFields[3].Descriptor()
+	// feishuwebhook.DefaultScene holds the default value on creation for the scene field.
+	feishuwebhook.DefaultScene = feishuwebhookDescScene.Default.(string)
+	// feishuwebhookDescEnabled is the schema descriptor for enabled field.
+	feishuwebhookDescEnabled := feishuwebhookFields[4].Descriptor()
+	// feishuwebhook.DefaultEnabled holds the default value on creation for the enabled field.
+	feishuwebhook.DefaultEnabled = feishuwebhookDescEnabled.Default.(bool)
+	// feishuwebhookDescRateLimitRps is the schema descriptor for rate_limit_rps field.
+	feishuwebhookDescRateLimitRps := feishuwebhookFields[5].Descriptor()
+	// feishuwebhook.DefaultRateLimitRps holds the default value on creation for the rate_limit_rps field.
+	feishuwebhook.DefaultRateLimitRps = feishuwebhookDescRateLimitRps.Default.(float64)
+	// feishuwebhookDescCreatedBy is the schema descriptor for created_by field.
+	feishuwebhookDescCreatedBy := feishuwebhookFields[6].Descriptor()
+	// feishuwebhook.DefaultCreatedBy holds the default value on creation for the created_by field.
+	feishuwebhook.DefaultCreatedBy = feishuwebhookDescCreatedBy.Default.(string)
+	// feishuwebhookDescCreatedAt is the schema descriptor for created_at field.
+	feishuwebhookDescCreatedAt := feishuwebhookFields[7].Descriptor()
+	// feishuwebhook.DefaultCreatedAt holds the default value on creation for the created_at field.
+	feishuwebhook.DefaultCreatedAt = feishuwebhookDescCreatedAt.Default.(func() time.Time)
+	// feishuwebhookDescUpdatedAt is the schema descriptor for updated_at field.
+	feishuwebhookDescUpdatedAt := feishuwebhookFields[8].Descriptor()
+	// feishuwebhook.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	feishuwebhook.DefaultUpdatedAt = feishuwebhookDescUpdatedAt.Default.(func() time.Time)
+	// feishuwebhook.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	feishuwebhook.UpdateDefaultUpdatedAt = feishuwebhookDescUpdatedAt.UpdateDefault.(func() time.Time)
 	gitlinkFields := schema.GitLink{}.Fields()
 	_ = gitlinkFields
 	// gitlinkDescEntityType is the schema descriptor for entity_type field.
@@ -480,6 +563,18 @@ func init() {
 	maskrule.DefaultUpdatedAt = maskruleDescUpdatedAt.Default.(func() time.Time)
 	// maskrule.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	maskrule.UpdateDefaultUpdatedAt = maskruleDescUpdatedAt.UpdateDefault.(func() time.Time)
+	notificationpreferenceFields := schema.NotificationPreference{}.Fields()
+	_ = notificationpreferenceFields
+	// notificationpreferenceDescChannels is the schema descriptor for channels field.
+	notificationpreferenceDescChannels := notificationpreferenceFields[2].Descriptor()
+	// notificationpreference.DefaultChannels holds the default value on creation for the channels field.
+	notificationpreference.DefaultChannels = notificationpreferenceDescChannels.Default.(string)
+	// notificationpreferenceDescUpdatedAt is the schema descriptor for updated_at field.
+	notificationpreferenceDescUpdatedAt := notificationpreferenceFields[3].Descriptor()
+	// notificationpreference.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	notificationpreference.DefaultUpdatedAt = notificationpreferenceDescUpdatedAt.Default.(func() time.Time)
+	// notificationpreference.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	notificationpreference.UpdateDefaultUpdatedAt = notificationpreferenceDescUpdatedAt.UpdateDefault.(func() time.Time)
 	oidcproviderFields := schema.OIDCProvider{}.Fields()
 	_ = oidcproviderFields
 	// oidcproviderDescName is the schema descriptor for name field.
@@ -612,6 +707,30 @@ func init() {
 	refreshtokenDescCreatedAt := refreshtokenFields[4].Descriptor()
 	// refreshtoken.DefaultCreatedAt holds the default value on creation for the created_at field.
 	refreshtoken.DefaultCreatedAt = refreshtokenDescCreatedAt.Default.(func() time.Time)
+	roleFields := schema.Role{}.Fields()
+	_ = roleFields
+	// roleDescDescription is the schema descriptor for description field.
+	roleDescDescription := roleFields[2].Descriptor()
+	// role.DefaultDescription holds the default value on creation for the description field.
+	role.DefaultDescription = roleDescDescription.Default.(string)
+	// roleDescIsBuiltin is the schema descriptor for is_builtin field.
+	roleDescIsBuiltin := roleFields[3].Descriptor()
+	// role.DefaultIsBuiltin holds the default value on creation for the is_builtin field.
+	role.DefaultIsBuiltin = roleDescIsBuiltin.Default.(bool)
+	// roleDescStatus is the schema descriptor for status field.
+	roleDescStatus := roleFields[4].Descriptor()
+	// role.DefaultStatus holds the default value on creation for the status field.
+	role.DefaultStatus = roleDescStatus.Default.(string)
+	// roleDescCreatedAt is the schema descriptor for created_at field.
+	roleDescCreatedAt := roleFields[5].Descriptor()
+	// role.DefaultCreatedAt holds the default value on creation for the created_at field.
+	role.DefaultCreatedAt = roleDescCreatedAt.Default.(func() time.Time)
+	// roleDescUpdatedAt is the schema descriptor for updated_at field.
+	roleDescUpdatedAt := roleFields[6].Descriptor()
+	// role.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	role.DefaultUpdatedAt = roleDescUpdatedAt.Default.(func() time.Time)
+	// role.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	role.UpdateDefaultUpdatedAt = roleDescUpdatedAt.UpdateDefault.(func() time.Time)
 	slaactionlogFields := schema.SLAActionLog{}.Fields()
 	_ = slaactionlogFields
 	// slaactionlogDescActionType is the schema descriptor for action_type field.
@@ -882,6 +1001,16 @@ func init() {
 	ticket.DefaultUpdatedAt = ticketDescUpdatedAt.Default.(func() time.Time)
 	// ticket.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	ticket.UpdateDefaultUpdatedAt = ticketDescUpdatedAt.UpdateDefault.(func() time.Time)
+	ticketnotificationlogFields := schema.TicketNotificationLog{}.Fields()
+	_ = ticketnotificationlogFields
+	// ticketnotificationlogDescSentAt is the schema descriptor for sent_at field.
+	ticketnotificationlogDescSentAt := ticketnotificationlogFields[2].Descriptor()
+	// ticketnotificationlog.DefaultSentAt holds the default value on creation for the sent_at field.
+	ticketnotificationlog.DefaultSentAt = ticketnotificationlogDescSentAt.Default.(func() time.Time)
+	// ticketnotificationlogDescStatus is the schema descriptor for status field.
+	ticketnotificationlogDescStatus := ticketnotificationlogFields[3].Descriptor()
+	// ticketnotificationlog.DefaultStatus holds the default value on creation for the status field.
+	ticketnotificationlog.DefaultStatus = ticketnotificationlogDescStatus.Default.(string)
 	ticketrevisionFields := schema.TicketRevision{}.Fields()
 	_ = ticketrevisionFields
 	// ticketrevisionDescSQLContent is the schema descriptor for sql_content field.
@@ -986,4 +1115,32 @@ func init() {
 	webvitalDescCreatedAt := webvitalFields[6].Descriptor()
 	// webvital.DefaultCreatedAt holds the default value on creation for the created_at field.
 	webvital.DefaultCreatedAt = webvitalDescCreatedAt.Default.(func() time.Time)
+	webhooksubscriptionFields := schema.WebhookSubscription{}.Fields()
+	_ = webhooksubscriptionFields
+	// webhooksubscriptionDescEvents is the schema descriptor for events field.
+	webhooksubscriptionDescEvents := webhooksubscriptionFields[3].Descriptor()
+	// webhooksubscription.DefaultEvents holds the default value on creation for the events field.
+	webhooksubscription.DefaultEvents = webhooksubscriptionDescEvents.Default.(string)
+	// webhooksubscriptionDescEnabled is the schema descriptor for enabled field.
+	webhooksubscriptionDescEnabled := webhooksubscriptionFields[4].Descriptor()
+	// webhooksubscription.DefaultEnabled holds the default value on creation for the enabled field.
+	webhooksubscription.DefaultEnabled = webhooksubscriptionDescEnabled.Default.(bool)
+	// webhooksubscriptionDescFailureCount is the schema descriptor for failure_count field.
+	webhooksubscriptionDescFailureCount := webhooksubscriptionFields[5].Descriptor()
+	// webhooksubscription.DefaultFailureCount holds the default value on creation for the failure_count field.
+	webhooksubscription.DefaultFailureCount = webhooksubscriptionDescFailureCount.Default.(int64)
+	// webhooksubscriptionDescCreatedBy is the schema descriptor for created_by field.
+	webhooksubscriptionDescCreatedBy := webhooksubscriptionFields[7].Descriptor()
+	// webhooksubscription.DefaultCreatedBy holds the default value on creation for the created_by field.
+	webhooksubscription.DefaultCreatedBy = webhooksubscriptionDescCreatedBy.Default.(string)
+	// webhooksubscriptionDescCreatedAt is the schema descriptor for created_at field.
+	webhooksubscriptionDescCreatedAt := webhooksubscriptionFields[8].Descriptor()
+	// webhooksubscription.DefaultCreatedAt holds the default value on creation for the created_at field.
+	webhooksubscription.DefaultCreatedAt = webhooksubscriptionDescCreatedAt.Default.(func() time.Time)
+	// webhooksubscriptionDescUpdatedAt is the schema descriptor for updated_at field.
+	webhooksubscriptionDescUpdatedAt := webhooksubscriptionFields[9].Descriptor()
+	// webhooksubscription.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	webhooksubscription.DefaultUpdatedAt = webhooksubscriptionDescUpdatedAt.Default.(func() time.Time)
+	// webhooksubscription.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	webhooksubscription.UpdateDefaultUpdatedAt = webhooksubscriptionDescUpdatedAt.UpdateDefault.(func() time.Time)
 }

@@ -34,7 +34,7 @@ func (WebVital) Fields() []ent.Field {
 		field.String("user_agent").
 			Default(""),
 		field.Time("created_at").
-			Default(timeNow).Annotations(entsql.DefaultExpr("datetime('now')")),
+			Default(timeNow).Annotations(entsql.DefaultExpr("now()")),
 	}
 }
 

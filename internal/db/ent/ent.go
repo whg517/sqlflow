@@ -16,16 +16,21 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent/approvalpolicy"
 	"github.com/whg517/sqlflow/internal/db/ent/approvalrecord"
 	"github.com/whg517/sqlflow/internal/db/ent/auditlog"
+	"github.com/whg517/sqlflow/internal/db/ent/casbinrule"
 	"github.com/whg517/sqlflow/internal/db/ent/comment"
 	"github.com/whg517/sqlflow/internal/db/ent/datasource"
 	"github.com/whg517/sqlflow/internal/db/ent/executionresult"
 	"github.com/whg517/sqlflow/internal/db/ent/exporttask"
+	"github.com/whg517/sqlflow/internal/db/ent/feishudeadletter"
+	"github.com/whg517/sqlflow/internal/db/ent/feishuwebhook"
 	"github.com/whg517/sqlflow/internal/db/ent/gitlink"
 	"github.com/whg517/sqlflow/internal/db/ent/maskrule"
+	"github.com/whg517/sqlflow/internal/db/ent/notificationpreference"
 	"github.com/whg517/sqlflow/internal/db/ent/oidcprovider"
 	"github.com/whg517/sqlflow/internal/db/ent/permissionrequest"
 	"github.com/whg517/sqlflow/internal/db/ent/queryhistory"
 	"github.com/whg517/sqlflow/internal/db/ent/refreshtoken"
+	"github.com/whg517/sqlflow/internal/db/ent/role"
 	"github.com/whg517/sqlflow/internal/db/ent/sensitivetable"
 	"github.com/whg517/sqlflow/internal/db/ent/sharedresult"
 	"github.com/whg517/sqlflow/internal/db/ent/slaactionlog"
@@ -33,8 +38,10 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent/sqltemplate"
 	"github.com/whg517/sqlflow/internal/db/ent/temppolicy"
 	"github.com/whg517/sqlflow/internal/db/ent/ticket"
+	"github.com/whg517/sqlflow/internal/db/ent/ticketnotificationlog"
 	"github.com/whg517/sqlflow/internal/db/ent/ticketrevision"
 	"github.com/whg517/sqlflow/internal/db/ent/user"
+	"github.com/whg517/sqlflow/internal/db/ent/webhooksubscription"
 	"github.com/whg517/sqlflow/internal/db/ent/webvital"
 )
 
@@ -96,30 +103,37 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			apitoken.Table:          apitoken.ValidColumn,
-			approvalpolicy.Table:    approvalpolicy.ValidColumn,
-			approvalrecord.Table:    approvalrecord.ValidColumn,
-			auditlog.Table:          auditlog.ValidColumn,
-			comment.Table:           comment.ValidColumn,
-			datasource.Table:        datasource.ValidColumn,
-			executionresult.Table:   executionresult.ValidColumn,
-			exporttask.Table:        exporttask.ValidColumn,
-			gitlink.Table:           gitlink.ValidColumn,
-			maskrule.Table:          maskrule.ValidColumn,
-			oidcprovider.Table:      oidcprovider.ValidColumn,
-			permissionrequest.Table: permissionrequest.ValidColumn,
-			queryhistory.Table:      queryhistory.ValidColumn,
-			refreshtoken.Table:      refreshtoken.ValidColumn,
-			slaactionlog.Table:      slaactionlog.ValidColumn,
-			slaconfig.Table:         slaconfig.ValidColumn,
-			sqltemplate.Table:       sqltemplate.ValidColumn,
-			sensitivetable.Table:    sensitivetable.ValidColumn,
-			sharedresult.Table:      sharedresult.ValidColumn,
-			temppolicy.Table:        temppolicy.ValidColumn,
-			ticket.Table:            ticket.ValidColumn,
-			ticketrevision.Table:    ticketrevision.ValidColumn,
-			user.Table:              user.ValidColumn,
-			webvital.Table:          webvital.ValidColumn,
+			apitoken.Table:               apitoken.ValidColumn,
+			approvalpolicy.Table:         approvalpolicy.ValidColumn,
+			approvalrecord.Table:         approvalrecord.ValidColumn,
+			auditlog.Table:               auditlog.ValidColumn,
+			casbinrule.Table:             casbinrule.ValidColumn,
+			comment.Table:                comment.ValidColumn,
+			datasource.Table:             datasource.ValidColumn,
+			executionresult.Table:        executionresult.ValidColumn,
+			exporttask.Table:             exporttask.ValidColumn,
+			feishudeadletter.Table:       feishudeadletter.ValidColumn,
+			feishuwebhook.Table:          feishuwebhook.ValidColumn,
+			gitlink.Table:                gitlink.ValidColumn,
+			maskrule.Table:               maskrule.ValidColumn,
+			notificationpreference.Table: notificationpreference.ValidColumn,
+			oidcprovider.Table:           oidcprovider.ValidColumn,
+			permissionrequest.Table:      permissionrequest.ValidColumn,
+			queryhistory.Table:           queryhistory.ValidColumn,
+			refreshtoken.Table:           refreshtoken.ValidColumn,
+			role.Table:                   role.ValidColumn,
+			slaactionlog.Table:           slaactionlog.ValidColumn,
+			slaconfig.Table:              slaconfig.ValidColumn,
+			sqltemplate.Table:            sqltemplate.ValidColumn,
+			sensitivetable.Table:         sensitivetable.ValidColumn,
+			sharedresult.Table:           sharedresult.ValidColumn,
+			temppolicy.Table:             temppolicy.ValidColumn,
+			ticket.Table:                 ticket.ValidColumn,
+			ticketnotificationlog.Table:  ticketnotificationlog.ValidColumn,
+			ticketrevision.Table:         ticketrevision.ValidColumn,
+			user.Table:                   user.ValidColumn,
+			webvital.Table:               webvital.ValidColumn,
+			webhooksubscription.Table:    webhooksubscription.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)
