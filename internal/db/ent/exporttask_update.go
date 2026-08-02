@@ -18,8 +18,9 @@ import (
 // ExportTaskUpdate is the builder for updating ExportTask entities.
 type ExportTaskUpdate struct {
 	config
-	hooks    []Hook
-	mutation *ExportTaskMutation
+	hooks     []Hook
+	mutation  *ExportTaskMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the ExportTaskUpdate builder.
@@ -269,6 +270,12 @@ func (_u *ExportTaskUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *ExportTaskUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *ExportTaskUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *ExportTaskUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(exporttask.Table, exporttask.Columns, sqlgraph.NewFieldSpec(exporttask.FieldID, field.TypeInt))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
@@ -329,6 +336,7 @@ func (_u *ExportTaskUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if _u.mutation.CompletedAtCleared() {
 		_spec.ClearField(exporttask.FieldCompletedAt, field.TypeTime)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{exporttask.Label}
@@ -344,9 +352,10 @@ func (_u *ExportTaskUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 // ExportTaskUpdateOne is the builder for updating a single ExportTask entity.
 type ExportTaskUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *ExportTaskMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *ExportTaskMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetUserID sets the "user_id" field.
@@ -603,6 +612,12 @@ func (_u *ExportTaskUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *ExportTaskUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *ExportTaskUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *ExportTaskUpdateOne) sqlSave(ctx context.Context) (_node *ExportTask, err error) {
 	_spec := sqlgraph.NewUpdateSpec(exporttask.Table, exporttask.Columns, sqlgraph.NewFieldSpec(exporttask.FieldID, field.TypeInt))
 	id, ok := _u.mutation.ID()
@@ -680,6 +695,7 @@ func (_u *ExportTaskUpdateOne) sqlSave(ctx context.Context) (_node *ExportTask, 
 	if _u.mutation.CompletedAtCleared() {
 		_spec.ClearField(exporttask.FieldCompletedAt, field.TypeTime)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &ExportTask{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

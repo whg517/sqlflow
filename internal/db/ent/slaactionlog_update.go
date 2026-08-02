@@ -18,8 +18,9 @@ import (
 // SLAActionLogUpdate is the builder for updating SLAActionLog entities.
 type SLAActionLogUpdate struct {
 	config
-	hooks    []Hook
-	mutation *SLAActionLogMutation
+	hooks     []Hook
+	mutation  *SLAActionLogMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the SLAActionLogUpdate builder.
@@ -179,6 +180,12 @@ func (_u *SLAActionLogUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *SLAActionLogUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SLAActionLogUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *SLAActionLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -218,6 +225,7 @@ func (_u *SLAActionLogUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if _u.mutation.SLAConfigIDCleared() {
 		_spec.ClearField(slaactionlog.FieldSLAConfigID, field.TypeInt64)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{slaactionlog.Label}
@@ -233,9 +241,10 @@ func (_u *SLAActionLogUpdate) sqlSave(ctx context.Context) (_node int, err error
 // SLAActionLogUpdateOne is the builder for updating a single SLAActionLog entity.
 type SLAActionLogUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *SLAActionLogMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *SLAActionLogMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -402,6 +411,12 @@ func (_u *SLAActionLogUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *SLAActionLogUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SLAActionLogUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *SLAActionLogUpdateOne) sqlSave(ctx context.Context) (_node *SLAActionLog, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -458,6 +473,7 @@ func (_u *SLAActionLogUpdateOne) sqlSave(ctx context.Context) (_node *SLAActionL
 	if _u.mutation.SLAConfigIDCleared() {
 		_spec.ClearField(slaactionlog.FieldSLAConfigID, field.TypeInt64)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &SLAActionLog{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

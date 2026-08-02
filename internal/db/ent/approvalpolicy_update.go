@@ -18,8 +18,9 @@ import (
 // ApprovalPolicyUpdate is the builder for updating ApprovalPolicy entities.
 type ApprovalPolicyUpdate struct {
 	config
-	hooks    []Hook
-	mutation *ApprovalPolicyMutation
+	hooks     []Hook
+	mutation  *ApprovalPolicyMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the ApprovalPolicyUpdate builder.
@@ -244,6 +245,12 @@ func (_u *ApprovalPolicyUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *ApprovalPolicyUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *ApprovalPolicyUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *ApprovalPolicyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -298,6 +305,7 @@ func (_u *ApprovalPolicyUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(approvalpolicy.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{approvalpolicy.Label}
@@ -313,9 +321,10 @@ func (_u *ApprovalPolicyUpdate) sqlSave(ctx context.Context) (_node int, err err
 // ApprovalPolicyUpdateOne is the builder for updating a single ApprovalPolicy entity.
 type ApprovalPolicyUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *ApprovalPolicyMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *ApprovalPolicyMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetName sets the "name" field.
@@ -547,6 +556,12 @@ func (_u *ApprovalPolicyUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *ApprovalPolicyUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *ApprovalPolicyUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *ApprovalPolicyUpdateOne) sqlSave(ctx context.Context) (_node *ApprovalPolicy, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -618,6 +633,7 @@ func (_u *ApprovalPolicyUpdateOne) sqlSave(ctx context.Context) (_node *Approval
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(approvalpolicy.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &ApprovalPolicy{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

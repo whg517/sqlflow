@@ -18,8 +18,9 @@ import (
 // QueryHistoryUpdate is the builder for updating QueryHistory entities.
 type QueryHistoryUpdate struct {
 	config
-	hooks    []Hook
-	mutation *QueryHistoryMutation
+	hooks     []Hook
+	mutation  *QueryHistoryMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the QueryHistoryUpdate builder.
@@ -273,6 +274,12 @@ func (_u *QueryHistoryUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *QueryHistoryUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *QueryHistoryUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *QueryHistoryUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -336,6 +343,7 @@ func (_u *QueryHistoryUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(queryhistory.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{queryhistory.Label}
@@ -351,9 +359,10 @@ func (_u *QueryHistoryUpdate) sqlSave(ctx context.Context) (_node int, err error
 // QueryHistoryUpdateOne is the builder for updating a single QueryHistory entity.
 type QueryHistoryUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *QueryHistoryMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *QueryHistoryMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetUserID sets the "user_id" field.
@@ -614,6 +623,12 @@ func (_u *QueryHistoryUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *QueryHistoryUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *QueryHistoryUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *QueryHistoryUpdateOne) sqlSave(ctx context.Context) (_node *QueryHistory, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -694,6 +709,7 @@ func (_u *QueryHistoryUpdateOne) sqlSave(ctx context.Context) (_node *QueryHisto
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(queryhistory.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &QueryHistory{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

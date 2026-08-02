@@ -79,8 +79,9 @@ func AppendLimitArgs(args []interface{}, p Pagination) []interface{} {
 // EscapeLike escapes the LIKE wildcards (%, _) and the escape character itself,
 // so caller-supplied text matches literally.
 //
-// Callers must pair it with an explicit ESCAPE '\' clause: without one, the
-// backslashes this adds are matched as ordinary characters by most engines.
+// PostgreSQL uses backslash as the LIKE escape character by default, so callers
+// need no explicit ESCAPE clause. On engines where that is not the default, one
+// must be supplied or the backslashes are matched as ordinary characters.
 func EscapeLike(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")
 	s = strings.ReplaceAll(s, "%", "\\%")

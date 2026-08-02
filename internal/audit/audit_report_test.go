@@ -17,7 +17,7 @@ func TestAuditReportService_GetUsageStats(t *testing.T) {
 	userID := testutil.CreateUser(t, db, "report_usage")
 	now := time.Now().Format("2006-01-02 15:04:05")
 	for i := 0; i < 5; i++ {
-		_, err := db.Exec(`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, execution_time_ms, result_rows, ip_address, created_at) VALUES (?, 'SELECT', 1, 'testdb', 'SELECT 1', 'SELECT', 10, 1, '192.168.1.1', ?)`,
+		_, err := db.Exec(`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, execution_time_ms, result_rows, ip_address, created_at) VALUES ($1, 'SELECT', 1, 'testdb', 'SELECT 1', 'SELECT', 10, 1, '192.168.1.1', $2)`,
 			userID, now)
 		if err != nil {
 			t.Fatalf("seed audit log: %v", err)
@@ -25,7 +25,7 @@ func TestAuditReportService_GetUsageStats(t *testing.T) {
 	}
 	// Add a different user
 	userID2 := testutil.CreateUser(t, db, "report_usage2")
-	_, err := db.Exec(`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, execution_time_ms, result_rows, ip_address, created_at) VALUES (?, 'UPDATE', 1, 'otherdb', 'UPDATE x SET y=1', 'UPDATE', 20, 0, '10.0.0.1', ?)`,
+	_, err := db.Exec(`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, execution_time_ms, result_rows, ip_address, created_at) VALUES ($1, 'UPDATE', 1, 'otherdb', 'UPDATE x SET y=1', 'UPDATE', 20, 0, '10.0.0.1', $2)`,
 		userID2, now)
 	if err != nil {
 		t.Fatalf("seed audit log 2: %v", err)
@@ -63,14 +63,14 @@ func TestAuditReportService_GetErrorStats(t *testing.T) {
 
 	// Insert 2 errors
 	for i := 0; i < 2; i++ {
-		_, err := db.Exec(`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, execution_time_ms, error_message, ip_address, created_at) VALUES (?, 'SELECT', 1, 'testdb', 'SELECT 1', 'SELECT', 10, 'connection refused', '127.0.0.1', ?)`,
+		_, err := db.Exec(`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, execution_time_ms, error_message, ip_address, created_at) VALUES ($1, 'SELECT', 1, 'testdb', 'SELECT 1', 'SELECT', 10, 'connection refused', '127.0.0.1', $2)`,
 			userID, now)
 		if err != nil {
 			t.Fatalf("seed error log: %v", err)
 		}
 	}
 	// Insert 1 success
-	_, err := db.Exec(`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, execution_time_ms, result_rows, ip_address, created_at) VALUES (?, 'SELECT', 1, 'testdb', 'SELECT 1', 'SELECT', 10, 1, '127.0.0.1', ?)`,
+	_, err := db.Exec(`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, execution_time_ms, result_rows, ip_address, created_at) VALUES ($1, 'SELECT', 1, 'testdb', 'SELECT 1', 'SELECT', 10, 1, '127.0.0.1', $2)`,
 		userID, now)
 	if err != nil {
 		t.Fatalf("seed success log: %v", err)
@@ -104,7 +104,7 @@ func TestAuditReportService_GetPerformanceReport(t *testing.T) {
 	// Insert audit logs with varying execution times
 	times := []int64{10, 50, 100, 200, 500}
 	for _, ms := range times {
-		_, err := db.Exec(`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, execution_time_ms, result_rows, affected_rows, ip_address, created_at) VALUES (?, 'SELECT', 1, 'testdb', 'SELECT 1', 'SELECT', ?, 100, 0, '127.0.0.1', ?)`,
+		_, err := db.Exec(`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, execution_time_ms, result_rows, affected_rows, ip_address, created_at) VALUES ($1, 'SELECT', 1, 'testdb', 'SELECT 1', 'SELECT', $2, 100, 0, '127.0.0.1', $3)`,
 			userID, ms, now)
 		if err != nil {
 			t.Fatalf("seed perf log: %v", err)
@@ -152,7 +152,7 @@ func TestAuditReportService_GetTicketReport(t *testing.T) {
 		{"SUBMITTED", ""},
 	}
 	for _, tc := range statuses {
-		_, err := db.Exec(`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, status, risk_level, created_at, updated_at) VALUES (?, 1, 'testdb', 'SELECT 1', 'SELECT', 'mysql', ?, ?, ?, ?)`,
+		_, err := db.Exec(`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, status, risk_level, created_at, updated_at) VALUES ($1, 1, 'testdb', 'SELECT 1', 'SELECT', 'mysql', $2, $3, $4, $5)`,
 			userID, tc.status, tc.riskLevel, now, now)
 		if err != nil {
 			t.Fatalf("seed ticket: %v", err)

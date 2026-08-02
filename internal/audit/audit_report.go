@@ -8,7 +8,12 @@ import (
 	"log"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
+
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entauditlog "github.com/whg517/sqlflow/internal/db/ent/auditlog"
+	entticket "github.com/whg517/sqlflow/internal/db/ent/ticket"
 )
 
 // --- Report Data Types ---
@@ -127,11 +132,64 @@ type RiskDistEntry struct {
 // ReportService provides aggregated audit and ticket report data.
 type ReportService struct {
 	database *db.DB
+	client   *ent.Client
 }
 
 // NewReportService creates a new ReportService.
 func NewReportService(database *db.DB) *ReportService {
-	return &ReportService{database: database}
+	return &ReportService{database: database, client: database.Client()}
+}
+
+// topN bounds every "top" list in the reports.
+//
+// A single constant because the UI renders these lists side by side; they
+// drifted to different limits once before.
+const topN = 10
+
+// topByColumn groups by one column and returns the topN most frequent values,
+// most frequent first.
+//
+// ent's typed GroupBy cannot order by an aggregate or limit the result, so this
+// drops to the query builder — the escape hatch ADR-0010 allows, with the reason
+// being that the typed API has no expression for it.
+func topByColumn(column string) func(*entsql.Selector) {
+	return func(sel *entsql.Selector) {
+		sel.Select(sel.C(column), entsql.As("COUNT(*)", "count")).
+			GroupBy(sel.C(column)).
+			OrderExpr(entsql.Expr("count DESC")).
+			Limit(topN)
+	}
+}
+
+// dayBucket renders a timestamp column as a YYYY-MM-DD string.
+//
+// The SQLite-era code did SUBSTR(created_at, 1, 10) because ent stored
+// timestamps as RFC3339Nano text that SQLite's DATE() could not parse. On
+// PostgreSQL created_at is a real timestamp, so that workaround is not merely
+// unnecessary — SUBSTR on a timestamp is a type error.
+func dayBucket(column string) string {
+	return "to_char(" + column + ", 'YYYY-MM-DD')"
+}
+
+// countDistinct counts distinct values of one column.
+//
+// ent's Count() has no distinct form, so this drops to the query builder's
+// modifier — the escape hatch ADR-0010 allows, used here because the typed API
+// cannot express COUNT(DISTINCT x) at all.
+func countDistinct(ctx context.Context, q *ent.AuditLogQuery, column string) (int64, error) {
+	var result []struct {
+		Count int64 `json:"count"`
+	}
+	err := q.Modify(func(sel *entsql.Selector) {
+		sel.Select(entsql.As("COUNT(DISTINCT "+sel.C(column)+")", "count"))
+	}).Scan(ctx, &result)
+	if err != nil {
+		return 0, err
+	}
+	if len(result) == 0 {
+		return 0, nil
+	}
+	return result[0].Count, nil
 }
 
 // ReportParams holds the common filter parameters for all reports.
@@ -149,9 +207,15 @@ func (p ReportParams) normalizedDays() int {
 	return p.Days
 }
 
-func (p ReportParams) startDate() string {
+// startDate is the inclusive lower bound of the report window.
+//
+// It returns a time.Time rather than a formatted string: created_at is a real
+// timestamp column, and comparing it against text only ever worked because
+// SQLite stored timestamps as text too.
+func (p ReportParams) startDate() time.Time {
 	days := p.normalizedDays()
-	return time.Now().AddDate(0, 0, -days).Format("2006-01-02") + " 00:00:00"
+	y, m, d := time.Now().AddDate(0, 0, -days).Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.Local)
 }
 
 // --- Usage Report ---
@@ -162,26 +226,21 @@ func (s *ReportService) GetUsageStats(ctx context.Context, params ReportParams) 
 
 	stats := &UsageStats{}
 
-	// Total actions
-	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= ?`, startDate,
-	).Scan(&stats.TotalActions)
+	inWindow := s.client.AuditLog.Query().Where(entauditlog.CreatedAtGTE(startDate))
+
+	total, err := inWindow.Clone().Count(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query total actions: %w", err)
 	}
+	stats.TotalActions = int64(total)
 
-	// Unique users
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(DISTINCT user_id) FROM audit_logs WHERE created_at >= ?`, startDate,
-	).Scan(&stats.UniqueUsers)
+	stats.UniqueUsers, err = countDistinct(ctx, inWindow.Clone(), entauditlog.FieldUserID)
 	if err != nil {
 		return nil, fmt.Errorf("query unique users: %w", err)
 	}
 
-	// Unique IPs
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(DISTINCT ip_address) FROM audit_logs WHERE created_at >= ? AND ip_address != ''`, startDate,
-	).Scan(&stats.UniqueIPs)
+	stats.UniqueIPs, err = countDistinct(ctx,
+		inWindow.Clone().Where(entauditlog.IPAddressNEQ("")), entauditlog.FieldIPAddress)
 	if err != nil {
 		return nil, fmt.Errorf("query unique ips: %w", err)
 	}
@@ -213,11 +272,11 @@ func (s *ReportService) GetUsageStats(ctx context.Context, params ReportParams) 
 	return stats, nil
 }
 
-func (s *ReportService) queryTopUsers(ctx context.Context, startDate string) ([]UserActionStat, error) {
+func (s *ReportService) queryTopUsers(ctx context.Context, startDate time.Time) ([]UserActionStat, error) {
 	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT a.user_id, COALESCE(u.username, ''), COUNT(*) as count
 		 FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id
-		 WHERE a.created_at >= ?
+		 WHERE a.created_at >= $1
 		 GROUP BY a.user_id, u.username ORDER BY count DESC LIMIT 10`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query top users: %w", err)
@@ -235,63 +294,45 @@ func (s *ReportService) queryTopUsers(ctx context.Context, startDate string) ([]
 	return result, rows.Err()
 }
 
-func (s *ReportService) queryTopActions(ctx context.Context, startDate string) ([]ActionStat, error) {
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT action, COUNT(*) as count FROM audit_logs WHERE created_at >= ? AND action != '' GROUP BY action ORDER BY count DESC LIMIT 10`, startDate)
+func (s *ReportService) queryTopActions(ctx context.Context, startDate time.Time) ([]ActionStat, error) {
+	var result []ActionStat
+	err := s.client.AuditLog.Query().
+		Where(entauditlog.CreatedAtGTE(startDate), entauditlog.ActionNEQ("")).
+		Modify(topByColumn(entauditlog.FieldAction)).
+		Scan(ctx, &result)
 	if err != nil {
 		return nil, fmt.Errorf("query top actions: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	var result []ActionStat
-	for rows.Next() {
-		var a ActionStat
-		if err := rows.Scan(&a.Action, &a.Count); err != nil {
-			return nil, fmt.Errorf("scan top action: %w", err)
-		}
-		result = append(result, a)
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
-func (s *ReportService) queryTopDatabases(ctx context.Context, startDate string) ([]DatabaseStat, error) {
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT database, COUNT(*) as count FROM audit_logs WHERE created_at >= ? AND database != '' GROUP BY database ORDER BY count DESC LIMIT 10`, startDate)
+func (s *ReportService) queryTopDatabases(ctx context.Context, startDate time.Time) ([]DatabaseStat, error) {
+	var result []DatabaseStat
+	err := s.client.AuditLog.Query().
+		Where(entauditlog.CreatedAtGTE(startDate), entauditlog.DatabaseNEQ("")).
+		Modify(topByColumn(entauditlog.FieldDatabase)).
+		Scan(ctx, &result)
 	if err != nil {
 		return nil, fmt.Errorf("query top databases: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	var result []DatabaseStat
-	for rows.Next() {
-		var d DatabaseStat
-		if err := rows.Scan(&d.Database, &d.Count); err != nil {
-			return nil, fmt.Errorf("scan top database: %w", err)
-		}
-		result = append(result, d)
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
-func (s *ReportService) queryDailyAuditTrend(ctx context.Context, startDate string) ([]DailyAuditTrend, error) {
-	// Use SUBSTR instead of DATE() because ent writes RFC3339Nano timestamps (e.g.
-	// "2026-06-07T02:52:43.128063513Z") which SQLite DATE() cannot parse, returning NULL.
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT SUBSTR(created_at, 1, 10) as date, COUNT(*) as count FROM audit_logs WHERE created_at >= ? GROUP BY SUBSTR(created_at, 1, 10) ORDER BY date`, startDate)
+func (s *ReportService) queryDailyAuditTrend(ctx context.Context, startDate time.Time) ([]DailyAuditTrend, error) {
+	var result []DailyAuditTrend
+	err := s.client.AuditLog.Query().
+		Where(entauditlog.CreatedAtGTE(startDate)).
+		Modify(func(sel *entsql.Selector) {
+			day := dayBucket(sel.C(entauditlog.FieldCreatedAt))
+			sel.Select(entsql.As(day, "date"), entsql.As("COUNT(*)", "count")).
+				GroupBy(day).
+				OrderExpr(entsql.Expr("date"))
+		}).
+		Scan(ctx, &result)
 	if err != nil {
 		return nil, fmt.Errorf("query daily audit trend: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	var result []DailyAuditTrend
-	for rows.Next() {
-		var d DailyAuditTrend
-		if err := rows.Scan(&d.Date, &d.Count); err != nil {
-			return nil, fmt.Errorf("scan daily audit trend: %w", err)
-		}
-		result = append(result, d)
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // --- Error Report ---
@@ -303,7 +344,7 @@ func (s *ReportService) GetErrorStats(ctx context.Context, params ReportParams) 
 
 	// Total errors (audit logs with non-empty error_message)
 	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= ? AND error_message != ''`, startDate,
+		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= $1 AND error_message != ''`, startDate,
 	).Scan(&stats.TotalErrors)
 	if err != nil {
 		return nil, fmt.Errorf("query total errors: %w", err)
@@ -312,7 +353,7 @@ func (s *ReportService) GetErrorStats(ctx context.Context, params ReportParams) 
 	// Total actions for error rate
 	var totalActions int64
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= ?`, startDate,
+		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= $1`, startDate,
 	).Scan(&totalActions)
 	if err != nil {
 		return nil, fmt.Errorf("query total actions for error rate: %w", err)
@@ -342,9 +383,9 @@ func (s *ReportService) GetErrorStats(ctx context.Context, params ReportParams) 
 	return stats, nil
 }
 
-func (s *ReportService) queryTopErrorTypes(ctx context.Context, startDate string) ([]ErrorTypeStat, error) {
+func (s *ReportService) queryTopErrorTypes(ctx context.Context, startDate time.Time) ([]ErrorTypeStat, error) {
 	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT action, COUNT(*) as count FROM audit_logs WHERE created_at >= ? AND error_message != '' GROUP BY action ORDER BY count DESC LIMIT 10`, startDate)
+		`SELECT action, COUNT(*) as count FROM audit_logs WHERE created_at >= $1 AND error_message != '' GROUP BY action ORDER BY count DESC LIMIT 10`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query top error types: %w", err)
 	}
@@ -361,11 +402,11 @@ func (s *ReportService) queryTopErrorTypes(ctx context.Context, startDate string
 	return result, rows.Err()
 }
 
-func (s *ReportService) queryRecentErrors(ctx context.Context, startDate string) ([]RecentErrorEntry, error) {
+func (s *ReportService) queryRecentErrors(ctx context.Context, startDate time.Time) ([]RecentErrorEntry, error) {
 	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT a.id, a.action, a.database, a.error_message, COALESCE(u.username, ''), a.created_at
 		 FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id
-		 WHERE a.created_at >= ? AND a.error_message != ''
+		 WHERE a.created_at >= $1 AND a.error_message != ''
 		 ORDER BY a.created_at DESC LIMIT 20`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query recent errors: %w", err)
@@ -383,24 +424,21 @@ func (s *ReportService) queryRecentErrors(ctx context.Context, startDate string)
 	return result, rows.Err()
 }
 
-func (s *ReportService) queryDailyErrorTrend(ctx context.Context, startDate string) ([]DailyAuditTrend, error) {
-	// Use SUBSTR instead of DATE() — see queryDailyAuditTrend for rationale.
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT SUBSTR(created_at, 1, 10) as date, COUNT(*) as count FROM audit_logs WHERE created_at >= ? AND error_message != '' GROUP BY SUBSTR(created_at, 1, 10) ORDER BY date`, startDate)
+func (s *ReportService) queryDailyErrorTrend(ctx context.Context, startDate time.Time) ([]DailyAuditTrend, error) {
+	var result []DailyAuditTrend
+	err := s.client.AuditLog.Query().
+		Where(entauditlog.CreatedAtGTE(startDate), entauditlog.ErrorMessageNEQ("")).
+		Modify(func(sel *entsql.Selector) {
+			day := dayBucket(sel.C(entauditlog.FieldCreatedAt))
+			sel.Select(entsql.As(day, "date"), entsql.As("COUNT(*)", "count")).
+				GroupBy(day).
+				OrderExpr(entsql.Expr("date"))
+		}).
+		Scan(ctx, &result)
 	if err != nil {
 		return nil, fmt.Errorf("query daily error trend: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	var result []DailyAuditTrend
-	for rows.Next() {
-		var d DailyAuditTrend
-		if err := rows.Scan(&d.Date, &d.Count); err != nil {
-			return nil, fmt.Errorf("scan daily error trend: %w", err)
-		}
-		result = append(result, d)
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // --- Performance Report ---
@@ -413,7 +451,7 @@ func (s *ReportService) GetPerformanceReport(ctx context.Context, params ReportP
 	// Average execution time
 	var avgMs sql.NullFloat64
 	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT CAST(COALESCE(AVG(execution_time_ms), 0) AS REAL) FROM audit_logs WHERE created_at >= ? AND execution_time_ms > 0`, startDate,
+		`SELECT CAST(COALESCE(AVG(execution_time_ms), 0) AS REAL) FROM audit_logs WHERE created_at >= $1 AND execution_time_ms > 0`, startDate,
 	).Scan(&avgMs)
 	if err != nil {
 		return nil, fmt.Errorf("query avg execution time: %w", err)
@@ -422,7 +460,7 @@ func (s *ReportService) GetPerformanceReport(ctx context.Context, params ReportP
 
 	// Max execution time
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COALESCE(MAX(execution_time_ms), 0) FROM audit_logs WHERE created_at >= ?`, startDate,
+		`SELECT COALESCE(MAX(execution_time_ms), 0) FROM audit_logs WHERE created_at >= $1`, startDate,
 	).Scan(&stats.MaxExecutionMs)
 	if err != nil {
 		return nil, fmt.Errorf("query max execution time: %w", err)
@@ -432,7 +470,7 @@ func (s *ReportService) GetPerformanceReport(ctx context.Context, params ReportP
 	// First count qualifying rows to guard against negative OFFSET
 	var p95Count int64
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= ? AND execution_time_ms > 0`, startDate,
+		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= $1 AND execution_time_ms > 0`, startDate,
 	).Scan(&p95Count)
 	if err != nil {
 		log.Printf("P95 count query failed: %v", err)
@@ -446,7 +484,7 @@ func (s *ReportService) GetPerformanceReport(ctx context.Context, params ReportP
 			offset = 0
 		}
 		err = s.database.DB.QueryRowContext(ctx,
-			`SELECT execution_time_ms FROM audit_logs WHERE created_at >= ? AND execution_time_ms > 0 ORDER BY execution_time_ms ASC LIMIT 1 OFFSET ?`, startDate, offset,
+			`SELECT execution_time_ms FROM audit_logs WHERE created_at >= $1 AND execution_time_ms > 0 ORDER BY execution_time_ms ASC LIMIT 1 OFFSET $2`, startDate, offset,
 		).Scan(&stats.P95ExecutionMs)
 		if err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
@@ -458,7 +496,7 @@ func (s *ReportService) GetPerformanceReport(ctx context.Context, params ReportP
 
 	// Total result rows
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COALESCE(SUM(result_rows), 0) FROM audit_logs WHERE created_at >= ?`, startDate,
+		`SELECT COALESCE(SUM(result_rows), 0) FROM audit_logs WHERE created_at >= $1`, startDate,
 	).Scan(&stats.TotalResultRows)
 	if err != nil {
 		return nil, fmt.Errorf("query total result rows: %w", err)
@@ -466,7 +504,7 @@ func (s *ReportService) GetPerformanceReport(ctx context.Context, params ReportP
 
 	// Total affected rows
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COALESCE(SUM(affected_rows), 0) FROM audit_logs WHERE created_at >= ?`, startDate,
+		`SELECT COALESCE(SUM(affected_rows), 0) FROM audit_logs WHERE created_at >= $1`, startDate,
 	).Scan(&stats.AffectedRows)
 	if err != nil {
 		return nil, fmt.Errorf("query affected rows: %w", err)
@@ -481,30 +519,25 @@ func (s *ReportService) GetPerformanceReport(ctx context.Context, params ReportP
 	return stats, nil
 }
 
-func (s *ReportService) queryDailyPerfTrend(ctx context.Context, startDate string) ([]DailyPerfTrend, error) {
-	// Use SUBSTR instead of DATE() — see queryDailyAuditTrend for rationale.
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT SUBSTR(created_at, 1, 10) as date,
-		        CAST(COALESCE(AVG(execution_time_ms), 0) AS REAL) as avg_time_ms,
-		        COALESCE(MAX(execution_time_ms), 0) as max_time_ms,
-		        COUNT(*) as query_count,
-		        COALESCE(SUM(result_rows), 0) as result_rows
-		 FROM audit_logs WHERE created_at >= ?
-		 GROUP BY SUBSTR(created_at, 1, 10) ORDER BY date`, startDate)
+func (s *ReportService) queryDailyPerfTrend(ctx context.Context, startDate time.Time) ([]DailyPerfTrend, error) {
+	var result []DailyPerfTrend
+	err := s.client.AuditLog.Query().
+		Where(entauditlog.CreatedAtGTE(startDate)).
+		Modify(func(sel *entsql.Selector) {
+			day := dayBucket(sel.C(entauditlog.FieldCreatedAt))
+			sel.Select(
+				entsql.As(day, "date"),
+				entsql.As("COALESCE(AVG(execution_time_ms), 0)::float8", "avg_time_ms"),
+				entsql.As("COALESCE(MAX(execution_time_ms), 0)", "max_time_ms"),
+				entsql.As("COUNT(*)", "query_count"),
+				entsql.As("COALESCE(SUM(result_rows), 0)", "result_rows"),
+			).GroupBy(day).OrderExpr(entsql.Expr("date"))
+		}).
+		Scan(ctx, &result)
 	if err != nil {
 		return nil, fmt.Errorf("query daily perf trend: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	var result []DailyPerfTrend
-	for rows.Next() {
-		var d DailyPerfTrend
-		if err := rows.Scan(&d.Date, &d.AvgTimeMs, &d.MaxTimeMs, &d.QueryCount, &d.ResultRows); err != nil {
-			return nil, fmt.Errorf("scan daily perf trend: %w", err)
-		}
-		result = append(result, d)
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // --- Ticket Report ---
@@ -516,7 +549,7 @@ func (s *ReportService) GetTicketReport(ctx context.Context, params ReportParams
 
 	// Status counts
 	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE created_at >= ?`, startDate,
+		`SELECT COUNT(*) FROM tickets WHERE created_at >= $1`, startDate,
 	).Scan(&stats.TotalTickets)
 	if err != nil {
 		return nil, fmt.Errorf("query total tickets: %w", err)
@@ -524,50 +557,63 @@ func (s *ReportService) GetTicketReport(ctx context.Context, params ReportParams
 
 	// Pending (SUBMITTED + AI_REVIEWED + PENDING_APPROVAL)
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE created_at >= ? AND status IN ('SUBMITTED', 'AI_REVIEWED', 'PENDING_APPROVAL')`, startDate,
+		`SELECT COUNT(*) FROM tickets WHERE created_at >= $1 AND status IN ('SUBMITTED', 'AI_REVIEWED', 'PENDING_APPROVAL')`, startDate,
 	).Scan(&stats.PendingCount)
 	if err != nil {
 		return nil, fmt.Errorf("query pending tickets: %w", err)
 	}
 
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE created_at >= ? AND status = 'APPROVED'`, startDate,
+		`SELECT COUNT(*) FROM tickets WHERE created_at >= $1 AND status = 'APPROVED'`, startDate,
 	).Scan(&stats.ApprovedCount)
 	if err != nil {
 		return nil, fmt.Errorf("query approved tickets: %w", err)
 	}
 
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE created_at >= ? AND status = 'REJECTED'`, startDate,
+		`SELECT COUNT(*) FROM tickets WHERE created_at >= $1 AND status = 'REJECTED'`, startDate,
 	).Scan(&stats.RejectedCount)
 	if err != nil {
 		return nil, fmt.Errorf("query rejected tickets: %w", err)
 	}
 
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE created_at >= ? AND status = 'DONE'`, startDate,
+		`SELECT COUNT(*) FROM tickets WHERE created_at >= $1 AND status = 'DONE'`, startDate,
 	).Scan(&stats.DoneCount)
 	if err != nil {
 		return nil, fmt.Errorf("query done tickets: %w", err)
 	}
 
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE created_at >= ? AND status = 'CANCELLED'`, startDate,
+		`SELECT COUNT(*) FROM tickets WHERE created_at >= $1 AND status = 'CANCELLED'`, startDate,
 	).Scan(&stats.CancelledCount)
 	if err != nil {
 		return nil, fmt.Errorf("query cancelled tickets: %w", err)
 	}
 
 	// Average approval time (from created_at to updated_at for APPROVED/DONE tickets)
-	var avgApprovalH sql.NullFloat64
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT CAST(COALESCE(AVG((julianday(updated_at) - julianday(created_at)) * 24), 0) AS REAL)
-		 FROM tickets WHERE created_at >= ? AND status IN ('APPROVED', 'DONE', 'REJECTED')`, startDate,
-	).Scan(&avgApprovalH)
+	// julianday() was SQLite's way to get a day-valued difference; PostgreSQL
+	// subtracts timestamps directly and EXTRACT(EPOCH) turns the interval into
+	// seconds.
+	var avg []struct {
+		Hours float64 `json:"hours"`
+	}
+	err = s.client.Ticket.Query().
+		Where(
+			entticket.CreatedAtGTE(startDate),
+			entticket.StatusIn("APPROVED", "DONE", "REJECTED"),
+		).
+		Modify(func(sel *entsql.Selector) {
+			sel.Select(entsql.As(
+				"COALESCE(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 3600), 0)::float8", "hours"))
+		}).
+		Scan(ctx, &avg)
 	if err != nil {
 		return nil, fmt.Errorf("query avg approval time: %w", err)
 	}
-	stats.AvgApprovalTimeH = avgApprovalH.Float64
+	if len(avg) > 0 {
+		stats.AvgApprovalTimeH = avg[0].Hours
+	}
 
 	// Daily ticket trend
 	stats.DailyTicketTrend, err = s.queryDailyTicketTrend(ctx, startDate)
@@ -584,34 +630,29 @@ func (s *ReportService) GetTicketReport(ctx context.Context, params ReportParams
 	return stats, nil
 }
 
-func (s *ReportService) queryDailyTicketTrend(ctx context.Context, startDate string) ([]DailyTicketTrend, error) {
-	// Use SUBSTR instead of DATE() — see queryDailyAuditTrend for rationale.
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT SUBSTR(created_at, 1, 10) as date,
-		        SUM(CASE WHEN 1=1 THEN 1 ELSE 0 END) as created,
-		        SUM(CASE WHEN status IN ('APPROVED', 'DONE') THEN 1 ELSE 0 END) as approved,
-		        SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as rejected
-		 FROM tickets WHERE created_at >= ?
-		 GROUP BY SUBSTR(created_at, 1, 10) ORDER BY date`, startDate)
+func (s *ReportService) queryDailyTicketTrend(ctx context.Context, startDate time.Time) ([]DailyTicketTrend, error) {
+	var result []DailyTicketTrend
+	err := s.client.Ticket.Query().
+		Where(entticket.CreatedAtGTE(startDate)).
+		Modify(func(sel *entsql.Selector) {
+			day := dayBucket(sel.C(entticket.FieldCreatedAt))
+			sel.Select(
+				entsql.As(day, "date"),
+				entsql.As("COUNT(*)", "created"),
+				entsql.As("COUNT(*) FILTER (WHERE status IN ('APPROVED', 'DONE'))", "approved"),
+				entsql.As("COUNT(*) FILTER (WHERE status = 'REJECTED')", "rejected"),
+			).GroupBy(day).OrderExpr(entsql.Expr("date"))
+		}).
+		Scan(ctx, &result)
 	if err != nil {
 		return nil, fmt.Errorf("query daily ticket trend: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	var result []DailyTicketTrend
-	for rows.Next() {
-		var d DailyTicketTrend
-		if err := rows.Scan(&d.Date, &d.Created, &d.Approved, &d.Rejected); err != nil {
-			return nil, fmt.Errorf("scan daily ticket trend: %w", err)
-		}
-		result = append(result, d)
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
-func (s *ReportService) queryRiskDistribution(ctx context.Context, startDate string) ([]RiskDistEntry, error) {
+func (s *ReportService) queryRiskDistribution(ctx context.Context, startDate time.Time) ([]RiskDistEntry, error) {
 	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT risk_level, COUNT(*) as count FROM tickets WHERE created_at >= ? AND risk_level != '' GROUP BY risk_level ORDER BY count DESC`, startDate)
+		`SELECT risk_level, COUNT(*) as count FROM tickets WHERE created_at >= $1 AND risk_level != '' GROUP BY risk_level ORDER BY count DESC`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("query risk distribution: %w", err)
 	}

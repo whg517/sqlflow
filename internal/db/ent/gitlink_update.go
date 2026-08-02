@@ -18,8 +18,9 @@ import (
 // GitLinkUpdate is the builder for updating GitLink entities.
 type GitLinkUpdate struct {
 	config
-	hooks    []Hook
-	mutation *GitLinkMutation
+	hooks     []Hook
+	mutation  *GitLinkMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the GitLinkUpdate builder.
@@ -277,6 +278,12 @@ func (_u *GitLinkUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *GitLinkUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *GitLinkUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *GitLinkUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(gitlink.Table, gitlink.Columns, sqlgraph.NewFieldSpec(gitlink.FieldID, field.TypeInt))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
@@ -337,6 +344,7 @@ func (_u *GitLinkUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(gitlink.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{gitlink.Label}
@@ -352,9 +360,10 @@ func (_u *GitLinkUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 // GitLinkUpdateOne is the builder for updating a single GitLink entity.
 type GitLinkUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *GitLinkMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *GitLinkMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetEntityType sets the "entity_type" field.
@@ -619,6 +628,12 @@ func (_u *GitLinkUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *GitLinkUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *GitLinkUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *GitLinkUpdateOne) sqlSave(ctx context.Context) (_node *GitLink, err error) {
 	_spec := sqlgraph.NewUpdateSpec(gitlink.Table, gitlink.Columns, sqlgraph.NewFieldSpec(gitlink.FieldID, field.TypeInt))
 	id, ok := _u.mutation.ID()
@@ -696,6 +711,7 @@ func (_u *GitLinkUpdateOne) sqlSave(ctx context.Context) (_node *GitLink, err er
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(gitlink.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &GitLink{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

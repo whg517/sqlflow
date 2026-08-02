@@ -18,8 +18,9 @@ import (
 // SQLTemplateUpdate is the builder for updating SQLTemplate entities.
 type SQLTemplateUpdate struct {
 	config
-	hooks    []Hook
-	mutation *SQLTemplateMutation
+	hooks     []Hook
+	mutation  *SQLTemplateMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the SQLTemplateUpdate builder.
@@ -223,6 +224,12 @@ func (_u *SQLTemplateUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *SQLTemplateUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SQLTemplateUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *SQLTemplateUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -268,6 +275,7 @@ func (_u *SQLTemplateUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(sqltemplate.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{sqltemplate.Label}
@@ -283,9 +291,10 @@ func (_u *SQLTemplateUpdate) sqlSave(ctx context.Context) (_node int, err error)
 // SQLTemplateUpdateOne is the builder for updating a single SQLTemplate entity.
 type SQLTemplateUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *SQLTemplateMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *SQLTemplateMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetUserID sets the "user_id" field.
@@ -496,6 +505,12 @@ func (_u *SQLTemplateUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *SQLTemplateUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SQLTemplateUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *SQLTemplateUpdateOne) sqlSave(ctx context.Context) (_node *SQLTemplate, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -558,6 +573,7 @@ func (_u *SQLTemplateUpdateOne) sqlSave(ctx context.Context) (_node *SQLTemplate
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(sqltemplate.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &SQLTemplate{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

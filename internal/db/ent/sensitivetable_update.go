@@ -18,8 +18,9 @@ import (
 // SensitiveTableUpdate is the builder for updating SensitiveTable entities.
 type SensitiveTableUpdate struct {
 	config
-	hooks    []Hook
-	mutation *SensitiveTableMutation
+	hooks     []Hook
+	mutation  *SensitiveTableMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the SensitiveTableUpdate builder.
@@ -152,6 +153,12 @@ func (_u *SensitiveTableUpdate) defaults() {
 	}
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *SensitiveTableUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SensitiveTableUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *SensitiveTableUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(sensitivetable.Table, sensitivetable.Columns, sqlgraph.NewFieldSpec(sensitivetable.FieldID, field.TypeInt))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
@@ -182,6 +189,7 @@ func (_u *SensitiveTableUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(sensitivetable.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{sensitivetable.Label}
@@ -197,9 +205,10 @@ func (_u *SensitiveTableUpdate) sqlSave(ctx context.Context) (_node int, err err
 // SensitiveTableUpdateOne is the builder for updating a single SensitiveTable entity.
 type SensitiveTableUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *SensitiveTableMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *SensitiveTableMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetDatasourceID sets the "datasource_id" field.
@@ -339,6 +348,12 @@ func (_u *SensitiveTableUpdateOne) defaults() {
 	}
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *SensitiveTableUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SensitiveTableUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *SensitiveTableUpdateOne) sqlSave(ctx context.Context) (_node *SensitiveTable, err error) {
 	_spec := sqlgraph.NewUpdateSpec(sensitivetable.Table, sensitivetable.Columns, sqlgraph.NewFieldSpec(sensitivetable.FieldID, field.TypeInt))
 	id, ok := _u.mutation.ID()
@@ -386,6 +401,7 @@ func (_u *SensitiveTableUpdateOne) sqlSave(ctx context.Context) (_node *Sensitiv
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(sensitivetable.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &SensitiveTable{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

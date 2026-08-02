@@ -18,8 +18,9 @@ import (
 // ApprovalRecordUpdate is the builder for updating ApprovalRecord entities.
 type ApprovalRecordUpdate struct {
 	config
-	hooks    []Hook
-	mutation *ApprovalRecordMutation
+	hooks     []Hook
+	mutation  *ApprovalRecordMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the ApprovalRecordUpdate builder.
@@ -293,6 +294,12 @@ func (_u *ApprovalRecordUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *ApprovalRecordUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *ApprovalRecordUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *ApprovalRecordUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(approvalrecord.Table, approvalrecord.Columns, sqlgraph.NewFieldSpec(approvalrecord.FieldID, field.TypeInt))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
@@ -368,6 +375,7 @@ func (_u *ApprovalRecordUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(approvalrecord.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{approvalrecord.Label}
@@ -383,9 +391,10 @@ func (_u *ApprovalRecordUpdate) sqlSave(ctx context.Context) (_node int, err err
 // ApprovalRecordUpdateOne is the builder for updating a single ApprovalRecord entity.
 type ApprovalRecordUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *ApprovalRecordMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *ApprovalRecordMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -666,6 +675,12 @@ func (_u *ApprovalRecordUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *ApprovalRecordUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *ApprovalRecordUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *ApprovalRecordUpdateOne) sqlSave(ctx context.Context) (_node *ApprovalRecord, err error) {
 	_spec := sqlgraph.NewUpdateSpec(approvalrecord.Table, approvalrecord.Columns, sqlgraph.NewFieldSpec(approvalrecord.FieldID, field.TypeInt))
 	id, ok := _u.mutation.ID()
@@ -758,6 +773,7 @@ func (_u *ApprovalRecordUpdateOne) sqlSave(ctx context.Context) (_node *Approval
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(approvalrecord.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &ApprovalRecord{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

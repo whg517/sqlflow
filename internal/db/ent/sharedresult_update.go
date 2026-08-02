@@ -18,8 +18,9 @@ import (
 // SharedResultUpdate is the builder for updating SharedResult entities.
 type SharedResultUpdate struct {
 	config
-	hooks    []Hook
-	mutation *SharedResultMutation
+	hooks     []Hook
+	mutation  *SharedResultMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the SharedResultUpdate builder.
@@ -272,6 +273,12 @@ func (_u *SharedResultUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *SharedResultUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SharedResultUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *SharedResultUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -332,6 +339,7 @@ func (_u *SharedResultUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(sharedresult.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{sharedresult.Label}
@@ -347,9 +355,10 @@ func (_u *SharedResultUpdate) sqlSave(ctx context.Context) (_node int, err error
 // SharedResultUpdateOne is the builder for updating a single SharedResult entity.
 type SharedResultUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *SharedResultMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *SharedResultMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetUserID sets the "user_id" field.
@@ -609,6 +618,12 @@ func (_u *SharedResultUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *SharedResultUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SharedResultUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *SharedResultUpdateOne) sqlSave(ctx context.Context) (_node *SharedResult, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -686,6 +701,7 @@ func (_u *SharedResultUpdateOne) sqlSave(ctx context.Context) (_node *SharedResu
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(sharedresult.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &SharedResult{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

@@ -22,6 +22,7 @@ type WebVitalQuery struct {
 	order      []webvital.OrderOption
 	inters     []Interceptor
 	predicates []predicate.WebVital
+	modifiers  []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -251,8 +252,9 @@ func (_q *WebVitalQuery) Clone() *WebVitalQuery {
 		inters:     append([]Interceptor{}, _q.inters...),
 		predicates: append([]predicate.WebVital{}, _q.predicates...),
 		// clone intermediate query.
-		sql:  _q.sql.Clone(),
-		path: _q.path,
+		sql:       _q.sql.Clone(),
+		path:      _q.path,
+		modifiers: append([]func(*sql.Selector){}, _q.modifiers...),
 	}
 }
 
@@ -343,6 +345,9 @@ func (_q *WebVitalQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Web
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
+	if len(_q.modifiers) > 0 {
+		_spec.Modifiers = _q.modifiers
+	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
@@ -357,6 +362,9 @@ func (_q *WebVitalQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Web
 
 func (_q *WebVitalQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
+	if len(_q.modifiers) > 0 {
+		_spec.Modifiers = _q.modifiers
+	}
 	_spec.Node.Columns = _q.ctx.Fields
 	if len(_q.ctx.Fields) > 0 {
 		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
@@ -419,6 +427,9 @@ func (_q *WebVitalQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
+	for _, m := range _q.modifiers {
+		m(selector)
+	}
 	for _, p := range _q.predicates {
 		p(selector)
 	}
@@ -434,6 +445,12 @@ func (_q *WebVitalQuery) sqlQuery(ctx context.Context) *sql.Selector {
 		selector.Limit(*limit)
 	}
 	return selector
+}
+
+// Modify adds a query modifier for attaching custom logic to queries.
+func (_q *WebVitalQuery) Modify(modifiers ...func(s *sql.Selector)) *WebVitalSelect {
+	_q.modifiers = append(_q.modifiers, modifiers...)
+	return _q.Select()
 }
 
 // WebVitalGroupBy is the group-by builder for WebVital entities.
@@ -524,4 +541,10 @@ func (_s *WebVitalSelect) sqlScan(ctx context.Context, root *WebVitalQuery, v an
 	}
 	defer rows.Close()
 	return sql.ScanSlice(rows, v)
+}
+
+// Modify adds a query modifier for attaching custom logic to queries.
+func (_s *WebVitalSelect) Modify(modifiers ...func(s *sql.Selector)) *WebVitalSelect {
+	_s.modifiers = append(_s.modifiers, modifiers...)
+	return _s
 }

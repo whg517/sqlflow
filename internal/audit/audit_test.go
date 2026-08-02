@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -15,55 +14,14 @@ import (
 )
 
 // newAuditTestDB creates an in-memory SQLite database with the audit_logs schema.
+// newAuditTestDB returns a migrated database scoped to this test.
+//
+// It used to hand-write CREATE TABLE for audit_logs and users. That let the
+// test schema drift from the migrations — the tables it created were similar
+// to the real ones, never checked against them.
 func newAuditTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "test.db")
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)", dbPath)
-	db, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	db.SetMaxOpenConns(1)
-
-	_, err = db.Exec(`
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id             INTEGER NOT NULL,
-    action              TEXT    NOT NULL DEFAULT '',
-    datasource_id       INTEGER NOT NULL DEFAULT 0,
-    database            TEXT    NOT NULL DEFAULT '',
-    sql_content         TEXT    NOT NULL DEFAULT '',
-    sql_summary         TEXT    NOT NULL DEFAULT '',
-    result_rows         INTEGER NOT NULL DEFAULT 0,
-    affected_rows       INTEGER NOT NULL DEFAULT 0,
-    execution_time_ms   INTEGER NOT NULL DEFAULT 0,
-    error_message       TEXT    NOT NULL DEFAULT '',
-    desensitized_fields TEXT    NOT NULL DEFAULT '',
-    ip_address          TEXT    NOT NULL DEFAULT '',
-    ai_review_result    TEXT    NOT NULL DEFAULT '',
-    ticket_id           INTEGER NOT NULL DEFAULT 0,
-    created_at          DATETIME NOT NULL DEFAULT (datetime('now'))
-);
-	`)
-	if err != nil {
-		t.Fatalf("create audit_logs: %v", err)
-	}
-
-	_, err = db.Exec(`
-CREATE TABLE IF NOT EXISTS users (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    username     TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    role         TEXT NOT NULL DEFAULT 'developer',
-    created_at   DATETIME NOT NULL DEFAULT (datetime('now')),
-    updated_at   DATETIME NOT NULL DEFAULT (datetime('now'))
-);
-	`)
-	if err != nil {
-		t.Fatalf("create users: %v", err)
-	}
-
-	return db
+	return testutil.NewDB(t).DB
 }
 
 func TestAuditService_WriteSync(t *testing.T) {

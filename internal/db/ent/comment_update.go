@@ -18,8 +18,9 @@ import (
 // CommentUpdate is the builder for updating Comment entities.
 type CommentUpdate struct {
 	config
-	hooks    []Hook
-	mutation *CommentMutation
+	hooks     []Hook
+	mutation  *CommentMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the CommentUpdate builder.
@@ -161,6 +162,12 @@ func (_u *CommentUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *CommentUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *CommentUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *CommentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -197,6 +204,7 @@ func (_u *CommentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(comment.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{comment.Label}
@@ -212,9 +220,10 @@ func (_u *CommentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 // CommentUpdateOne is the builder for updating a single Comment entity.
 type CommentUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *CommentMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *CommentMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetOrderID sets the "order_id" field.
@@ -363,6 +372,12 @@ func (_u *CommentUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *CommentUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *CommentUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *CommentUpdateOne) sqlSave(ctx context.Context) (_node *Comment, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -416,6 +431,7 @@ func (_u *CommentUpdateOne) sqlSave(ctx context.Context) (_node *Comment, err er
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(comment.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &Comment{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

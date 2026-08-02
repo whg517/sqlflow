@@ -18,8 +18,9 @@ import (
 // TicketRevisionUpdate is the builder for updating TicketRevision entities.
 type TicketRevisionUpdate struct {
 	config
-	hooks    []Hook
-	mutation *TicketRevisionMutation
+	hooks     []Hook
+	mutation  *TicketRevisionMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the TicketRevisionUpdate builder.
@@ -245,6 +246,12 @@ func (_u *TicketRevisionUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *TicketRevisionUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *TicketRevisionUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *TicketRevisionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -299,6 +306,7 @@ func (_u *TicketRevisionUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(ticketrevision.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{ticketrevision.Label}
@@ -314,9 +322,10 @@ func (_u *TicketRevisionUpdate) sqlSave(ctx context.Context) (_node int, err err
 // TicketRevisionUpdateOne is the builder for updating a single TicketRevision entity.
 type TicketRevisionUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *TicketRevisionMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *TicketRevisionMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -549,6 +558,12 @@ func (_u *TicketRevisionUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *TicketRevisionUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *TicketRevisionUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *TicketRevisionUpdateOne) sqlSave(ctx context.Context) (_node *TicketRevision, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -620,6 +635,7 @@ func (_u *TicketRevisionUpdateOne) sqlSave(ctx context.Context) (_node *TicketRe
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(ticketrevision.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &TicketRevision{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

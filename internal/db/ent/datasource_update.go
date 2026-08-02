@@ -18,8 +18,9 @@ import (
 // DataSourceUpdate is the builder for updating DataSource entities.
 type DataSourceUpdate struct {
 	config
-	hooks    []Hook
-	mutation *DataSourceMutation
+	hooks     []Hook
+	mutation  *DataSourceMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the DataSourceUpdate builder.
@@ -444,6 +445,12 @@ func (_u *DataSourceUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *DataSourceUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *DataSourceUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *DataSourceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -543,6 +550,7 @@ func (_u *DataSourceUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(datasource.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{datasource.Label}
@@ -558,9 +566,10 @@ func (_u *DataSourceUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 // DataSourceUpdateOne is the builder for updating a single DataSource entity.
 type DataSourceUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *DataSourceMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *DataSourceMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetName sets the "name" field.
@@ -992,6 +1001,12 @@ func (_u *DataSourceUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *DataSourceUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *DataSourceUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *DataSourceUpdateOne) sqlSave(ctx context.Context) (_node *DataSource, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -1108,6 +1123,7 @@ func (_u *DataSourceUpdateOne) sqlSave(ctx context.Context) (_node *DataSource, 
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(datasource.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &DataSource{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

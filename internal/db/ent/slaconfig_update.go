@@ -18,8 +18,9 @@ import (
 // SLAConfigUpdate is the builder for updating SLAConfig entities.
 type SLAConfigUpdate struct {
 	config
-	hooks    []Hook
-	mutation *SLAConfigMutation
+	hooks     []Hook
+	mutation  *SLAConfigMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the SLAConfigUpdate builder.
@@ -197,6 +198,12 @@ func (_u *SLAConfigUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *SLAConfigUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SLAConfigUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *SLAConfigUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -239,6 +246,7 @@ func (_u *SLAConfigUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(slaconfig.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{slaconfig.Label}
@@ -254,9 +262,10 @@ func (_u *SLAConfigUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 // SLAConfigUpdateOne is the builder for updating a single SLAConfig entity.
 type SLAConfigUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *SLAConfigMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *SLAConfigMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetPriority sets the "priority" field.
@@ -441,6 +450,12 @@ func (_u *SLAConfigUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *SLAConfigUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *SLAConfigUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *SLAConfigUpdateOne) sqlSave(ctx context.Context) (_node *SLAConfig, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -500,6 +515,7 @@ func (_u *SLAConfigUpdateOne) sqlSave(ctx context.Context) (_node *SLAConfig, er
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(slaconfig.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &SLAConfig{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

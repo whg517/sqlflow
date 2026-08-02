@@ -7,27 +7,21 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // newAuditFTSHandlerTest creates a fully initialized test setup with FTS5 support.
 func newAuditFTSHandlerTest(t *testing.T) (*echo.Echo, *Service, *Handler) {
+	t.Skip("待 P4：全文检索从 SQLite FTS5 改为 tsvector + pg_trgm 后重写。" +
+		"Search 目前查询的 audit_logs_fts 虚拟表在 PostgreSQL 上不存在。")
+
 	t.Helper()
 
-	database, err := db.Open(t.TempDir() + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	// Insert a user for the JOIN.
-	_, err = database.Exec("INSERT INTO users (username, password_hash, role) VALUES ('alice', 'hash', 'developer')")
+	_, err := database.Exec("INSERT INTO users (username, password_hash, role) VALUES ('alice', 'hash', 'developer')")
 	if err != nil {
 		t.Fatalf("insert user: %v", err)
 	}

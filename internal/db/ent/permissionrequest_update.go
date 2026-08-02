@@ -18,8 +18,9 @@ import (
 // PermissionRequestUpdate is the builder for updating PermissionRequest entities.
 type PermissionRequestUpdate struct {
 	config
-	hooks    []Hook
-	mutation *PermissionRequestMutation
+	hooks     []Hook
+	mutation  *PermissionRequestMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the PermissionRequestUpdate builder.
@@ -347,6 +348,12 @@ func (_u *PermissionRequestUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *PermissionRequestUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *PermissionRequestUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *PermissionRequestUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -431,6 +438,7 @@ func (_u *PermissionRequestUpdate) sqlSave(ctx context.Context) (_node int, err 
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(permissionrequest.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{permissionrequest.Label}
@@ -446,9 +454,10 @@ func (_u *PermissionRequestUpdate) sqlSave(ctx context.Context) (_node int, err 
 // PermissionRequestUpdateOne is the builder for updating a single PermissionRequest entity.
 type PermissionRequestUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *PermissionRequestMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *PermissionRequestMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetApplicantID sets the "applicant_id" field.
@@ -783,6 +792,12 @@ func (_u *PermissionRequestUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *PermissionRequestUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *PermissionRequestUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *PermissionRequestUpdateOne) sqlSave(ctx context.Context) (_node *PermissionRequest, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -884,6 +899,7 @@ func (_u *PermissionRequestUpdateOne) sqlSave(ctx context.Context) (_node *Permi
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(permissionrequest.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &PermissionRequest{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
@@ -17,18 +16,10 @@ import (
 func setupAuditTest(t *testing.T) (*echo.Echo, *Service, *Handler) {
 	t.Helper()
 
-	database, err := db.Open(t.TempDir() + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	// Insert a user for the JOIN in List
-	_, err = database.Exec("INSERT INTO users (username, password_hash, role) VALUES ('audituser', 'hash', 'developer')")
+	_, err := database.Exec("INSERT INTO users (username, password_hash, role) VALUES ('audituser', 'hash', 'developer')")
 	if err != nil {
 		t.Fatalf("insert test user: %v", err)
 	}

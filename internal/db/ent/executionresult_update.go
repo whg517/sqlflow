@@ -18,8 +18,9 @@ import (
 // ExecutionResultUpdate is the builder for updating ExecutionResult entities.
 type ExecutionResultUpdate struct {
 	config
-	hooks    []Hook
-	mutation *ExecutionResultMutation
+	hooks     []Hook
+	mutation  *ExecutionResultMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the ExecutionResultUpdate builder.
@@ -210,6 +211,12 @@ func (_u *ExecutionResultUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *ExecutionResultUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *ExecutionResultUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *ExecutionResultUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -258,6 +265,7 @@ func (_u *ExecutionResultUpdate) sqlSave(ctx context.Context) (_node int, err er
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(executionresult.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{executionresult.Label}
@@ -273,9 +281,10 @@ func (_u *ExecutionResultUpdate) sqlSave(ctx context.Context) (_node int, err er
 // ExecutionResultUpdateOne is the builder for updating a single ExecutionResult entity.
 type ExecutionResultUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *ExecutionResultMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *ExecutionResultMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -473,6 +482,12 @@ func (_u *ExecutionResultUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *ExecutionResultUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *ExecutionResultUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *ExecutionResultUpdateOne) sqlSave(ctx context.Context) (_node *ExecutionResult, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -538,6 +553,7 @@ func (_u *ExecutionResultUpdateOne) sqlSave(ctx context.Context) (_node *Executi
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(executionresult.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &ExecutionResult{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

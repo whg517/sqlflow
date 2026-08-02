@@ -18,8 +18,9 @@ import (
 // APITokenUpdate is the builder for updating APIToken entities.
 type APITokenUpdate struct {
 	config
-	hooks    []Hook
-	mutation *APITokenMutation
+	hooks     []Hook
+	mutation  *APITokenMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the APITokenUpdate builder.
@@ -264,6 +265,12 @@ func (_u *APITokenUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *APITokenUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *APITokenUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *APITokenUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -321,6 +328,7 @@ func (_u *APITokenUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(apitoken.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{apitoken.Label}
@@ -336,9 +344,10 @@ func (_u *APITokenUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 // APITokenUpdateOne is the builder for updating a single APIToken entity.
 type APITokenUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *APITokenMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *APITokenMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetUserID sets the "user_id" field.
@@ -590,6 +599,12 @@ func (_u *APITokenUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *APITokenUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *APITokenUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *APITokenUpdateOne) sqlSave(ctx context.Context) (_node *APIToken, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -664,6 +679,7 @@ func (_u *APITokenUpdateOne) sqlSave(ctx context.Context) (_node *APIToken, err 
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(apitoken.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &APIToken{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

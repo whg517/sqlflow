@@ -22,11 +22,7 @@ func setupAuditReportTest(t *testing.T) (*echo.Echo, *ReportService, *ReportHand
 	e := echo.New()
 
 	// Seed a user the audit logs can join to.
-	res, err := d.DB.Exec(`INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES ('alice', 'hash', 'developer', datetime('now'), datetime('now'))`)
-	if err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	uid, _ := res.LastInsertId()
+	uid := testutil.SeedUser(t, d.DB, "alice", "developer")
 
 	// Seed audit logs with a timestamp anchored to "now" so they always fall inside
 	// the default 7-day / 30-day report windows regardless of when the test runs.
@@ -35,7 +31,7 @@ func setupAuditReportTest(t *testing.T) (*echo.Echo, *ReportService, *ReportHand
 	for i := 0; i < 3; i++ {
 		if _, err := d.DB.Exec(
 			`INSERT INTO audit_logs (user_id, action, database, error_message, ip_address, execution_time_ms, result_rows, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 			uid, "query_execute", "appdb", "", "10.0.0.1", 500+int64(i*100), int64(i), now,
 		); err != nil {
 			t.Fatalf("seed audit log %d: %v", i, err)
@@ -44,7 +40,7 @@ func setupAuditReportTest(t *testing.T) (*echo.Echo, *ReportService, *ReportHand
 	// One error log.
 	if _, err := d.DB.Exec(
 		`INSERT INTO audit_logs (user_id, action, database, error_message, ip_address, execution_time_ms, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		uid, "query_execute", "appdb", "syntax error", "10.0.0.1", 100, now,
 	); err != nil {
 		t.Fatalf("seed error audit log: %v", err)

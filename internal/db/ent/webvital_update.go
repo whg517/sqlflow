@@ -18,8 +18,9 @@ import (
 // WebVitalUpdate is the builder for updating WebVital entities.
 type WebVitalUpdate struct {
 	config
-	hooks    []Hook
-	mutation *WebVitalMutation
+	hooks     []Hook
+	mutation  *WebVitalMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the WebVitalUpdate builder.
@@ -175,6 +176,12 @@ func (_u *WebVitalUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *WebVitalUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *WebVitalUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *WebVitalUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -211,6 +218,7 @@ func (_u *WebVitalUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(webvital.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{webvital.Label}
@@ -226,9 +234,10 @@ func (_u *WebVitalUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 // WebVitalUpdateOne is the builder for updating a single WebVital entity.
 type WebVitalUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *WebVitalMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *WebVitalMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetMetricName sets the "metric_name" field.
@@ -391,6 +400,12 @@ func (_u *WebVitalUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *WebVitalUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *WebVitalUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *WebVitalUpdateOne) sqlSave(ctx context.Context) (_node *WebVital, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -444,6 +459,7 @@ func (_u *WebVitalUpdateOne) sqlSave(ctx context.Context) (_node *WebVital, err 
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(webvital.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &WebVital{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

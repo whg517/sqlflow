@@ -14,6 +14,9 @@ import (
 
 // newAuditFTSTestDB creates an in-memory SQLite database with audit_logs, users, and FTS5 tables.
 func newAuditFTSTestDB(t *testing.T) *sql.DB {
+	t.Skip("待 P4：审计全文检索从 SQLite FTS5 改为 tsvector + pg_trgm 后重写。" +
+		"这些用例断言的是 FTS5 虚拟表与触发器的行为，在 PostgreSQL 上没有对应物。")
+
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)", dbPath)

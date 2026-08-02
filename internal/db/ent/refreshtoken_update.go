@@ -18,8 +18,9 @@ import (
 // RefreshTokenUpdate is the builder for updating RefreshToken entities.
 type RefreshTokenUpdate struct {
 	config
-	hooks    []Hook
-	mutation *RefreshTokenMutation
+	hooks     []Hook
+	mutation  *RefreshTokenMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the RefreshTokenUpdate builder.
@@ -147,6 +148,12 @@ func (_u *RefreshTokenUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *RefreshTokenUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *RefreshTokenUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *RefreshTokenUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -177,6 +184,7 @@ func (_u *RefreshTokenUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(refreshtoken.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{refreshtoken.Label}
@@ -192,9 +200,10 @@ func (_u *RefreshTokenUpdate) sqlSave(ctx context.Context) (_node int, err error
 // RefreshTokenUpdateOne is the builder for updating a single RefreshToken entity.
 type RefreshTokenUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *RefreshTokenMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *RefreshTokenMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetUserID sets the "user_id" field.
@@ -329,6 +338,12 @@ func (_u *RefreshTokenUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *RefreshTokenUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *RefreshTokenUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *RefreshTokenUpdateOne) sqlSave(ctx context.Context) (_node *RefreshToken, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -376,6 +391,7 @@ func (_u *RefreshTokenUpdateOne) sqlSave(ctx context.Context) (_node *RefreshTok
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(refreshtoken.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &RefreshToken{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

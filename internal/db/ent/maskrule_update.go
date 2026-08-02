@@ -18,8 +18,9 @@ import (
 // MaskRuleUpdate is the builder for updating MaskRule entities.
 type MaskRuleUpdate struct {
 	config
-	hooks    []Hook
-	mutation *MaskRuleMutation
+	hooks     []Hook
+	mutation  *MaskRuleMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the MaskRuleUpdate builder.
@@ -194,6 +195,12 @@ func (_u *MaskRuleUpdate) defaults() {
 	}
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *MaskRuleUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *MaskRuleUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *MaskRuleUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(maskrule.Table, maskrule.Columns, sqlgraph.NewFieldSpec(maskrule.FieldID, field.TypeInt))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
@@ -233,6 +240,7 @@ func (_u *MaskRuleUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(maskrule.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{maskrule.Label}
@@ -248,9 +256,10 @@ func (_u *MaskRuleUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 // MaskRuleUpdateOne is the builder for updating a single MaskRule entity.
 type MaskRuleUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *MaskRuleMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *MaskRuleMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetDatasourceID sets the "datasource_id" field.
@@ -432,6 +441,12 @@ func (_u *MaskRuleUpdateOne) defaults() {
 	}
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *MaskRuleUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *MaskRuleUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *MaskRuleUpdateOne) sqlSave(ctx context.Context) (_node *MaskRule, err error) {
 	_spec := sqlgraph.NewUpdateSpec(maskrule.Table, maskrule.Columns, sqlgraph.NewFieldSpec(maskrule.FieldID, field.TypeInt))
 	id, ok := _u.mutation.ID()
@@ -488,6 +503,7 @@ func (_u *MaskRuleUpdateOne) sqlSave(ctx context.Context) (_node *MaskRule, err 
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(maskrule.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &MaskRule{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

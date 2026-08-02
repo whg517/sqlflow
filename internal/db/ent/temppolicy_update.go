@@ -18,8 +18,9 @@ import (
 // TempPolicyUpdate is the builder for updating TempPolicy entities.
 type TempPolicyUpdate struct {
 	config
-	hooks    []Hook
-	mutation *TempPolicyMutation
+	hooks     []Hook
+	mutation  *TempPolicyMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the TempPolicyUpdate builder.
@@ -169,6 +170,12 @@ func (_u *TempPolicyUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *TempPolicyUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *TempPolicyUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *TempPolicyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -199,6 +206,7 @@ func (_u *TempPolicyUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(temppolicy.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{temppolicy.Label}
@@ -214,9 +222,10 @@ func (_u *TempPolicyUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 // TempPolicyUpdateOne is the builder for updating a single TempPolicy entity.
 type TempPolicyUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *TempPolicyMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *TempPolicyMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetSub sets the "sub" field.
@@ -373,6 +382,12 @@ func (_u *TempPolicyUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *TempPolicyUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *TempPolicyUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *TempPolicyUpdateOne) sqlSave(ctx context.Context) (_node *TempPolicy, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -420,6 +435,7 @@ func (_u *TempPolicyUpdateOne) sqlSave(ctx context.Context) (_node *TempPolicy, 
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(temppolicy.FieldCreatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &TempPolicy{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

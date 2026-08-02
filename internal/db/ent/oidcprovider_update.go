@@ -18,8 +18,9 @@ import (
 // OIDCProviderUpdate is the builder for updating OIDCProvider entities.
 type OIDCProviderUpdate struct {
 	config
-	hooks    []Hook
-	mutation *OIDCProviderMutation
+	hooks     []Hook
+	mutation  *OIDCProviderMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the OIDCProviderUpdate builder.
@@ -193,6 +194,12 @@ func (_u *OIDCProviderUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *OIDCProviderUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *OIDCProviderUpdate {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *OIDCProviderUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -229,6 +236,7 @@ func (_u *OIDCProviderUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(oidcprovider.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{oidcprovider.Label}
@@ -244,9 +252,10 @@ func (_u *OIDCProviderUpdate) sqlSave(ctx context.Context) (_node int, err error
 // OIDCProviderUpdateOne is the builder for updating a single OIDCProvider entity.
 type OIDCProviderUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *OIDCProviderMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *OIDCProviderMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetName sets the "name" field.
@@ -427,6 +436,12 @@ func (_u *OIDCProviderUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (_u *OIDCProviderUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *OIDCProviderUpdateOne {
+	_u.modifiers = append(_u.modifiers, modifiers...)
+	return _u
+}
+
 func (_u *OIDCProviderUpdateOne) sqlSave(ctx context.Context) (_node *OIDCProvider, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
@@ -480,6 +495,7 @@ func (_u *OIDCProviderUpdateOne) sqlSave(ctx context.Context) (_node *OIDCProvid
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(oidcprovider.FieldUpdatedAt, field.TypeTime, value)
 	}
+	_spec.AddModifiers(_u.modifiers...)
 	_node = &OIDCProvider{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

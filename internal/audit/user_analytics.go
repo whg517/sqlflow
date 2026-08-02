@@ -6,6 +6,10 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entauditlog "github.com/whg517/sqlflow/internal/db/ent/auditlog"
 )
 
 // --- Anomaly Detection Thresholds (configurable) ---
@@ -142,7 +146,7 @@ func (s *ReportService) GetUserAnalytics(ctx context.Context, params AnalyticsPa
 	result := &UserAnalytics{
 		GeneratedAt: time.Now().UTC(),
 		TimeRange:   params.TimeRange,
-		StartDate:   startDate,
+		StartDate:   startDate.Format("2006-01-02"),
 		EndDate:     time.Now().Format("2006-01-02"),
 		UserID:      params.UserID,
 	}
@@ -209,21 +213,37 @@ func validateAnalyticsParams(params *AnalyticsParams) error {
 }
 
 // resolveDateRange returns the start date string and day count from params.
-func resolveDateRange(params AnalyticsParams) (string, int, error) {
+// resolveDateRange returns the inclusive start of the report window and the
+// number of days it spans.
+//
+// It returns a time.Time rather than a formatted string: created_at is a real
+// timestamp column, and comparing it against text only ever worked because
+// SQLite stored timestamps as text too.
+func resolveDateRange(params AnalyticsParams) (time.Time, int, error) {
+	midnight := func(t time.Time) time.Time {
+		y, m, d := t.Date()
+		return time.Date(y, m, d, 0, 0, 0, 0, time.Local)
+	}
+	back := func(days int) (time.Time, int, error) {
+		return midnight(time.Now().AddDate(0, 0, -days)), days, nil
+	}
 	switch params.TimeRange {
-	case "7d":
-		return time.Now().AddDate(0, 0, -7).Format("2006-01-02") + " 00:00:00", 7, nil
 	case "30d":
-		return time.Now().AddDate(0, 0, -30).Format("2006-01-02") + " 00:00:00", 30, nil
+		return back(30)
 	case "90d":
-		return time.Now().AddDate(0, 0, -90).Format("2006-01-02") + " 00:00:00", 90, nil
+		return back(90)
 	case "custom":
-		start, _ := time.Parse("2006-01-02", params.StartDate)
-		end, _ := time.Parse("2006-01-02", params.EndDate)
-		days := int(end.Sub(start).Hours()/24) + 1
-		return params.StartDate + " 00:00:00", days, nil
+		start, err := time.Parse("2006-01-02", params.StartDate)
+		if err != nil {
+			return time.Time{}, 0, fmt.Errorf("解析开始日期失败: %w", err)
+		}
+		end, err := time.Parse("2006-01-02", params.EndDate)
+		if err != nil {
+			return time.Time{}, 0, fmt.Errorf("解析结束日期失败: %w", err)
+		}
+		return midnight(start), int(end.Sub(start).Hours()/24) + 1, nil
 	default:
-		return time.Now().AddDate(0, 0, -7).Format("2006-01-02") + " 00:00:00", 7, nil
+		return back(7)
 	}
 }
 
@@ -239,190 +259,161 @@ func ParseAnalyticsUserID(s string) (int64, error) {
 	return id, nil
 }
 
-func (s *ReportService) queryTopActiveUsers(ctx context.Context, startDate string, userID int64) ([]ActiveUserEntry, error) {
-	query := `SELECT a.user_id, COALESCE(u.username, ''),
-	          SUM(CASE WHEN a.action IN ('query_execute', 'query_submit') THEN 1 ELSE 0 END) as query_count,
-	          SUM(CASE WHEN a.action IN ('ticket_approve', 'ticket_reject') THEN 1 ELSE 0 END) as approval_count,
-	          COUNT(DISTINCT SUBSTR(a.created_at, 1, 10)) as active_days,
-	          COUNT(*) as total_actions
-	          FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id
-	          WHERE a.created_at >= ?`
-	args := []interface{}{startDate}
-
+// auditScope is the window every analytics query starts from: the report range,
+// optionally narrowed to one user.
+func (s *ReportService) auditScope(startDate time.Time, userID int64) *ent.AuditLogQuery {
+	q := s.client.AuditLog.Query().Where(entauditlog.CreatedAtGTE(startDate))
 	if userID > 0 {
-		query += ` AND a.user_id = ?`
-		args = append(args, userID)
+		q = q.Where(entauditlog.UserIDEQ(userID))
 	}
+	return q
+}
 
-	query += ` GROUP BY a.user_id, u.username ORDER BY total_actions DESC LIMIT 10`
-
-	rows, err := s.database.DB.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
+func (s *ReportService) queryTopActiveUsers(ctx context.Context, startDate time.Time, userID int64) ([]ActiveUserEntry, error) {
 	var result []ActiveUserEntry
-	rank := 1
-	for rows.Next() {
-		var e ActiveUserEntry
-		if err := rows.Scan(&e.UserID, &e.Username, &e.QueryCount, &e.ApprovalCount, &e.ActiveDays, &e.TotalActions); err != nil {
-			return nil, err
-		}
-		e.Rank = rank
-		result = append(result, e)
-		rank++
+	err := s.auditScope(startDate, userID).
+		Modify(func(sel *entsql.Selector) {
+			u := joinAuditUser(sel)
+			day := dayBucket(sel.C(entauditlog.FieldCreatedAt))
+			sel.Select(
+				entsql.As(sel.C(entauditlog.FieldUserID), "user_id"),
+				entsql.As("COALESCE("+u.C("username")+", '')", "username"),
+				entsql.As("COUNT(*) FILTER (WHERE action IN ('query_execute', 'query_submit'))", "query_count"),
+				entsql.As("COUNT(*) FILTER (WHERE action IN ('ticket_approve', 'ticket_reject'))", "approval_count"),
+				entsql.As("COUNT(DISTINCT "+day+")", "active_days"),
+				entsql.As("COUNT(*)", "total_actions"),
+			).GroupBy(sel.C(entauditlog.FieldUserID), u.C("username")).
+				OrderExpr(entsql.Expr("total_actions DESC")).
+				Limit(topN)
+		}).
+		Scan(ctx, &result)
+	if err != nil {
+		return nil, fmt.Errorf("查询活跃用户失败: %w", err)
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
-func (s *ReportService) queryFrequencyDistribution(ctx context.Context, startDate string, days int, userID int64) ([]QueryFrequencyEntry, error) {
-	query := `SELECT SUBSTR(created_at, 1, 10) as period, COUNT(*) as count
-	          FROM audit_logs WHERE created_at >= ?`
-	args := []interface{}{startDate}
-
-	if userID > 0 {
-		query += ` AND user_id = ?`
-		args = append(args, userID)
-	}
-
-	query += ` GROUP BY SUBSTR(created_at, 1, 10) ORDER BY period`
-
-	rows, err := s.database.DB.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
+func (s *ReportService) queryFrequencyDistribution(ctx context.Context, startDate time.Time, _ int, userID int64) ([]QueryFrequencyEntry, error) {
 	var result []QueryFrequencyEntry
-	for rows.Next() {
-		var e QueryFrequencyEntry
-		if err := rows.Scan(&e.Period, &e.Count); err != nil {
-			return nil, err
-		}
-		result = append(result, e)
-	}
-	return result, rows.Err()
-}
-
-func (s *ReportService) queryActionTypeBreakdown(ctx context.Context, startDate string, userID int64) ([]ActionTypeEntry, error) {
-	query := `SELECT action, COUNT(*) as count FROM audit_logs WHERE created_at >= ? AND action != ''`
-	args := []interface{}{startDate}
-
-	if userID > 0 {
-		query += ` AND user_id = ?`
-		args = append(args, userID)
-	}
-
-	query += ` GROUP BY action ORDER BY count DESC`
-
-	rows, err := s.database.DB.QueryContext(ctx, query, args...)
+	err := s.auditScope(startDate, userID).
+		Modify(func(sel *entsql.Selector) {
+			day := dayBucket(sel.C(entauditlog.FieldCreatedAt))
+			sel.Select(entsql.As(day, "period"), entsql.As("COUNT(*)", "count")).
+				GroupBy(day).
+				OrderExpr(entsql.Expr("period"))
+		}).
+		Scan(ctx, &result)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("查询频率分布失败: %w", err)
 	}
-	defer rows.Close()
-
-	var entries []ActionTypeEntry
-	var total int64
-	for rows.Next() {
-		var e ActionTypeEntry
-		if err := rows.Scan(&e.Action, &e.Count); err != nil {
-			return nil, err
-		}
-		total += e.Count
-		entries = append(entries, e)
-	}
-
-	// Calculate ratios
-	for i := range entries {
-		if total > 0 {
-			entries[i].Ratio = float64(entries[i].Count) / float64(total) * 100
-		}
-	}
-
-	return entries, rows.Err()
+	return result, nil
 }
 
-func (s *ReportService) detectAnomalousBehaviors(ctx context.Context, startDate string, userID int64) ([]AnomalyEntry, error) {
+func (s *ReportService) queryActionTypeBreakdown(ctx context.Context, startDate time.Time, userID int64) ([]ActionTypeEntry, error) {
+	var result []ActionTypeEntry
+	err := s.auditScope(startDate, userID).
+		Where(entauditlog.ActionNEQ("")).
+		Modify(func(sel *entsql.Selector) {
+			sel.Select(
+				entsql.As(sel.C(entauditlog.FieldAction), "action"),
+				entsql.As("COUNT(*)", "count"),
+			).GroupBy(sel.C(entauditlog.FieldAction)).
+				OrderExpr(entsql.Expr("count DESC"))
+		}).
+		Scan(ctx, &result)
+	if err != nil {
+		return nil, fmt.Errorf("查询操作类型分布失败: %w", err)
+	}
+	return result, nil
+}
+
+// anomalyLimit caps each anomaly list.
+const anomalyLimit = 20
+
+// hourBucket renders a timestamp as YYYY-MM-DDTHH, the window burst detection
+// groups by.
+func hourBucket(column string) string {
+	return "to_char(" + column + ", 'YYYY-MM-DD\"T\"HH24')"
+}
+
+// anomalyRow is the shared shape of both anomaly scans.
+type anomalyRow struct {
+	UserID   int64  `json:"user_id"`
+	Username string `json:"username"`
+	Window   string `json:"window"`
+	Count    int64  `json:"count"`
+}
+
+func (s *ReportService) detectAnomalousBehaviors(ctx context.Context, startDate time.Time, userID int64) ([]AnomalyEntry, error) {
 	var result []AnomalyEntry
 
-	// 1. Short-time burst: >BurstQueryThreshold queries in 1 hour
-	burstQuery := `SELECT a.user_id, COALESCE(u.username, ''),
-	               SUBSTR(a.created_at, 1, 13) as hour_window,
-	               COUNT(*) as cnt
-	               FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id
-	               WHERE a.created_at >= ? AND a.action IN ('query_execute', 'query_submit')`
-	burstArgs := []interface{}{startDate}
-	if userID > 0 {
-		burstQuery += ` AND a.user_id = ?`
-		burstArgs = append(burstArgs, userID)
-	}
-	burstQuery += fmt.Sprintf(` GROUP BY a.user_id, u.username, SUBSTR(a.created_at, 1, 13) HAVING cnt > %d ORDER BY cnt DESC LIMIT 20`, BurstQueryThreshold)
-
-	rows, err := s.database.DB.QueryContext(ctx, burstQuery, burstArgs...)
+	// 1. Short-time burst: more than BurstQueryThreshold queries within one hour.
+	var bursts []anomalyRow
+	err := s.auditScope(startDate, userID).
+		Where(entauditlog.ActionIn("query_execute", "query_submit")).
+		Modify(func(sel *entsql.Selector) {
+			hour := hourBucket(sel.C(entauditlog.FieldCreatedAt))
+			u := joinAuditUser(sel)
+			sel.Select(
+				entsql.As(sel.C(entauditlog.FieldUserID), "user_id"),
+				entsql.As("COALESCE("+u.C("username")+", '')", "username"),
+				entsql.As(hour, "window"),
+				entsql.As("COUNT(*)", "count"),
+			).GroupBy(sel.C(entauditlog.FieldUserID), u.C("username"), hour).
+				Having(entsql.ExprP(fmt.Sprintf("COUNT(*) > %d", BurstQueryThreshold))).
+				OrderExpr(entsql.Expr("count DESC")).
+				Limit(anomalyLimit)
+		}).
+		Scan(ctx, &bursts)
 	if err != nil {
 		return nil, fmt.Errorf("查询短时大量查询失败: %w", err)
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var uid int64
-		var username, hourWindow string
-		var cnt int64
-		if err := rows.Scan(&uid, &username, &hourWindow, &cnt); err != nil {
-			return nil, err
-		}
+	for _, b := range bursts {
 		result = append(result, AnomalyEntry{
-			UserID:      uid,
-			Username:    username,
+			UserID:      b.UserID,
+			Username:    b.Username,
 			AnomalyType: "burst_queries",
-			Description: fmt.Sprintf("1小时内执行 %d 次查询（阈值 %d）", cnt, BurstQueryThreshold),
-			Count:       cnt,
-			TimeWindow:  hourWindow,
+			Description: fmt.Sprintf("1小时内执行 %d 次查询（阈值 %d）", b.Count, BurstQueryThreshold),
+			Count:       b.Count,
+			TimeWindow:  b.Window,
 		})
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
 
-	// 2. Off-hours high-frequency: 22:00-08:00 with high activity
-	offHoursQuery := `SELECT a.user_id, COALESCE(u.username, ''),
-	                  SUBSTR(a.created_at, 12, 2) as hour_of_day,
-	                  COUNT(*) as cnt
-	                  FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id
-	                  WHERE a.created_at >= ? AND (CAST(SUBSTR(a.created_at, 12, 2) AS INTEGER) >= 22 OR CAST(SUBSTR(a.created_at, 12, 2) AS INTEGER) < 8)`
-	offArgs := []interface{}{startDate}
-	if userID > 0 {
-		offHoursQuery += ` AND a.user_id = ?`
-		offArgs = append(offArgs, userID)
-	}
-	offHoursQuery += fmt.Sprintf(` GROUP BY a.user_id, u.username HAVING cnt > %d ORDER BY cnt DESC LIMIT 20`, OffHoursThreshold)
-
-	rows2, err := s.database.DB.QueryContext(ctx, offHoursQuery, offArgs...)
+	// 2. Off-hours activity: 22:00-08:00.
+	//
+	// EXTRACT(HOUR FROM ...) rather than slicing text: created_at is a timestamp,
+	// and the SQLite version's SUBSTR(created_at, 12, 2) only worked because it
+	// was stored as an ISO string.
+	var offHours []anomalyRow
+	err = s.auditScope(startDate, userID).
+		Modify(func(sel *entsql.Selector) {
+			hour := "EXTRACT(HOUR FROM " + sel.C(entauditlog.FieldCreatedAt) + ")"
+			u := joinAuditUser(sel)
+			sel.Where(entsql.ExprP(hour+" >= 22 OR "+hour+" < 8")).
+				Select(
+					entsql.As(sel.C(entauditlog.FieldUserID), "user_id"),
+					entsql.As("COALESCE("+u.C("username")+", '')", "username"),
+					entsql.As("COUNT(*)", "count"),
+				).GroupBy(sel.C(entauditlog.FieldUserID), u.C("username")).
+				Having(entsql.ExprP(fmt.Sprintf("COUNT(*) > %d", OffHoursThreshold))).
+				OrderExpr(entsql.Expr("count DESC")).
+				Limit(anomalyLimit)
+		}).
+		Scan(ctx, &offHours)
 	if err != nil {
-		return nil, fmt.Errorf("查询非工作时间高频操作失败: %w", err)
+		return nil, fmt.Errorf("查询非工作时间活动失败: %w", err)
 	}
-	defer rows2.Close()
-
-	for rows2.Next() {
-		var uid int64
-		var username string
-		var hourOfDay string
-		var cnt int64
-		if err := rows2.Scan(&uid, &username, &hourOfDay, &cnt); err != nil {
-			return nil, err
-		}
+	for _, o := range offHours {
 		result = append(result, AnomalyEntry{
-			UserID:      uid,
-			Username:    username,
-			AnomalyType: "off_hours_high_frequency",
-			Description: fmt.Sprintf("非工作时间（22:00-08:00）执行 %d 次操作（阈值 %d）", cnt, OffHoursThreshold),
-			Count:       cnt,
-			TimeWindow:  "22:00-08:00",
+			UserID:      o.UserID,
+			Username:    o.Username,
+			AnomalyType: "off_hours_activity",
+			Description: fmt.Sprintf("非工作时间（22:00-08:00）执行 %d 次操作（阈值 %d）", o.Count, OffHoursThreshold),
+			Count:       o.Count,
 		})
 	}
 
-	return result, rows2.Err()
+	return result, nil
 }
 
 // InvalidateAnalyticsCache clears all cached analytics results.
