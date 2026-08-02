@@ -12,7 +12,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:8080',
+      // The backend port is configurable (SQLFLOW_SERVER_PORT), so hardcoding
+      // 8080 here breaks any setup that moved it — including running a second
+      // instance alongside one that already holds the default port.
+      '/api': process.env.SQLFLOW_API_TARGET ?? 'http://localhost:8080',
     },
   },
 })
