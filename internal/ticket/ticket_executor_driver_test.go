@@ -89,7 +89,7 @@ func TestExecuteSQL_DriverPath_MySQL(t *testing.T) {
 	// 创建 MySQL 数据源
 	encPass, _ := crypto.Encrypt("test", encKey)
 	_, err := d.DB.ExecContext(context.Background(),
-		`INSERT INTO datasources (id, name, type, host, port, username, password_encrypted, database) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO datasources (id, name, type, host, port, username, password_encrypted, database) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		100, "mysql-test", "mysql", "localhost", 3306, "root", encPass, "testdb")
 	if err != nil {
 		t.Fatalf("insert datasource: %v", err)
@@ -154,7 +154,7 @@ func TestExecuteSQL_DriverPath_PostgreSQLRollback(t *testing.T) {
 
 	encPass, _ := crypto.Encrypt("test", encKey)
 	_, err := d.DB.ExecContext(context.Background(),
-		`INSERT INTO datasources (id, name, type, host, port, username, password_encrypted, database, sslmode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO datasources (id, name, type, host, port, username, password_encrypted, database, sslmode) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		200, "pg-test", "postgresql", "localhost", 5432, "root", encPass, "testdb", "disable")
 	if err != nil {
 		t.Fatalf("insert datasource: %v", err)

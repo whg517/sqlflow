@@ -143,7 +143,7 @@ func rollbackOn(tx *ent.Tx, cause error) error {
 func (s *Service) ListRevisions(ctx context.Context, ticketID int64) ([]model.TicketRevision, error) {
 	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT id, ticket_id, revision, sql_content, sql_summary, change_reason, risk_level, ai_review_result, reviewer_id, review_comment, status, created_at
-		 FROM ticket_revisions WHERE ticket_id = ? ORDER BY revision ASC`,
+		 FROM ticket_revisions WHERE ticket_id = $1 ORDER BY revision ASC`,
 		ticketID,
 	)
 	if err != nil {

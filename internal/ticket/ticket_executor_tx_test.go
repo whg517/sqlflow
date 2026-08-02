@@ -49,7 +49,7 @@ func TestExecuteSQL_PostgreSQLRoute(t *testing.T) {
 	// Create datasource
 	encPass, _ := crypto.Encrypt("test", encKey)
 	result, err := d.DB.ExecContext(context.Background(),
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		"test-pg-route", "postgresql", "localhost", 5432, "test", encPass, "testdb", "disable")
 	if err != nil {
 		t.Fatalf("create datasource: %v", err)
@@ -115,7 +115,7 @@ func TestExecuteSQL_PostgreSQLRollback(t *testing.T) {
 
 	encPass, _ := crypto.Encrypt("test", encKey)
 	result, err := d.DB.ExecContext(context.Background(),
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		"test-pg-rollback", "postgresql", "localhost", 5432, "test", encPass, "testdb", "disable")
 	if err != nil {
 		t.Fatalf("create datasource: %v", err)
@@ -182,7 +182,7 @@ func TestExecuteSQL_MySQLNoTransaction(t *testing.T) {
 
 	encPass, _ := crypto.Encrypt("test", encKey)
 	result, err := d.DB.ExecContext(context.Background(),
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		"test-mysql-notx", "mysql", "localhost", 3306, "test", encPass, "testdb")
 	if err != nil {
 		t.Fatalf("create datasource: %v", err)

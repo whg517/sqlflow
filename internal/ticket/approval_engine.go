@@ -576,7 +576,7 @@ func getTicketForNotify(ctx context.Context, db *sql.DB, ticketID int64) (*model
 	t := &model.Ticket{ID: ticketID}
 	err := db.QueryRowContext(ctx,
 		`SELECT submitter_id, datasource_id, database, sql_summary, risk_level, status, created_at, updated_at
-			 FROM tickets WHERE id = ?`, ticketID,
+			 FROM tickets WHERE id = $1`, ticketID,
 	).Scan(&t.SubmitterID, &t.DatasourceID, &t.Database, &t.SQLSummary, &t.RiskLevel, &t.Status, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err

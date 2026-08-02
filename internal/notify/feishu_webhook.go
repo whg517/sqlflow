@@ -181,7 +181,7 @@ func (s *FeishuService) Create(ctx context.Context, req FeishuCreateRequest, cre
 	urlHash := hashURL(req.WebhookURL)
 	var count int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM feishu_webhooks WHERE url_hash = ?`, urlHash,
+		`SELECT COUNT(*) FROM feishu_webhooks WHERE url_hash = $1`, urlHash,
 	).Scan(&count)
 	if err != nil {
 		return nil, fmt.Errorf("检查重复 URL: %w", err)
@@ -221,7 +221,7 @@ func (s *FeishuService) Create(ctx context.Context, req FeishuCreateRequest, cre
 func (s *FeishuService) GetByID(ctx context.Context, id int64) (*FeishuWebhook, error) {
 	row := s.db.QueryRowContext(ctx,
 		`SELECT id, name, encrypted_url, url_hash, scene, enabled, rate_limit_rps, created_by, created_at, updated_at
-		 FROM feishu_webhooks WHERE id = ?`, id,
+		 FROM feishu_webhooks WHERE id = $1`, id,
 	)
 
 	var wh FeishuWebhook
@@ -308,7 +308,7 @@ func (s *FeishuService) Update(ctx context.Context, id int64, req FeishuUpdateRe
 		// Check duplicate (excluding self)
 		var count int
 		err := s.db.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM feishu_webhooks WHERE url_hash = ? AND id != ?`, urlHash, id,
+			`SELECT COUNT(*) FROM feishu_webhooks WHERE url_hash = $1 AND id != $2`, urlHash, id,
 		).Scan(&count)
 		if err != nil {
 			return nil, fmt.Errorf("检查重复 URL: %w", err)
@@ -351,7 +351,7 @@ func (s *FeishuService) Update(ctx context.Context, id int64, req FeishuUpdateRe
 	sets = append(sets, "updated_at = datetime('now')")
 	args = append(args, id)
 
-	query := "UPDATE feishu_webhooks SET " + strings.Join(sets, ", ") + " WHERE id = ?"
+	query := "UPDATE feishu_webhooks SET " + strings.Join(sets, ", ") + " WHERE id = $1"
 	if _, err := s.db.ExecContext(ctx, query, args...); err != nil {
 		return nil, fmt.Errorf("更新失败: %w", err)
 	}
@@ -361,11 +361,11 @@ func (s *FeishuService) Update(ctx context.Context, id int64, req FeishuUpdateRe
 
 // Delete removes a webhook and its dead letter entries.
 func (s *FeishuService) Delete(ctx context.Context, id int64) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM feishu_dead_letters WHERE webhook_id = ?`, id); err != nil {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM feishu_dead_letters WHERE webhook_id = $1`, id); err != nil {
 		log.Printf("feishu webhook: delete dead letters for webhook %d: %v", id, err)
 	}
 
-	result, err := s.db.ExecContext(ctx, `DELETE FROM feishu_webhooks WHERE id = ?`, id)
+	result, err := s.db.ExecContext(ctx, `DELETE FROM feishu_webhooks WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("删除失败: %w", err)
 	}
@@ -457,7 +457,7 @@ func (s *FeishuService) RecordDeadLetter(ctx context.Context, webhookID int64, p
 	var existingID int64
 	var attemptCount int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, attempt_count FROM feishu_dead_letters WHERE webhook_id = ? AND payload = ?`,
+		`SELECT id, attempt_count FROM feishu_dead_letters WHERE webhook_id = $1 AND payload = $2`,
 		webhookID, payload,
 	).Scan(&existingID, &attemptCount)
 
@@ -465,7 +465,7 @@ func (s *FeishuService) RecordDeadLetter(ctx context.Context, webhookID int64, p
 		// New dead letter
 		_, err := s.db.ExecContext(ctx,
 			`INSERT INTO feishu_dead_letters (webhook_id, payload, error_message, attempt_count, last_attempt_at)
-			 VALUES (?, ?, ?, 1, datetime('now'))`,
+			 VALUES ($1, $2, $3, 1, datetime('now'))`,
 			webhookID, payload, errMsg,
 		)
 		return err
@@ -477,8 +477,8 @@ func (s *FeishuService) RecordDeadLetter(ctx context.Context, webhookID int64, p
 
 	// Update existing
 	_, err = s.db.ExecContext(ctx,
-		`UPDATE feishu_dead_letters SET attempt_count = ?, error_message = ?, last_attempt_at = datetime('now')
-		 WHERE id = ?`,
+		`UPDATE feishu_dead_letters SET attempt_count = $1, error_message = $2, last_attempt_at = datetime('now')
+		 WHERE id = $3`,
 		attemptCount+1, errMsg, existingID,
 	)
 	return err
@@ -496,13 +496,13 @@ func (s *FeishuService) ListDeadLetters(ctx context.Context, webhookID int64, li
 	if webhookID > 0 {
 		rows, err = s.db.QueryContext(ctx,
 			`SELECT id, webhook_id, payload, error_message, attempt_count, last_attempt_at, created_at
-			 FROM feishu_dead_letters WHERE webhook_id = ? ORDER BY created_at DESC LIMIT ?`,
+			 FROM feishu_dead_letters WHERE webhook_id = $1 ORDER BY created_at DESC LIMIT $2`,
 			webhookID, limit,
 		)
 	} else {
 		rows, err = s.db.QueryContext(ctx,
 			`SELECT id, webhook_id, payload, error_message, attempt_count, last_attempt_at, created_at
-			 FROM feishu_dead_letters ORDER BY created_at DESC LIMIT ?`,
+			 FROM feishu_dead_letters ORDER BY created_at DESC LIMIT $1`,
 			limit,
 		)
 	}
@@ -526,7 +526,7 @@ func (s *FeishuService) ListDeadLetters(ctx context.Context, webhookID int64, li
 // CleanExpiredDeadLetters removes dead letters that have exceeded max retries.
 func (s *FeishuService) CleanExpiredDeadLetters(ctx context.Context) (int64, error) {
 	result, err := s.db.ExecContext(ctx,
-		`DELETE FROM feishu_dead_letters WHERE attempt_count >= ?`,
+		`DELETE FROM feishu_dead_letters WHERE attempt_count >= $1`,
 		MaxDeadLetterRetries,
 	)
 	if err != nil {

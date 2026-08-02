@@ -20,7 +20,7 @@ import (
 func tamperTicketSQL(t *testing.T, platform *db.DB, id int64, sqlContent string) {
 	t.Helper()
 	if _, err := platform.Exec(
-		`UPDATE tickets SET sql_content = ?, sql_summary = ? WHERE id = ?`,
+		`UPDATE tickets SET sql_content = $1, sql_summary = $2 WHERE id = $3`,
 		sqlContent, sqlContent, id,
 	); err != nil {
 		t.Fatalf("tamper ticket #%d: %v", id, err)
@@ -30,7 +30,7 @@ func tamperTicketSQL(t *testing.T, platform *db.DB, id int64, sqlContent string)
 func ticketSQLHash(t *testing.T, platform *db.DB, id int64) string {
 	t.Helper()
 	var hash string
-	if err := platform.QueryRow(`SELECT sql_hash FROM tickets WHERE id = ?`, id).Scan(&hash); err != nil {
+	if err := platform.QueryRow(`SELECT sql_hash FROM tickets WHERE id = $1`, id).Scan(&hash); err != nil {
 		t.Fatalf("read ticket #%d sql_hash: %v", id, err)
 	}
 	return hash
@@ -157,7 +157,7 @@ func TestScheduler_RejectsTamperedSQL(t *testing.T) {
 	// ScheduleTicket refuses a past time, so backdate the row directly to make
 	// the ticket due on this pass.
 	if _, err := platform.Exec(
-		`UPDATE tickets SET status = ?, scheduled_at = ? WHERE id = ?`,
+		`UPDATE tickets SET status = $1, scheduled_at = $2 WHERE id = $3`,
 		model.TicketStatusScheduled, time.Now().Add(-time.Minute), id,
 	); err != nil {
 		t.Fatalf("backdate schedule: %v", err)
@@ -185,7 +185,7 @@ func TestResubmitTicket_ClearsSQLHash(t *testing.T) {
 		"UPDATE demo SET n = 7", time.Time{})
 
 	// Simulate a hash left over from an earlier approval round.
-	if _, err := platform.Exec(`UPDATE tickets SET sql_hash = ? WHERE id = ?`, "stale-hash", id); err != nil {
+	if _, err := platform.Exec(`UPDATE tickets SET sql_hash = $1 WHERE id = $2`, "stale-hash", id); err != nil {
 		t.Fatalf("seed stale hash: %v", err)
 	}
 

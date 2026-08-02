@@ -70,7 +70,7 @@ func (s *PreferenceService) GetPreferences(ctx context.Context, userID int64) ([
 	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT id, user_id, event_type, channels, updated_at
 		 FROM notification_preferences
-		 WHERE user_id = ?
+		 WHERE user_id = $1
 		 ORDER BY event_type`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("查询通知偏好失败: %w", err)
@@ -125,8 +125,8 @@ func (s *PreferenceService) UpdatePreferences(ctx context.Context, userID int64,
 
 		_, err := s.database.DB.ExecContext(ctx,
 			`INSERT INTO notification_preferences (user_id, event_type, channels, updated_at)
-			 VALUES (?, ?, ?, ?)
-			 ON CONFLICT(user_id, event_type) DO UPDATE SET channels = ?, updated_at = ?`,
+			 VALUES ($1, $2, $3, $4)
+			 ON CONFLICT(user_id, event_type) DO UPDATE SET channels = $5, updated_at = $6`,
 			userID, pref.EventType, string(channelsJSON), now,
 			string(channelsJSON), now,
 		)

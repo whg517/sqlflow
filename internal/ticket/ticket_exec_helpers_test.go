@@ -47,7 +47,7 @@ func setupTicketExecTest(t *testing.T) (platform *db.DB, ticketSvc *Service, tar
 	}
 	res, err := platform.Exec(
 		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		"test-ds", "mysql", "127.0.0.1", 3306, "root", encPassword, "active",
 	)
 	if err != nil {
@@ -98,7 +98,7 @@ func insertTicket(t *testing.T, platform *db.DB, status model.TicketStatus, sqlC
 	res, err := platform.Exec(
 		`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type,
 		                      change_reason, status, risk_level, scheduled_at, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		1, 1, ticketExecDatabase, sqlContent, sqlContent, "mysql",
 		"ticket execution test", status, "low", scheduled, now, now,
 	)
@@ -115,7 +115,7 @@ func insertTicket(t *testing.T, platform *db.DB, status model.TicketStatus, sqlC
 func ticketStatus(t *testing.T, platform *db.DB, id int64) string {
 	t.Helper()
 	var status string
-	if err := platform.QueryRow(`SELECT status FROM tickets WHERE id = ?`, id).Scan(&status); err != nil {
+	if err := platform.QueryRow(`SELECT status FROM tickets WHERE id = $1`, id).Scan(&status); err != nil {
 		t.Fatalf("read ticket #%d status: %v", id, err)
 	}
 	return status

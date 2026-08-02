@@ -21,7 +21,7 @@ func setupSchedulerTest(t *testing.T) (*db.DB, *Service) {
 
 	auditSvc := audit.NewService(testDB, 0, 0)
 	// Insert datasource
-	testDB.Exec(`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+	testDB.Exec(`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		"test-ds", "mysql", "10.0.0.1", 3306, "root", "enc", "active")
 
 	ticketSvc := New(Deps{DB: testDB, Audit: auditSvc})

@@ -59,8 +59,15 @@ func (e *DatasourceInUseError) Error() string {
 
 // IsInternal reports whether a datasource exposes SQLFlow's own
 // metadata database. These datasources are restricted to administrators.
+//
+// The marker is the system flag this package writes into extra_config, not the
+// driver type. Requiring Type == "sqlite" here was correct only while the
+// platform stored its metadata in SQLite; after ADR-0009 moved it to
+// PostgreSQL the condition became permanently false and the administrator gate
+// it guards silently opened. Which engine the platform happens to use is not
+// what makes a datasource internal.
 func IsInternal(ds *model.DataSource) bool {
-	if ds == nil || ds.Type != "sqlite" || ds.ExtraConfig == "" {
+	if ds == nil || ds.ExtraConfig == "" {
 		return false
 	}
 	var extra struct {
@@ -516,14 +523,14 @@ func (s *Service) datasourceDependencies(ctx context.Context, id int64) ([]Datas
 		query string
 		args  []interface{}
 	}{
-		{"工单", `SELECT COUNT(*) FROM tickets WHERE datasource_id = ?`, []interface{}{id}},
-		{"查询历史", `SELECT COUNT(*) FROM query_history WHERE datasource_id = ?`, []interface{}{id}},
-		{"审计日志", `SELECT COUNT(*) FROM audit_logs WHERE datasource_id = ?`, []interface{}{id}},
-		{"脱敏规则", `SELECT COUNT(*) FROM mask_rules WHERE datasource_id = ?`, []interface{}{id}},
-		{"敏感表", `SELECT COUNT(*) FROM sensitive_tables WHERE datasource_id = ?`, []interface{}{id}},
-		{"临时权限申请", `SELECT COUNT(*) FROM permission_requests WHERE datasource_id = ?`, []interface{}{id}},
-		{"权限策略", `SELECT COUNT(*) FROM casbin_rule WHERE v1 = ? OR v2 = ?`, []interface{}{domain, domain}},
-		{"临时授权", `SELECT COUNT(*) FROM temp_policies WHERE dom = ?`, []interface{}{domain}},
+		{"工单", `SELECT COUNT(*) FROM tickets WHERE datasource_id = $1`, []interface{}{id}},
+		{"查询历史", `SELECT COUNT(*) FROM query_history WHERE datasource_id = $1`, []interface{}{id}},
+		{"审计日志", `SELECT COUNT(*) FROM audit_logs WHERE datasource_id = $1`, []interface{}{id}},
+		{"脱敏规则", `SELECT COUNT(*) FROM mask_rules WHERE datasource_id = $1`, []interface{}{id}},
+		{"敏感表", `SELECT COUNT(*) FROM sensitive_tables WHERE datasource_id = $1`, []interface{}{id}},
+		{"临时权限申请", `SELECT COUNT(*) FROM permission_requests WHERE datasource_id = $1`, []interface{}{id}},
+		{"权限策略", `SELECT COUNT(*) FROM casbin_rule WHERE v1 = $1 OR v2 = $2`, []interface{}{domain, domain}},
+		{"临时授权", `SELECT COUNT(*) FROM temp_policies WHERE dom = $1`, []interface{}{domain}},
 	}
 
 	dependencies := make([]DatasourceDependency, 0)

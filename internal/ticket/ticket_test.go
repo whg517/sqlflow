@@ -30,7 +30,7 @@ func setupTicketTestDB(t *testing.T) *sql.DB {
 func seedTestUser(t *testing.T, testDB *sql.DB, username, role string) int64 {
 	t.Helper()
 	result, err := testDB.Exec(
-		`INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
+		`INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES ($1, $2, $3, datetime('now'), datetime('now'))`,
 		username, "$2a$10$testhash", role,
 	)
 	if err != nil {
@@ -44,7 +44,7 @@ func seedTestUser(t *testing.T, testDB *sql.DB, username, role string) int64 {
 func seedTestDatasource(t *testing.T, testDB *sql.DB, name string) int64 {
 	t.Helper()
 	result, err := testDB.Exec(
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES (?, 'mysql', 'localhost', 3306, 'root', '', 'active', datetime('now'), datetime('now'))`,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active', datetime('now'), datetime('now'))`,
 		name,
 	)
 	if err != nil {
@@ -645,7 +645,7 @@ func TestFullWorkflow(t *testing.T) {
 	// Seed a datasource with an encrypted password so GetDataSource can decrypt it.
 	encPass, _ := crypto.Encrypt("secret", encKey)
 	dsRes, err := testDB.Exec(
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES (?, 'mysql', 'localhost', 3306, 'root', ?, 'active', datetime('now'), datetime('now'))`,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES ($1, 'mysql', 'localhost', 3306, 'root', $2, 'active', datetime('now'), datetime('now'))`,
 		"test-mysql", encPass)
 	if err != nil {
 		t.Fatalf("seed datasource: %v", err)
@@ -788,7 +788,7 @@ func createTicketAtStatus(t *testing.T, testDB *sql.DB, svc *Service, userID, ds
 // Helper: directly set a ticket's status in the DB.
 func setTicketStatus(t *testing.T, testDB *sql.DB, ticketID int64, status model.TicketStatus) {
 	t.Helper()
-	_, err := testDB.Exec(`UPDATE tickets SET status = ?, updated_at = datetime('now') WHERE id = ?`, status, ticketID)
+	_, err := testDB.Exec(`UPDATE tickets SET status = $1, updated_at = datetime('now') WHERE id = $2`, status, ticketID)
 	if err != nil {
 		t.Fatalf("setTicketStatus(%d, %s) error: %v", ticketID, status, err)
 	}

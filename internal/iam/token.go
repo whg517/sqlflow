@@ -136,7 +136,7 @@ func (s *TokenService) GetTokenByID(ctx context.Context, id int64) (*model.APITo
 		        t.description, t.created_at, t.updated_at
 		 FROM api_tokens t
 		 LEFT JOIN users u ON u.id = t.user_id
-		 WHERE t.id = ?`,
+		 WHERE t.id = $1`,
 		id,
 	).Scan(&t.ID, &t.UserID, &username, &t.Name, &t.TokenHash, &t.TokenPrefix,
 		&t.Scopes, &t.ExpiresAt, &lastUsedAt, &t.UseCount, &isActive,
@@ -167,7 +167,7 @@ func (s *TokenService) ListTokens(ctx context.Context, userID int64) ([]*model.A
 			        COALESCE(t.description, ''), t.created_at, t.updated_at
 			 FROM api_tokens t
 			 LEFT JOIN users u ON u.id = t.user_id
-			 WHERE t.user_id = ?
+			 WHERE t.user_id = $1
 			 ORDER BY t.created_at DESC`
 
 	rows, err := s.database.DB.QueryContext(ctx, query, userID)
@@ -268,7 +268,7 @@ func (s *TokenService) ValidateTokenWithRole(ctx context.Context, plainToken str
 		 FROM api_tokens t
 		 JOIN users u ON u.id = t.user_id
 		 JOIN roles r ON r.name = u.role AND r.status = 'active'
-		 WHERE t.token_hash = ?`,
+		 WHERE t.token_hash = $1`,
 		tokenHash,
 	).Scan(&userID, &username, &role, &scopeStr, &expiresAt, &isActive, &lastUsedAt)
 	if err != nil {
@@ -289,7 +289,7 @@ func (s *TokenService) ValidateTokenWithRole(ctx context.Context, plainToken str
 	// Update usage (best-effort, don't fail auth on update error)
 	// RAW_SQL: atomic increment via raw SQL (use_count = use_count + 1)
 	_, _ = s.database.DB.ExecContext(ctx,
-		`UPDATE api_tokens SET last_used_at = datetime('now'), use_count = use_count + 1, updated_at = datetime('now') WHERE token_hash = ?`,
+		`UPDATE api_tokens SET last_used_at = datetime('now'), use_count = use_count + 1, updated_at = datetime('now') WHERE token_hash = $1`,
 		tokenHash,
 	)
 
@@ -361,7 +361,7 @@ func scanTokens(rows *sql.Rows) ([]*model.APIToken, error) {
 func (s *TokenService) GetTokenStats(ctx context.Context, userID int64) (totalCount, activeCount, totalUsage int64, err error) {
 	err = s.database.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0), COALESCE(SUM(use_count), 0)
-		 FROM api_tokens WHERE user_id = ?`, userID,
+		 FROM api_tokens WHERE user_id = $1`, userID,
 	).Scan(&totalCount, &activeCount, &totalUsage)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("query token stats: %w", err)

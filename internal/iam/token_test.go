@@ -19,12 +19,12 @@ func setupTokenTestDB(t *testing.T) *db.DB {
 // createTokenTestUser creates a test user and returns the ID.
 func createTokenTestUser(t *testing.T, database *db.DB, username string) int64 {
 	t.Helper()
-	_, err := database.Exec(`INSERT INTO users (username, password_hash, role) VALUES (?, 'hashed', 'developer')`, username)
+	_, err := database.Exec(`INSERT INTO users (username, password_hash, role) VALUES ($1, 'hashed', 'developer')`, username)
 	if err != nil {
 		t.Fatalf("create test user: %v", err)
 	}
 	var id int64
-	err = database.QueryRow(`SELECT id FROM users WHERE username = ?`, username).Scan(&id)
+	err = database.QueryRow(`SELECT id FROM users WHERE username = $1`, username).Scan(&id)
 	if err != nil {
 		t.Fatalf("get test user id: %v", err)
 	}

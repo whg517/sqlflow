@@ -144,7 +144,7 @@ func (s *Service) shouldNotify(ctx context.Context, ticketID int64, eventType st
 
 	var count int
 	err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM ticket_notification_logs WHERE ticket_id = ? AND event_type = ?`,
+		`SELECT COUNT(*) FROM ticket_notification_logs WHERE ticket_id = $1 AND event_type = $2`,
 		ticketID, eventType,
 	).Scan(&count)
 	if err != nil {
@@ -165,7 +165,7 @@ func (s *Service) recordNotification(ctx context.Context, ticketID int64, eventT
 	}
 
 	_, err := db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO ticket_notification_logs (ticket_id, event_type) VALUES (?, ?)`,
+		`INSERT OR IGNORE INTO ticket_notification_logs (ticket_id, event_type) VALUES ($1, $2)`,
 		ticketID, eventType,
 	)
 	if err != nil {

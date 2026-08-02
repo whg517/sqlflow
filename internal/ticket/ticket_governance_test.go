@@ -16,7 +16,7 @@ import (
 func ticketRiskLevel(t *testing.T, platform *db.DB, id int64) string {
 	t.Helper()
 	var risk string
-	if err := platform.QueryRow(`SELECT risk_level FROM tickets WHERE id = ?`, id).Scan(&risk); err != nil {
+	if err := platform.QueryRow(`SELECT risk_level FROM tickets WHERE id = $1`, id).Scan(&risk); err != nil {
 		t.Fatalf("read ticket #%d risk_level: %v", id, err)
 	}
 	return risk
@@ -174,7 +174,7 @@ func TestResubmitTicket_ConcurrentResubmitsProduceOneRevision(t *testing.T) {
 	}
 
 	var revisions int
-	if err := platform.QueryRow(`SELECT COUNT(*) FROM ticket_revisions WHERE ticket_id = ?`, id).
+	if err := platform.QueryRow(`SELECT COUNT(*) FROM ticket_revisions WHERE ticket_id = $1`, id).
 		Scan(&revisions); err != nil {
 		t.Fatalf("count revisions: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestResubmitTicket_RefreshesAnalysis(t *testing.T) {
 
 	// Seed stale analysis from the rejected revision.
 	if _, err := platform.Exec(
-		`UPDATE tickets SET risk_level = ?, sql_type = ?, affected_tables = ? WHERE id = ?`,
+		`UPDATE tickets SET risk_level = $1, sql_type = $2, affected_tables = $3 WHERE id = $4`,
 		RiskLevelCritical, "DROP", `["users"]`, id,
 	); err != nil {
 		t.Fatalf("seed stale analysis: %v", err)

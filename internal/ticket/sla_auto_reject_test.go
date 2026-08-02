@@ -19,7 +19,7 @@ func setupSLATestDB(t *testing.T) *sql.DB {
 func createTestUserForSLA(t *testing.T, ctx context.Context, d *sql.DB, username string) int64 {
 	t.Helper()
 	result, err := d.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)`,
+		`INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
 		username, "$2a$10$hash", "dba")
 	if err != nil {
 		t.Fatalf("create user %s: %v", username, err)
@@ -31,7 +31,7 @@ func createTestUserForSLA(t *testing.T, ctx context.Context, d *sql.DB, username
 func createTestDatasourceForSLA(t *testing.T, ctx context.Context, d *sql.DB) int64 {
 	t.Helper()
 	result, err := d.ExecContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted) VALUES (?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted) VALUES ($1, $2, $3, $4, $5, $6)`,
 		"test-ds", "mysql", "localhost", 3306, "root", "encrypted")
 	if err != nil {
 		t.Fatalf("create datasource: %v", err)
@@ -44,7 +44,7 @@ func createTestTicketForSLA(t *testing.T, ctx context.Context, d *sql.DB, submit
 	t.Helper()
 	result, err := d.ExecContext(ctx,
 		`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, status, risk_level, created_at, updated_at, sla_deadline, sla_status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		submitterID, dsID, "testdb", "SELECT 1", "SELECT 1", "mysql", status, "medium", createdAt, createdAt, slaDeadline, "normal")
 	if err != nil {
 		t.Fatalf("create ticket: %v", err)
@@ -65,7 +65,7 @@ func TestSLAService_AutoReject_Breached(t *testing.T) {
 	// Create SLA config with auto_reject_enabled = true, timeout = 60 minutes
 	_, err := d.ExecContext(ctx,
 		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, auto_reject_enabled, enabled, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		"medium", 60, 80, "admin", 1, 1, time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("create sla config: %v", err)
@@ -83,7 +83,7 @@ func TestSLAService_AutoReject_Breached(t *testing.T) {
 
 	// Verify ticket was auto-rejected
 	var status string
-	err = d.QueryRowContext(ctx, `SELECT status FROM tickets WHERE id = ?`, ticketID).Scan(&status)
+	err = d.QueryRowContext(ctx, `SELECT status FROM tickets WHERE id = $1`, ticketID).Scan(&status)
 	if err != nil {
 		t.Fatalf("query ticket: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestSLAService_AutoReject_Breached(t *testing.T) {
 
 	// Verify review_comment mentions auto-reject
 	var comment string
-	err = d.QueryRowContext(ctx, `SELECT review_comment FROM tickets WHERE id = ?`, ticketID).Scan(&comment)
+	err = d.QueryRowContext(ctx, `SELECT review_comment FROM tickets WHERE id = $1`, ticketID).Scan(&comment)
 	if err != nil {
 		t.Fatalf("query comment: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestSLAService_AutoReject_Breached(t *testing.T) {
 
 	// Verify sla_status = breached
 	var slaStatus string
-	err = d.QueryRowContext(ctx, `SELECT sla_status FROM tickets WHERE id = ?`, ticketID).Scan(&slaStatus)
+	err = d.QueryRowContext(ctx, `SELECT sla_status FROM tickets WHERE id = $1`, ticketID).Scan(&slaStatus)
 	if err != nil {
 		t.Fatalf("query sla_status: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestSLAService_AutoReject_Breached(t *testing.T) {
 
 	// Verify action was logged
 	var actionCount int
-	err = d.QueryRowContext(ctx, `SELECT COUNT(*) FROM sla_action_log WHERE ticket_id = ? AND action_type = 'auto_reject'`, ticketID).Scan(&actionCount)
+	err = d.QueryRowContext(ctx, `SELECT COUNT(*) FROM sla_action_log WHERE ticket_id = $1 AND action_type = 'auto_reject'`, ticketID).Scan(&actionCount)
 	if err != nil {
 		t.Fatalf("query action log: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestSLAService_AutoReject_Idempotent(t *testing.T) {
 
 	_, err := d.ExecContext(ctx,
 		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, auto_reject_enabled, enabled, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		"medium", 60, 80, "admin", 1, 1, time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("create sla config: %v", err)
@@ -152,7 +152,7 @@ func TestSLAService_AutoReject_Idempotent(t *testing.T) {
 
 	// Verify only one auto_reject action logged
 	var actionCount int
-	err = d.QueryRowContext(ctx, `SELECT COUNT(*) FROM sla_action_log WHERE ticket_id = ? AND action_type = 'auto_reject'`, ticketID).Scan(&actionCount)
+	err = d.QueryRowContext(ctx, `SELECT COUNT(*) FROM sla_action_log WHERE ticket_id = $1 AND action_type = 'auto_reject'`, ticketID).Scan(&actionCount)
 	if err != nil {
 		t.Fatalf("query action log: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestSLAService_NoAutoReject_WhenDisabled(t *testing.T) {
 	// auto_reject_enabled = false (default)
 	_, err := d.ExecContext(ctx,
 		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, auto_reject_enabled, enabled, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		"medium", 60, 80, "admin", 0, 1, time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("create sla config: %v", err)
@@ -188,7 +188,7 @@ func TestSLAService_NoAutoReject_WhenDisabled(t *testing.T) {
 
 	// Ticket should still be PENDING_APPROVAL (not auto-rejected)
 	var status string
-	err = d.QueryRowContext(ctx, `SELECT status FROM tickets WHERE id = ?`, ticketID).Scan(&status)
+	err = d.QueryRowContext(ctx, `SELECT status FROM tickets WHERE id = $1`, ticketID).Scan(&status)
 	if err != nil {
 		t.Fatalf("query ticket: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestSLAService_NoAutoReject_WhenDisabled(t *testing.T) {
 
 	// But escalation should be logged (the existing behavior)
 	var actionCount int
-	err = d.QueryRowContext(ctx, `SELECT COUNT(*) FROM sla_action_log WHERE ticket_id = ? AND action_type = 'escalate'`, ticketID).Scan(&actionCount)
+	err = d.QueryRowContext(ctx, `SELECT COUNT(*) FROM sla_action_log WHERE ticket_id = $1 AND action_type = 'escalate'`, ticketID).Scan(&actionCount)
 	if err != nil {
 		t.Fatalf("query action log: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestSLAService_NoAutoReject_WhenNotBreached(t *testing.T) {
 
 	_, err := d.ExecContext(ctx,
 		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, auto_reject_enabled, enabled, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		"medium", 60, 80, "admin", 1, 1, time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("create sla config: %v", err)
@@ -234,7 +234,7 @@ func TestSLAService_NoAutoReject_WhenNotBreached(t *testing.T) {
 
 	// Ticket should still be PENDING_APPROVAL
 	var status string
-	err = d.QueryRowContext(ctx, `SELECT status FROM tickets WHERE id = ?`, ticketID).Scan(&status)
+	err = d.QueryRowContext(ctx, `SELECT status FROM tickets WHERE id = $1`, ticketID).Scan(&status)
 	if err != nil {
 		t.Fatalf("query ticket: %v", err)
 	}
@@ -244,7 +244,7 @@ func TestSLAService_NoAutoReject_WhenNotBreached(t *testing.T) {
 
 	// No auto_reject action should be logged
 	var actionCount int
-	err = d.QueryRowContext(ctx, `SELECT COUNT(*) FROM sla_action_log WHERE ticket_id = ? AND action_type = 'auto_reject'`, ticketID).Scan(&actionCount)
+	err = d.QueryRowContext(ctx, `SELECT COUNT(*) FROM sla_action_log WHERE ticket_id = $1 AND action_type = 'auto_reject'`, ticketID).Scan(&actionCount)
 	if err != nil {
 		t.Fatalf("query action log: %v", err)
 	}

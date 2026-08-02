@@ -23,7 +23,7 @@ func NewSQLAnalyzer() *SQLAnalyzer {
 	return &SQLAnalyzer{}
 }
 
-var firstKeywordRegex = regexp.MustCompile(`(?i)^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|WITH|MERGE|REPLACE)`)
+var firstKeywordRegex = regexp.MustCompile(`($1i)^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|WITH|MERGE|REPLACE)`)
 
 // Analyze parses a SQL statement and returns metadata.
 func (a *SQLAnalyzer) Analyze(sql string) *SQLAnalysis {

@@ -228,7 +228,7 @@ func (s *Service) UpdateUserRole(ctx context.Context, userID int64, role string)
 // ValidateRole verifies that a persisted role exists and is active.
 func (s *Service) ValidateRole(ctx context.Context, role string) error {
 	var status string
-	err := s.database.DB.QueryRowContext(ctx, `SELECT status FROM roles WHERE name = ?`, role).Scan(&status)
+	err := s.database.DB.QueryRowContext(ctx, `SELECT status FROM roles WHERE name = $1`, role).Scan(&status)
 	if errors.Is(err, sql.ErrNoRows) || status != "active" {
 		return ErrInvalidRole
 	}

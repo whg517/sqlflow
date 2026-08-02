@@ -377,7 +377,7 @@ func TestFeishuWebhookService_DeadLetter(t *testing.T) {
 
 	t.Run("clean expired", func(t *testing.T) {
 		// Manually set attempt_count to max
-		svc.db.ExecContext(ctx, `UPDATE feishu_dead_letters SET attempt_count = ?`, MaxDeadLetterRetries)
+		svc.db.ExecContext(ctx, `UPDATE feishu_dead_letters SET attempt_count = $1`, MaxDeadLetterRetries)
 
 		affected, err := svc.CleanExpiredDeadLetters(ctx)
 		if err != nil {

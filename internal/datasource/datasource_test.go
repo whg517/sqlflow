@@ -694,7 +694,7 @@ func TestDatasourceLifecycle(t *testing.T) {
 	}
 
 	if _, err := testDB.ExecContext(ctx,
-		`INSERT INTO mask_rules (datasource_id, table_name, field, mask_type) VALUES (?, 'users', 'phone', 'phone')`,
+		`INSERT INTO mask_rules (datasource_id, table_name, field, mask_type) VALUES ($1, 'users', 'phone', 'phone')`,
 		created.ID,
 	); err != nil {
 		t.Fatalf("insert dependency: %v", err)
@@ -705,7 +705,7 @@ func TestDatasourceLifecycle(t *testing.T) {
 		t.Fatalf("DeleteDataSource(in use) error = %v, want dependency error", err)
 	}
 
-	if _, err := testDB.ExecContext(ctx, `DELETE FROM mask_rules WHERE datasource_id = ?`, created.ID); err != nil {
+	if _, err := testDB.ExecContext(ctx, `DELETE FROM mask_rules WHERE datasource_id = $1`, created.ID); err != nil {
 		t.Fatalf("remove dependency: %v", err)
 	}
 	if err := svc.DeleteDataSource(ctx, created.ID); err != nil {
@@ -1162,15 +1162,14 @@ func TestGetTables_InvalidDatasourceType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encrypt: %v", err)
 	}
-	result, err := testDB.ExecContext(ctx,
+	var dsID int64
+	if err := testDB.QueryRowContext(ctx,
 		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, status)
-		 VALUES (?, 'postgres', ?, ?, ?, ?, ?, 'active')`,
+		 VALUES ($1, 'postgres', $2, $3, $4, $5, $6, 'active') RETURNING id`,
 		"invalid-type-ds", "10.0.0.1", 5432, "root", encrypted, "testdb",
-	)
-	if err != nil {
+	).Scan(&dsID); err != nil {
 		t.Fatalf("insert datasource: %v", err)
 	}
-	dsID, _ := result.LastInsertId()
 
 	_, err = svc.GetTables(ctx, dsID)
 	if err != ErrInvalidDatasourceType {
@@ -1247,6 +1246,54 @@ func TestBuildMongoURI(t *testing.T) {
 			got := buildMongoURI(tt.host, tt.port, tt.user, tt.password)
 			if got != tt.want {
 				t.Errorf("buildMongoURI() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestIsInternal_FollowsTheExtraConfigNotTheType is the regression test for the
+// admin gate on the platform's own datasource.
+//
+// IsInternal used to require Type == "sqlite". When the platform store moved to
+// PostgreSQL (ADR-0009) the internal datasource began registering as
+// postgresql, so that condition became permanently false — and the gate it
+// guards, which hides the metadata database from non-admins, silently opened.
+//
+// The marker is the extra_config flag, not the driver: which engine the
+// platform happens to store its metadata in is not what makes a datasource
+// internal.
+func TestIsInternal_FollowsTheExtraConfigNotTheType(t *testing.T) {
+	tests := []struct {
+		name string
+		ds   *model.DataSource
+		want bool
+	}{
+		{
+			"postgresql internal datasource is internal",
+			&model.DataSource{Type: "postgresql", ExtraConfig: `{"system":true,"read_only":true}`},
+			true,
+		},
+		{
+			"sqlite internal datasource is still internal",
+			&model.DataSource{Type: "sqlite", ExtraConfig: `{"system":true,"read_only":true}`},
+			true,
+		},
+		{
+			"an ordinary postgresql datasource is not",
+			&model.DataSource{Type: "postgresql", ExtraConfig: ""},
+			false,
+		},
+		{
+			"a datasource a user marked read_only is not internal",
+			&model.DataSource{Type: "mysql", ExtraConfig: `{"read_only":true}`},
+			false,
+		},
+		{"nil is not internal", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsInternal(tt.ds); got != tt.want {
+				t.Errorf("IsInternal() = %v, want %v", got, tt.want)
 			}
 		})
 	}

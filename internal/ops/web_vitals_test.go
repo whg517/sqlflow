@@ -69,7 +69,7 @@ func TestWebVitalsService_CleanupOld(t *testing.T) {
 	// Insert a metric with old timestamp (31 days ago)
 	oldTime := time.Now().AddDate(0, 0, -31).Format("2006-01-02 15:04:05")
 	_, err := conn.Exec(
-		`INSERT INTO web_vitals (metric_name, value, rating, created_at) VALUES ('LCP', 1000, 'good', ?)`,
+		`INSERT INTO web_vitals (metric_name, value, rating, created_at) VALUES ('LCP', 1000, 'good', $1)`,
 		oldTime,
 	)
 	if err != nil {

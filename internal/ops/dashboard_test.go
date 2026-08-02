@@ -53,7 +53,7 @@ func TestDashboardService_GetStats_WithData(t *testing.T) {
 	// Seed users
 	for i := 0; i < 3; i++ {
 		testDB.ExecContext(ctx,
-			`INSERT INTO users (username, password_hash, role) VALUES (?, 'hash', 'developer')`,
+			`INSERT INTO users (username, password_hash, role) VALUES ($1, 'hash', 'developer')`,
 			"dev"+string(rune('0'+i)),
 		)
 	}
@@ -61,13 +61,13 @@ func TestDashboardService_GetStats_WithData(t *testing.T) {
 	// Seed active datasources
 	for i := 0; i < 2; i++ {
 		testDB.ExecContext(ctx,
-			`INSERT INTO datasources (name, type, host, port, status) VALUES (?, 'mysql', 'localhost', 3306, 'active')`,
+			`INSERT INTO datasources (name, type, host, port, status) VALUES ($1, 'mysql', 'localhost', 3306, 'active')`,
 			"ds"+string(rune('0'+i)),
 		)
 	}
 	// Seed an inactive datasource
 	testDB.ExecContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, status) VALUES (?, 'mysql', 'localhost', 3306, 'disabled')`,
+		`INSERT INTO datasources (name, type, host, port, status) VALUES ($1, 'mysql', 'localhost', 3306, 'disabled')`,
 		"ds_disabled",
 	)
 
@@ -80,7 +80,7 @@ func TestDashboardService_GetStats_WithData(t *testing.T) {
 	pendingStatuses := []string{"SUBMITTED", "AI_REVIEWED", "PENDING_APPROVAL"}
 	for _, s := range pendingStatuses {
 		testDB.ExecContext(ctx,
-			`INSERT INTO tickets (submitter_id, datasource_id, sql_content, status) VALUES (1, 1, 'ALTER TABLE t ADD COLUMN c INT', ?)`,
+			`INSERT INTO tickets (submitter_id, datasource_id, sql_content, status) VALUES (1, 1, 'ALTER TABLE t ADD COLUMN c INT', $1)`,
 			s,
 		)
 	}
@@ -167,7 +167,7 @@ func TestDashboardService_GetFullStats_WithData(t *testing.T) {
 	statuses := []string{"SUBMITTED", "SUBMITTED", "DONE", "REJECTED", "APPROVED"}
 	for _, s := range statuses {
 		testDB.ExecContext(ctx,
-			`INSERT INTO tickets (submitter_id, datasource_id, sql_content, status) VALUES (1, 1, 'ALTER TABLE t ADD c INT', ?)`,
+			`INSERT INTO tickets (submitter_id, datasource_id, sql_content, status) VALUES (1, 1, 'ALTER TABLE t ADD c INT', $1)`,
 			s)
 	}
 

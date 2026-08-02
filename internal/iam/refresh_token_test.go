@@ -26,7 +26,7 @@ func setupRefreshTokenTest(t *testing.T) (*db.DB, int64) {
 	}
 
 	// Insert a test user
-	result, err := database.Exec("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", "testuser", "hash", "developer")
+	result, err := database.Exec("INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)", "testuser", "hash", "developer")
 	if err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestRefreshTokenService_GenerateToken_MultipleUsers(t *testing.T) {
 	svc := NewRefreshTokenService(testDB)
 
 	// Insert another user
-	result, _ := testDB.Exec("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", "user2", "hash2", "admin")
+	result, _ := testDB.Exec("INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)", "user2", "hash2", "admin")
 	userID2, _ := result.LastInsertId()
 
 	token1, err := svc.GenerateToken(context.Background(), userID)

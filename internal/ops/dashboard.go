@@ -184,19 +184,19 @@ func (s *DashboardService) GetFullStats(ctx context.Context, startDate, endDate 
 
 	// 2. Sparklines: 3 metrics × 7 days
 	stats.PendingTicketSparkline, err = s.getSparkline(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE status IN ('SUBMITTED', 'AI_REVIEWED', 'PENDING_APPROVAL') AND created_at >= ? AND created_at < ?`)
+		`SELECT COUNT(*) FROM tickets WHERE status IN ('SUBMITTED', 'AI_REVIEWED', 'PENDING_APPROVAL') AND created_at >= $1 AND created_at < $2`)
 	if err != nil {
 		log.Printf("dashboard: pending ticket sparkline error: %v", err)
 	}
 
 	stats.QuerySparkline, err = s.getSparkline(ctx,
-		`SELECT COUNT(*) FROM query_history WHERE created_at >= ? AND created_at < ?`)
+		`SELECT COUNT(*) FROM query_history WHERE created_at >= $1 AND created_at < $2`)
 	if err != nil {
 		log.Printf("dashboard: query sparkline error: %v", err)
 	}
 
 	stats.DatasourceSparkline, err = s.getSparkline(ctx,
-		`SELECT COUNT(*) FROM datasources WHERE status = 'active' AND created_at <= ?`)
+		`SELECT COUNT(*) FROM datasources WHERE status = 'active' AND created_at <= $1`)
 	if err != nil {
 		log.Printf("dashboard: datasource sparkline error: %v", err)
 	}
@@ -304,7 +304,7 @@ func (s *DashboardService) getQueryTrend(ctx context.Context, startDate, endDate
 	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT DATE(created_at) as day, COUNT(*) as cnt
 		 FROM query_history
-		 WHERE created_at >= ? AND created_at < ?
+		 WHERE created_at >= $1 AND created_at < $2
 		 GROUP BY DATE(created_at)
 		 ORDER BY day`,
 		startDate+" 00:00:00",

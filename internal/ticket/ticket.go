@@ -367,7 +367,7 @@ func (s *Service) applyApprovalPolicy(ctx context.Context, t *model.Ticket) {
 // GetTicket retrieves a ticket by ID with populated user names.
 func (s *Service) GetTicket(ctx context.Context, id int64) (*model.Ticket, error) {
 	t, err := scanTicket(s.database.DB.QueryRowContext(ctx,
-		fmt.Sprintf(`SELECT %s FROM tickets WHERE id = ?`, ticketColumns), id,
+		fmt.Sprintf(`SELECT %s FROM tickets WHERE id = $1`, ticketColumns), id,
 	))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -440,7 +440,7 @@ func (s *Service) ListTickets(ctx context.Context, page, pageSize int, status, d
 
 	// Query page
 	querySQL := fmt.Sprintf(
-		`SELECT %s FROM tickets %s ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		`SELECT %s FROM tickets %s ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
 		ticketColumns, whereClause,
 	)
 	queryArgs := sqlutil.AppendLimitArgs(args, p)
@@ -690,7 +690,7 @@ func (s *Service) executeTicket(ctx context.Context, t *model.Ticket, operatorID
 	// support conditional WHERE on current row values. Keep raw SQL for atomicity.
 	now := time.Now()
 	result, err := s.database.DB.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, updated_at = ? WHERE id = ? AND status IN (?, ?)`,
+		`UPDATE tickets SET status = $1, updated_at = $2 WHERE id = $3 AND status IN ($4, $5)`,
 		model.TicketStatusExecuting, now, t.ID, model.TicketStatusApproved, model.TicketStatusScheduled,
 	)
 	if err != nil {

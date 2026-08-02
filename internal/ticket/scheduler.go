@@ -98,7 +98,7 @@ func (s *Scheduler) executeDueTickets(ctx context.Context) error {
 func (s *Scheduler) dueTicketIDs(ctx context.Context, now time.Time) ([]int64, error) {
 	rows, err := s.ticketSvc.database.DB.QueryContext(ctx,
 		`SELECT id FROM tickets
-		 WHERE status = ? AND scheduled_at IS NOT NULL AND scheduled_at <= ?
+		 WHERE status = $1 AND scheduled_at IS NOT NULL AND scheduled_at <= $2
 		 ORDER BY scheduled_at ASC`,
 		model.TicketStatusScheduled, now,
 	)

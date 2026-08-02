@@ -69,7 +69,7 @@ func seedAIReviewUser(t *testing.T, database *db.DB, username, role string) int6
 	t.Helper()
 	ctx := aiReviewContextWithTimeout(t)
 	res, err := database.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES (?, 'testhash', ?)`,
+		`INSERT INTO users (username, password_hash, role) VALUES ($1, 'testhash', $2)`,
 		username, role,
 	)
 	if err != nil {

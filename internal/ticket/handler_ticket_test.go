@@ -47,7 +47,7 @@ func seedTicketTestUser(t *testing.T, database *db.DB, username, role string) in
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
 	res, err := database.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES (?, 'testhash', ?)`,
+		`INSERT INTO users (username, password_hash, role) VALUES ($1, 'testhash', $2)`,
 		username, role,
 	)
 	if err != nil {
@@ -62,7 +62,7 @@ func seedTicketTestDatasource(t *testing.T, database *db.DB, name string) int64 
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
 	res, err := database.ExecContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES (?, 'mysql', 'localhost', 3306, 'root', '', 'active')`,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active')`,
 		name,
 	)
 	if err != nil {
@@ -77,7 +77,7 @@ func setTicketStatusDB(t *testing.T, database *db.DB, ticketID int64, status mod
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
 	_, err := database.ExecContext(ctx,
-		`UPDATE tickets SET status = ?, updated_at = datetime('now') WHERE id = ?`,
+		`UPDATE tickets SET status = $1, updated_at = datetime('now') WHERE id = $2`,
 		status, ticketID,
 	)
 	if err != nil {
@@ -91,7 +91,7 @@ func createTicketViaDB(t *testing.T, database *db.DB, submitterID, dsID int64, s
 	ctx := testutil.ContextWithTimeout(t)
 	res, err := database.ExecContext(ctx,
 		`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result)
-		 VALUES (?, ?, 'mydb', ?, 'summary', 'mysql', 'test', 'SUBMITTED', 'low', '')`,
+		 VALUES ($1, $2, 'mydb', $3, 'summary', 'mysql', 'test', 'SUBMITTED', 'low', '')`,
 		submitterID, dsID, sqlContent,
 	)
 	if err != nil {
