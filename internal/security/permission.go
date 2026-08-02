@@ -664,7 +664,7 @@ func (s *Service) CreateRole(ctx context.Context, name, displayName, description
 	}
 	_, err := s.database.DB.ExecContext(ctx, `
 		INSERT INTO roles (name, display_name, description, is_builtin, status)
-		VALUES ($1, $2, $3, 0, 'active')`, name, displayName, strings.TrimSpace(description))
+		VALUES ($1, $2, $3, FALSE, 'active')`, name, displayName, strings.TrimSpace(description))
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {
 			return nil, ErrRoleExists

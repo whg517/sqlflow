@@ -206,7 +206,7 @@ func (s *FeishuService) Create(ctx context.Context, req FeishuCreateRequest, cre
 
 	result, err := s.db.ExecContext(ctx,
 		`INSERT INTO feishu_webhooks (name, encrypted_url, url_hash, scene, enabled, rate_limit_rps, created_by)
-		 VALUES (?, ?, ?, ?, 1, ?, ?)`,
+		 VALUES ($1, $2, $3, $4, TRUE, $5, $6)`,
 		req.Name, encryptedURL, urlHash, req.Scene, req.RateLimitRPS, createdBy,
 	)
 	if err != nil {

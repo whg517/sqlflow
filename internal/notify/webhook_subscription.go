@@ -231,7 +231,7 @@ func (s *WebhookSubscriptionService) Create(ctx context.Context, req CreateSubsc
 
 	result, err := s.db.ExecContext(ctx,
 		`INSERT INTO webhook_subscriptions (name, url, encrypted_secret, events, enabled, failure_count, created_by)
-		 VALUES (?, ?, ?, ?, 1, 0, ?)`,
+		 VALUES ($1, $2, $3, $4, TRUE, 0, $5)`,
 		req.Name, req.URL, encryptedSecret, string(eventsJSON), createdBy,
 	)
 	if err != nil {

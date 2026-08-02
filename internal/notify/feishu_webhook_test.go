@@ -424,7 +424,7 @@ func TestNotifyService_MultiWebhookSend(t *testing.T) {
 	urlHash := hashURLHelper(server.URL)
 	db.ExecContext(ctx,
 		`INSERT INTO feishu_webhooks (name, encrypted_url, url_hash, scene, enabled, rate_limit_rps, created_by)
-		 VALUES (?, ?, ?, 'general', 1, 100.0, 'test')`,
+		 VALUES ($1, $2, $3, 'general', TRUE, 100.0, 'test')`,
 		"Test Webhook", encryptedURL, urlHash,
 	)
 

@@ -236,7 +236,7 @@ func TestRefreshTokenService_CleanupExpiredTokens(t *testing.T) {
 	// Manually insert an already-expired and revoked token
 	expiredTime := time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339)
 	_, err = testDB.Exec(
-		`INSERT INTO refresh_tokens (user_id, token, expires_at, revoked) VALUES (?, ?, ?, 1)`,
+		`INSERT INTO refresh_tokens (user_id, token, expires_at, revoked) VALUES ($1, $2, $3, TRUE)`,
 		userID, "expired-revoked-token-hash", expiredTime,
 	)
 	if err != nil {

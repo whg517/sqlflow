@@ -8,9 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"strconv"
+
 	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
+	entmaskrule "github.com/whg517/sqlflow/internal/db/ent/maskrule"
+	entsensitivetable "github.com/whg517/sqlflow/internal/db/ent/sensitivetable"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/platform/mask"
@@ -133,52 +137,50 @@ func (s *MaskService) GetMaskRule(ctx context.Context, id int64) (*model.MaskRul
 func (s *MaskService) ListMaskRules(ctx context.Context, page, pageSize int, datasourceIDStr, database, tableName string) ([]model.MaskRule, int64, error) {
 	p := sqlutil.ParsePagination(page, pageSize)
 
-	var filters []sqlutil.FilterClause
-	if datasourceIDStr != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "datasource_id = ?", Args: []interface{}{datasourceIDStr}})
+	q := s.client.MaskRule.Query()
+	// datasource_id is a bigint. The previous code compared it against the raw
+	// query-string value, which PostgreSQL rejects and SQLite only accepted
+	// because of its dynamic typing.
+	if id, err := strconv.ParseInt(datasourceIDStr, 10, 64); err == nil && datasourceIDStr != "" {
+		q = q.Where(entmaskrule.DatasourceIDEQ(id))
 	}
 	if database != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "database = ?", Args: []interface{}{database}})
+		q = q.Where(entmaskrule.DatabaseEQ(database))
 	}
 	if tableName != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "table_name = ?", Args: []interface{}{tableName}})
+		q = q.Where(entmaskrule.TableNameEQ(tableName))
 	}
 
-	whereClause, args := sqlutil.BuildWhereClause(filters)
-
-	var total int64
-	countSQL := sqlutil.PaginatedCountSQL("mask_rules", whereClause)
-	if err := s.database.DB.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
 		return nil, 0, fmt.Errorf("统计脱敏规则失败: %w", err)
 	}
 
-	querySQL := fmt.Sprintf(
-		`SELECT id, datasource_id, database, table_name, field, mask_type, custom_regex, custom_template, created_at, updated_at
-		 FROM mask_rules %s ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-		whereClause,
-	)
-	queryArgs := sqlutil.AppendLimitArgs(args, p)
-
-	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
+	found, err := q.
+		Order(ent.Desc(entmaskrule.FieldCreatedAt)).
+		Limit(p.PageSize).
+		Offset(p.Offset).
+		All(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("查询脱敏规则失败: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
-	rules := make([]model.MaskRule, 0)
-	for rows.Next() {
-		var r model.MaskRule
-		if err := rows.Scan(&r.ID, &r.DatasourceID, &r.Database, &r.TableName, &r.Field, &r.MaskType, &r.CustomRegex, &r.CustomTemplate, &r.CreatedAt, &r.UpdatedAt); err != nil {
-			continue
-		}
-		rules = append(rules, r)
+	rules := make([]model.MaskRule, 0, len(found))
+	for _, r := range found {
+		rules = append(rules, model.MaskRule{
+			ID:             int64(r.ID),
+			DatasourceID:   r.DatasourceID,
+			Database:       r.Database,
+			TableName:      r.TableName,
+			Field:          r.Field,
+			MaskType:       r.MaskType,
+			CustomRegex:    r.CustomRegex,
+			CustomTemplate: r.CustomTemplate,
+			CreatedAt:      r.CreatedAt,
+			UpdatedAt:      r.UpdatedAt,
+		})
 	}
-
-	if err := rows.Err(); err != nil {
-		return nil, 0, fmt.Errorf("遍历脱敏规则失败: %w", err)
-	}
-
-	return rules, total, nil
+	return rules, int64(total), nil
 }
 
 // UpdateMaskRule updates an existing mask rule and records an audit log for the given userID.
@@ -300,52 +302,46 @@ func (s *MaskService) CreateSensitiveTable(ctx context.Context, userID, datasour
 func (s *MaskService) ListSensitiveTables(ctx context.Context, page, pageSize int, datasourceIDStr, database, tableName string) ([]model.SensitiveTable, int64, error) {
 	p := sqlutil.ParsePagination(page, pageSize)
 
-	var filters []sqlutil.FilterClause
-	if datasourceIDStr != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "datasource_id = ?", Args: []interface{}{datasourceIDStr}})
+	q := s.client.SensitiveTable.Query()
+	if id, err := strconv.ParseInt(datasourceIDStr, 10, 64); err == nil && datasourceIDStr != "" {
+		q = q.Where(entsensitivetable.DatasourceIDEQ(id))
 	}
 	if database != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "database = ?", Args: []interface{}{database}})
+		q = q.Where(entsensitivetable.DatabaseEQ(database))
 	}
 	if tableName != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "table_name LIKE ?", Args: []interface{}{"%" + tableName + "%"}})
+		// Contains rather than a hand-built LIKE: ent escapes the pattern, so a
+		// table name holding % or _ matches literally.
+		q = q.Where(entsensitivetable.TableNameContains(tableName))
 	}
 
-	whereClause, args := sqlutil.BuildWhereClause(filters)
-
-	var total int64
-	countSQL := sqlutil.PaginatedCountSQL("sensitive_tables", whereClause)
-	if err := s.database.DB.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
 		return nil, 0, fmt.Errorf("统计敏感表失败: %w", err)
 	}
 
-	querySQL := fmt.Sprintf(
-		`SELECT id, datasource_id, database, table_name, sensitivity_level, created_at, updated_at
-		 FROM sensitive_tables %s ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-		whereClause,
-	)
-	queryArgs := sqlutil.AppendLimitArgs(args, p)
-
-	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
+	found, err := q.
+		Order(ent.Desc(entsensitivetable.FieldCreatedAt)).
+		Limit(p.PageSize).
+		Offset(p.Offset).
+		All(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("查询敏感表失败: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
-	tables := make([]model.SensitiveTable, 0)
-	for rows.Next() {
-		var t model.SensitiveTable
-		if err := rows.Scan(&t.ID, &t.DatasourceID, &t.Database, &t.TableName, &t.SensitivityLevel, &t.CreatedAt, &t.UpdatedAt); err != nil {
-			continue
-		}
-		tables = append(tables, t)
+	tables := make([]model.SensitiveTable, 0, len(found))
+	for _, t := range found {
+		tables = append(tables, model.SensitiveTable{
+			ID:               int64(t.ID),
+			DatasourceID:     t.DatasourceID,
+			Database:         t.Database,
+			TableName:        t.TableName,
+			SensitivityLevel: t.SensitivityLevel,
+			CreatedAt:        t.CreatedAt,
+			UpdatedAt:        t.UpdatedAt,
+		})
 	}
-
-	if err := rows.Err(); err != nil {
-		return nil, 0, fmt.Errorf("遍历敏感表失败: %w", err)
-	}
-
-	return tables, total, nil
+	return tables, int64(total), nil
 }
 
 // DeleteSensitiveTable removes a sensitive table marking and records an audit log for the given userID.
