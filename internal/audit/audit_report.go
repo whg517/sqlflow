@@ -2,8 +2,6 @@ package audit
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -171,6 +169,29 @@ func dayBucket(column string) string {
 	return "to_char(" + column + ", 'YYYY-MM-DD')"
 }
 
+// recentErrorLimit caps the recent-errors list on the error report.
+const recentErrorLimit = 20
+
+// scalarAgg evaluates a single aggregate expression over an audit-log query.
+//
+// The reports are mostly one-number answers — an average, a max, a sum — and
+// ent's typed Aggregate cannot carry the COALESCE each of them needs to return
+// 0 rather than NULL on an empty window. Expressing them through the modifier
+// keeps them inside ent and dialect-aware.
+func scalarAgg[T any](ctx context.Context, q *ent.AuditLogQuery, expr string) (T, error) {
+	var out []struct {
+		Value T `json:"value"`
+	}
+	var zero T
+	err := q.Modify(func(sel *entsql.Selector) {
+		sel.Select(entsql.As(expr, "value"))
+	}).Scan(ctx, &out)
+	if err != nil || len(out) == 0 {
+		return zero, err
+	}
+	return out[0].Value, nil
+}
+
 // countDistinct counts distinct values of one column.
 //
 // ent's Count() has no distinct form, so this drops to the query builder's
@@ -273,25 +294,24 @@ func (s *ReportService) GetUsageStats(ctx context.Context, params ReportParams) 
 }
 
 func (s *ReportService) queryTopUsers(ctx context.Context, startDate time.Time) ([]UserActionStat, error) {
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT a.user_id, COALESCE(u.username, ''), COUNT(*) as count
-		 FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id
-		 WHERE a.created_at >= $1
-		 GROUP BY a.user_id, u.username ORDER BY count DESC LIMIT 10`, startDate)
+	var result []UserActionStat
+	err := s.client.AuditLog.Query().
+		Where(entauditlog.CreatedAtGTE(startDate)).
+		Modify(func(sel *entsql.Selector) {
+			u := joinAuditUser(sel)
+			sel.Select(
+				entsql.As(sel.C(entauditlog.FieldUserID), "user_id"),
+				entsql.As("COALESCE("+u.C("username")+", '')", "username"),
+				entsql.As("COUNT(*)", "count"),
+			).GroupBy(sel.C(entauditlog.FieldUserID), u.C("username")).
+				OrderExpr(entsql.Expr("count DESC")).
+				Limit(topN)
+		}).
+		Scan(ctx, &result)
 	if err != nil {
 		return nil, fmt.Errorf("query top users: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	var result []UserActionStat
-	for rows.Next() {
-		var u UserActionStat
-		if err := rows.Scan(&u.UserID, &u.Username, &u.Count); err != nil {
-			return nil, fmt.Errorf("scan top user: %w", err)
-		}
-		result = append(result, u)
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
 func (s *ReportService) queryTopActions(ctx context.Context, startDate time.Time) ([]ActionStat, error) {
@@ -342,19 +362,15 @@ func (s *ReportService) GetErrorStats(ctx context.Context, params ReportParams) 
 	startDate := params.startDate()
 	stats := &ErrorStats{}
 
-	// Total errors (audit logs with non-empty error_message)
-	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= $1 AND error_message != ''`, startDate,
-	).Scan(&stats.TotalErrors)
+	inWindow := s.client.AuditLog.Query().Where(entauditlog.CreatedAtGTE(startDate))
+
+	errored, err := inWindow.Clone().Where(entauditlog.ErrorMessageNEQ("")).Count(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query total errors: %w", err)
 	}
+	stats.TotalErrors = int64(errored)
 
-	// Total actions for error rate
-	var totalActions int64
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= $1`, startDate,
-	).Scan(&totalActions)
+	totalActions, err := inWindow.Clone().Count(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query total actions for error rate: %w", err)
 	}
@@ -384,44 +400,40 @@ func (s *ReportService) GetErrorStats(ctx context.Context, params ReportParams) 
 }
 
 func (s *ReportService) queryTopErrorTypes(ctx context.Context, startDate time.Time) ([]ErrorTypeStat, error) {
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT action, COUNT(*) as count FROM audit_logs WHERE created_at >= $1 AND error_message != '' GROUP BY action ORDER BY count DESC LIMIT 10`, startDate)
+	var result []ErrorTypeStat
+	err := s.client.AuditLog.Query().
+		Where(entauditlog.CreatedAtGTE(startDate), entauditlog.ErrorMessageNEQ("")).
+		Modify(topByColumn(entauditlog.FieldAction)).
+		Scan(ctx, &result)
 	if err != nil {
 		return nil, fmt.Errorf("query top error types: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	var result []ErrorTypeStat
-	for rows.Next() {
-		var e ErrorTypeStat
-		if err := rows.Scan(&e.Action, &e.Count); err != nil {
-			return nil, fmt.Errorf("scan top error type: %w", err)
-		}
-		result = append(result, e)
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
 func (s *ReportService) queryRecentErrors(ctx context.Context, startDate time.Time) ([]RecentErrorEntry, error) {
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT a.id, a.action, a.database, a.error_message, COALESCE(u.username, ''), a.created_at
-		 FROM audit_logs a LEFT JOIN users u ON a.user_id = u.id
-		 WHERE a.created_at >= $1 AND a.error_message != ''
-		 ORDER BY a.created_at DESC LIMIT 20`, startDate)
+	var result []RecentErrorEntry
+	err := s.client.AuditLog.Query().
+		Where(entauditlog.CreatedAtGTE(startDate), entauditlog.ErrorMessageNEQ("")).
+		Modify(func(sel *entsql.Selector) {
+			u := joinAuditUser(sel)
+			// created_at is rendered as text because RecentErrorEntry carries it
+			// as a string all the way to the API response.
+			sel.Select(
+				entsql.As(sel.C(entauditlog.FieldID), "id"),
+				entsql.As(sel.C(entauditlog.FieldAction), "action"),
+				entsql.As(sel.C(entauditlog.FieldDatabase), "database"),
+				entsql.As(sel.C(entauditlog.FieldErrorMessage), "error_message"),
+				entsql.As("COALESCE("+u.C("username")+", '')", "username"),
+				entsql.As("to_char("+sel.C(entauditlog.FieldCreatedAt)+", 'YYYY-MM-DD HH24:MI:SS')", "created_at"),
+			).OrderBy(entsql.Desc(sel.C(entauditlog.FieldCreatedAt))).
+				Limit(recentErrorLimit)
+		}).
+		Scan(ctx, &result)
 	if err != nil {
 		return nil, fmt.Errorf("query recent errors: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	var result []RecentErrorEntry
-	for rows.Next() {
-		var e RecentErrorEntry
-		if err := rows.Scan(&e.ID, &e.Action, &e.Database, &e.ErrorMessage, &e.Username, &e.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan recent error: %w", err)
-		}
-		result = append(result, e)
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
 func (s *ReportService) queryDailyErrorTrend(ctx context.Context, startDate time.Time) ([]DailyAuditTrend, error) {
@@ -448,64 +460,43 @@ func (s *ReportService) GetPerformanceReport(ctx context.Context, params ReportP
 	startDate := params.startDate()
 	stats := &PerformanceReportStats{}
 
-	// Average execution time
-	var avgMs sql.NullFloat64
-	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT CAST(COALESCE(AVG(execution_time_ms), 0) AS REAL) FROM audit_logs WHERE created_at >= $1 AND execution_time_ms > 0`, startDate,
-	).Scan(&avgMs)
+	inWindow := s.client.AuditLog.Query().Where(entauditlog.CreatedAtGTE(startDate))
+	timed := inWindow.Clone().Where(entauditlog.ExecutionTimeMsGT(0))
+
+	var err error
+	stats.AvgExecutionMs, err = scalarAgg[float64](ctx, timed.Clone(),
+		"COALESCE(AVG(execution_time_ms), 0)::float8")
 	if err != nil {
 		return nil, fmt.Errorf("query avg execution time: %w", err)
 	}
-	stats.AvgExecutionMs = avgMs.Float64
 
-	// Max execution time
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COALESCE(MAX(execution_time_ms), 0) FROM audit_logs WHERE created_at >= $1`, startDate,
-	).Scan(&stats.MaxExecutionMs)
+	stats.MaxExecutionMs, err = scalarAgg[int64](ctx, inWindow.Clone(),
+		"COALESCE(MAX(execution_time_ms), 0)")
 	if err != nil {
 		return nil, fmt.Errorf("query max execution time: %w", err)
 	}
 
-	// P95 execution time (approximate via subquery with LIMIT)
-	// First count qualifying rows to guard against negative OFFSET
-	var p95Count int64
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM audit_logs WHERE created_at >= $1 AND execution_time_ms > 0`, startDate,
-	).Scan(&p95Count)
+	// percentile_cont rather than the previous ORDER BY ... LIMIT 1 OFFSET n:
+	// that approximation needed a separate COUNT to compute the offset, guards
+	// against a negative offset, and still landed on a neighboring row.
+	// PostgreSQL computes the percentile directly.
+	stats.P95ExecutionMs, err = scalarAgg[int64](ctx, timed.Clone(),
+		"COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY execution_time_ms), 0)::bigint")
 	if err != nil {
-		log.Printf("P95 count query failed: %v", err)
+		// A percentile is a nice-to-have on a report; failing the whole report
+		// over it would hide the numbers that did compute.
+		log.Printf("P95 query failed: %v", err)
 		stats.P95ExecutionMs = 0
-	} else if p95Count < 2 {
-		// Not enough data for a meaningful percentile
-		stats.P95ExecutionMs = 0
-	} else {
-		offset := p95Count*95/100 - 1
-		if offset < 0 {
-			offset = 0
-		}
-		err = s.database.DB.QueryRowContext(ctx,
-			`SELECT execution_time_ms FROM audit_logs WHERE created_at >= $1 AND execution_time_ms > 0 ORDER BY execution_time_ms ASC LIMIT 1 OFFSET $2`, startDate, offset,
-		).Scan(&stats.P95ExecutionMs)
-		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
-				log.Printf("P95 query failed: %v", err)
-			}
-			stats.P95ExecutionMs = 0
-		}
 	}
 
-	// Total result rows
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COALESCE(SUM(result_rows), 0) FROM audit_logs WHERE created_at >= $1`, startDate,
-	).Scan(&stats.TotalResultRows)
+	stats.TotalResultRows, err = scalarAgg[int64](ctx, inWindow.Clone(),
+		"COALESCE(SUM(result_rows), 0)")
 	if err != nil {
 		return nil, fmt.Errorf("query total result rows: %w", err)
 	}
 
-	// Total affected rows
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COALESCE(SUM(affected_rows), 0) FROM audit_logs WHERE created_at >= $1`, startDate,
-	).Scan(&stats.AffectedRows)
+	stats.AffectedRows, err = scalarAgg[int64](ctx, inWindow.Clone(),
+		"COALESCE(SUM(affected_rows), 0)")
 	if err != nil {
 		return nil, fmt.Errorf("query affected rows: %w", err)
 	}
@@ -547,48 +538,38 @@ func (s *ReportService) GetTicketReport(ctx context.Context, params ReportParams
 	startDate := params.startDate()
 	stats := &TicketStats{}
 
-	// Status counts
-	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE created_at >= $1`, startDate,
-	).Scan(&stats.TotalTickets)
-	if err != nil {
-		return nil, fmt.Errorf("query total tickets: %w", err)
+	// One grouped count instead of six separate ones: they only differed in the
+	// status they filtered on, so six round trips were paying for one answer.
+	var byStatus []struct {
+		Status string `json:"status"`
+		Count  int64  `json:"count"`
 	}
-
-	// Pending (SUBMITTED + AI_REVIEWED + PENDING_APPROVAL)
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE created_at >= $1 AND status IN ('SUBMITTED', 'AI_REVIEWED', 'PENDING_APPROVAL')`, startDate,
-	).Scan(&stats.PendingCount)
+	err := s.client.Ticket.Query().
+		Where(entticket.CreatedAtGTE(startDate)).
+		Modify(func(sel *entsql.Selector) {
+			sel.Select(
+				entsql.As(sel.C(entticket.FieldStatus), "status"),
+				entsql.As("COUNT(*)", "count"),
+			).GroupBy(sel.C(entticket.FieldStatus))
+		}).
+		Scan(ctx, &byStatus)
 	if err != nil {
-		return nil, fmt.Errorf("query pending tickets: %w", err)
+		return nil, fmt.Errorf("query ticket status counts: %w", err)
 	}
-
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE created_at >= $1 AND status = 'APPROVED'`, startDate,
-	).Scan(&stats.ApprovedCount)
-	if err != nil {
-		return nil, fmt.Errorf("query approved tickets: %w", err)
-	}
-
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE created_at >= $1 AND status = 'REJECTED'`, startDate,
-	).Scan(&stats.RejectedCount)
-	if err != nil {
-		return nil, fmt.Errorf("query rejected tickets: %w", err)
-	}
-
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE created_at >= $1 AND status = 'DONE'`, startDate,
-	).Scan(&stats.DoneCount)
-	if err != nil {
-		return nil, fmt.Errorf("query done tickets: %w", err)
-	}
-
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE created_at >= $1 AND status = 'CANCELLED'`, startDate,
-	).Scan(&stats.CancelledCount)
-	if err != nil {
-		return nil, fmt.Errorf("query cancelled tickets: %w", err)
+	for _, r := range byStatus {
+		stats.TotalTickets += r.Count
+		switch r.Status {
+		case "SUBMITTED", "AI_REVIEWED", "PENDING_APPROVAL":
+			stats.PendingCount += r.Count
+		case "APPROVED":
+			stats.ApprovedCount = r.Count
+		case "REJECTED":
+			stats.RejectedCount = r.Count
+		case "DONE":
+			stats.DoneCount = r.Count
+		case "CANCELLED":
+			stats.CancelledCount = r.Count
+		}
 	}
 
 	// Average approval time (from created_at to updated_at for APPROVED/DONE tickets)
@@ -651,20 +632,19 @@ func (s *ReportService) queryDailyTicketTrend(ctx context.Context, startDate tim
 }
 
 func (s *ReportService) queryRiskDistribution(ctx context.Context, startDate time.Time) ([]RiskDistEntry, error) {
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT risk_level, COUNT(*) as count FROM tickets WHERE created_at >= $1 AND risk_level != '' GROUP BY risk_level ORDER BY count DESC`, startDate)
+	var result []RiskDistEntry
+	err := s.client.Ticket.Query().
+		Where(entticket.CreatedAtGTE(startDate), entticket.RiskLevelNEQ("")).
+		Modify(func(sel *entsql.Selector) {
+			sel.Select(
+				entsql.As(sel.C(entticket.FieldRiskLevel), "risk_level"),
+				entsql.As("COUNT(*)", "count"),
+			).GroupBy(sel.C(entticket.FieldRiskLevel)).
+				OrderExpr(entsql.Expr("count DESC"))
+		}).
+		Scan(ctx, &result)
 	if err != nil {
 		return nil, fmt.Errorf("query risk distribution: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	var result []RiskDistEntry
-	for rows.Next() {
-		var r RiskDistEntry
-		if err := rows.Scan(&r.RiskLevel, &r.Count); err != nil {
-			return nil, fmt.Errorf("scan risk distribution: %w", err)
-		}
-		result = append(result, r)
-	}
-	return result, rows.Err()
+	return result, nil
 }

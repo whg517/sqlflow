@@ -249,3 +249,138 @@ func TestAuditReportService_EmptyData(t *testing.T) {
 		t.Errorf("expected 0 tickets for empty DB, got %d", ticketStats.TotalTickets)
 	}
 }
+
+// TestReportAggregates_ExactValues pins the numbers the reporting queries
+// produce.
+//
+// The conversion to ent rewrote every aggregate in this file, including two
+// whose semantics changed: P95 moved from an ORDER BY/OFFSET approximation to
+// percentile_cont, and the six per-status ticket counts collapsed into one
+// grouped query. Asserting on shapes and non-zero-ness would not have caught a
+// mis-mapped status or an off-by-one percentile.
+func TestReportAggregates_ExactValues(t *testing.T) {
+	d := testutil.NewDB(t)
+	svc := NewReportService(d)
+	ctx := context.Background()
+
+	alice := testutil.SeedUser(t, d.DB, "agg_alice", "developer")
+	bob := testutil.SeedUser(t, d.DB, "agg_bob", "dba")
+
+	// Execution times 100..1000 so the 95th percentile is unambiguous.
+	for i := 1; i <= 10; i++ {
+		owner := alice
+		if i > 6 {
+			owner = bob
+		}
+		if _, err := d.Exec(
+			`INSERT INTO audit_logs (user_id, action, database, sql_content, sql_summary,
+			                         execution_time_ms, result_rows, affected_rows, ip_address, created_at)
+			 VALUES ($1, 'query_execute', 'appdb', 'SELECT 1', 'SELECT 1', $2, $3, 1, '10.0.0.1', now())`,
+			owner, int64(i*100), int64(i),
+		); err != nil {
+			t.Fatalf("seed audit log %d: %v", i, err)
+		}
+	}
+
+	perf, err := svc.GetPerformanceReport(ctx, ReportParams{Days: 7})
+	if err != nil {
+		t.Fatalf("GetPerformanceReport: %v", err)
+	}
+	if got, want := perf.AvgExecutionMs, 550.0; got != want {
+		t.Errorf("AvgExecutionMs = %v, want %v", got, want)
+	}
+	if got, want := perf.MaxExecutionMs, int64(1000); got != want {
+		t.Errorf("MaxExecutionMs = %d, want %d", got, want)
+	}
+	// percentile_cont interpolates: the 95th percentile of 100..1000 is 955.
+	if got, want := perf.P95ExecutionMs, int64(955); got != want {
+		t.Errorf("P95ExecutionMs = %d, want %d", got, want)
+	}
+	if got, want := perf.TotalResultRows, int64(55); got != want {
+		t.Errorf("TotalResultRows = %d, want %d", got, want)
+	}
+	if got, want := perf.AffectedRows, int64(10); got != want {
+		t.Errorf("AffectedRows = %d, want %d", got, want)
+	}
+
+	usage, err := svc.GetUsageStats(ctx, ReportParams{Days: 7})
+	if err != nil {
+		t.Fatalf("GetUsageStats: %v", err)
+	}
+	if got, want := usage.TotalActions, int64(10); got != want {
+		t.Errorf("TotalActions = %d, want %d", got, want)
+	}
+	if got, want := usage.UniqueUsers, int64(2); got != want {
+		t.Errorf("UniqueUsers = %d, want %d", got, want)
+	}
+	if got, want := usage.UniqueIPs, int64(1); got != want {
+		t.Errorf("UniqueIPs = %d, want %d", got, want)
+	}
+	// The username comes from the join, which is the part most likely to break.
+	if len(usage.TopUsers) != 2 {
+		t.Fatalf("TopUsers = %d entries, want 2", len(usage.TopUsers))
+	}
+	if usage.TopUsers[0].Username != "agg_alice" || usage.TopUsers[0].Count != 6 {
+		t.Errorf("TopUsers[0] = %+v, want agg_alice with 6", usage.TopUsers[0])
+	}
+	if usage.TopUsers[1].Username != "agg_bob" || usage.TopUsers[1].Count != 4 {
+		t.Errorf("TopUsers[1] = %+v, want agg_bob with 4", usage.TopUsers[1])
+	}
+}
+
+// TestTicketReport_StatusCountsMapCorrectly guards the collapse of six status
+// counts into one grouped query: a status landing in the wrong bucket is
+// invisible unless the counts differ per status.
+func TestTicketReport_StatusCountsMapCorrectly(t *testing.T) {
+	d := testutil.NewDB(t)
+	svc := NewReportService(d)
+
+	uid := testutil.SeedUser(t, d.DB, "ticket_reporter", "developer")
+	dsID := testutil.SeedDatasource(t, d.DB, "ticket-report-ds")
+
+	// Distinct counts per status so a swapped mapping cannot pass.
+	seed := map[string]int{
+		"SUBMITTED": 1, "AI_REVIEWED": 2, "PENDING_APPROVAL": 3,
+		"APPROVED": 4, "REJECTED": 5, "DONE": 6, "CANCELLED": 7,
+	}
+	for status, n := range seed {
+		for i := 0; i < n; i++ {
+			if _, err := d.Exec(
+				`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary,
+				                      db_type, status, risk_level, created_at, updated_at)
+				 VALUES ($1, $2, 'appdb', 'SELECT 1', 'SELECT 1', 'mysql', $3, 'low', now(), now())`,
+				uid, dsID, status,
+			); err != nil {
+				t.Fatalf("seed ticket %s: %v", status, err)
+			}
+		}
+	}
+
+	stats, err := svc.GetTicketReport(context.Background(), ReportParams{Days: 7})
+	if err != nil {
+		t.Fatalf("GetTicketReport: %v", err)
+	}
+	checks := []struct {
+		name string
+		got  int64
+		want int64
+	}{
+		{"TotalTickets", stats.TotalTickets, 28},
+		{"PendingCount", stats.PendingCount, 6}, // SUBMITTED + AI_REVIEWED + PENDING_APPROVAL
+		{"ApprovedCount", stats.ApprovedCount, 4},
+		{"RejectedCount", stats.RejectedCount, 5},
+		{"DoneCount", stats.DoneCount, 6},
+		{"CancelledCount", stats.CancelledCount, 7},
+	}
+	for _, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s = %d, want %d", c.name, c.got, c.want)
+		}
+	}
+	if len(stats.RiskDistribution) != 1 || stats.RiskDistribution[0].RiskLevel != "low" {
+		t.Errorf("RiskDistribution = %+v, want one entry for low", stats.RiskDistribution)
+	}
+	if stats.RiskDistribution[0].Count != 28 {
+		t.Errorf("RiskDistribution count = %d, want 28", stats.RiskDistribution[0].Count)
+	}
+}
