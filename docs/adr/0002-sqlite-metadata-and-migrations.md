@@ -1,11 +1,20 @@
 # ADR-0002：使用 SQLite 保存平台元数据并保留显式 SQL Migration
 
-- 状态：accepted
+> **本 ADR 已被取代，保留作为历史记录。**
+>
+> 它把两个正交决策——用哪个数据库、用什么方式访问——写在了一起，使得后来
+> 换库时看起来必须连迁移管理一起重新论证。取代它的两个 ADR 各自只讲一件事。
+>
+> 其中「Ent 与原始 SQL 在迁移阶段共享同一连接」一句没有写退出条件，直接导致
+> 双轨长期存在；ADR-0010 补上了该条件。
+
+- 状态：superseded
 - 日期：2026-07-14（补录）
 - 决策者：SQLFlow Team
 - 关联需求：FR-OPS-004、NFR-REL-001、NFR-SCL-001
 - 取代：无
-- 被取代：无
+- 被取代：数据库选型部分由 [ADR-0009](0009-postgresql-platform-metadata.md) 取代；
+  数据访问方式部分由 [ADR-0010](0010-ent-as-the-single-data-access-path.md) 取代
 
 ## 背景
 

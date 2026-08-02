@@ -286,13 +286,14 @@ sequenceDiagram
 
 ### 7.2 数据访问迁移状态
 
-当前处于双轨状态：
+平台元数据库是 PostgreSQL（[ADR-0009](adr/0009-postgresql-platform-metadata.md)），不保留 SQLite 兼容路径。
 
 - SQL migration 是 DDL 的唯一运行时事实来源。
 - Ent Schema 提供类型化模型，但 Ent 自动迁移未启用。
-- Service 中原始 SQL 和 Ent 查询并存。
+- Ent 是访问平台元数据的唯一方式（[ADR-0010](adr/0010-ent-as-the-single-data-access-path.md)）。
+  存量原始 SQL 正在逐域清零，退出条件与例外见该 ADR。
 
-在完成迁移前，任何表结构变更必须同时评估 SQL migration、Ent Schema、原始 SQL 和测试 fixture 的一致性。详见 [ADR-0002](adr/0002-sqlite-metadata-and-migrations.md)。
+在退出条件达成前，任何表结构变更必须同时评估 SQL migration、Ent Schema、残留原始 SQL 和测试 fixture 的一致性。
 
 ### 7.3 数据保留与备份
 
@@ -377,8 +378,8 @@ Casbin 使用 [ADR-0006](adr/0006-canonical-casbin-tuples.md) 定义的唯一元
 
 | 风险/债务 | 影响 | 建议演进 |
 |---|---|---|
-| SQLite 单写者与进程内任务 | 限制写吞吐、多副本和故障接管 | 当出现明确容量需求时评估外部元数据库和分布式任务租约 |
-| 原始 SQL / Ent 双轨 | 模型漂移和迁移成本 | 分域迁移 Service，保持 SQL migration 为唯一 DDL 来源直到正式切换 |
+| 调度器缺分布式租约 | 多副本会重复执行工单与 SLA 动作，故障接管缺失 | 换用 PostgreSQL 已解除存储层障碍，剩下的是调度器租约——在此之前仍只能单副本部署 |
+| 原始 SQL / Ent 双轨 | 模型漂移和换库成本 | 分域迁移到 Ent，退出条件见 ADR-0010；达成后由 `internal/arch` 守卫 |
 | `connpool` 残留于 ES 元数据浏览 | 该路径的连接生命周期不受 `PoolManager` 管理 | 为 `Driver` 增加索引/字段浏览能力后移除 |
 | 路由层 Admin 分组覆盖 DBA 可见性 | 角色语义与注释可能不完全一致 | 为审计/报表定义明确的策略中间件，而不是复用 Admin 中间件 |
 | 外部集成在进程内调用 | 慢调用和失败可能影响延迟 | 强化超时、重试、幂等与 outbox/队列边界 |

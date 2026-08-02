@@ -7,13 +7,15 @@ ADR 用来保存 SQLFlow 中对架构有长期影响的决策背景、选择和�
 | ADR | 标题 | 状态 | 日期 |
 |---|---|---|---|
 | [0001](0001-modular-monolith.md) | 采用模块化单体和单一部署单元 | accepted | 2026-07-14（补录） |
-| [0002](0002-sqlite-metadata-and-migrations.md) | 使用 SQLite 保存平台元数据并保留显式 SQL Migration | accepted | 2026-07-14（补录） |
+| [0002](0002-sqlite-metadata-and-migrations.md) | 使用 SQLite 保存平台元数据并保留显式 SQL Migration | **superseded**（由 0009、0010 取代） | 2026-07-14（补录） |
 | [0003](0003-capability-based-datasource-drivers.md) | 使用能力声明的数据源驱动抽象 | accepted | 2026-07-14（补录） |
 | [0004](0004-ai-is-advisory.md) | AI 评审只作辅助并提供确定性规则降级 | accepted | 2026-07-14（补录） |
 | [0005](0005-server-side-security-enforcement.md) | 在服务端集中执行权限、状态机与脱敏门禁 | accepted | 2026-07-14（补录） |
 | [0006](0006-canonical-casbin-tuples.md) | 统一 Casbin 授权元组与通配语义 | accepted | 2026-07-29 |
 | [0007](0007-unified-authorization-and-data-visibility.md) | 统一授权决策与数据可见性 | accepted | 2026-07-30 |
 | [0008](0008-persisted-roles-and-delegated-platform-permissions.md) | 持久化角色与可委派平台权限 | accepted | 2026-07-30 |
+| [0009](0009-postgresql-platform-metadata.md) | 平台元数据改用 PostgreSQL | accepted | 2026-08-01 |
+| [0010](0010-ent-as-the-single-data-access-path.md) | Ent 是唯一的数据访问方式 | accepted | 2026-08-01 |
 
 这些 ADR 是依据既有代码重建的历史决策，因此日期标注为“补录”，不代表设计首次发生在该日。
 

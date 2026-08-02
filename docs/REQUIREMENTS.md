@@ -186,7 +186,7 @@ stateDiagram-v2
 | FR-OPS-001 | 查询、工单执行和关键管理动作形成审计记录，并支持筛选和全文检索。 | 审计包含用户、动作、目标、摘要、结果、耗时和错误等上下文。 | partial |
 | FR-OPS-002 | Admin 可查看使用、错误、性能、工单和用户行为报表。 | 报表来自平台记录，筛选边界与角色权限保持一致。 | partial |
 | FR-OPS-003 | 系统支持钉钉、飞书和通用 Webhook 通知及个人通知偏好。 | 外部通知失败不能破坏核心事务；失败可被记录或进入死信视图。 | partial |
-| FR-OPS-004 | Admin 可触发、列出、下载和删除平台 SQLite 备份，并可启用定时备份与保留策略。 | 备份仅覆盖平台元数据，不覆盖目标数据源。 | partial |
+| FR-OPS-004 | Admin 可触发、列出、下载和删除平台元数据备份（`pg_dump` 产物），并可启用定时备份与保留策略。 | 备份仅覆盖平台元数据，不覆盖目标数据源。 | partial |
 | FR-OPS-005 | 服务提供存活、就绪、健康和可选 Prometheus 指标端点。 | `/healthz` 不依赖外部依赖；`/readyz` 检查就绪依赖。 | partial |
 | FR-OPS-006 | 服务记录前端 Core Web Vitals 用于体验分析。 | 采集入口公开但受限流；数据不作为身份认证依据。 | partial |
 
@@ -209,20 +209,20 @@ stateDiagram-v2
 |---|---|---|---|
 | NFR-SEC-001 | 传输与密钥安全 | 支持 TLS；生产环境通过环境变量注入 JWT、管理员密码和加密密钥；镜像以非 root 用户运行。 | partial |
 | NFR-SEC-002 | 最小暴露 | 密码、Token 哈希、数据源密钥和本地文件路径不得进入普通响应。 | blocked |
-| NFR-REL-001 | 可恢复性 | 服务优雅关闭调度器和连接；SQLite 使用 WAL、外键和 busy timeout；支持定时备份。 | blocked |
+| NFR-REL-001 | 可恢复性 | 服务优雅关闭调度器和连接；平台库为 PostgreSQL；支持定时备份。 | blocked |
 | NFR-PERF-001 | 查询保护 | 查询默认 30 秒超时和 1000 行上限；连接参数可配置；大文件导出可异步。 | partial |
 | NFR-OBS-001 | 可观测性 | 提供结构化请求日志、健康探针、可选 Prometheus 指标和 Web Vitals。 | partial |
 | NFR-MNT-001 | 可维护性 | 后端遵循 Handler → Service → DB/Driver 依赖方向；数据源差异通过 Driver/Capability 隔离。 | partial |
 | NFR-TST-001 | 可测试性 | 变更应通过 Go 单元/集成测试和 Vitest 验证；CI 执行 lint、test、build。浏览器级端到端验证当前缺失。 | partial |
 | NFR-DEP-001 | 可部署性 | 提供多阶段 Docker 镜像和 Docker Compose；Go 服务统一托管 API 与 React SPA。 | partial |
-| NFR-SCL-001 | 扩展边界 | 当前目标是单实例/小团队部署；SQLite 单写者和进程内调度器不承诺水平扩展。 | implemented |
+| NFR-SCL-001 | 扩展边界 | 平台元数据使用 PostgreSQL，存储层不再限制并发写入；但工单与 SLA 调度器仍在进程内运行且缺少分布式租约，多副本会重复执行，因此**当前仍只支持单副本部署**。 | partial |
 
 ## 7. 约束、假设与风险
 
 - Go 版本基线为 1.25，前端为 React + TypeScript + Vite。
 - 平台是模块化单体和单一部署单元；调度任务、连接池和异步服务均在进程内。
 - SQLite 连接池限制为单连接以降低锁竞争，这限制高写入吞吐和多副本部署。
-- 当前原始 SQL 与 Ent 访问并存，迁移期间必须保持两套模型和 migration 一致。
+- Ent 是访问平台元数据的唯一方式（[ADR-0010](adr/0010-ent-as-the-single-data-access-path.md)）。存量原始 SQL 正在逐域清零，在退出条件达成前，两套模型和 migration 必须保持一致。
 - 多数据库驱动的事务、语法、元数据和导出能力并不完全相同，产品不得把能力缺失表现为成功。
 - 外部 AI、OIDC、通知和 Webhook 均可能不可用，核心查询治理和工单状态不能依赖它们才能正确运行。
 
