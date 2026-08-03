@@ -44,14 +44,13 @@ func setMaskRuleAuthContext(c echo.Context, userID int64, username, role string)
 func seedMaskRuleDatasource(t *testing.T, database *db.DB, name string) int64 {
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
-	res, err := database.ExecContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active')`,
+	var id int64
+	if err := database.QueryRowContext(ctx,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active') RETURNING id`,
 		name,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("seed datasource %q: %v", name, err)
 	}
-	id, _ := res.LastInsertId()
 	return id
 }
 
@@ -59,14 +58,13 @@ func seedMaskRuleDatasource(t *testing.T, database *db.DB, name string) int64 {
 func seedMaskRule(t *testing.T, database *db.DB, dsID int64, db_, table, field, maskType string) int64 {
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
-	res, err := database.ExecContext(ctx,
-		`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type, custom_regex, custom_template) VALUES ($1, $2, $3, $4, $5, '', '')`,
+	var id int64
+	if err := database.QueryRowContext(ctx,
+		`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type, custom_regex, custom_template) VALUES ($1, $2, $3, $4, $5, '', '') RETURNING id`,
 		dsID, db_, table, field, maskType,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("seed mask rule: %v", err)
 	}
-	id, _ := res.LastInsertId()
 	return id
 }
 
@@ -74,14 +72,13 @@ func seedMaskRule(t *testing.T, database *db.DB, dsID int64, db_, table, field, 
 func seedSensitiveTable(t *testing.T, database *db.DB, dsID int64, db_, table, level string) int64 {
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
-	res, err := database.ExecContext(ctx,
-		`INSERT INTO sensitive_tables (datasource_id, database, table_name, sensitivity_level) VALUES ($1, $2, $3, $4)`,
+	var id int64
+	if err := database.QueryRowContext(ctx,
+		`INSERT INTO sensitive_tables (datasource_id, database, table_name, sensitivity_level) VALUES ($1, $2, $3, $4) RETURNING id`,
 		dsID, db_, table, level,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("seed sensitive table: %v", err)
 	}
-	id, _ := res.LastInsertId()
 	return id
 }
 

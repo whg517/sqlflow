@@ -52,14 +52,13 @@ func setupQueryTest(t *testing.T) (*echo.Echo, *Service, *HistoryService, *datas
 func seedTestUser(t *testing.T, database *db.DB, username, role string) int64 {
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
-	res, err := database.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES ($1, 'testhash', $2)`,
+	var id int64
+	if err := database.QueryRowContext(ctx,
+		`INSERT INTO users (username, password_hash, role) VALUES ($1, 'testhash', $2) RETURNING id`,
 		username, role,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("seed user %q: %v", username, err)
 	}
-	id, _ := res.LastInsertId()
 	return id
 }
 
@@ -85,15 +84,14 @@ func seedTestDatasource(t *testing.T, dsSvc *datasource.Service, name string) *m
 func seedQueryHistory(t *testing.T, database *db.DB, userID, dsID int64, sqlContent string) int64 {
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
-	res, err := database.ExecContext(ctx,
+	var id int64
+	if err := database.QueryRowContext(ctx,
 		`INSERT INTO query_history (user_id, datasource_id, database, sql_content, sql_summary, db_type, execution_time, result_rows, affected_rows)
-		 VALUES ($1, $2, 'testdb', $3, 'summary', 'mysql', 10, 5, 0)`,
+		 VALUES ($1, $2, 'testdb', $3, 'summary', 'mysql', 10, 5, 0) RETURNING id`,
 		userID, dsID, sqlContent,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("seed query history: %v", err)
 	}
-	id, _ := res.LastInsertId()
 	return id
 }
 

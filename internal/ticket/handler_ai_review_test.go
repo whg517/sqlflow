@@ -68,14 +68,13 @@ func setupAIReviewTestWithMockLLM(t *testing.T, handler http.HandlerFunc) (*echo
 func seedAIReviewUser(t *testing.T, database *db.DB, username, role string) int64 {
 	t.Helper()
 	ctx := aiReviewContextWithTimeout(t)
-	res, err := database.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES ($1, 'testhash', $2)`,
+	var id int64
+	if err := database.QueryRowContext(ctx,
+		`INSERT INTO users (username, password_hash, role) VALUES ($1, 'testhash', $2) RETURNING id`,
 		username, role,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("seed user %q: %v", username, err)
 	}
-	id, _ := res.LastInsertId()
 	return id
 }
 

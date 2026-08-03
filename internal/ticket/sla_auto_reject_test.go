@@ -18,38 +18,35 @@ func setupSLATestDB(t *testing.T) *sql.DB {
 
 func createTestUserForSLA(t *testing.T, ctx context.Context, d *sql.DB, username string) int64 {
 	t.Helper()
-	result, err := d.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
-		username, "$2a$10$hash", "dba")
-	if err != nil {
+	var id int64
+	if err := d.QueryRowContext(ctx,
+		`INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id`,
+		username, "$2a$10$hash", "dba").Scan(&id); err != nil {
 		t.Fatalf("create user %s: %v", username, err)
 	}
-	id, _ := result.LastInsertId()
 	return id
 }
 
 func createTestDatasourceForSLA(t *testing.T, ctx context.Context, d *sql.DB) int64 {
 	t.Helper()
-	result, err := d.ExecContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted) VALUES ($1, $2, $3, $4, $5, $6)`,
-		"test-ds", "mysql", "localhost", 3306, "root", "encrypted")
-	if err != nil {
+	var id int64
+	if err := d.QueryRowContext(ctx,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		"test-ds", "mysql", "localhost", 3306, "root", "encrypted").Scan(&id); err != nil {
 		t.Fatalf("create datasource: %v", err)
 	}
-	id, _ := result.LastInsertId()
 	return id
 }
 
 func createTestTicketForSLA(t *testing.T, ctx context.Context, d *sql.DB, submitterID, dsID int64, status string, createdAt time.Time, slaDeadline *time.Time) int64 {
 	t.Helper()
-	result, err := d.ExecContext(ctx,
+	var id int64
+	if err := d.QueryRowContext(ctx,
 		`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, status, risk_level, created_at, updated_at, sla_deadline, sla_status)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-		submitterID, dsID, "testdb", "SELECT 1", "SELECT 1", "mysql", status, "medium", createdAt, createdAt, slaDeadline, "normal")
-	if err != nil {
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+		submitterID, dsID, "testdb", "SELECT 1", "SELECT 1", "mysql", status, "medium", createdAt, createdAt, slaDeadline, "normal").Scan(&id); err != nil {
 		t.Fatalf("create ticket: %v", err)
 	}
-	id, _ := result.LastInsertId()
 	return id
 }
 

@@ -48,13 +48,12 @@ func TestExecuteSQL_PostgreSQLRoute(t *testing.T) {
 
 	// Create datasource
 	encPass, _ := crypto.Encrypt("test", encKey)
-	result, err := d.DB.ExecContext(context.Background(),
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		"test-pg-route", "postgresql", "localhost", 5432, "test", encPass, "testdb", "disable")
-	if err != nil {
+	var dsID int64
+	if err := d.DB.QueryRowContext(context.Background(),
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+		"test-pg-route", "postgresql", "localhost", 5432, "test", encPass, "testdb", "disable").Scan(&dsID); err != nil {
 		t.Fatalf("create datasource: %v", err)
 	}
-	dsID, _ := result.LastInsertId()
 
 	// Inject the mock as a PG pool
 	poolMgr.InjectForTest(dsID, pgdriver.NewWithDB(mockDB), &driver.Config{ID: dsID, Database: "testdb"})
@@ -114,13 +113,12 @@ func TestExecuteSQL_PostgreSQLRollback(t *testing.T) {
 	defer mockDB.Close()
 
 	encPass, _ := crypto.Encrypt("test", encKey)
-	result, err := d.DB.ExecContext(context.Background(),
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		"test-pg-rollback", "postgresql", "localhost", 5432, "test", encPass, "testdb", "disable")
-	if err != nil {
+	var dsID int64
+	if err := d.DB.QueryRowContext(context.Background(),
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, sslmode) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+		"test-pg-rollback", "postgresql", "localhost", 5432, "test", encPass, "testdb", "disable").Scan(&dsID); err != nil {
 		t.Fatalf("create datasource: %v", err)
 	}
-	dsID, _ := result.LastInsertId()
 
 	poolMgr.InjectForTest(dsID, pgdriver.NewWithDB(mockDB), &driver.Config{ID: dsID, Database: "testdb"})
 
@@ -181,13 +179,12 @@ func TestExecuteSQL_MySQLNoTransaction(t *testing.T) {
 	defer mockDB.Close()
 
 	encPass, _ := crypto.Encrypt("test", encKey)
-	result, err := d.DB.ExecContext(context.Background(),
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		"test-mysql-notx", "mysql", "localhost", 3306, "test", encPass, "testdb")
-	if err != nil {
+	var dsID int64
+	if err := d.DB.QueryRowContext(context.Background(),
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+		"test-mysql-notx", "mysql", "localhost", 3306, "test", encPass, "testdb").Scan(&dsID); err != nil {
 		t.Fatalf("create datasource: %v", err)
 	}
-	dsID, _ := result.LastInsertId()
 
 	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(mockDB), &driver.Config{ID: dsID, Database: "testdb"})
 

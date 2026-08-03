@@ -29,28 +29,26 @@ func setupTicketTestDB(t *testing.T) *sql.DB {
 // seedTestUser creates a test user and returns the user ID.
 func seedTestUser(t *testing.T, testDB *sql.DB, username, role string) int64 {
 	t.Helper()
-	result, err := testDB.Exec(
-		`INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES ($1, $2, $3, datetime('now'), datetime('now'))`,
+	var id int64
+	if err := testDB.QueryRow(
+		`INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES ($1, $2, $3, datetime('now'), datetime('now')) RETURNING id`,
 		username, "$2a$10$testhash", role,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("failed to seed user %s: %v", username, err)
 	}
-	id, _ := result.LastInsertId()
 	return id
 }
 
 // seedTestDatasource creates a test datasource and returns the ID.
 func seedTestDatasource(t *testing.T, testDB *sql.DB, name string) int64 {
 	t.Helper()
-	result, err := testDB.Exec(
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active', datetime('now'), datetime('now'))`,
+	var id int64
+	if err := testDB.QueryRow(
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active', datetime('now'), datetime('now')) RETURNING id`,
 		name,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("failed to seed datasource %s: %v", name, err)
 	}
-	id, _ := result.LastInsertId()
 	return id
 }
 
@@ -644,13 +642,12 @@ func TestFullWorkflow(t *testing.T) {
 
 	// Seed a datasource with an encrypted password so GetDataSource can decrypt it.
 	encPass, _ := crypto.Encrypt("secret", encKey)
-	dsRes, err := testDB.Exec(
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES ($1, 'mysql', 'localhost', 3306, 'root', $2, 'active', datetime('now'), datetime('now'))`,
-		"test-mysql", encPass)
-	if err != nil {
+	var dsID int64
+	if err := testDB.QueryRow(
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES ($1, 'mysql', 'localhost', 3306, 'root', $2, 'active', datetime('now'), datetime('now')) RETURNING id`,
+		"test-mysql", encPass).Scan(&dsID); err != nil {
 		t.Fatalf("seed datasource: %v", err)
 	}
-	dsID, _ := dsRes.LastInsertId()
 
 	// Inject a sqlmock as the MySQL pool keyed by the seeded datasource identity.
 	mockDB, mock, err := sqlmock.New()

@@ -134,14 +134,13 @@ func seedPolicy(t *testing.T, testDB *sql.DB, permSvc *security.Service, sub, do
 // seedUser inserts a user and returns its ID.
 func seedUser(t *testing.T, testDB *sql.DB, username, role string) int64 {
 	t.Helper()
-	result, err := testDB.Exec(
-		`INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
+	var id int64
+	if err := testDB.QueryRow(
+		`INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id`,
 		username, "$2a$10$fakehash", role,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("seed user %q: %v", username, err)
 	}
-	id, _ := result.LastInsertId()
 	return id
 }
 

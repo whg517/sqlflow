@@ -45,17 +45,13 @@ func setupTicketExecTest(t *testing.T) (platform *db.DB, ticketSvc *Service, tar
 	if err != nil {
 		t.Fatalf("encrypt datasource password: %v", err)
 	}
-	res, err := platform.Exec(
+	var dsID int64
+	if err := platform.QueryRow(
 		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
 		"test-ds", "mysql", "127.0.0.1", 3306, "root", encPassword, "active",
-	)
-	if err != nil {
+	).Scan(&dsID); err != nil {
 		t.Fatalf("insert datasource: %v", err)
-	}
-	dsID, err := res.LastInsertId()
-	if err != nil {
-		t.Fatalf("datasource id: %v", err)
 	}
 
 	target = testutil.NewDB(t)
@@ -95,19 +91,15 @@ func insertTicket(t *testing.T, platform *db.DB, status model.TicketStatus, sqlC
 	}
 
 	now := time.Now()
-	res, err := platform.Exec(
+	var id int64
+	if err := platform.QueryRow(
 		`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type,
 		                      change_reason, status, risk_level, scheduled_at, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
 		1, 1, ticketExecDatabase, sqlContent, sqlContent, "mysql",
 		"ticket execution test", status, "low", scheduled, now, now,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("insert ticket: %v", err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		t.Fatalf("ticket id: %v", err)
 	}
 	return id
 }

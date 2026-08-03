@@ -43,15 +43,14 @@ func setupCommentTest(t *testing.T) (*sql.DB, int64, int64) {
 	dsID, _ := dsRes.LastInsertId()
 
 	// Insert a test ticket
-	ticketRes, err := database.Exec(
+	var ticketID int64
+	if err := database.QueryRow(
 		`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, risk_level, status)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
 		userID, dsID, "testdb", "SELECT 1", "SELECT 1", "mysql", "test", "low", model.TicketStatusDone,
-	)
-	if err != nil {
+	).Scan(&ticketID); err != nil {
 		t.Fatalf("insert ticket: %v", err)
 	}
-	ticketID, _ := ticketRes.LastInsertId()
 
 	return database.DB, userID, ticketID
 }

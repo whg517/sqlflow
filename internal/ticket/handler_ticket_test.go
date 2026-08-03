@@ -46,14 +46,13 @@ func setTicketAuthContext(c echo.Context, userID int64, username, role string) {
 func seedTicketTestUser(t *testing.T, database *db.DB, username, role string) int64 {
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
-	res, err := database.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES ($1, 'testhash', $2)`,
+	var id int64
+	if err := database.QueryRowContext(ctx,
+		`INSERT INTO users (username, password_hash, role) VALUES ($1, 'testhash', $2) RETURNING id`,
 		username, role,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("seed user %q: %v", username, err)
 	}
-	id, _ := res.LastInsertId()
 	return id
 }
 
@@ -61,14 +60,13 @@ func seedTicketTestUser(t *testing.T, database *db.DB, username, role string) in
 func seedTicketTestDatasource(t *testing.T, database *db.DB, name string) int64 {
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
-	res, err := database.ExecContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active')`,
+	var id int64
+	if err := database.QueryRowContext(ctx,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active') RETURNING id`,
 		name,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("seed datasource %q: %v", name, err)
 	}
-	id, _ := res.LastInsertId()
 	return id
 }
 
@@ -89,15 +87,14 @@ func setTicketStatusDB(t *testing.T, database *db.DB, ticketID int64, status mod
 func createTicketViaDB(t *testing.T, database *db.DB, submitterID, dsID int64, sqlContent string) int64 {
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
-	res, err := database.ExecContext(ctx,
+	var id int64
+	if err := database.QueryRowContext(ctx,
 		`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, ai_review_result)
-		 VALUES ($1, $2, 'mydb', $3, 'summary', 'mysql', 'test', 'SUBMITTED', 'low', '')`,
+		 VALUES ($1, $2, 'mydb', $3, 'summary', 'mysql', 'test', 'SUBMITTED', 'low', '') RETURNING id`,
 		submitterID, dsID, sqlContent,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		t.Fatalf("createTicketViaDB: %v", err)
 	}
-	id, _ := res.LastInsertId()
 	return id
 }
 
