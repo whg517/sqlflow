@@ -73,13 +73,13 @@ func (s *SLAService) ListConfigs(ctx context.Context) ([]*model.SLAConfig, error
 	var configs []*model.SLAConfig
 	for rows.Next() {
 		c := &model.SLAConfig{}
-		var enabled, autoReject int
+		var enabled, autoReject bool
 		if err := rows.Scan(&c.ID, &c.Priority, &c.TimeoutMinutes, &c.ReminderPercent,
 			&c.EscalateToRole, &c.EscalateToUser, &autoReject, &enabled, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan sla config: %w", err)
 		}
-		c.Enabled = enabled == 1
-		c.AutoRejectEnabled = autoReject == 1
+		c.Enabled = enabled
+		c.AutoRejectEnabled = autoReject
 		configs = append(configs, c)
 	}
 	return configs, rows.Err()
@@ -88,7 +88,7 @@ func (s *SLAService) ListConfigs(ctx context.Context) ([]*model.SLAConfig, error
 // GetConfig returns the SLA config for a given priority.
 func (s *SLAService) GetConfig(ctx context.Context, priority string) (*model.SLAConfig, error) {
 	c := &model.SLAConfig{}
-	var enabled, autoReject int
+	var enabled, autoReject bool
 	err := s.database.QueryRowContext(ctx,
 		`SELECT id, priority, timeout_minutes, reminder_percent, escalate_to_role, escalate_to_user, auto_reject_enabled, enabled, created_at, updated_at
 		 FROM sla_config WHERE priority = $1`, priority).Scan(
@@ -100,30 +100,25 @@ func (s *SLAService) GetConfig(ctx context.Context, priority string) (*model.SLA
 		}
 		return nil, fmt.Errorf("get sla config: %w", err)
 	}
-	c.Enabled = enabled == 1
-	c.AutoRejectEnabled = autoReject == 1
+	c.Enabled = enabled
+	c.AutoRejectEnabled = autoReject
 	return c, nil
 }
 
 // CreateConfig creates a new SLA configuration.
 func (s *SLAService) CreateConfig(ctx context.Context, cfg *model.SLAConfig) (*model.SLAConfig, error) {
-	enabled := 0
-	if cfg.Enabled {
-		enabled = 1
-	}
-	autoReject := 0
-	if cfg.AutoRejectEnabled {
-		autoReject = 1
-	}
+	// The booleans go through as booleans. Converting them to 0/1 was only ever
+	// needed because SQLite had no boolean type.
 	now := time.Now()
-	result, err := s.database.ExecContext(ctx,
+	var id int64
+	if err := s.database.QueryRowContext(ctx,
 		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, escalate_to_user, auto_reject_enabled, enabled, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		cfg.Priority, cfg.TimeoutMinutes, cfg.ReminderPercent, cfg.EscalateToRole, cfg.EscalateToUser, autoReject, enabled, now, now)
-	if err != nil {
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+		cfg.Priority, cfg.TimeoutMinutes, cfg.ReminderPercent, cfg.EscalateToRole, cfg.EscalateToUser,
+		cfg.AutoRejectEnabled, cfg.Enabled, now, now,
+	).Scan(&id); err != nil {
 		return nil, fmt.Errorf("create sla config: %w", err)
 	}
-	id, _ := result.LastInsertId()
 	cfg.ID = id
 	cfg.CreatedAt = now
 	cfg.UpdatedAt = now
@@ -132,19 +127,11 @@ func (s *SLAService) CreateConfig(ctx context.Context, cfg *model.SLAConfig) (*m
 
 // UpdateConfig updates an existing SLA configuration.
 func (s *SLAService) UpdateConfig(ctx context.Context, id int64, cfg *model.SLAConfig) error {
-	enabled := 0
-	if cfg.Enabled {
-		enabled = 1
-	}
-	autoReject := 0
-	if cfg.AutoRejectEnabled {
-		autoReject = 1
-	}
 	now := time.Now()
 	_, err := s.database.ExecContext(ctx,
 		`UPDATE sla_config SET priority = $1, timeout_minutes = $2, reminder_percent = $3, escalate_to_role = $4, escalate_to_user = $5, auto_reject_enabled = $6, enabled = $7, updated_at = $8
 		 WHERE id = $9`,
-		cfg.Priority, cfg.TimeoutMinutes, cfg.ReminderPercent, cfg.EscalateToRole, cfg.EscalateToUser, autoReject, enabled, now, id)
+		cfg.Priority, cfg.TimeoutMinutes, cfg.ReminderPercent, cfg.EscalateToRole, cfg.EscalateToUser, cfg.AutoRejectEnabled, cfg.Enabled, now, id)
 	if err != nil {
 		return fmt.Errorf("update sla config: %w", err)
 	}

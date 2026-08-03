@@ -394,7 +394,7 @@ func (s *FeishuService) GetEnabledWebhooks(ctx context.Context) ([]struct {
 	URL string
 }, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, encrypted_url FROM feishu_webhooks WHERE enabled = 1`,
+		`SELECT id, encrypted_url FROM feishu_webhooks WHERE enabled = TRUE`,
 	)
 	if err != nil {
 		return nil, err

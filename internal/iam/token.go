@@ -116,7 +116,11 @@ func (s *TokenService) CreateToken(ctx context.Context, userID int64, name, desc
 
 	token, err = s.GetTokenByID(ctx, int64(created.ID))
 	if err != nil {
-		return plainToken, nil, nil // token saved but lookup failed, still return plaintext
+		// The row is written but unreadable — returning (plaintext, nil, nil)
+		// handed callers a nil token with no error, which they dereferenced.
+		// The plaintext still comes back so a caller that wants to show it can,
+		// but the failure is no longer silent.
+		return plainToken, nil, fmt.Errorf("read back created token: %w", err)
 	}
 
 	return plainToken, token, nil
@@ -126,7 +130,7 @@ func (s *TokenService) CreateToken(ctx context.Context, userID int64, name, desc
 // RAW_SQL: LEFT JOIN users for username — no ent edge defined for this relation.
 func (s *TokenService) GetTokenByID(ctx context.Context, id int64) (*model.APIToken, error) {
 	t := &model.APIToken{}
-	var isActive int
+	var isActive bool
 	var lastUsedAt sql.NullTime
 	var username sql.NullString
 
@@ -148,7 +152,7 @@ func (s *TokenService) GetTokenByID(ctx context.Context, id int64) (*model.APITo
 		return nil, fmt.Errorf("query token: %w", err)
 	}
 
-	t.IsActive = isActive == 1
+	t.IsActive = isActive
 	if username.Valid {
 		t.Username = username.String
 	}
@@ -258,7 +262,7 @@ func (s *TokenService) ValidateTokenWithRole(ctx context.Context, plainToken str
 	hash := sha256.Sum256([]byte(plainToken))
 	tokenHash := hex.EncodeToString(hash[:])
 
-	var isActive int
+	var isActive bool
 	var scopeStr string
 	var expiresAt time.Time
 	var lastUsedAt sql.NullTime
@@ -278,7 +282,7 @@ func (s *TokenService) ValidateTokenWithRole(ctx context.Context, plainToken str
 		return 0, "", "", nil, fmt.Errorf("validate token: %w", err)
 	}
 
-	if isActive != 1 {
+	if !isActive {
 		return 0, "", "", nil, ErrTokenRevoked
 	}
 
@@ -331,7 +335,7 @@ func scanTokens(rows *sql.Rows) ([]*model.APIToken, error) {
 	var tokens []*model.APIToken
 	for rows.Next() {
 		t := &model.APIToken{}
-		var isActive int
+		var isActive bool
 		var lastUsedAt sql.NullTime
 
 		err := rows.Scan(&t.ID, &t.UserID, &t.Username, &t.Name, &t.TokenHash, &t.TokenPrefix,
@@ -342,7 +346,7 @@ func scanTokens(rows *sql.Rows) ([]*model.APIToken, error) {
 			return nil, fmt.Errorf("scan token: %w", err)
 		}
 
-		t.IsActive = isActive == 1
+		t.IsActive = isActive
 		if lastUsedAt.Valid {
 			t.LastUsedAt = &lastUsedAt.Time
 		}
@@ -360,7 +364,7 @@ func scanTokens(rows *sql.Rows) ([]*model.APIToken, error) {
 // but raw SQL is clearer for this specific aggregation pattern.
 func (s *TokenService) GetTokenStats(ctx context.Context, userID int64) (totalCount, activeCount, totalUsage int64, err error) {
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END), 0), COALESCE(SUM(use_count), 0)
+		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN is_active = TRUE THEN 1 ELSE 0 END), 0), COALESCE(SUM(use_count), 0)
 		 FROM api_tokens WHERE user_id = $1`, userID,
 	).Scan(&totalCount, &activeCount, &totalUsage)
 	if err != nil {

@@ -112,7 +112,7 @@ func (s *TemplateService) getTemplate(ctx context.Context, id, userID int64, enf
 		 FROM sql_templates WHERE id = $1`
 	args := []interface{}{id}
 	if enforceAccess {
-		query += " AND (user_id = $1 OR is_public = 1)"
+		query += " AND (user_id = $1 OR is_public = TRUE)"
 		args = append(args, userID)
 	}
 	err := s.database.QueryRowContext(ctx,
@@ -144,9 +144,9 @@ func (s *TemplateService) ListTemplates(ctx context.Context, userID int64, categ
 
 	if userID == 0 {
 		// All public templates
-		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE is_public = 1"
+		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE is_public = TRUE"
 		args := []interface{}{}
-		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE is_public = 1"
+		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE is_public = TRUE"
 		if category != "" {
 			countQuery += " AND category = $1"
 			listQuery += " AND category = $1"
@@ -163,9 +163,9 @@ func (s *TemplateService) ListTemplates(ctx context.Context, userID int64, categ
 		rows, err = s.database.QueryContext(ctx, listQuery, listArgs...)
 	} else {
 		// User's own + all public
-		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE (user_id = $1 OR is_public = 1)"
+		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE (user_id = $1 OR is_public = TRUE)"
 		args := []interface{}{userID}
-		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE (user_id = $1 OR is_public = 1)"
+		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE (user_id = $1 OR is_public = TRUE)"
 		if category != "" {
 			countQuery += " AND category = $1"
 			listQuery += " AND category = $1"

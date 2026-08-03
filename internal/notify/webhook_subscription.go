@@ -310,7 +310,7 @@ func (s *WebhookSubscriptionService) List(ctx context.Context) ([]*model.Webhook
 // This avoids N+1 queries compared to List + per-item decryptSecret.
 func (s *WebhookSubscriptionService) listForDelivery(ctx context.Context) ([]*deliveryTarget, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, url, encrypted_secret, events FROM webhook_subscriptions WHERE enabled = 1`)
+		`SELECT id, url, encrypted_secret, events FROM webhook_subscriptions WHERE enabled = TRUE`)
 	if err != nil {
 		return nil, fmt.Errorf("查询订阅失败: %w", err)
 	}
@@ -555,7 +555,7 @@ func (s *WebhookSubscriptionService) handleFailure(subID int64) {
 
 	if result.FailureCount >= MaxConsecutiveFailures && result.Enabled == 1 {
 		_, err = s.db.ExecContext(ctx,
-			`UPDATE webhook_subscriptions SET enabled = 0, updated_at = datetime('now') WHERE id = $1 AND enabled = 1`,
+			`UPDATE webhook_subscriptions SET enabled = FALSE, updated_at = datetime('now') WHERE id = $1 AND enabled = TRUE`,
 			subID)
 		if err != nil {
 			log.Printf("webhook: failed to auto-disable subscription %d: %v", subID, err)

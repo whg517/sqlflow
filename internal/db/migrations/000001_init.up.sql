@@ -460,6 +460,16 @@ CREATE TABLE IF NOT EXISTS webhook_subscriptions (
     updated_at             TIMESTAMPTZ NOT NULL DEFAULT (now())
 );
 
+-- 内置角色。
+--
+-- 这是 schema 的一部分而不是应用启动时的 seed：ValidateRole 在创建用户时查这张
+-- 表，空表会让「创建 admin 用户」这件事本身失败——包括首次启动的初始化。
+INSERT INTO roles (name, display_name, description, is_builtin, status) VALUES
+    ('admin',     '管理员',   '拥有平台全部管理权限的内置角色',       TRUE, 'active'),
+    ('dba',       'DBA',      '负责数据库变更、审批与数据治理的内置角色', TRUE, 'active'),
+    ('developer', '开发人员', '默认只读查询与工单提交角色',           TRUE, 'active')
+ON CONFLICT (name) DO NOTHING;
+
 -- 索引
 
 CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
