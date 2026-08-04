@@ -87,16 +87,21 @@ func (s *MaskService) CreateMaskRule(ctx context.Context, userID int64, datasour
 	}
 
 	now := time.Now()
-	result, err := s.database.DB.ExecContext(ctx,
-		`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type, custom_regex, custom_template, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		datasourceID, database, tableName, field, maskType, customRegex, customTemplate, now, now,
-	)
+	created, err := s.client.MaskRule.Create().
+		SetDatasourceID(datasourceID).
+		SetDatabase(database).
+		SetTableName(tableName).
+		SetField(field).
+		SetMaskType(maskType).
+		SetCustomRegex(customRegex).
+		SetCustomTemplate(customTemplate).
+		SetCreatedAt(now).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("创建脱敏规则失败: %w", err)
 	}
-
-	id, _ := result.LastInsertId()
+	id := int64(created.ID)
 	s.auditSvc.Write(ctx, auditlog.Record{
 		UserID:     userID,
 		Action:     "mask_rule_create",
@@ -271,16 +276,18 @@ func (s *MaskService) CreateSensitiveTable(ctx context.Context, userID, datasour
 	}
 
 	now := time.Now()
-	result, err := s.database.DB.ExecContext(ctx,
-		`INSERT INTO sensitive_tables (datasource_id, database, table_name, sensitivity_level, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		datasourceID, database, tableName, sensitivityLevel, now, now,
-	)
+	created, err := s.client.SensitiveTable.Create().
+		SetDatasourceID(datasourceID).
+		SetDatabase(database).
+		SetTableName(tableName).
+		SetSensitivityLevel(sensitivityLevel).
+		SetCreatedAt(now).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("创建敏感表记录失败: %w", err)
 	}
-
-	id, _ := result.LastInsertId()
+	id := int64(created.ID)
 	s.auditSvc.Write(ctx, auditlog.Record{
 		UserID:     userID,
 		Action:     "sensitive_table_create",
@@ -392,31 +399,31 @@ func (s *MaskService) HasDesensitizeBypass(role string, datasourceID int64, tabl
 
 // GetSensitiveTablesForDatasource returns the list of sensitive table names for a given datasource.
 func (s *MaskService) GetSensitiveTablesForDatasource(ctx context.Context, datasourceID int64, database string) ([]model.SensitiveTable, error) {
-	query := `SELECT id, datasource_id, database, table_name, sensitivity_level, created_at, updated_at
-			  FROM sensitive_tables WHERE datasource_id = $1`
-	args := []interface{}{datasourceID}
-
+	q := s.client.SensitiveTable.Query().Where(entsensitivetable.DatasourceIDEQ(datasourceID))
 	if database != "" {
-		query += ` AND (database = ? OR database = '')`
-		args = append(args, database)
+		// An empty database on a row means "any database in this datasource".
+		q = q.Where(entsensitivetable.Or(
+			entsensitivetable.DatabaseEQ(database),
+			entsensitivetable.DatabaseEQ(""),
+		))
 	}
 
-	rows, err := s.database.DB.QueryContext(ctx, query, args...)
+	found, err := q.All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询敏感表失败: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
-	tables := make([]model.SensitiveTable, 0)
-	for rows.Next() {
-		var t model.SensitiveTable
-		if err := rows.Scan(&t.ID, &t.DatasourceID, &t.Database, &t.TableName, &t.SensitivityLevel, &t.CreatedAt, &t.UpdatedAt); err != nil {
-			continue
-		}
-		tables = append(tables, t)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("遍历敏感表失败: %w", err)
+	tables := make([]model.SensitiveTable, 0, len(found))
+	for _, t := range found {
+		tables = append(tables, model.SensitiveTable{
+			ID:               int64(t.ID),
+			DatasourceID:     t.DatasourceID,
+			Database:         t.Database,
+			TableName:        t.TableName,
+			SensitivityLevel: t.SensitivityLevel,
+			CreatedAt:        t.CreatedAt,
+			UpdatedAt:        t.UpdatedAt,
+		})
 	}
 	return tables, nil
 }

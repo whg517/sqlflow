@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"strconv"
+
 	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
@@ -255,9 +257,13 @@ func (s *RequestService) ListRequests(ctx context.Context, page, pageSize int, s
 		whereParts = append(whereParts, "r.status = ?")
 		args = append(args, status)
 	}
-	if applicantIDStr != "" {
+	// applicant_id is a bigint; passing the raw query-string value made
+	// PostgreSQL reject the comparison, and only worked under SQLite's dynamic
+	// typing. An unparseable value filters nothing rather than erroring, which
+	// matches how the other filters treat an empty parameter.
+	if id, err := strconv.ParseInt(applicantIDStr, 10, 64); err == nil && applicantIDStr != "" {
 		whereParts = append(whereParts, "r.applicant_id = ?")
-		args = append(args, applicantIDStr)
+		args = append(args, id)
 	}
 
 	whereClause := ""
@@ -266,7 +272,7 @@ func (s *RequestService) ListRequests(ctx context.Context, page, pageSize int, s
 	}
 
 	var total int64
-	countSQL := fmt.Sprintf(`SELECT COUNT(*) FROM permission_requests r %s`, whereClause)
+	countSQL := sqlutil.NumberPlaceholders(fmt.Sprintf(`SELECT COUNT(*) FROM permission_requests r %s`, whereClause))
 	if err := s.database.DB.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count permission requests: %w", err)
 	}
@@ -286,7 +292,8 @@ func (s *RequestService) ListRequests(ctx context.Context, page, pageSize int, s
 		 LEFT JOIN datasources ds ON ds.id = r.datasource_id
 		 %s ORDER BY r.created_at DESC`, whereClause)
 
-	querySQL += fmt.Sprintf(" LIMIT %d OFFSET %d", p.PageSize, (p.Page-1)*p.PageSize)
+	querySQL = sqlutil.NumberPlaceholders(querySQL) +
+		fmt.Sprintf(" LIMIT %d OFFSET %d", p.PageSize, (p.Page-1)*p.PageSize)
 	rows, err := s.database.DB.QueryContext(ctx, querySQL, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query permission requests: %w", err)

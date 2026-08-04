@@ -2,21 +2,13 @@ package security
 
 import (
 	"errors"
-	"path/filepath"
 	"testing"
 
-	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 func TestRoleLifecycleAndGuards(t *testing.T) {
-	database, err := db.Open(filepath.Join(t.TempDir(), "roles.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = database.Close() })
-	if err := database.Migrate(); err != nil {
-		t.Fatal(err)
-	}
+	database := testutil.NewDB(t)
 
 	svc, err := NewService(database)
 	if err != nil {
