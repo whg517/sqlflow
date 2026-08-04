@@ -2,11 +2,8 @@ package ops
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	esql "entgo.io/ent/dialect/sql"
@@ -33,13 +30,12 @@ var (
 
 // GitService handles git link management — associating commits/PRs with tickets and audit logs.
 type GitService struct {
-	database *db.DB
-	client   *ent.Client
+	client *ent.Client
 }
 
 // NewGitService creates a new GitService.
 func NewGitService(database *db.DB) *GitService {
-	return &GitService{database: database, client: database.Client()}
+	return &GitService{client: database.Client()}
 }
 
 // CreateGitLinkInput holds the input parameters for creating a git link.
@@ -210,38 +206,39 @@ func (s *GitService) PopulateGitLinks(ctx context.Context, ticket *model.Ticket)
 }
 
 // BatchPopulateGitLinks fetches git links for multiple tickets in a single query.
-// Uses raw SQL for the IN clause — same pattern as Phase 3 ListTickets.
+//
+// One query rather than one per ticket: the ticket list renders links for every
+// row, and the per-ticket form made the list's cost scale with page size.
 func (s *GitService) BatchPopulateGitLinks(ctx context.Context, tickets []model.Ticket) {
 	if len(tickets) == 0 {
 		return
 	}
-	ids := make([]string, len(tickets))
+	ids := make([]int64, len(tickets))
 	idMap := make(map[int64]int, len(tickets))
 	for i, t := range tickets {
-		ids[i] = strconv.FormatInt(t.ID, 10)
+		ids[i] = t.ID
 		idMap[t.ID] = i
 	}
 
-	rows, err := s.database.QueryContext(ctx,
-		`SELECT id, entity_type, entity_id, link_type, commit_hash, commit_msg, author_name, author_email, pr_number, pr_title, pr_url, repo_url, branch, created_by, created_at
-		 FROM git_links WHERE entity_type = 'ticket' AND entity_id IN (`+strings.Join(ids, ",")+`) ORDER BY created_at DESC`,
-	)
+	// The ids were formatted into the statement text before. They are integers
+	// so nothing could be injected, but IDIn binds them, which removes the
+	// question entirely.
+	links, err := s.client.GitLink.Query().
+		Where(
+			gitlink.EntityTypeEQ("ticket"),
+			gitlink.EntityIDIn(ids...),
+		).
+		Order(ent.Desc(gitlink.FieldCreatedAt)).
+		All(ctx)
 	if err != nil {
+		// Populating links is decoration on a ticket list; failing the list
+		// because the decoration is unavailable would be worse than omitting it.
 		return
 	}
-	defer func() { _ = rows.Close() }()
 
-	for rows.Next() {
-		var link model.GitLink
-		var created sql.NullTime
-		if err := rows.Scan(&link.ID, &link.EntityType, &link.EntityID, &link.LinkType, &link.CommitHash, &link.CommitMsg, &link.AuthorName, &link.AuthorEmail, &link.PRNumber, &link.PRTitle, &link.PRURL, &link.RepoURL, &link.Branch, &link.CreatedBy, &created); err != nil {
-			continue // batch populate: skip bad rows to avoid failing entire batch
-		}
-		if created.Valid {
-			link.CreatedAt = created.Time
-		}
-		if idx, ok := idMap[link.EntityID]; ok {
-			tickets[idx].GitLinks = append(tickets[idx].GitLinks, link)
+	for _, gl := range links {
+		if idx, ok := idMap[gl.EntityID]; ok {
+			tickets[idx].GitLinks = append(tickets[idx].GitLinks, *entGitLinkToModel(gl))
 		}
 	}
 }

@@ -7,7 +7,14 @@ import (
 	"sync"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
+
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entauditlog "github.com/whg517/sqlflow/internal/db/ent/auditlog"
+	entdatasource "github.com/whg517/sqlflow/internal/db/ent/datasource"
+	entqueryhistory "github.com/whg517/sqlflow/internal/db/ent/queryhistory"
+	entticket "github.com/whg517/sqlflow/internal/db/ent/ticket"
 )
 
 // DashboardStats holds aggregated statistics for the dashboard overview.
@@ -53,7 +60,10 @@ type RecentActivityItem struct {
 	UserID    int64  `json:"user_id"`
 	Action    string `json:"action"`
 	IPAddress string `json:"ip_address"`
-	CreatedAt string `json:"created_at"`
+	// time.Time rather than a string: the raw version stored whatever text the
+	// driver produced, which differs between drivers. Every other timestamp the
+	// API returns is a marshaled time.Time, so this one now matches.
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // cacheEntry holds a cached DashboardFullStats with an expiry time.
@@ -64,7 +74,7 @@ type cacheEntry struct {
 
 // DashboardService provides dashboard statistics.
 type DashboardService struct {
-	database *db.DB
+	client *ent.Client
 
 	// Cache for full stats (60s TTL)
 	cache   cacheEntry
@@ -75,42 +85,64 @@ const dashboardCacheTTL = 60 * time.Second
 
 // NewDashboardService creates a new DashboardService.
 func NewDashboardService(database *db.DB) *DashboardService {
-	return &DashboardService{database: database}
+	return &DashboardService{client: database.Client()}
+}
+
+// openTicketStatuses are the statuses a ticket passes through before anyone has
+// decided on it.
+//
+// Shared because the stat card, its sparkline and the two entry points all have
+// to agree on what "pending" means; they were four separate literals, and a
+// status added to one of them would have quietly changed only part of the
+// dashboard.
+var openTicketStatuses = []string{"SUBMITTED", "AI_REVIEWED", "PENDING_APPROVAL"}
+
+// pendingTickets counts tickets awaiting a decision.
+func (s *DashboardService) pendingTickets() *ent.TicketQuery {
+	return s.client.Ticket.Query().Where(entticket.StatusIn(openTicketStatuses...))
+}
+
+// recentQueries counts query history from the last seven days.
+func (s *DashboardService) recentQueries() *ent.QueryHistoryQuery {
+	return s.client.QueryHistory.Query().
+		Where(entqueryhistory.CreatedAtGTE(time.Now().AddDate(0, 0, -7)))
+}
+
+// activeDatasources counts datasources in service.
+func (s *DashboardService) activeDatasources() *ent.DataSourceQuery {
+	return s.client.DataSource.Query().Where(entdatasource.StatusEQ("active"))
+}
+
+// statCards fills the three counters both entry points show.
+func (s *DashboardService) statCards(ctx context.Context) (pending, recent, datasources int, err error) {
+	if pending, err = s.pendingTickets().Count(ctx); err != nil {
+		return 0, 0, 0, fmt.Errorf("query pending tickets: %w", err)
+	}
+	if recent, err = s.recentQueries().Count(ctx); err != nil {
+		return 0, 0, 0, fmt.Errorf("query recent queries: %w", err)
+	}
+	if datasources, err = s.activeDatasources().Count(ctx); err != nil {
+		return 0, 0, 0, fmt.Errorf("query active datasources: %w", err)
+	}
+	return pending, recent, datasources, nil
 }
 
 // GetStats returns aggregated dashboard statistics (original API, backward compatible).
 func (s *DashboardService) GetStats(ctx context.Context) (*DashboardStats, error) {
-	stats := &DashboardStats{}
-
-	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE status IN ('SUBMITTED', 'AI_REVIEWED', 'PENDING_APPROVAL')`,
-	).Scan(&stats.PendingTickets)
+	pending, recent, datasources, err := s.statCards(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("query pending tickets: %w", err)
+		return nil, err
 	}
-
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM query_history WHERE created_at >= (now() + interval '-7 days')`,
-	).Scan(&stats.RecentQueries7d)
-	if err != nil {
-		return nil, fmt.Errorf("query recent queries: %w", err)
-	}
-
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM datasources WHERE status = 'active'`,
-	).Scan(&stats.ActiveDatasources)
-	if err != nil {
-		return nil, fmt.Errorf("query active datasources: %w", err)
-	}
-
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM users`,
-	).Scan(&stats.TotalUsers)
+	users, err := s.client.User.Query().Count(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query total users: %w", err)
 	}
-
-	return stats, nil
+	return &DashboardStats{
+		PendingTickets:    pending,
+		RecentQueries7d:   recent,
+		ActiveDatasources: datasources,
+		TotalUsers:        users,
+	}, nil
 }
 
 // GetFullStats returns all dashboard data in a single request.
@@ -159,64 +191,57 @@ func (s *DashboardService) GetFullStats(ctx context.Context, startDate, endDate 
 		TicketStatusDistribution: make(map[string]int),
 	}
 
-	// 1. Stat cards (parallelizable but keep simple for SQLite)
-	var err error
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE status IN ('SUBMITTED', 'AI_REVIEWED', 'PENDING_APPROVAL')`,
-	).Scan(&stats.PendingTickets)
+	pending, recent, datasources, err := s.statCards(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("query pending tickets: %w", err)
+		return nil, err
 	}
+	stats.PendingTickets, stats.RecentQueries7d, stats.ActiveDatasources = pending, recent, datasources
 
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM query_history WHERE created_at >= (now() + interval '-7 days')`,
-	).Scan(&stats.RecentQueries7d)
-	if err != nil {
-		return nil, fmt.Errorf("query recent queries: %w", err)
-	}
-
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM datasources WHERE status = 'active'`,
-	).Scan(&stats.ActiveDatasources)
-	if err != nil {
-		return nil, fmt.Errorf("query active datasources: %w", err)
-	}
-
-	// 2. Sparklines: 3 metrics × 7 days
-	stats.PendingTicketSparkline, err = s.getSparkline(ctx,
-		`SELECT COUNT(*) FROM tickets WHERE status IN ('SUBMITTED', 'AI_REVIEWED', 'PENDING_APPROVAL') AND created_at >= $1 AND created_at < $2`)
+	// 2. Sparklines: 3 metrics x 7 days.
+	//
+	// Each takes a function returning a fresh query so the day filter can be
+	// added per bucket; passing one built query would accumulate seven
+	// overlapping WHERE clauses.
+	stats.PendingTicketSparkline, err = dailyCounts(ctx, func() *ent.TicketQuery { return s.pendingTickets() },
+		func(q *ent.TicketQuery, from, to time.Time) *ent.TicketQuery {
+			return q.Where(entticket.CreatedAtGTE(from), entticket.CreatedAtLT(to))
+		})
 	if err != nil {
 		log.Printf("dashboard: pending ticket sparkline error: %v", err)
 	}
 
-	stats.QuerySparkline, err = s.getSparkline(ctx,
-		`SELECT COUNT(*) FROM query_history WHERE created_at >= $1 AND created_at < $2`)
+	stats.QuerySparkline, err = dailyCounts(ctx, func() *ent.QueryHistoryQuery { return s.client.QueryHistory.Query() },
+		func(q *ent.QueryHistoryQuery, from, to time.Time) *ent.QueryHistoryQuery {
+			return q.Where(entqueryhistory.CreatedAtGTE(from), entqueryhistory.CreatedAtLT(to))
+		})
 	if err != nil {
 		log.Printf("dashboard: query sparkline error: %v", err)
 	}
 
-	stats.DatasourceSparkline, err = s.getSparkline(ctx,
-		`SELECT COUNT(*) FROM datasources WHERE status = 'active' AND created_at <= $1`)
+	// Datasources are cumulative rather than per-day: the card shows how many
+	// exist, so its sparkline is the running total at each day's end.
+	stats.DatasourceSparkline, err = dailyCounts(ctx, func() *ent.DataSourceQuery { return s.activeDatasources() },
+		func(q *ent.DataSourceQuery, _, to time.Time) *ent.DataSourceQuery {
+			return q.Where(entdatasource.CreatedAtLT(to))
+		})
 	if err != nil {
 		log.Printf("dashboard: datasource sparkline error: %v", err)
 	}
 
 	// 3. Ticket status distribution
-	distRows, err := s.database.DB.QueryContext(ctx,
-		`SELECT status, COUNT(*) as cnt FROM tickets GROUP BY status`,
-	)
+	var dist []struct {
+		Status string `json:"status"`
+		Count  int    `json:"count"`
+	}
+	err = s.client.Ticket.Query().
+		GroupBy(entticket.FieldStatus).
+		Aggregate(ent.Count()).
+		Scan(ctx, &dist)
 	if err != nil {
 		return nil, fmt.Errorf("query ticket distribution: %w", err)
 	}
-	defer func() { _ = distRows.Close() }()
-
-	for distRows.Next() {
-		var status string
-		var cnt int
-		if err := distRows.Scan(&status, &cnt); err != nil {
-			continue
-		}
-		stats.TicketStatusDistribution[status] = cnt
+	for _, d := range dist {
+		stats.TicketStatusDistribution[d.Status] = d.Count
 	}
 
 	// 4. Query trend
@@ -226,20 +251,21 @@ func (s *DashboardService) GetFullStats(ctx context.Context, startDate, endDate 
 	}
 
 	// 5. Recent activity (latest 10 audit logs)
-	activityRows, err := s.database.DB.QueryContext(ctx,
-		`SELECT id, user_id, action, ip_address, created_at FROM audit_logs ORDER BY created_at DESC LIMIT 10`,
-	)
+	recentLogs, err := s.client.AuditLog.Query().
+		Order(ent.Desc(entauditlog.FieldCreatedAt)).
+		Limit(10).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query recent activity: %w", err)
 	}
-	defer func() { _ = activityRows.Close() }()
-
-	for activityRows.Next() {
-		var item RecentActivityItem
-		if err := activityRows.Scan(&item.ID, &item.UserID, &item.Action, &item.IPAddress, &item.CreatedAt); err != nil {
-			continue
-		}
-		stats.RecentActivity = append(stats.RecentActivity, item)
+	for _, l := range recentLogs {
+		stats.RecentActivity = append(stats.RecentActivity, RecentActivityItem{
+			ID:        int64(l.ID),
+			UserID:    l.UserID,
+			Action:    l.Action,
+			IPAddress: l.IPAddress,
+			CreatedAt: l.CreatedAt,
+		})
 	}
 
 	// Update cache
@@ -253,30 +279,39 @@ func (s *DashboardService) GetFullStats(ctx context.Context, startDate, endDate 
 	return stats, nil
 }
 
-// getSparkline returns 7 daily counts for the given query.
-// The query MUST have exactly 2 placeholders: start_time and end_time.
+// dailyCounts returns one count per day for the last seven days.
 //
-// 注意：使用 UTC 时间计算日期边界，与 SQLite now() 一致。
-// 若用本地时间，在非 UTC 时区会导致"今天"的数据落入昨天的窗口（跨日错位）。
-func (s *DashboardService) getSparkline(ctx context.Context, query string) ([]int, error) {
+// Generic over the entity so each metric keeps its own typed predicates: the
+// previous version took a SQL string that had to contain exactly two
+// placeholders in the right order, which nothing checked.
+//
+// Day boundaries are computed in UTC to match the timestamps the database
+// writes. Local time would put today's rows in yesterday's bucket for anyone
+// east of UTC.
+func dailyCounts[Q any](
+	ctx context.Context,
+	newQuery func() Q,
+	restrict func(Q, time.Time, time.Time) Q,
+) ([]int, error) {
 	result := make([]int, 7)
 	now := time.Now().UTC()
-
 	for i := 6; i >= 0; i-- {
 		dayStart := now.AddDate(0, 0, -i).Truncate(24 * time.Hour)
-		dayEnd := dayStart.AddDate(0, 0, 1)
-
-		var count int
-		err := s.database.DB.QueryRowContext(ctx, query,
-			dayStart.Format("2006-01-02 15:04:05"),
-			dayEnd.Format("2006-01-02 15:04:05"),
-		).Scan(&count)
+		q := restrict(newQuery(), dayStart, dayStart.AddDate(0, 0, 1))
+		c, ok := any(q).(interface {
+			Count(context.Context) (int, error)
+		})
+		if !ok {
+			return result, fmt.Errorf("query type %T cannot count", q)
+		}
+		count, err := c.Count(ctx)
 		if err != nil {
+			// A single bad bucket renders as zero rather than failing the whole
+			// dashboard; the caller logs it.
 			count = 0
 		}
 		result[6-i] = count
 	}
-
 	return result, nil
 }
 
@@ -301,33 +336,34 @@ func (s *DashboardService) getQueryTrend(ctx context.Context, startDate, endDate
 		return nil, fmt.Errorf("date range cannot exceed 30 days")
 	}
 
-	rows, err := s.database.DB.QueryContext(ctx,
-		// to_char rather than DATE(): DATE() yields a date value, and the
-		// destination here is a string used as a map key. The bounds are real
-		// timestamps rather than formatted text, so the comparison does not
-		// depend on how the column happens to render.
-		`SELECT to_char(created_at, 'YYYY-MM-DD') as day, COUNT(*) as cnt
-		 FROM query_history
-		 WHERE created_at >= $1 AND created_at < $2
-		 GROUP BY to_char(created_at, 'YYYY-MM-DD')
-		 ORDER BY day`,
-		parsedStart,
-		parsedEnd.AddDate(0, 0, 1),
-	)
+	// Bucketed by to_char rather than DATE(): the destination is a string used
+	// as a map key, and DATE() yields a date value. The bounds stay real
+	// timestamps, so the comparison does not depend on how the column renders.
+	var buckets []struct {
+		Day   string `json:"day"`
+		Count int    `json:"count"`
+	}
+	err := s.client.QueryHistory.Query().
+		Where(
+			entqueryhistory.CreatedAtGTE(parsedStart),
+			entqueryhistory.CreatedAtLT(parsedEnd.AddDate(0, 0, 1)),
+		).
+		Modify(func(sel *entsql.Selector) {
+			day := "to_char(" + sel.C(entqueryhistory.FieldCreatedAt) + ", 'YYYY-MM-DD')"
+			sel.Select().
+				AppendSelect(entsql.As(day, "day"), entsql.As("COUNT(*)", "count")).
+				GroupBy(day).
+				OrderBy("day")
+		}).
+		Scan(ctx, &buckets)
 	if err != nil {
 		return nil, fmt.Errorf("query trend: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	// Build a map of date -> count, then fill gaps with 0
 	countMap := make(map[string]int)
-	for rows.Next() {
-		var day string
-		var cnt int
-		if err := rows.Scan(&day, &cnt); err != nil {
-			continue
-		}
-		countMap[day] = cnt
+	for _, b := range buckets {
+		countMap[b.Day] = b.Count
 	}
 
 	var result []DailyCount
