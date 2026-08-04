@@ -1,7 +1,7 @@
 # SQLFlow
 
 数据访问治理平台：低风险查询开发者自助，高风险变更走「工单 → 审批 → 执行 → 审计」闭环。
-Go 1.25 + Echo 后端，React 19 + TypeScript 前端，平台元数据存 SQLite。
+Go 1.25 + Echo 后端，React 19 + TypeScript 前端，平台元数据存 PostgreSQL（见 [ADR-0009](docs/adr/0009-postgresql-platform-metadata.md)）。
 
 **当前发布等级 L0（仅隔离开发验证）**，存在未关闭的发布阻断项。改动前先读
 [docs/ROADMAP.md](docs/ROADMAP.md) 的阶段 0 与
@@ -9,7 +9,11 @@ Go 1.25 + Echo 后端，React 19 + TypeScript 前端，平台元数据存 SQLite
 
 ## 验证
 
+测试需要一个真实的 PostgreSQL——每个用例独占一个 schema，跑完即删。
+没有它任何 DB 相关测试都会直接 fail 而不是跳过。
+
 ```
+make dev-db        # 起测试用 PostgreSQL；未设 SQLFLOW_TEST_DSN 时用它的地址
 make verify        # lint + build + test，提交前跑这个
 make arch          # 只查分包依赖方向，秒级
 go test ./internal/ticket/      # 单包验证，比全量快一个数量级
@@ -17,8 +21,11 @@ golangci-lint run ./internal/... ./cmd/...
 cd web && npx tsc -b && npm run test
 ```
 
-`go test ./internal/...` 全量约 2 分钟，`internal/ticket` 单包就占 40 秒。
+`go test ./internal/...` 全量各包耗时合计约 13 分钟（并行执行墙钟更短），
+`internal/query` 单包就占 3.5 分钟，`internal/ticket` 占 2 分钟。
 改动集中时请只跑相关包，别用全量当默认反馈回路。
+
+备份走 `pg_dump`，`internal/ops` 的测试需要它在 PATH 上。
 
 ## 不可违反的不变量
 
@@ -90,7 +97,7 @@ internal/ops/        备份、仪表盘、Git 关联、前端性能指标
 
 共享
 internal/driver/     数据源端口 + 5 个驱动 + 注册表 + 连接池
-internal/db/         SQLite、ent、SQL migration
+internal/db/         PostgreSQL 连接、ent、SQL migration
 internal/model/      跨领域的持久化模型
 internal/authz/      Casbin 元组的唯一构造点
 internal/platform/   领域无关能力：auditlog、httpx、crypto、mask、metrics、sqlparser、sqlutil、perf
@@ -123,8 +130,13 @@ docs/                需求、架构、ADR、评审、路线图
   改表结构要同时评估 migration、ent schema 和测试夹具。
 - **`internal/connpool` 只剩一处用途**：ES 索引与字段浏览需要原生客户端。
   不要扩大它；其余路径一律走 `internal/driver.PoolManager`。
-- **平台 SQLite 是 `MaxOpenConns(1)`。** 持有 `rows` 游标期间发起写操作会阻塞
-  到 ctx 超时。先把游标读尽再写。
+- **动态拼接的 SQL 一律用 `?` 写片段，组装完成后调 `sqlutil.NumberPlaceholders`
+  统一编号。** PostgreSQL 的 `$N` 是位置量，手工数占位符出过一批缺陷——最严重的
+  一处让 `WHERE id = $1 AND user_id = $1` 拿模板 id 去比对用户 id，私有模板的
+  归属校验形同虚设。片段自己不知道前面有几个占位符，只有组装点知道。
+- **`LastInsertId` 在 PostgreSQL 上返回 0 且不报错。** 写入后取 id 一律用
+  `RETURNING id` + `QueryRow`。这是迁移期最危险的一类：不报错，外键指向不存在
+  的行，症状在很远的地方才浮现。
 - 浏览器级端到端验证目前缺失（Playwright 套件已移除）。
 - **前端单测套件对负载敏感**，`findByText` / `waitFor` 在并行压力下会超时，同一份
   代码连跑三次可能 0、2、48 个失败。这是既有问题（在重组前的树上同样复现），
