@@ -87,7 +87,7 @@ func TestDashboardHandler_GetFullStats(t *testing.T) {
 		`INSERT INTO datasources (name, type, host, port, status) VALUES ('ds1', 'mysql', 'localhost', 3306, 'active')`,
 	)
 	database.ExecContext(ctx,
-		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 1', datetime('now'))`,
+		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 1', now())`,
 	)
 	for i := 0; i < 3; i++ {
 		database.ExecContext(ctx,

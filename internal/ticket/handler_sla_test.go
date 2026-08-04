@@ -284,7 +284,7 @@ func TestSLAHandler_GetTicketSLAStatuses_Success(t *testing.T) {
 	e := echo.New()
 
 	// Seed one ticket with an SLA deadline set.
-	if _, err := d.Exec(`INSERT INTO tickets (submitter_id, datasource_id, sql_content, status, sla_status, sla_deadline) VALUES (1, 1, 'SELECT 1', 'PENDING_APPROVAL', 'normal', datetime('now','+1 hour'))`); err != nil {
+	if _, err := d.Exec(`INSERT INTO tickets (submitter_id, datasource_id, sql_content, status, sla_status, sla_deadline) VALUES (1, 1, 'SELECT 1', 'PENDING_APPROVAL', 'normal', (now() + interval '+1 hour'))`); err != nil {
 		t.Fatalf("seed ticket: %v", err)
 	}
 

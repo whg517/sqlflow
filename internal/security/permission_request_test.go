@@ -286,7 +286,7 @@ func TestPermReqService_ExpireOverdue(t *testing.T) {
 
 	// Force req1 into the past (expired), leave req2 still valid.
 	if _, err := db.ExecContext(ctx,
-		`UPDATE permission_requests SET expires_at = datetime('now','-1 hour') WHERE id = $1`,
+		`UPDATE permission_requests SET expires_at = (now() + interval '-1 hour') WHERE id = $1`,
 		req1.ID); err != nil {
 		t.Fatalf("force expiry: %v", err)
 	}

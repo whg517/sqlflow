@@ -583,7 +583,7 @@ func TestUpdateDataSource_UpdatedAtChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDataSource() error: %v", err)
 	}
-	// SQLite datetime('now') has second precision, so we check >= instead of strictly after
+	// SQLite now() has second precision, so we check >= instead of strictly after
 	if got.UpdatedAt.Before(originalUpdatedAt) {
 		t.Errorf("UpdatedAt = %v, want >= %v", got.UpdatedAt, originalUpdatedAt)
 	}

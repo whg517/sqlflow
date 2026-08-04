@@ -348,7 +348,7 @@ func (s *FeishuService) Update(ctx context.Context, id int64, req FeishuUpdateRe
 		return existing, nil
 	}
 
-	sets = append(sets, "updated_at = datetime('now')")
+	sets = append(sets, "updated_at = now()")
 	args = append(args, id)
 
 	query := "UPDATE feishu_webhooks SET " + strings.Join(sets, ", ") + " WHERE id = $1"
@@ -465,7 +465,7 @@ func (s *FeishuService) RecordDeadLetter(ctx context.Context, webhookID int64, p
 		// New dead letter
 		_, err := s.db.ExecContext(ctx,
 			`INSERT INTO feishu_dead_letters (webhook_id, payload, error_message, attempt_count, last_attempt_at)
-			 VALUES ($1, $2, $3, 1, datetime('now'))`,
+			 VALUES ($1, $2, $3, 1, now())`,
 			webhookID, payload, errMsg,
 		)
 		return err
@@ -477,7 +477,7 @@ func (s *FeishuService) RecordDeadLetter(ctx context.Context, webhookID int64, p
 
 	// Update existing
 	_, err = s.db.ExecContext(ctx,
-		`UPDATE feishu_dead_letters SET attempt_count = $1, error_message = $2, last_attempt_at = datetime('now')
+		`UPDATE feishu_dead_letters SET attempt_count = $1, error_message = $2, last_attempt_at = now()
 		 WHERE id = $3`,
 		attemptCount+1, errMsg, existingID,
 	)

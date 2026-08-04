@@ -31,7 +31,7 @@ func seedTestUser(t *testing.T, testDB *sql.DB, username, role string) int64 {
 	t.Helper()
 	var id int64
 	if err := testDB.QueryRow(
-		`INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES ($1, $2, $3, datetime('now'), datetime('now')) RETURNING id`,
+		`INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES ($1, $2, $3, now(), now()) RETURNING id`,
 		username, "$2a$10$testhash", role,
 	).Scan(&id); err != nil {
 		t.Fatalf("failed to seed user %s: %v", username, err)
@@ -44,7 +44,7 @@ func seedTestDatasource(t *testing.T, testDB *sql.DB, name string) int64 {
 	t.Helper()
 	var id int64
 	if err := testDB.QueryRow(
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active', datetime('now'), datetime('now')) RETURNING id`,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active', now(), now()) RETURNING id`,
 		name,
 	).Scan(&id); err != nil {
 		t.Fatalf("failed to seed datasource %s: %v", name, err)
@@ -644,7 +644,7 @@ func TestFullWorkflow(t *testing.T) {
 	encPass, _ := crypto.Encrypt("secret", encKey)
 	var dsID int64
 	if err := testDB.QueryRow(
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES ($1, 'mysql', 'localhost', 3306, 'root', $2, 'active', datetime('now'), datetime('now')) RETURNING id`,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at) VALUES ($1, 'mysql', 'localhost', 3306, 'root', $2, 'active', now(), now()) RETURNING id`,
 		"test-mysql", encPass).Scan(&dsID); err != nil {
 		t.Fatalf("seed datasource: %v", err)
 	}
@@ -785,7 +785,7 @@ func createTicketAtStatus(t *testing.T, testDB *sql.DB, svc *Service, userID, ds
 // Helper: directly set a ticket's status in the DB.
 func setTicketStatus(t *testing.T, testDB *sql.DB, ticketID int64, status model.TicketStatus) {
 	t.Helper()
-	_, err := testDB.Exec(`UPDATE tickets SET status = $1, updated_at = datetime('now') WHERE id = $2`, status, ticketID)
+	_, err := testDB.Exec(`UPDATE tickets SET status = $1, updated_at = now() WHERE id = $2`, status, ticketID)
 	if err != nil {
 		t.Fatalf("setTicketStatus(%d, %s) error: %v", ticketID, status, err)
 	}

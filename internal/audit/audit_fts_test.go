@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     ip_address          TEXT    NOT NULL DEFAULT '',
     ai_review_result    TEXT    NOT NULL DEFAULT '',
     ticket_id           INTEGER NOT NULL DEFAULT 0,
-    created_at          DATETIME NOT NULL DEFAULT (datetime('now'))
+    created_at          DATETIME NOT NULL DEFAULT (now())
 );
 	`)
 	if err != nil {
@@ -58,8 +58,8 @@ CREATE TABLE IF NOT EXISTS users (
     username     TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     role         TEXT NOT NULL DEFAULT 'developer',
-    created_at   DATETIME NOT NULL DEFAULT (datetime('now')),
-    updated_at   DATETIME NOT NULL DEFAULT (datetime('now'))
+    created_at   DATETIME NOT NULL DEFAULT (now()),
+    updated_at   DATETIME NOT NULL DEFAULT (now())
 );
 	`)
 	if err != nil {

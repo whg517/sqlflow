@@ -695,7 +695,7 @@ func (s *Service) UpdateRole(ctx context.Context, name, displayName, description
 	}
 	result, err := s.database.DB.ExecContext(ctx, `
 		UPDATE roles
-		SET display_name = $1, description = $2, status = $3, updated_at = datetime('now')
+		SET display_name = $1, description = $2, status = $3, updated_at = now()
 		WHERE name = $4`, displayName, strings.TrimSpace(description), status, name)
 	if err != nil {
 		return nil, fmt.Errorf("update role: %w", err)

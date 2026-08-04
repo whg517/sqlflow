@@ -380,7 +380,7 @@ func (s *WebhookSubscriptionService) Update(ctx context.Context, id int64, req U
 	}
 
 	_, err = s.db.ExecContext(ctx,
-		`UPDATE webhook_subscriptions SET name = $1, url = $2, events = $3, updated_at = datetime('now') WHERE id = $4`,
+		`UPDATE webhook_subscriptions SET name = $1, url = $2, events = $3, updated_at = now() WHERE id = $4`,
 		name, webURL, events, id)
 	if err != nil {
 		return nil, fmt.Errorf("更新订阅失败: %w", err)
@@ -427,7 +427,7 @@ func (s *WebhookSubscriptionService) Toggle(ctx context.Context, id int64, usern
 	}
 
 	_, err = s.db.ExecContext(ctx,
-		`UPDATE webhook_subscriptions SET enabled = $1, failure_count = $2, updated_at = datetime('now') WHERE id = $3`,
+		`UPDATE webhook_subscriptions SET enabled = $1, failure_count = $2, updated_at = now() WHERE id = $3`,
 		boolToInt(newEnabled), failureCount, id)
 	if err != nil {
 		return nil, fmt.Errorf("切换订阅状态失败: %w", err)
@@ -529,7 +529,7 @@ func (s *WebhookSubscriptionService) handleSuccess(subID int64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE webhook_subscriptions SET failure_count = 0, last_triggered_at = datetime('now'), updated_at = datetime('now') WHERE id = $1`,
+		`UPDATE webhook_subscriptions SET failure_count = 0, last_triggered_at = now(), updated_at = now() WHERE id = $1`,
 		subID)
 	if err != nil {
 		log.Printf("webhook: failed to update success for subscription %d: %v", subID, err)
@@ -546,7 +546,7 @@ func (s *WebhookSubscriptionService) handleFailure(subID int64) {
 		Enabled      int
 	}
 	err := s.db.QueryRowContext(ctx,
-		`UPDATE webhook_subscriptions SET failure_count = failure_count + 1, updated_at = datetime('now') WHERE id = $1
+		`UPDATE webhook_subscriptions SET failure_count = failure_count + 1, updated_at = now() WHERE id = $1
 		 RETURNING failure_count, enabled`, subID).Scan(&result.FailureCount, &result.Enabled)
 	if err != nil {
 		log.Printf("webhook: failed to increment failure for subscription %d: %v", subID, err)
@@ -555,7 +555,7 @@ func (s *WebhookSubscriptionService) handleFailure(subID int64) {
 
 	if result.FailureCount >= MaxConsecutiveFailures && result.Enabled == 1 {
 		_, err = s.db.ExecContext(ctx,
-			`UPDATE webhook_subscriptions SET enabled = FALSE, updated_at = datetime('now') WHERE id = $1 AND enabled = TRUE`,
+			`UPDATE webhook_subscriptions SET enabled = FALSE, updated_at = now() WHERE id = $1 AND enabled = TRUE`,
 			subID)
 		if err != nil {
 			log.Printf("webhook: failed to auto-disable subscription %d: %v", subID, err)
@@ -621,7 +621,7 @@ func (s *WebhookSubscriptionService) sendWebhookRequest(targetURL, secret string
 
 func (s *WebhookSubscriptionService) writeAuditLog(ctx context.Context, action string, userID int64, username, details string) {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO audit_logs (user_id, action, ip_address, error_message, created_at) VALUES ($1, $2, '', $3, datetime('now'))`,
+		`INSERT INTO audit_logs (user_id, action, ip_address, error_message, created_at) VALUES ($1, $2, '', $3, now())`,
 		userID, action, fmt.Sprintf("%s — %s", username, details))
 	if err != nil {
 		log.Printf("webhook: failed to write audit log: %v", err)

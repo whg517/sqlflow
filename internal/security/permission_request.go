@@ -357,7 +357,7 @@ func (s *RequestService) MyActiveRequests(ctx context.Context, userID int64) ([]
 		 LEFT JOIN users u1 ON u1.id = r.applicant_id
 		 LEFT JOIN users u2 ON u2.id = r.approver_id
 		 LEFT JOIN datasources ds ON ds.id = r.datasource_id
-		 WHERE r.applicant_id = $1 AND r.status = 'APPROVED' AND r.expires_at > datetime('now')
+		 WHERE r.applicant_id = $1 AND r.status = 'APPROVED' AND r.expires_at > now()
 		 ORDER BY r.expires_at ASC`,
 		userID,
 	)

@@ -42,15 +42,15 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     ip_address          TEXT    NOT NULL DEFAULT '',
     ai_review_result    TEXT    NOT NULL DEFAULT '',
     ticket_id           INTEGER NOT NULL DEFAULT 0,
-    created_at          DATETIME NOT NULL DEFAULT (datetime('now'))
+    created_at          DATETIME NOT NULL DEFAULT (now())
 );
 CREATE TABLE IF NOT EXISTS users (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     username     TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     role         TEXT NOT NULL DEFAULT 'developer',
-    created_at   DATETIME NOT NULL DEFAULT (datetime('now')),
-    updated_at   DATETIME NOT NULL DEFAULT (datetime('now'))
+    created_at   DATETIME NOT NULL DEFAULT (now()),
+    updated_at   DATETIME NOT NULL DEFAULT (now())
 );
 CREATE TABLE IF NOT EXISTS tickets (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,8 +68,8 @@ CREATE TABLE IF NOT EXISTS tickets (
     review_comment   TEXT    NOT NULL DEFAULT '',
     scheduled_at     DATETIME,
     executed_at      DATETIME,
-    created_at       DATETIME NOT NULL DEFAULT (datetime('now')),
-    updated_at       DATETIME NOT NULL DEFAULT (datetime('now'))
+    created_at       DATETIME NOT NULL DEFAULT (now()),
+    updated_at       DATETIME NOT NULL DEFAULT (now())
 );
 	`)
 	if err != nil {
@@ -118,7 +118,7 @@ func seedTickets(t *testing.T, db *sql.DB, count int) {
 	for i := 0; i < count; i++ {
 		_, err := db.Exec(
 			`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, created_at, updated_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, datetime('now'), datetime('now'))`,
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now())`,
 			1, i%2+1, fmt.Sprintf("db_%d", i%2+1),
 			fmt.Sprintf("ALTER TABLE users ADD COLUMN col_%d INT", i),
 			"ALTER TABLE users ADD ...",

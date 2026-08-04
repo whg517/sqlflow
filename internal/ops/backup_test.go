@@ -46,6 +46,9 @@ func setupBackupServiceTest(t *testing.T) (*BackupService, string, func()) {
 }
 
 func TestBackupService_RunBackup(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	svc, backupDir, cleanup := setupBackupServiceTest(t)
 	defer cleanup()
 
@@ -75,6 +78,9 @@ func TestBackupService_RunBackup(t *testing.T) {
 }
 
 func TestBackupService_RunBackup_Compressed(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 	backupDir := filepath.Join(tmpDir, "backups")
@@ -127,6 +133,9 @@ func TestBackupService_RunBackup_Compressed(t *testing.T) {
 }
 
 func TestBackupService_ListBackups(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	svc, _, cleanup := setupBackupServiceTest(t)
 	defer cleanup()
 
@@ -165,6 +174,9 @@ func TestBackupService_ListBackups(t *testing.T) {
 }
 
 func TestBackupService_DeleteBackup(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	svc, _, cleanup := setupBackupServiceTest(t)
 	defer cleanup()
 
@@ -193,6 +205,9 @@ func TestBackupService_DeleteBackup(t *testing.T) {
 }
 
 func TestBackupService_DeleteBackup_NotFound(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	svc, _, cleanup := setupBackupServiceTest(t)
 	defer cleanup()
 
@@ -203,6 +218,9 @@ func TestBackupService_DeleteBackup_NotFound(t *testing.T) {
 }
 
 func TestBackupService_DeleteBackup_InvalidFilename(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	svc, _, cleanup := setupBackupServiceTest(t)
 	defer cleanup()
 
@@ -227,6 +245,9 @@ func TestBackupService_DeleteBackup_InvalidFilename(t *testing.T) {
 }
 
 func TestBackupService_Rotation(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 	backupDir := filepath.Join(tmpDir, "backups")
@@ -270,6 +291,9 @@ func TestBackupService_Rotation(t *testing.T) {
 }
 
 func TestBackupService_BackupDir(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	svc, backupDir, cleanup := setupBackupServiceTest(t)
 	defer cleanup()
 
@@ -279,6 +303,9 @@ func TestBackupService_BackupDir(t *testing.T) {
 }
 
 func TestBackupService_Start_Disabled(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
@@ -307,6 +334,9 @@ func TestBackupService_Start_Disabled(t *testing.T) {
 }
 
 func TestBackupService_Stop(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	svc, _, cleanup := setupBackupServiceTest(t)
 	defer cleanup()
 
@@ -315,6 +345,9 @@ func TestBackupService_Stop(t *testing.T) {
 }
 
 func TestBackupInfo(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	info := BackupInfo{
 		Filename:   "sqlflow-20240101-120000.db",
 		Filepath:   "/backups/sqlflow-20240101-120000.db",

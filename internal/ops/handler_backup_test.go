@@ -48,6 +48,9 @@ func setupBackupHandlerTest(t *testing.T) (*echo.Echo, *BackupService, *BackupHa
 }
 
 func TestBackupHandler_TriggerBackup(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	e, _, h, _ := setupBackupHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/backups", nil)
@@ -81,6 +84,9 @@ func TestBackupHandler_TriggerBackup(t *testing.T) {
 }
 
 func TestBackupHandler_ListBackups(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	e, backupSvc, h, backupDir := setupBackupHandlerTest(t)
 
 	// Create a backup manually
@@ -111,6 +117,9 @@ func TestBackupHandler_ListBackups(t *testing.T) {
 }
 
 func TestBackupHandler_ListBackups_Empty(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	e, _, h, _ := setupBackupHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/backups", nil)
@@ -138,6 +147,9 @@ func TestBackupHandler_ListBackups_Empty(t *testing.T) {
 }
 
 func TestBackupHandler_DeleteBackup(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	e, backupSvc, h, _ := setupBackupHandlerTest(t)
 
 	// Create a backup first
@@ -189,6 +201,9 @@ func TestBackupHandler_DeleteBackup(t *testing.T) {
 }
 
 func TestBackupHandler_DeleteBackup_EmptyFilename(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	e, _, h, _ := setupBackupHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/backups/", nil)
@@ -207,6 +222,9 @@ func TestBackupHandler_DeleteBackup_EmptyFilename(t *testing.T) {
 }
 
 func TestBackupHandler_DeleteBackup_NotFound(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	e, _, h, _ := setupBackupHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/backups/sqlflow-nonexistent.db", nil)
@@ -225,6 +243,9 @@ func TestBackupHandler_DeleteBackup_NotFound(t *testing.T) {
 }
 
 func TestBackupHandler_DownloadBackup(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	e, backupSvc, h, _ := setupBackupHandlerTest(t)
 
 	// Create a backup first
@@ -268,6 +289,9 @@ func TestBackupHandler_DownloadBackup(t *testing.T) {
 }
 
 func TestBackupHandler_DownloadBackup_NotFound(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	e, _, h, _ := setupBackupHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/backups/sqlflow-nonexistent.db/download", nil)
@@ -286,6 +310,9 @@ func TestBackupHandler_DownloadBackup_NotFound(t *testing.T) {
 }
 
 func TestBackupHandler_DownloadBackup_EmptyFilename(t *testing.T) {
+	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
+		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
+
 	e, _, h, _ := setupBackupHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/backups//download", nil)

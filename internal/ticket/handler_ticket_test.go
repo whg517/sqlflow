@@ -75,7 +75,7 @@ func setTicketStatusDB(t *testing.T, database *db.DB, ticketID int64, status mod
 	t.Helper()
 	ctx := testutil.ContextWithTimeout(t)
 	_, err := database.ExecContext(ctx,
-		`UPDATE tickets SET status = $1, updated_at = datetime('now') WHERE id = $2`,
+		`UPDATE tickets SET status = $1, updated_at = now() WHERE id = $2`,
 		status, ticketID,
 	)
 	if err != nil {

@@ -293,7 +293,7 @@ func (s *TokenService) ValidateTokenWithRole(ctx context.Context, plainToken str
 	// Update usage (best-effort, don't fail auth on update error)
 	// RAW_SQL: atomic increment via raw SQL (use_count = use_count + 1)
 	_, _ = s.database.DB.ExecContext(ctx,
-		`UPDATE api_tokens SET last_used_at = datetime('now'), use_count = use_count + 1, updated_at = datetime('now') WHERE token_hash = $1`,
+		`UPDATE api_tokens SET last_used_at = now(), use_count = use_count + 1, updated_at = now() WHERE token_hash = $1`,
 		tokenHash,
 	)
 

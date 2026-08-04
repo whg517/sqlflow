@@ -90,7 +90,7 @@ func (s *DashboardService) GetStats(ctx context.Context) (*DashboardStats, error
 	}
 
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM query_history WHERE created_at >= datetime('now', '-7 days')`,
+		`SELECT COUNT(*) FROM query_history WHERE created_at >= (now() + interval '-7 days')`,
 	).Scan(&stats.RecentQueries7d)
 	if err != nil {
 		return nil, fmt.Errorf("query recent queries: %w", err)
@@ -169,7 +169,7 @@ func (s *DashboardService) GetFullStats(ctx context.Context, startDate, endDate 
 	}
 
 	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM query_history WHERE created_at >= datetime('now', '-7 days')`,
+		`SELECT COUNT(*) FROM query_history WHERE created_at >= (now() + interval '-7 days')`,
 	).Scan(&stats.RecentQueries7d)
 	if err != nil {
 		return nil, fmt.Errorf("query recent queries: %w", err)
@@ -256,7 +256,7 @@ func (s *DashboardService) GetFullStats(ctx context.Context, startDate, endDate 
 // getSparkline returns 7 daily counts for the given query.
 // The query MUST have exactly 2 placeholders: start_time and end_time.
 //
-// 注意：使用 UTC 时间计算日期边界，与 SQLite datetime('now') 一致。
+// 注意：使用 UTC 时间计算日期边界，与 SQLite now() 一致。
 // 若用本地时间，在非 UTC 时区会导致"今天"的数据落入昨天的窗口（跨日错位）。
 func (s *DashboardService) getSparkline(ctx context.Context, query string) ([]int, error) {
 	result := make([]int, 7)
@@ -283,7 +283,7 @@ func (s *DashboardService) getSparkline(ctx context.Context, query string) ([]in
 // getQueryTrend returns daily query counts within the given date range.
 // Defaults to last 7 days if no dates provided.
 func (s *DashboardService) getQueryTrend(ctx context.Context, startDate, endDate string) ([]DailyCount, error) {
-	// Default: last 7 days (UTC, 与 SQLite datetime('now') 一致)
+	// Default: last 7 days (UTC, 与 SQLite now() 一致)
 	if startDate == "" {
 		startDate = time.Now().UTC().AddDate(0, 0, -6).Format("2006-01-02")
 	}
@@ -302,13 +302,17 @@ func (s *DashboardService) getQueryTrend(ctx context.Context, startDate, endDate
 	}
 
 	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT DATE(created_at) as day, COUNT(*) as cnt
+		// to_char rather than DATE(): DATE() yields a date value, and the
+		// destination here is a string used as a map key. The bounds are real
+		// timestamps rather than formatted text, so the comparison does not
+		// depend on how the column happens to render.
+		`SELECT to_char(created_at, 'YYYY-MM-DD') as day, COUNT(*) as cnt
 		 FROM query_history
 		 WHERE created_at >= $1 AND created_at < $2
-		 GROUP BY DATE(created_at)
+		 GROUP BY to_char(created_at, 'YYYY-MM-DD')
 		 ORDER BY day`,
-		startDate+" 00:00:00",
-		parsedEnd.AddDate(0, 0, 1).Format("2006-01-02")+" 00:00:00",
+		parsedStart,
+		parsedEnd.AddDate(0, 0, 1),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query trend: %w", err)

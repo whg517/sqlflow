@@ -73,7 +73,7 @@ func TestDashboardService_GetStats_WithData(t *testing.T) {
 
 	// Seed query history
 	testDB.ExecContext(ctx,
-		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 1', datetime('now'))`,
+		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 1', now())`,
 	)
 
 	// Seed tickets in various statuses
@@ -160,7 +160,7 @@ func TestDashboardService_GetFullStats_WithData(t *testing.T) {
 	// Seed query history today
 	for i := 0; i < 5; i++ {
 		testDB.ExecContext(ctx,
-			`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 1', datetime('now'))`)
+			`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 1', now())`)
 	}
 
 	// Seed tickets in different statuses
@@ -174,7 +174,7 @@ func TestDashboardService_GetFullStats_WithData(t *testing.T) {
 	// Seed audit logs
 	for i := 0; i < 15; i++ {
 		testDB.ExecContext(ctx,
-			`INSERT INTO audit_logs (user_id, action, ip_address, created_at) VALUES (1, 'query', '127.0.0.1', datetime('now'))`)
+			`INSERT INTO audit_logs (user_id, action, ip_address, created_at) VALUES (1, 'query', '127.0.0.1', now())`)
 	}
 
 	stats, err := svc.GetFullStats(ctx, "", "")
@@ -233,14 +233,14 @@ func TestDashboardService_GetFullStats_DateRange(t *testing.T) {
 
 	// Seed query history 3 days ago
 	testDB.ExecContext(ctx,
-		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 1', datetime('now', '-3 days'))`)
+		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 1', (now() + interval '-3 days'))`)
 	testDB.ExecContext(ctx,
-		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 2', datetime('now', '-3 days'))`)
+		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 2', (now() + interval '-3 days'))`)
 	testDB.ExecContext(ctx,
-		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 3', datetime('now'))`)
+		`INSERT INTO query_history (user_id, datasource_id, sql_content, created_at) VALUES (1, 1, 'SELECT 3', now())`)
 
 	// Query with specific date range (5 days).
-	// NOTE: the seeded rows above use SQLite datetime('now') which is UTC, so
+	// NOTE: the seeded rows above use SQLite now() which is UTC, so
 	// compute the date bounds in UTC too — otherwise the test is flaky in any
 	// timezone where local "today" differs from UTC "today".
 	now := time.Now().UTC()

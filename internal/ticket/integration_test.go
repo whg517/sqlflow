@@ -29,7 +29,7 @@ import (
 // setIntegrationTicketStatus directly sets a ticket's status in the DB.
 func setIntegrationTicketStatus(t *testing.T, testDB *sql.DB, ticketID int64, status model.TicketStatus) {
 	t.Helper()
-	_, err := testDB.Exec(`UPDATE tickets SET status = $1, updated_at = datetime('now') WHERE id = $2`, status, ticketID)
+	_, err := testDB.Exec(`UPDATE tickets SET status = $1, updated_at = now() WHERE id = $2`, status, ticketID)
 	if err != nil {
 		t.Fatalf("setTicketStatus(%d, %s): %v", ticketID, status, err)
 	}
@@ -561,7 +561,7 @@ func TestIntegration_SensitiveTableAffectsAIReview(t *testing.T) {
 	// Create a mask rule that marks "users" as sensitive via mask_rules table
 	// (AI review checks mask_rules for sensitive table detection)
 	_, err := testDB.Exec(
-		`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type, created_at, updated_at) VALUES ($1, '', 'users', 'phone', 'phone', datetime('now'), datetime('now'))`,
+		`INSERT INTO mask_rules (datasource_id, database, table_name, field, mask_type, created_at, updated_at) VALUES ($1, '', 'users', 'phone', 'phone', now(), now())`,
 		dsID,
 	)
 	if err != nil {
