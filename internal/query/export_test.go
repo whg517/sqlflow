@@ -10,7 +10,6 @@ import (
 	"github.com/whg517/sqlflow/internal/audit"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/testutil"
-	_ "modernc.org/sqlite"
 )
 
 // newExportTestDB creates an in-memory SQLite database with audit_logs, tickets, and users schemas.

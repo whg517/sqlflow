@@ -12,33 +12,18 @@ import (
 	"github.com/whg517/sqlflow/internal/audit"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/testutil"
-	_ "modernc.org/sqlite"
 )
 
+// newExportAsyncTestDB returns a real migrated schema plus a scratch directory
+// for the exported files.
+//
+// It used to hand-write CREATE TABLE for four production tables in a temp-file
+// SQLite database. Those definitions had already drifted — the DDL carried
+// DEFAULT now(), which SQLite has no such function for — and a schema written
+// out by hand cannot catch the column rename it exists to protect against.
 func newExportAsyncTestDB(t *testing.T) (*sql.DB, string) {
 	t.Helper()
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "test.db")
-	dsn := "file:" + dbPath + "?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
-	db, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	db.SetMaxOpenConns(1)
-	t.Cleanup(func() { db.Close() })
-
-	// Create necessary tables
-	_, err = db.Exec(`
-CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'developer', created_at DATETIME NOT NULL DEFAULT (now()), updated_at DATETIME NOT NULL DEFAULT (now()));
-CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, action TEXT NOT NULL DEFAULT '', datasource_id INTEGER NOT NULL DEFAULT 0, database TEXT NOT NULL DEFAULT '', sql_content TEXT NOT NULL DEFAULT '', sql_summary TEXT NOT NULL DEFAULT '', result_rows INTEGER NOT NULL DEFAULT 0, affected_rows INTEGER NOT NULL DEFAULT 0, execution_time_ms INTEGER NOT NULL DEFAULT 0, error_message TEXT NOT NULL DEFAULT '', desensitized_fields TEXT NOT NULL DEFAULT '', ip_address TEXT NOT NULL DEFAULT '', ai_review_result TEXT NOT NULL DEFAULT '', ticket_id INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL DEFAULT (now()));
-CREATE TABLE IF NOT EXISTS tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, submitter_id INTEGER NOT NULL, datasource_id INTEGER NOT NULL, database TEXT NOT NULL DEFAULT '', sql_content TEXT NOT NULL, sql_summary TEXT NOT NULL DEFAULT '', db_type TEXT NOT NULL DEFAULT 'mysql', change_reason TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'SUBMITTED', risk_level TEXT NOT NULL DEFAULT '', ai_review_result TEXT NOT NULL DEFAULT '', reviewer_id INTEGER NOT NULL DEFAULT 0, review_comment TEXT NOT NULL DEFAULT '', scheduled_at DATETIME, executed_at DATETIME, created_at DATETIME NOT NULL DEFAULT (now()), updated_at DATETIME NOT NULL DEFAULT (now()));
-CREATE TABLE IF NOT EXISTS export_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, username TEXT NOT NULL DEFAULT '', export_type TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', filename TEXT NOT NULL DEFAULT '', file_path TEXT NOT NULL DEFAULT '', file_format TEXT NOT NULL DEFAULT '', total_rows INTEGER NOT NULL DEFAULT 0, file_bytes INTEGER NOT NULL DEFAULT 0, filters_json TEXT NOT NULL DEFAULT '{}', error_msg TEXT NOT NULL DEFAULT '', created_at DATETIME NOT NULL DEFAULT (now()), completed_at DATETIME);
-	`)
-	if err != nil {
-		t.Fatalf("create tables: %v", err)
-	}
-
-	return db, dir
+	return testutil.NewDB(t).DB, t.TempDir()
 }
 
 func TestExportAsyncService_CreateAndRetrieve(t *testing.T) {

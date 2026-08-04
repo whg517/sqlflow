@@ -410,7 +410,10 @@ func CheckSensitiveTables(ctx context.Context, db *sql.DB, tables []string, data
 	args = append(args, datasourceID)
 
 	query := sqlutil.NumberPlaceholders(fmt.Sprintf(
-		"SELECT DISTINCT table_name FROM mask_rules WHERE table_name IN (%s) AND datasource_id = ?",
+		// Ordered because the result reaches the user as a warning list, and an
+		// unordered DISTINCT lets the same query render its tables differently
+		// from one call to the next.
+		"SELECT DISTINCT table_name FROM mask_rules WHERE table_name IN (%s) AND datasource_id = ? ORDER BY table_name",
 		strings.Join(placeholders, ","),
 	))
 

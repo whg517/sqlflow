@@ -10,7 +10,6 @@ import (
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 	"github.com/whg517/sqlflow/internal/testutil"
-	_ "modernc.org/sqlite"
 )
 
 // newAuditTestDB creates an in-memory SQLite database with the audit_logs schema.

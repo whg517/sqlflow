@@ -23,10 +23,10 @@ func TestTemplateServiceRenderParameterizedSQL(t *testing.T) {
 		wantParams []interface{}
 	}{
 		{
-			name:       "mysql",
-			dbType:     "mysql",
-			sql:        "SELECT * FROM users WHERE id = {{ id }} AND status = {{status: active}}",
-			params:     map[string]string{"id": "42"},
+			name:   "mysql",
+			dbType: "mysql",
+			sql:    "SELECT * FROM users WHERE id = {{ id }} AND status = {{status: active}}",
+			params: map[string]string{"id": "42"},
 			// MySQL binds positionally: the placeholder style is the target
 			// datasource's, not the platform store's.
 			wantSQL:    "SELECT * FROM users WHERE id = ? AND status = ?",
