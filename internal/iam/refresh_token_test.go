@@ -2,36 +2,18 @@ package iam
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // setupRefreshTokenTest creates a test database with a user for refresh token tests.
 func setupRefreshTokenTest(t *testing.T) (*db.DB, int64) {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("failed to open test database: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("failed to migrate: %v", err)
-	}
-
-	// Insert a test user
-	result, err := database.Exec("INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)", "testuser", "hash", "developer")
-	if err != nil {
-		t.Fatalf("insert user: %v", err)
-	}
-	userID, _ := result.LastInsertId()
-
+	database := testutil.NewDB(t)
+	userID := testutil.SeedUser(t, database.DB, "testuser", "developer")
 	return database, userID
 }
 
