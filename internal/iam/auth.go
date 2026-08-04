@@ -2,13 +2,13 @@ package iam
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
+	entRole "github.com/whg517/sqlflow/internal/db/ent/role"
 	entUser "github.com/whg517/sqlflow/internal/db/ent/user"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/sqlutil"
@@ -172,40 +172,28 @@ func (s *Service) UserCount(ctx context.Context) (int, error) {
 }
 
 // ListUsers returns a paginated list of users.
-// RAW_SQL: pagination helper uses raw SQL for LIMIT/OFFSET with count.
-// This will be migrated to ent pagination in a future cleanup.
 func (s *Service) ListUsers(ctx context.Context, page, pageSize int64) ([]*model.User, int64, error) {
 	p := sqlutil.ParsePagination(int(page), int(pageSize))
 
-	var total int64
-	countSQL := sqlutil.PaginatedCountSQL("users", "")
-	if err := s.database.DB.QueryRowContext(ctx, countSQL).Scan(&total); err != nil {
+	total, err := s.client.User.Query().Count(ctx)
+	if err != nil {
 		return nil, 0, fmt.Errorf("count users: %w", err)
 	}
 
-	querySQL := sqlutil.PaginatedQuerySQL(
-		"SELECT id, username, password_hash, role, created_at, updated_at",
-		"users", "", "id", p,
-	)
-	queryArgs := sqlutil.AppendLimitArgs(nil, p)
-	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.client.User.Query().
+		Order(ent.Asc(entUser.FieldID)).
+		Limit(p.PageSize).
+		Offset(p.Offset).
+		All(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query users: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
-	var users []*model.User
-	for rows.Next() {
-		u := &model.User{}
-		if err := rows.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt); err != nil {
-			return nil, 0, fmt.Errorf("scan user: %w", err)
-		}
-		users = append(users, u)
+	users := make([]*model.User, 0, len(rows))
+	for _, u := range rows {
+		users = append(users, entUserToModel(u))
 	}
-	if err := rows.Err(); err != nil {
-		return nil, 0, fmt.Errorf("iterate users: %w", err)
-	}
-	return users, total, nil
+	return users, int64(total), nil
 }
 
 // UpdateUserRole updates a user's role. Returns an error if the user does not exist.
@@ -226,14 +214,22 @@ func (s *Service) UpdateUserRole(ctx context.Context, userID int64, role string)
 }
 
 // ValidateRole verifies that a persisted role exists and is active.
+//
+// A missing role and a disabled one are the same answer to the caller: the role
+// cannot be assigned. Only a database failure is worth distinguishing.
 func (s *Service) ValidateRole(ctx context.Context, role string) error {
-	var status string
-	err := s.database.DB.QueryRowContext(ctx, `SELECT status FROM roles WHERE name = $1`, role).Scan(&status)
-	if errors.Is(err, sql.ErrNoRows) || status != "active" {
+	status, err := s.client.Role.Query().
+		Where(entRole.NameEQ(role)).
+		Select(entRole.FieldStatus).
+		String(ctx)
+	if ent.IsNotFound(err) {
 		return ErrInvalidRole
 	}
 	if err != nil {
 		return fmt.Errorf("validate role: %w", err)
+	}
+	if status != "active" {
+		return ErrInvalidRole
 	}
 	return nil
 }

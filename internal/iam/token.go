@@ -4,17 +4,19 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
+
+	entsql "entgo.io/ent/dialect/sql"
 
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
 	entToken "github.com/whg517/sqlflow/internal/db/ent/apitoken"
+	entRole "github.com/whg517/sqlflow/internal/db/ent/role"
+	entUser "github.com/whg517/sqlflow/internal/db/ent/user"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 )
@@ -126,94 +128,115 @@ func (s *TokenService) CreateToken(ctx context.Context, userID int64, name, desc
 	return plainToken, token, nil
 }
 
-// GetTokenByID retrieves a token by its ID.
-// RAW_SQL: LEFT JOIN users for username — no ent edge defined for this relation.
-func (s *TokenService) GetTokenByID(ctx context.Context, id int64) (*model.APIToken, error) {
-	t := &model.APIToken{}
-	var isActive bool
-	var lastUsedAt sql.NullTime
-	var username sql.NullString
-
-	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT t.id, t.user_id, u.username, t.name, t.token_hash, t.token_prefix,
-		        t.scopes, t.expires_at, t.last_used_at, t.use_count, t.is_active,
-		        t.description, t.created_at, t.updated_at
-		 FROM api_tokens t
-		 LEFT JOIN users u ON u.id = t.user_id
-		 WHERE t.id = $1`,
-		id,
-	).Scan(&t.ID, &t.UserID, &username, &t.Name, &t.TokenHash, &t.TokenPrefix,
-		&t.Scopes, &t.ExpiresAt, &lastUsedAt, &t.UseCount, &isActive,
-		&t.Description, &t.CreatedAt, &t.UpdatedAt)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrTokenNotFound
-		}
-		return nil, fmt.Errorf("query token: %w", err)
-	}
-
-	t.IsActive = isActive
-	if username.Valid {
-		t.Username = username.String
-	}
-	if lastUsedAt.Valid {
-		t.LastUsedAt = &lastUsedAt.Time
-	}
-
-	return t, nil
+// tokenRow is an api_tokens row with the owner's username joined on.
+//
+// The username is not a token column and there is no ent edge to users, so it
+// arrives through a join and lands here rather than in the generated entity.
+type tokenRow struct {
+	ID          int64      `json:"id"`
+	UserID      int64      `json:"user_id"`
+	Username    string     `json:"username"`
+	Name        string     `json:"name"`
+	TokenHash   string     `json:"token_hash"`
+	TokenPrefix string     `json:"token_prefix"`
+	Scopes      string     `json:"scopes"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	LastUsedAt  *time.Time `json:"last_used_at"`
+	UseCount    int64      `json:"use_count"`
+	IsActive    bool       `json:"is_active"`
+	Description string     `json:"description"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
-// ListTokens returns all active tokens for a user.
-// RAW_SQL: LEFT JOIN users for username — no ent edge defined for this relation.
-func (s *TokenService) ListTokens(ctx context.Context, userID int64) ([]*model.APIToken, error) {
-	query := `SELECT t.id, t.user_id, COALESCE(u.username, ''), t.name, t.token_hash, t.token_prefix,
-			        t.scopes, t.expires_at, t.last_used_at, t.use_count, t.is_active,
-			        COALESCE(t.description, ''), t.created_at, t.updated_at
-			 FROM api_tokens t
-			 LEFT JOIN users u ON u.id = t.user_id
-			 WHERE t.user_id = $1
-			 ORDER BY t.created_at DESC`
+func (r tokenRow) toModel() *model.APIToken {
+	return &model.APIToken{
+		ID: r.ID, UserID: r.UserID, Username: r.Username, Name: r.Name,
+		TokenHash: r.TokenHash, TokenPrefix: r.TokenPrefix, Scopes: r.Scopes,
+		ExpiresAt: r.ExpiresAt, LastUsedAt: r.LastUsedAt, UseCount: r.UseCount,
+		IsActive: r.IsActive, Description: r.Description,
+		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+	}
+}
 
-	rows, err := s.database.DB.QueryContext(ctx, query, userID)
+// selectTokensWithUsername joins users and selects every token column plus the
+// owner's username.
+//
+// Every listing path needs the same shape, and the column list comes from ent's
+// own metadata so adding a token field cannot leave one of them behind.
+func selectTokensWithUsername(sel *entsql.Selector) {
+	u := entsql.Table(entUser.Table).As("u")
+	sel.LeftJoin(u).On(sel.C(entToken.FieldUserID), u.C(entUser.FieldID))
+	cols := make([]string, 0, len(entToken.Columns)+1)
+	for _, c := range entToken.Columns {
+		cols = append(cols, sel.C(c))
+	}
+	sel.Select(cols...).AppendSelect(entsql.As("COALESCE("+u.C(entUser.FieldUsername)+", '')", "username"))
+}
+
+// GetTokenByID retrieves a token by its ID.
+func (s *TokenService) GetTokenByID(ctx context.Context, id int64) (*model.APIToken, error) {
+	var rows []tokenRow
+	err := s.client.APIToken.Query().
+		Where(entToken.IDEQ(int(id))).
+		Modify(selectTokensWithUsername).
+		Scan(ctx, &rows)
+	if err != nil {
+		return nil, fmt.Errorf("query token: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, ErrTokenNotFound
+	}
+	return rows[0].toModel(), nil
+}
+
+// ListTokens returns all tokens for a user.
+func (s *TokenService) ListTokens(ctx context.Context, userID int64) ([]*model.APIToken, error) {
+	var rows []tokenRow
+	err := s.client.APIToken.Query().
+		Where(entToken.UserIDEQ(userID)).
+		Modify(func(sel *entsql.Selector) {
+			selectTokensWithUsername(sel)
+			sel.OrderBy(entsql.Desc(sel.C(entToken.FieldCreatedAt)))
+		}).
+		Scan(ctx, &rows)
 	if err != nil {
 		return nil, fmt.Errorf("query tokens: %w", err)
 	}
-	defer rows.Close()
+	return tokenRowsToModels(rows), nil
+}
 
-	return scanTokens(rows)
+// tokenRowsToModels converts scanned rows to the API shape.
+func tokenRowsToModels(rows []tokenRow) []*model.APIToken {
+	tokens := make([]*model.APIToken, 0, len(rows))
+	for _, r := range rows {
+		tokens = append(tokens, r.toModel())
+	}
+	return tokens
 }
 
 // ListAllTokens returns all tokens (admin view).
-// RAW_SQL: LEFT JOIN users for username — no ent edge defined for this relation.
 func (s *TokenService) ListAllTokens(ctx context.Context, page, pageSize int) ([]*model.APIToken, int64, error) {
 	p := sqlutil.ParsePagination(page, pageSize)
 
-	var total int64
-	count, err := s.client.APIToken.Query().Count(ctx)
+	total, err := s.client.APIToken.Query().Count(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count tokens: %w", err)
 	}
-	total = int64(count)
 
-	querySQL := sqlutil.PaginatedQuerySQL(
-		`SELECT t.id, t.user_id, COALESCE(u.username, ''), t.name, t.token_hash, t.token_prefix,
-		        t.scopes, t.expires_at, t.last_used_at, t.use_count, t.is_active,
-		        COALESCE(t.description, ''), t.created_at, t.updated_at`,
-		"api_tokens t LEFT JOIN users u ON u.id = t.user_id",
-		"", "t.id", p,
-	)
-	queryArgs := sqlutil.AppendLimitArgs(nil, p)
-	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
+	var rows []tokenRow
+	err = s.client.APIToken.Query().
+		Modify(func(sel *entsql.Selector) {
+			selectTokensWithUsername(sel)
+			sel.OrderBy(entsql.Asc(sel.C(entToken.FieldID))).
+				Limit(p.PageSize).
+				Offset(p.Offset)
+		}).
+		Scan(ctx, &rows)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query tokens: %w", err)
 	}
-	defer rows.Close()
-
-	tokens, err := scanTokens(rows)
-	if err != nil {
-		return nil, 0, err
-	}
-	return tokens, total, nil
+	return tokenRowsToModels(rows), int64(total), nil
 }
 
 // RevokeToken deactivates a token.
@@ -262,40 +285,63 @@ func (s *TokenService) ValidateTokenWithRole(ctx context.Context, plainToken str
 	hash := sha256.Sum256([]byte(plainToken))
 	tokenHash := hex.EncodeToString(hash[:])
 
-	var isActive bool
-	var scopeStr string
-	var expiresAt time.Time
-	var lastUsedAt sql.NullTime
-
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT t.user_id, COALESCE(u.username, ''), COALESCE(u.role, ''), t.scopes, t.expires_at, t.is_active, t.last_used_at
-		 FROM api_tokens t
-		 JOIN users u ON u.id = t.user_id
-		 JOIN roles r ON r.name = u.role AND r.status = 'active'
-		 WHERE t.token_hash = $1`,
-		tokenHash,
-	).Scan(&userID, &username, &role, &scopeStr, &expiresAt, &isActive, &lastUsedAt)
+	// The role is read through a join on roles so that a disabled role denies
+	// the token immediately; carrying the role from users alone would let a
+	// deactivated role keep authenticating until someone reissued the token.
+	var rows []struct {
+		UserID    int64     `json:"user_id"`
+		Username  string    `json:"username"`
+		Role      string    `json:"role"`
+		Scopes    string    `json:"scopes"`
+		ExpiresAt time.Time `json:"expires_at"`
+		IsActive  bool      `json:"is_active"`
+	}
+	err = s.client.APIToken.Query().
+		Where(entToken.TokenHashEQ(tokenHash)).
+		Modify(func(sel *entsql.Selector) {
+			u := entsql.Table(entUser.Table).As("u")
+			r := entsql.Table(entRole.Table).As("r")
+			sel.Join(u).On(sel.C(entToken.FieldUserID), u.C(entUser.FieldID))
+			sel.Join(r).OnP(entsql.And(
+				entsql.ColumnsEQ(r.C(entRole.FieldName), u.C(entUser.FieldRole)),
+				entsql.EQ(r.C(entRole.FieldStatus), "active"),
+			))
+			sel.Select(
+				sel.C(entToken.FieldUserID),
+				sel.C(entToken.FieldScopes),
+				sel.C(entToken.FieldExpiresAt),
+				sel.C(entToken.FieldIsActive),
+			).AppendSelect(
+				entsql.As("COALESCE("+u.C(entUser.FieldUsername)+", '')", "username"),
+				entsql.As("COALESCE("+u.C(entUser.FieldRole)+", '')", "role"),
+			)
+		}).
+		Scan(ctx, &rows)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, "", "", nil, ErrTokenNotFound
-		}
 		return 0, "", "", nil, fmt.Errorf("validate token: %w", err)
 	}
+	if len(rows) == 0 {
+		return 0, "", "", nil, ErrTokenNotFound
+	}
+	t := rows[0]
+	userID, username, role, scopeStr := t.UserID, t.Username, t.Role, t.Scopes
 
-	if !isActive {
+	if !t.IsActive {
 		return 0, "", "", nil, ErrTokenRevoked
 	}
-
-	if time.Now().After(expiresAt) {
+	if time.Now().After(t.ExpiresAt) {
 		return 0, "", "", nil, ErrTokenExpired
 	}
 
-	// Update usage (best-effort, don't fail auth on update error)
-	// RAW_SQL: atomic increment via raw SQL (use_count = use_count + 1)
-	_, _ = s.database.DB.ExecContext(ctx,
-		`UPDATE api_tokens SET last_used_at = now(), use_count = use_count + 1, updated_at = now() WHERE token_hash = $1`,
-		tokenHash,
-	)
+	// Usage tracking is best effort: a failure here must not deny a valid token.
+	// AddUseCount is an atomic increment, so concurrent requests do not lose
+	// counts the way a read-modify-write would.
+	_ = s.client.APIToken.Update().
+		Where(entToken.TokenHashEQ(tokenHash)).
+		SetLastUsedAt(time.Now()).
+		AddUseCount(1).
+		SetUpdatedAt(time.Now()).
+		Exec(ctx)
 
 	if scopeStr != "" {
 		scopes = strings.Split(scopeStr, ",")
@@ -330,45 +376,34 @@ func validateScopes(scopes []string) error {
 	return nil
 }
 
-// scanTokens scans token rows from a prepared query.
-func scanTokens(rows *sql.Rows) ([]*model.APIToken, error) {
-	var tokens []*model.APIToken
-	for rows.Next() {
-		t := &model.APIToken{}
-		var isActive bool
-		var lastUsedAt sql.NullTime
-
-		err := rows.Scan(&t.ID, &t.UserID, &t.Username, &t.Name, &t.TokenHash, &t.TokenPrefix,
-			&t.Scopes, &t.ExpiresAt, &lastUsedAt, &t.UseCount, &isActive,
-			&t.Description, &t.CreatedAt, &t.UpdatedAt)
-		if err != nil {
-			log.Printf("scanTokens: scan failed: %v", err)
-			return nil, fmt.Errorf("scan token: %w", err)
-		}
-
-		t.IsActive = isActive
-		if lastUsedAt.Valid {
-			t.LastUsedAt = &lastUsedAt.Time
-		}
-		tokens = append(tokens, t)
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("scanTokens: rows iteration failed: %v", err)
-		return nil, fmt.Errorf("iterate tokens: %w", err)
-	}
-	return tokens, nil
-}
-
 // GetTokenStats returns aggregate token statistics for a user.
-// RAW_SQL: aggregate query with SUM/CASE — ent query builder can express this
-// but raw SQL is clearer for this specific aggregation pattern.
 func (s *TokenService) GetTokenStats(ctx context.Context, userID int64) (totalCount, activeCount, totalUsage int64, err error) {
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN is_active = TRUE THEN 1 ELSE 0 END), 0), COALESCE(SUM(use_count), 0)
-		 FROM api_tokens WHERE user_id = $1`, userID,
-	).Scan(&totalCount, &activeCount, &totalUsage)
+	owned := s.client.APIToken.Query().Where(entToken.UserIDEQ(userID))
+
+	total, err := owned.Clone().Count(ctx)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("query token stats: %w", err)
+		return 0, 0, 0, fmt.Errorf("count tokens: %w", err)
 	}
-	return totalCount, activeCount, totalUsage, nil
+	active, err := owned.Clone().Where(entToken.IsActiveEQ(true)).Count(ctx)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("count active tokens: %w", err)
+	}
+
+	// Sum over an empty set is NULL, which will not scan into an int64, so the
+	// aggregate is skipped when there is nothing to add up.
+	if total == 0 {
+		return 0, 0, 0, nil
+	}
+	var usage []struct {
+		Sum int64 `json:"sum"`
+	}
+	if err := owned.Clone().
+		Aggregate(ent.Sum(entToken.FieldUseCount)).
+		Scan(ctx, &usage); err != nil {
+		return 0, 0, 0, fmt.Errorf("sum token usage: %w", err)
+	}
+	if len(usage) > 0 {
+		totalUsage = usage[0].Sum
+	}
+	return int64(total), int64(active), totalUsage, nil
 }
