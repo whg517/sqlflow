@@ -8,6 +8,7 @@ package sqlutil
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -87,4 +88,35 @@ func EscapeLike(s string) string {
 	s = strings.ReplaceAll(s, "%", "\\%")
 	s = strings.ReplaceAll(s, "_", "\\_")
 	return s
+}
+
+// NumberPlaceholders rewrites the ? placeholders in a statement to PostgreSQL's
+// positional $1, $2, … form, in order of appearance.
+//
+// Dynamic UPDATE and WHERE clauses are assembled fragment by fragment, and the
+// number a fragment's placeholder should carry depends on how many came before
+// it — which the fragment cannot know. Writing ? while building and numbering
+// once at the end keeps that knowledge in one place; hand-numbering is how a
+// SET clause ends up colliding with the WHERE that follows it.
+//
+// Placeholders inside single-quoted string literals are left alone.
+func NumberPlaceholders(query string) string {
+	var b strings.Builder
+	b.Grow(len(query) + 8)
+	n := 0
+	inString := false
+	for _, r := range query {
+		switch {
+		case r == '\'':
+			inString = !inString
+			b.WriteRune(r)
+		case r == '?' && !inString:
+			n++
+			b.WriteString("$")
+			b.WriteString(strconv.Itoa(n))
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }

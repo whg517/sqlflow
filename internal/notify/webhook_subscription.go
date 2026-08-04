@@ -229,16 +229,14 @@ func (s *WebhookSubscriptionService) Create(ctx context.Context, req CreateSubsc
 
 	eventsJSON, _ := json.Marshal(req.Events)
 
-	result, err := s.db.ExecContext(ctx,
+	var id int64
+	if err := s.db.QueryRowContext(ctx,
 		`INSERT INTO webhook_subscriptions (name, url, encrypted_secret, events, enabled, failure_count, created_by)
-		 VALUES ($1, $2, $3, $4, TRUE, 0, $5)`,
+		 VALUES ($1, $2, $3, $4, TRUE, 0, $5) RETURNING id`,
 		req.Name, req.URL, encryptedSecret, string(eventsJSON), createdBy,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		return nil, "", fmt.Errorf("创建订阅失败: %w", err)
 	}
-
-	id, _ := result.LastInsertId()
 	sub, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, "", err
@@ -256,7 +254,7 @@ func (s *WebhookSubscriptionService) GetByID(ctx context.Context, id int64) (*mo
 
 	sub := &model.WebhookSubscription{}
 	var lastTriggered sql.NullTime
-	var enabled int
+	var enabled bool
 
 	err := row.Scan(&sub.ID, &sub.Name, &sub.URL, &sub.Secret, &sub.Events, &enabled,
 		&sub.FailureCount, &lastTriggered, &sub.CreatedBy, &sub.CreatedAt, &sub.UpdatedAt)
@@ -267,7 +265,7 @@ func (s *WebhookSubscriptionService) GetByID(ctx context.Context, id int64) (*mo
 		return nil, fmt.Errorf("查询订阅失败: %w", err)
 	}
 
-	sub.Enabled = enabled == 1
+	sub.Enabled = enabled
 	if lastTriggered.Valid {
 		sub.LastTriggeredAt = &lastTriggered.Time
 	}
@@ -288,7 +286,7 @@ func (s *WebhookSubscriptionService) List(ctx context.Context) ([]*model.Webhook
 	for rows.Next() {
 		sub := &model.WebhookSubscription{}
 		var lastTriggered sql.NullTime
-		var enabled int
+		var enabled bool
 		var encryptedSecret string
 
 		if err := rows.Scan(&sub.ID, &sub.Name, &sub.URL, &encryptedSecret, &sub.Events, &enabled,
@@ -296,7 +294,7 @@ func (s *WebhookSubscriptionService) List(ctx context.Context) ([]*model.Webhook
 			return nil, fmt.Errorf("扫描订阅数据失败: %w", err)
 		}
 
-		sub.Enabled = enabled == 1
+		sub.Enabled = enabled
 		if lastTriggered.Valid {
 			sub.LastTriggeredAt = &lastTriggered.Time
 		}

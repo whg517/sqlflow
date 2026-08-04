@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/whg517/sqlflow/internal/platform/crypto"
+	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 )
 
 // FeishuWebhook represents a stored Feishu webhook configuration.
@@ -204,16 +205,14 @@ func (s *FeishuService) Create(ctx context.Context, req FeishuCreateRequest, cre
 		req.RateLimitRPS = 1.0
 	}
 
-	result, err := s.db.ExecContext(ctx,
+	var id int64
+	if err := s.db.QueryRowContext(ctx,
 		`INSERT INTO feishu_webhooks (name, encrypted_url, url_hash, scene, enabled, rate_limit_rps, created_by)
-		 VALUES ($1, $2, $3, $4, TRUE, $5, $6)`,
+		 VALUES ($1, $2, $3, $4, TRUE, $5, $6) RETURNING id`,
 		req.Name, encryptedURL, urlHash, req.Scene, req.RateLimitRPS, createdBy,
-	)
-	if err != nil {
+	).Scan(&id); err != nil {
 		return nil, fmt.Errorf("插入记录失败: %w", err)
 	}
-
-	id, _ := result.LastInsertId()
 	return s.GetByID(ctx, id)
 }
 
@@ -225,14 +224,14 @@ func (s *FeishuService) GetByID(ctx context.Context, id int64) (*FeishuWebhook, 
 	)
 
 	var wh FeishuWebhook
-	var enabled int
+	var enabled bool
 	if err := row.Scan(&wh.ID, &wh.Name, &wh.EncryptedURL, &wh.URLHash, &wh.Scene, &enabled, &wh.RateLimitRPS, &wh.CreatedBy, &wh.CreatedAt, &wh.UpdatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("webhook 不存在 (id=%d)", id)
 		}
 		return nil, err
 	}
-	wh.Enabled = enabled == 1
+	wh.Enabled = enabled
 	return &wh, nil
 }
 
@@ -251,7 +250,7 @@ func (s *FeishuService) List(ctx context.Context, showFullURL bool) ([]map[strin
 	for rows.Next() {
 		var id int64
 		var name, encryptedURL, scene, createdBy, createdAt, updatedAt string
-		var enabled int
+		var enabled bool
 		var rateLimitRPS float64
 
 		if err := rows.Scan(&id, &name, &encryptedURL, &scene, &enabled, &rateLimitRPS, &createdBy, &createdAt, &updatedAt); err != nil {
@@ -275,7 +274,7 @@ func (s *FeishuService) List(ctx context.Context, showFullURL bool) ([]map[strin
 			"name":           name,
 			"webhook_url":    displayURL,
 			"scene":          scene,
-			"enabled":        enabled == 1,
+			"enabled":        enabled,
 			"rate_limit_rps": rateLimitRPS,
 			"created_by":     createdBy,
 			"created_at":     createdAt,
@@ -331,12 +330,8 @@ func (s *FeishuService) Update(ctx context.Context, id int64, req FeishuUpdateRe
 	}
 
 	if req.Enabled != nil {
-		enabledVal := 0
-		if *req.Enabled {
-			enabledVal = 1
-		}
 		sets = append(sets, "enabled = ?")
-		args = append(args, enabledVal)
+		args = append(args, *req.Enabled)
 	}
 
 	if req.RateLimitRPS != nil {
@@ -351,7 +346,10 @@ func (s *FeishuService) Update(ctx context.Context, id int64, req FeishuUpdateRe
 	sets = append(sets, "updated_at = now()")
 	args = append(args, id)
 
-	query := "UPDATE feishu_webhooks SET " + strings.Join(sets, ", ") + " WHERE id = $1"
+	// Numbered once, after every fragment is in place: each fragment writes ?
+	// because it cannot know how many placeholders precede it.
+	query := sqlutil.NumberPlaceholders(
+		"UPDATE feishu_webhooks SET " + strings.Join(sets, ", ") + " WHERE id = ?")
 	if _, err := s.db.ExecContext(ctx, query, args...); err != nil {
 		return nil, fmt.Errorf("更新失败: %w", err)
 	}

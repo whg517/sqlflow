@@ -107,7 +107,7 @@ func (s *TemplateService) GetTemplateForUser(ctx context.Context, id, userID int
 
 func (s *TemplateService) getTemplate(ctx context.Context, id, userID int64, enforceAccess bool) (*model.SQLTemplate, error) {
 	t := &model.SQLTemplate{}
-	var pub int
+	var pub bool
 	query := `SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at
 		 FROM sql_templates WHERE id = $1`
 	args := []interface{}{id}
@@ -124,7 +124,7 @@ func (s *TemplateService) getTemplate(ctx context.Context, id, userID int64, enf
 	if err != nil {
 		return nil, fmt.Errorf("get template: %w", err)
 	}
-	t.IsPublic = pub == 1
+	t.IsPublic = pub
 	return t, nil
 }
 
@@ -190,11 +190,11 @@ func (s *TemplateService) ListTemplates(ctx context.Context, userID int64, categ
 	var templates []*model.SQLTemplate
 	for rows.Next() {
 		t := &model.SQLTemplate{}
-		var pub int
+		var pub bool
 		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Description, &t.SQLContent, &t.DBType, &t.Category, &t.ParamsJSON, &pub, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, 0, fmt.Errorf("scan template: %w", err)
 		}
-		t.IsPublic = pub == 1
+		t.IsPublic = pub
 		templates = append(templates, t)
 	}
 
