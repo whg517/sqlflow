@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/webhooksubscription"
@@ -18,6 +19,7 @@ type WebhookSubscriptionCreate struct {
 	config
 	mutation *WebhookSubscriptionMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -246,6 +248,7 @@ func (_c *WebhookSubscriptionCreate) createSpec() (*WebhookSubscription, *sqlgra
 		_node = &WebhookSubscription{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(webhooksubscription.Table, sqlgraph.NewFieldSpec(webhooksubscription.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(webhooksubscription.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -289,11 +292,420 @@ func (_c *WebhookSubscriptionCreate) createSpec() (*WebhookSubscription, *sqlgra
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.WebhookSubscription.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.WebhookSubscriptionUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *WebhookSubscriptionCreate) OnConflict(opts ...sql.ConflictOption) *WebhookSubscriptionUpsertOne {
+	_c.conflict = opts
+	return &WebhookSubscriptionUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.WebhookSubscription.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *WebhookSubscriptionCreate) OnConflictColumns(columns ...string) *WebhookSubscriptionUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &WebhookSubscriptionUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// WebhookSubscriptionUpsertOne is the builder for "upsert"-ing
+	//  one WebhookSubscription node.
+	WebhookSubscriptionUpsertOne struct {
+		create *WebhookSubscriptionCreate
+	}
+
+	// WebhookSubscriptionUpsert is the "OnConflict" setter.
+	WebhookSubscriptionUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *WebhookSubscriptionUpsert) SetName(v string) *WebhookSubscriptionUpsert {
+	u.Set(webhooksubscription.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsert) UpdateName() *WebhookSubscriptionUpsert {
+	u.SetExcluded(webhooksubscription.FieldName)
+	return u
+}
+
+// SetURL sets the "url" field.
+func (u *WebhookSubscriptionUpsert) SetURL(v string) *WebhookSubscriptionUpsert {
+	u.Set(webhooksubscription.FieldURL, v)
+	return u
+}
+
+// UpdateURL sets the "url" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsert) UpdateURL() *WebhookSubscriptionUpsert {
+	u.SetExcluded(webhooksubscription.FieldURL)
+	return u
+}
+
+// SetEncryptedSecret sets the "encrypted_secret" field.
+func (u *WebhookSubscriptionUpsert) SetEncryptedSecret(v string) *WebhookSubscriptionUpsert {
+	u.Set(webhooksubscription.FieldEncryptedSecret, v)
+	return u
+}
+
+// UpdateEncryptedSecret sets the "encrypted_secret" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsert) UpdateEncryptedSecret() *WebhookSubscriptionUpsert {
+	u.SetExcluded(webhooksubscription.FieldEncryptedSecret)
+	return u
+}
+
+// SetEvents sets the "events" field.
+func (u *WebhookSubscriptionUpsert) SetEvents(v string) *WebhookSubscriptionUpsert {
+	u.Set(webhooksubscription.FieldEvents, v)
+	return u
+}
+
+// UpdateEvents sets the "events" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsert) UpdateEvents() *WebhookSubscriptionUpsert {
+	u.SetExcluded(webhooksubscription.FieldEvents)
+	return u
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *WebhookSubscriptionUpsert) SetEnabled(v bool) *WebhookSubscriptionUpsert {
+	u.Set(webhooksubscription.FieldEnabled, v)
+	return u
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsert) UpdateEnabled() *WebhookSubscriptionUpsert {
+	u.SetExcluded(webhooksubscription.FieldEnabled)
+	return u
+}
+
+// SetFailureCount sets the "failure_count" field.
+func (u *WebhookSubscriptionUpsert) SetFailureCount(v int64) *WebhookSubscriptionUpsert {
+	u.Set(webhooksubscription.FieldFailureCount, v)
+	return u
+}
+
+// UpdateFailureCount sets the "failure_count" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsert) UpdateFailureCount() *WebhookSubscriptionUpsert {
+	u.SetExcluded(webhooksubscription.FieldFailureCount)
+	return u
+}
+
+// AddFailureCount adds v to the "failure_count" field.
+func (u *WebhookSubscriptionUpsert) AddFailureCount(v int64) *WebhookSubscriptionUpsert {
+	u.Add(webhooksubscription.FieldFailureCount, v)
+	return u
+}
+
+// SetLastTriggeredAt sets the "last_triggered_at" field.
+func (u *WebhookSubscriptionUpsert) SetLastTriggeredAt(v time.Time) *WebhookSubscriptionUpsert {
+	u.Set(webhooksubscription.FieldLastTriggeredAt, v)
+	return u
+}
+
+// UpdateLastTriggeredAt sets the "last_triggered_at" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsert) UpdateLastTriggeredAt() *WebhookSubscriptionUpsert {
+	u.SetExcluded(webhooksubscription.FieldLastTriggeredAt)
+	return u
+}
+
+// ClearLastTriggeredAt clears the value of the "last_triggered_at" field.
+func (u *WebhookSubscriptionUpsert) ClearLastTriggeredAt() *WebhookSubscriptionUpsert {
+	u.SetNull(webhooksubscription.FieldLastTriggeredAt)
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *WebhookSubscriptionUpsert) SetCreatedBy(v string) *WebhookSubscriptionUpsert {
+	u.Set(webhooksubscription.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsert) UpdateCreatedBy() *WebhookSubscriptionUpsert {
+	u.SetExcluded(webhooksubscription.FieldCreatedBy)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WebhookSubscriptionUpsert) SetCreatedAt(v time.Time) *WebhookSubscriptionUpsert {
+	u.Set(webhooksubscription.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsert) UpdateCreatedAt() *WebhookSubscriptionUpsert {
+	u.SetExcluded(webhooksubscription.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *WebhookSubscriptionUpsert) SetUpdatedAt(v time.Time) *WebhookSubscriptionUpsert {
+	u.Set(webhooksubscription.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsert) UpdateUpdatedAt() *WebhookSubscriptionUpsert {
+	u.SetExcluded(webhooksubscription.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.WebhookSubscription.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *WebhookSubscriptionUpsertOne) UpdateNewValues() *WebhookSubscriptionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.WebhookSubscription.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *WebhookSubscriptionUpsertOne) Ignore() *WebhookSubscriptionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *WebhookSubscriptionUpsertOne) DoNothing() *WebhookSubscriptionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the WebhookSubscriptionCreate.OnConflict
+// documentation for more info.
+func (u *WebhookSubscriptionUpsertOne) Update(set func(*WebhookSubscriptionUpsert)) *WebhookSubscriptionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&WebhookSubscriptionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *WebhookSubscriptionUpsertOne) SetName(v string) *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertOne) UpdateName() *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetURL sets the "url" field.
+func (u *WebhookSubscriptionUpsertOne) SetURL(v string) *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetURL(v)
+	})
+}
+
+// UpdateURL sets the "url" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertOne) UpdateURL() *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateURL()
+	})
+}
+
+// SetEncryptedSecret sets the "encrypted_secret" field.
+func (u *WebhookSubscriptionUpsertOne) SetEncryptedSecret(v string) *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetEncryptedSecret(v)
+	})
+}
+
+// UpdateEncryptedSecret sets the "encrypted_secret" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertOne) UpdateEncryptedSecret() *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateEncryptedSecret()
+	})
+}
+
+// SetEvents sets the "events" field.
+func (u *WebhookSubscriptionUpsertOne) SetEvents(v string) *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetEvents(v)
+	})
+}
+
+// UpdateEvents sets the "events" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertOne) UpdateEvents() *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateEvents()
+	})
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *WebhookSubscriptionUpsertOne) SetEnabled(v bool) *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetEnabled(v)
+	})
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertOne) UpdateEnabled() *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateEnabled()
+	})
+}
+
+// SetFailureCount sets the "failure_count" field.
+func (u *WebhookSubscriptionUpsertOne) SetFailureCount(v int64) *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetFailureCount(v)
+	})
+}
+
+// AddFailureCount adds v to the "failure_count" field.
+func (u *WebhookSubscriptionUpsertOne) AddFailureCount(v int64) *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.AddFailureCount(v)
+	})
+}
+
+// UpdateFailureCount sets the "failure_count" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertOne) UpdateFailureCount() *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateFailureCount()
+	})
+}
+
+// SetLastTriggeredAt sets the "last_triggered_at" field.
+func (u *WebhookSubscriptionUpsertOne) SetLastTriggeredAt(v time.Time) *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetLastTriggeredAt(v)
+	})
+}
+
+// UpdateLastTriggeredAt sets the "last_triggered_at" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertOne) UpdateLastTriggeredAt() *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateLastTriggeredAt()
+	})
+}
+
+// ClearLastTriggeredAt clears the value of the "last_triggered_at" field.
+func (u *WebhookSubscriptionUpsertOne) ClearLastTriggeredAt() *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.ClearLastTriggeredAt()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *WebhookSubscriptionUpsertOne) SetCreatedBy(v string) *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertOne) UpdateCreatedBy() *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WebhookSubscriptionUpsertOne) SetCreatedAt(v time.Time) *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertOne) UpdateCreatedAt() *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *WebhookSubscriptionUpsertOne) SetUpdatedAt(v time.Time) *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertOne) UpdateUpdatedAt() *WebhookSubscriptionUpsertOne {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *WebhookSubscriptionUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for WebhookSubscriptionCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *WebhookSubscriptionUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *WebhookSubscriptionUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *WebhookSubscriptionUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // WebhookSubscriptionCreateBulk is the builder for creating many WebhookSubscription entities in bulk.
 type WebhookSubscriptionCreateBulk struct {
 	config
 	err      error
 	builders []*WebhookSubscriptionCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the WebhookSubscription entities in the database.
@@ -323,6 +735,7 @@ func (_c *WebhookSubscriptionCreateBulk) Save(ctx context.Context) ([]*WebhookSu
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -373,6 +786,264 @@ func (_c *WebhookSubscriptionCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *WebhookSubscriptionCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.WebhookSubscription.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.WebhookSubscriptionUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *WebhookSubscriptionCreateBulk) OnConflict(opts ...sql.ConflictOption) *WebhookSubscriptionUpsertBulk {
+	_c.conflict = opts
+	return &WebhookSubscriptionUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.WebhookSubscription.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *WebhookSubscriptionCreateBulk) OnConflictColumns(columns ...string) *WebhookSubscriptionUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &WebhookSubscriptionUpsertBulk{
+		create: _c,
+	}
+}
+
+// WebhookSubscriptionUpsertBulk is the builder for "upsert"-ing
+// a bulk of WebhookSubscription nodes.
+type WebhookSubscriptionUpsertBulk struct {
+	create *WebhookSubscriptionCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.WebhookSubscription.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *WebhookSubscriptionUpsertBulk) UpdateNewValues() *WebhookSubscriptionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.WebhookSubscription.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *WebhookSubscriptionUpsertBulk) Ignore() *WebhookSubscriptionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *WebhookSubscriptionUpsertBulk) DoNothing() *WebhookSubscriptionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the WebhookSubscriptionCreateBulk.OnConflict
+// documentation for more info.
+func (u *WebhookSubscriptionUpsertBulk) Update(set func(*WebhookSubscriptionUpsert)) *WebhookSubscriptionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&WebhookSubscriptionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *WebhookSubscriptionUpsertBulk) SetName(v string) *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertBulk) UpdateName() *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetURL sets the "url" field.
+func (u *WebhookSubscriptionUpsertBulk) SetURL(v string) *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetURL(v)
+	})
+}
+
+// UpdateURL sets the "url" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertBulk) UpdateURL() *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateURL()
+	})
+}
+
+// SetEncryptedSecret sets the "encrypted_secret" field.
+func (u *WebhookSubscriptionUpsertBulk) SetEncryptedSecret(v string) *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetEncryptedSecret(v)
+	})
+}
+
+// UpdateEncryptedSecret sets the "encrypted_secret" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertBulk) UpdateEncryptedSecret() *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateEncryptedSecret()
+	})
+}
+
+// SetEvents sets the "events" field.
+func (u *WebhookSubscriptionUpsertBulk) SetEvents(v string) *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetEvents(v)
+	})
+}
+
+// UpdateEvents sets the "events" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertBulk) UpdateEvents() *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateEvents()
+	})
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *WebhookSubscriptionUpsertBulk) SetEnabled(v bool) *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetEnabled(v)
+	})
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertBulk) UpdateEnabled() *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateEnabled()
+	})
+}
+
+// SetFailureCount sets the "failure_count" field.
+func (u *WebhookSubscriptionUpsertBulk) SetFailureCount(v int64) *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetFailureCount(v)
+	})
+}
+
+// AddFailureCount adds v to the "failure_count" field.
+func (u *WebhookSubscriptionUpsertBulk) AddFailureCount(v int64) *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.AddFailureCount(v)
+	})
+}
+
+// UpdateFailureCount sets the "failure_count" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertBulk) UpdateFailureCount() *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateFailureCount()
+	})
+}
+
+// SetLastTriggeredAt sets the "last_triggered_at" field.
+func (u *WebhookSubscriptionUpsertBulk) SetLastTriggeredAt(v time.Time) *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetLastTriggeredAt(v)
+	})
+}
+
+// UpdateLastTriggeredAt sets the "last_triggered_at" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertBulk) UpdateLastTriggeredAt() *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateLastTriggeredAt()
+	})
+}
+
+// ClearLastTriggeredAt clears the value of the "last_triggered_at" field.
+func (u *WebhookSubscriptionUpsertBulk) ClearLastTriggeredAt() *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.ClearLastTriggeredAt()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *WebhookSubscriptionUpsertBulk) SetCreatedBy(v string) *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertBulk) UpdateCreatedBy() *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WebhookSubscriptionUpsertBulk) SetCreatedAt(v time.Time) *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertBulk) UpdateCreatedAt() *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *WebhookSubscriptionUpsertBulk) SetUpdatedAt(v time.Time) *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *WebhookSubscriptionUpsertBulk) UpdateUpdatedAt() *WebhookSubscriptionUpsertBulk {
+	return u.Update(func(s *WebhookSubscriptionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *WebhookSubscriptionUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the WebhookSubscriptionCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for WebhookSubscriptionCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *WebhookSubscriptionUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

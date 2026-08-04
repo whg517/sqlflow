@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/casbinrule"
@@ -17,6 +18,7 @@ type CasbinRuleCreate struct {
 	config
 	mutation *CasbinRuleMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetPtype sets the "ptype" field.
@@ -231,6 +233,7 @@ func (_c *CasbinRuleCreate) createSpec() (*CasbinRule, *sqlgraph.CreateSpec) {
 		_node = &CasbinRule{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(casbinrule.Table, sqlgraph.NewFieldSpec(casbinrule.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Ptype(); ok {
 		_spec.SetField(casbinrule.FieldPtype, field.TypeString, value)
 		_node.Ptype = value
@@ -262,11 +265,316 @@ func (_c *CasbinRuleCreate) createSpec() (*CasbinRule, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CasbinRule.Create().
+//		SetPtype(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CasbinRuleUpsert) {
+//			SetPtype(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CasbinRuleCreate) OnConflict(opts ...sql.ConflictOption) *CasbinRuleUpsertOne {
+	_c.conflict = opts
+	return &CasbinRuleUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CasbinRule.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CasbinRuleCreate) OnConflictColumns(columns ...string) *CasbinRuleUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CasbinRuleUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// CasbinRuleUpsertOne is the builder for "upsert"-ing
+	//  one CasbinRule node.
+	CasbinRuleUpsertOne struct {
+		create *CasbinRuleCreate
+	}
+
+	// CasbinRuleUpsert is the "OnConflict" setter.
+	CasbinRuleUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetPtype sets the "ptype" field.
+func (u *CasbinRuleUpsert) SetPtype(v string) *CasbinRuleUpsert {
+	u.Set(casbinrule.FieldPtype, v)
+	return u
+}
+
+// UpdatePtype sets the "ptype" field to the value that was provided on create.
+func (u *CasbinRuleUpsert) UpdatePtype() *CasbinRuleUpsert {
+	u.SetExcluded(casbinrule.FieldPtype)
+	return u
+}
+
+// SetV0 sets the "v0" field.
+func (u *CasbinRuleUpsert) SetV0(v string) *CasbinRuleUpsert {
+	u.Set(casbinrule.FieldV0, v)
+	return u
+}
+
+// UpdateV0 sets the "v0" field to the value that was provided on create.
+func (u *CasbinRuleUpsert) UpdateV0() *CasbinRuleUpsert {
+	u.SetExcluded(casbinrule.FieldV0)
+	return u
+}
+
+// SetV1 sets the "v1" field.
+func (u *CasbinRuleUpsert) SetV1(v string) *CasbinRuleUpsert {
+	u.Set(casbinrule.FieldV1, v)
+	return u
+}
+
+// UpdateV1 sets the "v1" field to the value that was provided on create.
+func (u *CasbinRuleUpsert) UpdateV1() *CasbinRuleUpsert {
+	u.SetExcluded(casbinrule.FieldV1)
+	return u
+}
+
+// SetV2 sets the "v2" field.
+func (u *CasbinRuleUpsert) SetV2(v string) *CasbinRuleUpsert {
+	u.Set(casbinrule.FieldV2, v)
+	return u
+}
+
+// UpdateV2 sets the "v2" field to the value that was provided on create.
+func (u *CasbinRuleUpsert) UpdateV2() *CasbinRuleUpsert {
+	u.SetExcluded(casbinrule.FieldV2)
+	return u
+}
+
+// SetV3 sets the "v3" field.
+func (u *CasbinRuleUpsert) SetV3(v string) *CasbinRuleUpsert {
+	u.Set(casbinrule.FieldV3, v)
+	return u
+}
+
+// UpdateV3 sets the "v3" field to the value that was provided on create.
+func (u *CasbinRuleUpsert) UpdateV3() *CasbinRuleUpsert {
+	u.SetExcluded(casbinrule.FieldV3)
+	return u
+}
+
+// SetV4 sets the "v4" field.
+func (u *CasbinRuleUpsert) SetV4(v string) *CasbinRuleUpsert {
+	u.Set(casbinrule.FieldV4, v)
+	return u
+}
+
+// UpdateV4 sets the "v4" field to the value that was provided on create.
+func (u *CasbinRuleUpsert) UpdateV4() *CasbinRuleUpsert {
+	u.SetExcluded(casbinrule.FieldV4)
+	return u
+}
+
+// SetV5 sets the "v5" field.
+func (u *CasbinRuleUpsert) SetV5(v string) *CasbinRuleUpsert {
+	u.Set(casbinrule.FieldV5, v)
+	return u
+}
+
+// UpdateV5 sets the "v5" field to the value that was provided on create.
+func (u *CasbinRuleUpsert) UpdateV5() *CasbinRuleUpsert {
+	u.SetExcluded(casbinrule.FieldV5)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.CasbinRule.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CasbinRuleUpsertOne) UpdateNewValues() *CasbinRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CasbinRule.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *CasbinRuleUpsertOne) Ignore() *CasbinRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CasbinRuleUpsertOne) DoNothing() *CasbinRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CasbinRuleCreate.OnConflict
+// documentation for more info.
+func (u *CasbinRuleUpsertOne) Update(set func(*CasbinRuleUpsert)) *CasbinRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CasbinRuleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetPtype sets the "ptype" field.
+func (u *CasbinRuleUpsertOne) SetPtype(v string) *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetPtype(v)
+	})
+}
+
+// UpdatePtype sets the "ptype" field to the value that was provided on create.
+func (u *CasbinRuleUpsertOne) UpdatePtype() *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdatePtype()
+	})
+}
+
+// SetV0 sets the "v0" field.
+func (u *CasbinRuleUpsertOne) SetV0(v string) *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetV0(v)
+	})
+}
+
+// UpdateV0 sets the "v0" field to the value that was provided on create.
+func (u *CasbinRuleUpsertOne) UpdateV0() *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdateV0()
+	})
+}
+
+// SetV1 sets the "v1" field.
+func (u *CasbinRuleUpsertOne) SetV1(v string) *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetV1(v)
+	})
+}
+
+// UpdateV1 sets the "v1" field to the value that was provided on create.
+func (u *CasbinRuleUpsertOne) UpdateV1() *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdateV1()
+	})
+}
+
+// SetV2 sets the "v2" field.
+func (u *CasbinRuleUpsertOne) SetV2(v string) *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetV2(v)
+	})
+}
+
+// UpdateV2 sets the "v2" field to the value that was provided on create.
+func (u *CasbinRuleUpsertOne) UpdateV2() *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdateV2()
+	})
+}
+
+// SetV3 sets the "v3" field.
+func (u *CasbinRuleUpsertOne) SetV3(v string) *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetV3(v)
+	})
+}
+
+// UpdateV3 sets the "v3" field to the value that was provided on create.
+func (u *CasbinRuleUpsertOne) UpdateV3() *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdateV3()
+	})
+}
+
+// SetV4 sets the "v4" field.
+func (u *CasbinRuleUpsertOne) SetV4(v string) *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetV4(v)
+	})
+}
+
+// UpdateV4 sets the "v4" field to the value that was provided on create.
+func (u *CasbinRuleUpsertOne) UpdateV4() *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdateV4()
+	})
+}
+
+// SetV5 sets the "v5" field.
+func (u *CasbinRuleUpsertOne) SetV5(v string) *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetV5(v)
+	})
+}
+
+// UpdateV5 sets the "v5" field to the value that was provided on create.
+func (u *CasbinRuleUpsertOne) UpdateV5() *CasbinRuleUpsertOne {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdateV5()
+	})
+}
+
+// Exec executes the query.
+func (u *CasbinRuleUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CasbinRuleCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CasbinRuleUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *CasbinRuleUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *CasbinRuleUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // CasbinRuleCreateBulk is the builder for creating many CasbinRule entities in bulk.
 type CasbinRuleCreateBulk struct {
 	config
 	err      error
 	builders []*CasbinRuleCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the CasbinRule entities in the database.
@@ -296,6 +604,7 @@ func (_c *CasbinRuleCreateBulk) Save(ctx context.Context) ([]*CasbinRule, error)
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -346,6 +655,208 @@ func (_c *CasbinRuleCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *CasbinRuleCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CasbinRule.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CasbinRuleUpsert) {
+//			SetPtype(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CasbinRuleCreateBulk) OnConflict(opts ...sql.ConflictOption) *CasbinRuleUpsertBulk {
+	_c.conflict = opts
+	return &CasbinRuleUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CasbinRule.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CasbinRuleCreateBulk) OnConflictColumns(columns ...string) *CasbinRuleUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CasbinRuleUpsertBulk{
+		create: _c,
+	}
+}
+
+// CasbinRuleUpsertBulk is the builder for "upsert"-ing
+// a bulk of CasbinRule nodes.
+type CasbinRuleUpsertBulk struct {
+	create *CasbinRuleCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.CasbinRule.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CasbinRuleUpsertBulk) UpdateNewValues() *CasbinRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CasbinRule.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *CasbinRuleUpsertBulk) Ignore() *CasbinRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CasbinRuleUpsertBulk) DoNothing() *CasbinRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CasbinRuleCreateBulk.OnConflict
+// documentation for more info.
+func (u *CasbinRuleUpsertBulk) Update(set func(*CasbinRuleUpsert)) *CasbinRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CasbinRuleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetPtype sets the "ptype" field.
+func (u *CasbinRuleUpsertBulk) SetPtype(v string) *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetPtype(v)
+	})
+}
+
+// UpdatePtype sets the "ptype" field to the value that was provided on create.
+func (u *CasbinRuleUpsertBulk) UpdatePtype() *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdatePtype()
+	})
+}
+
+// SetV0 sets the "v0" field.
+func (u *CasbinRuleUpsertBulk) SetV0(v string) *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetV0(v)
+	})
+}
+
+// UpdateV0 sets the "v0" field to the value that was provided on create.
+func (u *CasbinRuleUpsertBulk) UpdateV0() *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdateV0()
+	})
+}
+
+// SetV1 sets the "v1" field.
+func (u *CasbinRuleUpsertBulk) SetV1(v string) *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetV1(v)
+	})
+}
+
+// UpdateV1 sets the "v1" field to the value that was provided on create.
+func (u *CasbinRuleUpsertBulk) UpdateV1() *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdateV1()
+	})
+}
+
+// SetV2 sets the "v2" field.
+func (u *CasbinRuleUpsertBulk) SetV2(v string) *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetV2(v)
+	})
+}
+
+// UpdateV2 sets the "v2" field to the value that was provided on create.
+func (u *CasbinRuleUpsertBulk) UpdateV2() *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdateV2()
+	})
+}
+
+// SetV3 sets the "v3" field.
+func (u *CasbinRuleUpsertBulk) SetV3(v string) *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetV3(v)
+	})
+}
+
+// UpdateV3 sets the "v3" field to the value that was provided on create.
+func (u *CasbinRuleUpsertBulk) UpdateV3() *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdateV3()
+	})
+}
+
+// SetV4 sets the "v4" field.
+func (u *CasbinRuleUpsertBulk) SetV4(v string) *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetV4(v)
+	})
+}
+
+// UpdateV4 sets the "v4" field to the value that was provided on create.
+func (u *CasbinRuleUpsertBulk) UpdateV4() *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdateV4()
+	})
+}
+
+// SetV5 sets the "v5" field.
+func (u *CasbinRuleUpsertBulk) SetV5(v string) *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.SetV5(v)
+	})
+}
+
+// UpdateV5 sets the "v5" field to the value that was provided on create.
+func (u *CasbinRuleUpsertBulk) UpdateV5() *CasbinRuleUpsertBulk {
+	return u.Update(func(s *CasbinRuleUpsert) {
+		s.UpdateV5()
+	})
+}
+
+// Exec executes the query.
+func (u *CasbinRuleUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the CasbinRuleCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CasbinRuleCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CasbinRuleUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

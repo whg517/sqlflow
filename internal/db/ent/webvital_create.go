@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/webvital"
@@ -18,6 +19,7 @@ type WebVitalCreate struct {
 	config
 	mutation *WebVitalMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetMetricName sets the "metric_name" field.
@@ -210,6 +212,7 @@ func (_c *WebVitalCreate) createSpec() (*WebVital, *sqlgraph.CreateSpec) {
 		_node = &WebVital{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(webvital.Table, sqlgraph.NewFieldSpec(webvital.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.MetricName(); ok {
 		_spec.SetField(webvital.FieldMetricName, field.TypeString, value)
 		_node.MetricName = value
@@ -241,11 +244,329 @@ func (_c *WebVitalCreate) createSpec() (*WebVital, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.WebVital.Create().
+//		SetMetricName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.WebVitalUpsert) {
+//			SetMetricName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *WebVitalCreate) OnConflict(opts ...sql.ConflictOption) *WebVitalUpsertOne {
+	_c.conflict = opts
+	return &WebVitalUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.WebVital.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *WebVitalCreate) OnConflictColumns(columns ...string) *WebVitalUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &WebVitalUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// WebVitalUpsertOne is the builder for "upsert"-ing
+	//  one WebVital node.
+	WebVitalUpsertOne struct {
+		create *WebVitalCreate
+	}
+
+	// WebVitalUpsert is the "OnConflict" setter.
+	WebVitalUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetMetricName sets the "metric_name" field.
+func (u *WebVitalUpsert) SetMetricName(v string) *WebVitalUpsert {
+	u.Set(webvital.FieldMetricName, v)
+	return u
+}
+
+// UpdateMetricName sets the "metric_name" field to the value that was provided on create.
+func (u *WebVitalUpsert) UpdateMetricName() *WebVitalUpsert {
+	u.SetExcluded(webvital.FieldMetricName)
+	return u
+}
+
+// SetValue sets the "value" field.
+func (u *WebVitalUpsert) SetValue(v float64) *WebVitalUpsert {
+	u.Set(webvital.FieldValue, v)
+	return u
+}
+
+// UpdateValue sets the "value" field to the value that was provided on create.
+func (u *WebVitalUpsert) UpdateValue() *WebVitalUpsert {
+	u.SetExcluded(webvital.FieldValue)
+	return u
+}
+
+// AddValue adds v to the "value" field.
+func (u *WebVitalUpsert) AddValue(v float64) *WebVitalUpsert {
+	u.Add(webvital.FieldValue, v)
+	return u
+}
+
+// SetRating sets the "rating" field.
+func (u *WebVitalUpsert) SetRating(v string) *WebVitalUpsert {
+	u.Set(webvital.FieldRating, v)
+	return u
+}
+
+// UpdateRating sets the "rating" field to the value that was provided on create.
+func (u *WebVitalUpsert) UpdateRating() *WebVitalUpsert {
+	u.SetExcluded(webvital.FieldRating)
+	return u
+}
+
+// SetPath sets the "path" field.
+func (u *WebVitalUpsert) SetPath(v string) *WebVitalUpsert {
+	u.Set(webvital.FieldPath, v)
+	return u
+}
+
+// UpdatePath sets the "path" field to the value that was provided on create.
+func (u *WebVitalUpsert) UpdatePath() *WebVitalUpsert {
+	u.SetExcluded(webvital.FieldPath)
+	return u
+}
+
+// SetNavigationType sets the "navigation_type" field.
+func (u *WebVitalUpsert) SetNavigationType(v string) *WebVitalUpsert {
+	u.Set(webvital.FieldNavigationType, v)
+	return u
+}
+
+// UpdateNavigationType sets the "navigation_type" field to the value that was provided on create.
+func (u *WebVitalUpsert) UpdateNavigationType() *WebVitalUpsert {
+	u.SetExcluded(webvital.FieldNavigationType)
+	return u
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (u *WebVitalUpsert) SetUserAgent(v string) *WebVitalUpsert {
+	u.Set(webvital.FieldUserAgent, v)
+	return u
+}
+
+// UpdateUserAgent sets the "user_agent" field to the value that was provided on create.
+func (u *WebVitalUpsert) UpdateUserAgent() *WebVitalUpsert {
+	u.SetExcluded(webvital.FieldUserAgent)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WebVitalUpsert) SetCreatedAt(v time.Time) *WebVitalUpsert {
+	u.Set(webvital.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WebVitalUpsert) UpdateCreatedAt() *WebVitalUpsert {
+	u.SetExcluded(webvital.FieldCreatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.WebVital.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *WebVitalUpsertOne) UpdateNewValues() *WebVitalUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.WebVital.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *WebVitalUpsertOne) Ignore() *WebVitalUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *WebVitalUpsertOne) DoNothing() *WebVitalUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the WebVitalCreate.OnConflict
+// documentation for more info.
+func (u *WebVitalUpsertOne) Update(set func(*WebVitalUpsert)) *WebVitalUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&WebVitalUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetMetricName sets the "metric_name" field.
+func (u *WebVitalUpsertOne) SetMetricName(v string) *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetMetricName(v)
+	})
+}
+
+// UpdateMetricName sets the "metric_name" field to the value that was provided on create.
+func (u *WebVitalUpsertOne) UpdateMetricName() *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdateMetricName()
+	})
+}
+
+// SetValue sets the "value" field.
+func (u *WebVitalUpsertOne) SetValue(v float64) *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetValue(v)
+	})
+}
+
+// AddValue adds v to the "value" field.
+func (u *WebVitalUpsertOne) AddValue(v float64) *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.AddValue(v)
+	})
+}
+
+// UpdateValue sets the "value" field to the value that was provided on create.
+func (u *WebVitalUpsertOne) UpdateValue() *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdateValue()
+	})
+}
+
+// SetRating sets the "rating" field.
+func (u *WebVitalUpsertOne) SetRating(v string) *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetRating(v)
+	})
+}
+
+// UpdateRating sets the "rating" field to the value that was provided on create.
+func (u *WebVitalUpsertOne) UpdateRating() *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdateRating()
+	})
+}
+
+// SetPath sets the "path" field.
+func (u *WebVitalUpsertOne) SetPath(v string) *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetPath(v)
+	})
+}
+
+// UpdatePath sets the "path" field to the value that was provided on create.
+func (u *WebVitalUpsertOne) UpdatePath() *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdatePath()
+	})
+}
+
+// SetNavigationType sets the "navigation_type" field.
+func (u *WebVitalUpsertOne) SetNavigationType(v string) *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetNavigationType(v)
+	})
+}
+
+// UpdateNavigationType sets the "navigation_type" field to the value that was provided on create.
+func (u *WebVitalUpsertOne) UpdateNavigationType() *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdateNavigationType()
+	})
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (u *WebVitalUpsertOne) SetUserAgent(v string) *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetUserAgent(v)
+	})
+}
+
+// UpdateUserAgent sets the "user_agent" field to the value that was provided on create.
+func (u *WebVitalUpsertOne) UpdateUserAgent() *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdateUserAgent()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WebVitalUpsertOne) SetCreatedAt(v time.Time) *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WebVitalUpsertOne) UpdateCreatedAt() *WebVitalUpsertOne {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *WebVitalUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for WebVitalCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *WebVitalUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *WebVitalUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *WebVitalUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // WebVitalCreateBulk is the builder for creating many WebVital entities in bulk.
 type WebVitalCreateBulk struct {
 	config
 	err      error
 	builders []*WebVitalCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the WebVital entities in the database.
@@ -275,6 +596,7 @@ func (_c *WebVitalCreateBulk) Save(ctx context.Context) ([]*WebVital, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -325,6 +647,215 @@ func (_c *WebVitalCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *WebVitalCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.WebVital.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.WebVitalUpsert) {
+//			SetMetricName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *WebVitalCreateBulk) OnConflict(opts ...sql.ConflictOption) *WebVitalUpsertBulk {
+	_c.conflict = opts
+	return &WebVitalUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.WebVital.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *WebVitalCreateBulk) OnConflictColumns(columns ...string) *WebVitalUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &WebVitalUpsertBulk{
+		create: _c,
+	}
+}
+
+// WebVitalUpsertBulk is the builder for "upsert"-ing
+// a bulk of WebVital nodes.
+type WebVitalUpsertBulk struct {
+	create *WebVitalCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.WebVital.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *WebVitalUpsertBulk) UpdateNewValues() *WebVitalUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.WebVital.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *WebVitalUpsertBulk) Ignore() *WebVitalUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *WebVitalUpsertBulk) DoNothing() *WebVitalUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the WebVitalCreateBulk.OnConflict
+// documentation for more info.
+func (u *WebVitalUpsertBulk) Update(set func(*WebVitalUpsert)) *WebVitalUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&WebVitalUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetMetricName sets the "metric_name" field.
+func (u *WebVitalUpsertBulk) SetMetricName(v string) *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetMetricName(v)
+	})
+}
+
+// UpdateMetricName sets the "metric_name" field to the value that was provided on create.
+func (u *WebVitalUpsertBulk) UpdateMetricName() *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdateMetricName()
+	})
+}
+
+// SetValue sets the "value" field.
+func (u *WebVitalUpsertBulk) SetValue(v float64) *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetValue(v)
+	})
+}
+
+// AddValue adds v to the "value" field.
+func (u *WebVitalUpsertBulk) AddValue(v float64) *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.AddValue(v)
+	})
+}
+
+// UpdateValue sets the "value" field to the value that was provided on create.
+func (u *WebVitalUpsertBulk) UpdateValue() *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdateValue()
+	})
+}
+
+// SetRating sets the "rating" field.
+func (u *WebVitalUpsertBulk) SetRating(v string) *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetRating(v)
+	})
+}
+
+// UpdateRating sets the "rating" field to the value that was provided on create.
+func (u *WebVitalUpsertBulk) UpdateRating() *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdateRating()
+	})
+}
+
+// SetPath sets the "path" field.
+func (u *WebVitalUpsertBulk) SetPath(v string) *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetPath(v)
+	})
+}
+
+// UpdatePath sets the "path" field to the value that was provided on create.
+func (u *WebVitalUpsertBulk) UpdatePath() *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdatePath()
+	})
+}
+
+// SetNavigationType sets the "navigation_type" field.
+func (u *WebVitalUpsertBulk) SetNavigationType(v string) *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetNavigationType(v)
+	})
+}
+
+// UpdateNavigationType sets the "navigation_type" field to the value that was provided on create.
+func (u *WebVitalUpsertBulk) UpdateNavigationType() *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdateNavigationType()
+	})
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (u *WebVitalUpsertBulk) SetUserAgent(v string) *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetUserAgent(v)
+	})
+}
+
+// UpdateUserAgent sets the "user_agent" field to the value that was provided on create.
+func (u *WebVitalUpsertBulk) UpdateUserAgent() *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdateUserAgent()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WebVitalUpsertBulk) SetCreatedAt(v time.Time) *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WebVitalUpsertBulk) UpdateCreatedAt() *WebVitalUpsertBulk {
+	return u.Update(func(s *WebVitalUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *WebVitalUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the WebVitalCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for WebVitalCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *WebVitalUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

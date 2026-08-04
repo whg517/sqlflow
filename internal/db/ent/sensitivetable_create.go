@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/sensitivetable"
@@ -18,6 +19,7 @@ type SensitiveTableCreate struct {
 	config
 	mutation *SensitiveTableMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetDatasourceID sets the "datasource_id" field.
@@ -205,6 +207,7 @@ func (_c *SensitiveTableCreate) createSpec() (*SensitiveTable, *sqlgraph.CreateS
 		_node = &SensitiveTable{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(sensitivetable.Table, sqlgraph.NewFieldSpec(sensitivetable.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.DatasourceID(); ok {
 		_spec.SetField(sensitivetable.FieldDatasourceID, field.TypeInt64, value)
 		_node.DatasourceID = value
@@ -232,11 +235,303 @@ func (_c *SensitiveTableCreate) createSpec() (*SensitiveTable, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SensitiveTable.Create().
+//		SetDatasourceID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SensitiveTableUpsert) {
+//			SetDatasourceID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SensitiveTableCreate) OnConflict(opts ...sql.ConflictOption) *SensitiveTableUpsertOne {
+	_c.conflict = opts
+	return &SensitiveTableUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SensitiveTable.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SensitiveTableCreate) OnConflictColumns(columns ...string) *SensitiveTableUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SensitiveTableUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// SensitiveTableUpsertOne is the builder for "upsert"-ing
+	//  one SensitiveTable node.
+	SensitiveTableUpsertOne struct {
+		create *SensitiveTableCreate
+	}
+
+	// SensitiveTableUpsert is the "OnConflict" setter.
+	SensitiveTableUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetDatasourceID sets the "datasource_id" field.
+func (u *SensitiveTableUpsert) SetDatasourceID(v int64) *SensitiveTableUpsert {
+	u.Set(sensitivetable.FieldDatasourceID, v)
+	return u
+}
+
+// UpdateDatasourceID sets the "datasource_id" field to the value that was provided on create.
+func (u *SensitiveTableUpsert) UpdateDatasourceID() *SensitiveTableUpsert {
+	u.SetExcluded(sensitivetable.FieldDatasourceID)
+	return u
+}
+
+// AddDatasourceID adds v to the "datasource_id" field.
+func (u *SensitiveTableUpsert) AddDatasourceID(v int64) *SensitiveTableUpsert {
+	u.Add(sensitivetable.FieldDatasourceID, v)
+	return u
+}
+
+// SetDatabase sets the "database" field.
+func (u *SensitiveTableUpsert) SetDatabase(v string) *SensitiveTableUpsert {
+	u.Set(sensitivetable.FieldDatabase, v)
+	return u
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *SensitiveTableUpsert) UpdateDatabase() *SensitiveTableUpsert {
+	u.SetExcluded(sensitivetable.FieldDatabase)
+	return u
+}
+
+// SetTableName sets the "table_name" field.
+func (u *SensitiveTableUpsert) SetTableName(v string) *SensitiveTableUpsert {
+	u.Set(sensitivetable.FieldTableName, v)
+	return u
+}
+
+// UpdateTableName sets the "table_name" field to the value that was provided on create.
+func (u *SensitiveTableUpsert) UpdateTableName() *SensitiveTableUpsert {
+	u.SetExcluded(sensitivetable.FieldTableName)
+	return u
+}
+
+// SetSensitivityLevel sets the "sensitivity_level" field.
+func (u *SensitiveTableUpsert) SetSensitivityLevel(v string) *SensitiveTableUpsert {
+	u.Set(sensitivetable.FieldSensitivityLevel, v)
+	return u
+}
+
+// UpdateSensitivityLevel sets the "sensitivity_level" field to the value that was provided on create.
+func (u *SensitiveTableUpsert) UpdateSensitivityLevel() *SensitiveTableUpsert {
+	u.SetExcluded(sensitivetable.FieldSensitivityLevel)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SensitiveTableUpsert) SetCreatedAt(v time.Time) *SensitiveTableUpsert {
+	u.Set(sensitivetable.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SensitiveTableUpsert) UpdateCreatedAt() *SensitiveTableUpsert {
+	u.SetExcluded(sensitivetable.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SensitiveTableUpsert) SetUpdatedAt(v time.Time) *SensitiveTableUpsert {
+	u.Set(sensitivetable.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SensitiveTableUpsert) UpdateUpdatedAt() *SensitiveTableUpsert {
+	u.SetExcluded(sensitivetable.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.SensitiveTable.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SensitiveTableUpsertOne) UpdateNewValues() *SensitiveTableUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SensitiveTable.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *SensitiveTableUpsertOne) Ignore() *SensitiveTableUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SensitiveTableUpsertOne) DoNothing() *SensitiveTableUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SensitiveTableCreate.OnConflict
+// documentation for more info.
+func (u *SensitiveTableUpsertOne) Update(set func(*SensitiveTableUpsert)) *SensitiveTableUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SensitiveTableUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetDatasourceID sets the "datasource_id" field.
+func (u *SensitiveTableUpsertOne) SetDatasourceID(v int64) *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.SetDatasourceID(v)
+	})
+}
+
+// AddDatasourceID adds v to the "datasource_id" field.
+func (u *SensitiveTableUpsertOne) AddDatasourceID(v int64) *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.AddDatasourceID(v)
+	})
+}
+
+// UpdateDatasourceID sets the "datasource_id" field to the value that was provided on create.
+func (u *SensitiveTableUpsertOne) UpdateDatasourceID() *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.UpdateDatasourceID()
+	})
+}
+
+// SetDatabase sets the "database" field.
+func (u *SensitiveTableUpsertOne) SetDatabase(v string) *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.SetDatabase(v)
+	})
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *SensitiveTableUpsertOne) UpdateDatabase() *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.UpdateDatabase()
+	})
+}
+
+// SetTableName sets the "table_name" field.
+func (u *SensitiveTableUpsertOne) SetTableName(v string) *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.SetTableName(v)
+	})
+}
+
+// UpdateTableName sets the "table_name" field to the value that was provided on create.
+func (u *SensitiveTableUpsertOne) UpdateTableName() *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.UpdateTableName()
+	})
+}
+
+// SetSensitivityLevel sets the "sensitivity_level" field.
+func (u *SensitiveTableUpsertOne) SetSensitivityLevel(v string) *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.SetSensitivityLevel(v)
+	})
+}
+
+// UpdateSensitivityLevel sets the "sensitivity_level" field to the value that was provided on create.
+func (u *SensitiveTableUpsertOne) UpdateSensitivityLevel() *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.UpdateSensitivityLevel()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SensitiveTableUpsertOne) SetCreatedAt(v time.Time) *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SensitiveTableUpsertOne) UpdateCreatedAt() *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SensitiveTableUpsertOne) SetUpdatedAt(v time.Time) *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SensitiveTableUpsertOne) UpdateUpdatedAt() *SensitiveTableUpsertOne {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SensitiveTableUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SensitiveTableCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SensitiveTableUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *SensitiveTableUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *SensitiveTableUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // SensitiveTableCreateBulk is the builder for creating many SensitiveTable entities in bulk.
 type SensitiveTableCreateBulk struct {
 	config
 	err      error
 	builders []*SensitiveTableCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the SensitiveTable entities in the database.
@@ -266,6 +561,7 @@ func (_c *SensitiveTableCreateBulk) Save(ctx context.Context) ([]*SensitiveTable
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -316,6 +612,201 @@ func (_c *SensitiveTableCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *SensitiveTableCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SensitiveTable.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SensitiveTableUpsert) {
+//			SetDatasourceID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SensitiveTableCreateBulk) OnConflict(opts ...sql.ConflictOption) *SensitiveTableUpsertBulk {
+	_c.conflict = opts
+	return &SensitiveTableUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SensitiveTable.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SensitiveTableCreateBulk) OnConflictColumns(columns ...string) *SensitiveTableUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SensitiveTableUpsertBulk{
+		create: _c,
+	}
+}
+
+// SensitiveTableUpsertBulk is the builder for "upsert"-ing
+// a bulk of SensitiveTable nodes.
+type SensitiveTableUpsertBulk struct {
+	create *SensitiveTableCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.SensitiveTable.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SensitiveTableUpsertBulk) UpdateNewValues() *SensitiveTableUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SensitiveTable.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *SensitiveTableUpsertBulk) Ignore() *SensitiveTableUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SensitiveTableUpsertBulk) DoNothing() *SensitiveTableUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SensitiveTableCreateBulk.OnConflict
+// documentation for more info.
+func (u *SensitiveTableUpsertBulk) Update(set func(*SensitiveTableUpsert)) *SensitiveTableUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SensitiveTableUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetDatasourceID sets the "datasource_id" field.
+func (u *SensitiveTableUpsertBulk) SetDatasourceID(v int64) *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.SetDatasourceID(v)
+	})
+}
+
+// AddDatasourceID adds v to the "datasource_id" field.
+func (u *SensitiveTableUpsertBulk) AddDatasourceID(v int64) *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.AddDatasourceID(v)
+	})
+}
+
+// UpdateDatasourceID sets the "datasource_id" field to the value that was provided on create.
+func (u *SensitiveTableUpsertBulk) UpdateDatasourceID() *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.UpdateDatasourceID()
+	})
+}
+
+// SetDatabase sets the "database" field.
+func (u *SensitiveTableUpsertBulk) SetDatabase(v string) *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.SetDatabase(v)
+	})
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *SensitiveTableUpsertBulk) UpdateDatabase() *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.UpdateDatabase()
+	})
+}
+
+// SetTableName sets the "table_name" field.
+func (u *SensitiveTableUpsertBulk) SetTableName(v string) *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.SetTableName(v)
+	})
+}
+
+// UpdateTableName sets the "table_name" field to the value that was provided on create.
+func (u *SensitiveTableUpsertBulk) UpdateTableName() *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.UpdateTableName()
+	})
+}
+
+// SetSensitivityLevel sets the "sensitivity_level" field.
+func (u *SensitiveTableUpsertBulk) SetSensitivityLevel(v string) *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.SetSensitivityLevel(v)
+	})
+}
+
+// UpdateSensitivityLevel sets the "sensitivity_level" field to the value that was provided on create.
+func (u *SensitiveTableUpsertBulk) UpdateSensitivityLevel() *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.UpdateSensitivityLevel()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SensitiveTableUpsertBulk) SetCreatedAt(v time.Time) *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SensitiveTableUpsertBulk) UpdateCreatedAt() *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SensitiveTableUpsertBulk) SetUpdatedAt(v time.Time) *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SensitiveTableUpsertBulk) UpdateUpdatedAt() *SensitiveTableUpsertBulk {
+	return u.Update(func(s *SensitiveTableUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SensitiveTableUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the SensitiveTableCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SensitiveTableCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SensitiveTableUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

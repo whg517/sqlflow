@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/slaconfig"
@@ -18,6 +19,7 @@ type SLAConfigCreate struct {
 	config
 	mutation *SLAConfigMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetPriority sets the "priority" field.
@@ -246,6 +248,7 @@ func (_c *SLAConfigCreate) createSpec() (*SLAConfig, *sqlgraph.CreateSpec) {
 		_node = &SLAConfig{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(slaconfig.Table, sqlgraph.NewFieldSpec(slaconfig.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Priority(); ok {
 		_spec.SetField(slaconfig.FieldPriority, field.TypeString, value)
 		_node.Priority = value
@@ -285,11 +288,394 @@ func (_c *SLAConfigCreate) createSpec() (*SLAConfig, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLAConfig.Create().
+//		SetPriority(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLAConfigUpsert) {
+//			SetPriority(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLAConfigCreate) OnConflict(opts ...sql.ConflictOption) *SLAConfigUpsertOne {
+	_c.conflict = opts
+	return &SLAConfigUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLAConfig.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLAConfigCreate) OnConflictColumns(columns ...string) *SLAConfigUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLAConfigUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// SLAConfigUpsertOne is the builder for "upsert"-ing
+	//  one SLAConfig node.
+	SLAConfigUpsertOne struct {
+		create *SLAConfigCreate
+	}
+
+	// SLAConfigUpsert is the "OnConflict" setter.
+	SLAConfigUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetPriority sets the "priority" field.
+func (u *SLAConfigUpsert) SetPriority(v string) *SLAConfigUpsert {
+	u.Set(slaconfig.FieldPriority, v)
+	return u
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *SLAConfigUpsert) UpdatePriority() *SLAConfigUpsert {
+	u.SetExcluded(slaconfig.FieldPriority)
+	return u
+}
+
+// SetTimeoutMinutes sets the "timeout_minutes" field.
+func (u *SLAConfigUpsert) SetTimeoutMinutes(v int) *SLAConfigUpsert {
+	u.Set(slaconfig.FieldTimeoutMinutes, v)
+	return u
+}
+
+// UpdateTimeoutMinutes sets the "timeout_minutes" field to the value that was provided on create.
+func (u *SLAConfigUpsert) UpdateTimeoutMinutes() *SLAConfigUpsert {
+	u.SetExcluded(slaconfig.FieldTimeoutMinutes)
+	return u
+}
+
+// AddTimeoutMinutes adds v to the "timeout_minutes" field.
+func (u *SLAConfigUpsert) AddTimeoutMinutes(v int) *SLAConfigUpsert {
+	u.Add(slaconfig.FieldTimeoutMinutes, v)
+	return u
+}
+
+// SetReminderPercent sets the "reminder_percent" field.
+func (u *SLAConfigUpsert) SetReminderPercent(v int) *SLAConfigUpsert {
+	u.Set(slaconfig.FieldReminderPercent, v)
+	return u
+}
+
+// UpdateReminderPercent sets the "reminder_percent" field to the value that was provided on create.
+func (u *SLAConfigUpsert) UpdateReminderPercent() *SLAConfigUpsert {
+	u.SetExcluded(slaconfig.FieldReminderPercent)
+	return u
+}
+
+// AddReminderPercent adds v to the "reminder_percent" field.
+func (u *SLAConfigUpsert) AddReminderPercent(v int) *SLAConfigUpsert {
+	u.Add(slaconfig.FieldReminderPercent, v)
+	return u
+}
+
+// SetEscalateToRole sets the "escalate_to_role" field.
+func (u *SLAConfigUpsert) SetEscalateToRole(v string) *SLAConfigUpsert {
+	u.Set(slaconfig.FieldEscalateToRole, v)
+	return u
+}
+
+// UpdateEscalateToRole sets the "escalate_to_role" field to the value that was provided on create.
+func (u *SLAConfigUpsert) UpdateEscalateToRole() *SLAConfigUpsert {
+	u.SetExcluded(slaconfig.FieldEscalateToRole)
+	return u
+}
+
+// SetEscalateToUser sets the "escalate_to_user" field.
+func (u *SLAConfigUpsert) SetEscalateToUser(v string) *SLAConfigUpsert {
+	u.Set(slaconfig.FieldEscalateToUser, v)
+	return u
+}
+
+// UpdateEscalateToUser sets the "escalate_to_user" field to the value that was provided on create.
+func (u *SLAConfigUpsert) UpdateEscalateToUser() *SLAConfigUpsert {
+	u.SetExcluded(slaconfig.FieldEscalateToUser)
+	return u
+}
+
+// SetAutoRejectEnabled sets the "auto_reject_enabled" field.
+func (u *SLAConfigUpsert) SetAutoRejectEnabled(v bool) *SLAConfigUpsert {
+	u.Set(slaconfig.FieldAutoRejectEnabled, v)
+	return u
+}
+
+// UpdateAutoRejectEnabled sets the "auto_reject_enabled" field to the value that was provided on create.
+func (u *SLAConfigUpsert) UpdateAutoRejectEnabled() *SLAConfigUpsert {
+	u.SetExcluded(slaconfig.FieldAutoRejectEnabled)
+	return u
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *SLAConfigUpsert) SetEnabled(v bool) *SLAConfigUpsert {
+	u.Set(slaconfig.FieldEnabled, v)
+	return u
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *SLAConfigUpsert) UpdateEnabled() *SLAConfigUpsert {
+	u.SetExcluded(slaconfig.FieldEnabled)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAConfigUpsert) SetCreatedAt(v time.Time) *SLAConfigUpsert {
+	u.Set(slaconfig.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAConfigUpsert) UpdateCreatedAt() *SLAConfigUpsert {
+	u.SetExcluded(slaconfig.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLAConfigUpsert) SetUpdatedAt(v time.Time) *SLAConfigUpsert {
+	u.Set(slaconfig.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLAConfigUpsert) UpdateUpdatedAt() *SLAConfigUpsert {
+	u.SetExcluded(slaconfig.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.SLAConfig.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLAConfigUpsertOne) UpdateNewValues() *SLAConfigUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLAConfig.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *SLAConfigUpsertOne) Ignore() *SLAConfigUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLAConfigUpsertOne) DoNothing() *SLAConfigUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLAConfigCreate.OnConflict
+// documentation for more info.
+func (u *SLAConfigUpsertOne) Update(set func(*SLAConfigUpsert)) *SLAConfigUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLAConfigUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetPriority sets the "priority" field.
+func (u *SLAConfigUpsertOne) SetPriority(v string) *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *SLAConfigUpsertOne) UpdatePriority() *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetTimeoutMinutes sets the "timeout_minutes" field.
+func (u *SLAConfigUpsertOne) SetTimeoutMinutes(v int) *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetTimeoutMinutes(v)
+	})
+}
+
+// AddTimeoutMinutes adds v to the "timeout_minutes" field.
+func (u *SLAConfigUpsertOne) AddTimeoutMinutes(v int) *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.AddTimeoutMinutes(v)
+	})
+}
+
+// UpdateTimeoutMinutes sets the "timeout_minutes" field to the value that was provided on create.
+func (u *SLAConfigUpsertOne) UpdateTimeoutMinutes() *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateTimeoutMinutes()
+	})
+}
+
+// SetReminderPercent sets the "reminder_percent" field.
+func (u *SLAConfigUpsertOne) SetReminderPercent(v int) *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetReminderPercent(v)
+	})
+}
+
+// AddReminderPercent adds v to the "reminder_percent" field.
+func (u *SLAConfigUpsertOne) AddReminderPercent(v int) *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.AddReminderPercent(v)
+	})
+}
+
+// UpdateReminderPercent sets the "reminder_percent" field to the value that was provided on create.
+func (u *SLAConfigUpsertOne) UpdateReminderPercent() *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateReminderPercent()
+	})
+}
+
+// SetEscalateToRole sets the "escalate_to_role" field.
+func (u *SLAConfigUpsertOne) SetEscalateToRole(v string) *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetEscalateToRole(v)
+	})
+}
+
+// UpdateEscalateToRole sets the "escalate_to_role" field to the value that was provided on create.
+func (u *SLAConfigUpsertOne) UpdateEscalateToRole() *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateEscalateToRole()
+	})
+}
+
+// SetEscalateToUser sets the "escalate_to_user" field.
+func (u *SLAConfigUpsertOne) SetEscalateToUser(v string) *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetEscalateToUser(v)
+	})
+}
+
+// UpdateEscalateToUser sets the "escalate_to_user" field to the value that was provided on create.
+func (u *SLAConfigUpsertOne) UpdateEscalateToUser() *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateEscalateToUser()
+	})
+}
+
+// SetAutoRejectEnabled sets the "auto_reject_enabled" field.
+func (u *SLAConfigUpsertOne) SetAutoRejectEnabled(v bool) *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetAutoRejectEnabled(v)
+	})
+}
+
+// UpdateAutoRejectEnabled sets the "auto_reject_enabled" field to the value that was provided on create.
+func (u *SLAConfigUpsertOne) UpdateAutoRejectEnabled() *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateAutoRejectEnabled()
+	})
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *SLAConfigUpsertOne) SetEnabled(v bool) *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetEnabled(v)
+	})
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *SLAConfigUpsertOne) UpdateEnabled() *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateEnabled()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAConfigUpsertOne) SetCreatedAt(v time.Time) *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAConfigUpsertOne) UpdateCreatedAt() *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLAConfigUpsertOne) SetUpdatedAt(v time.Time) *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLAConfigUpsertOne) UpdateUpdatedAt() *SLAConfigUpsertOne {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SLAConfigUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLAConfigCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLAConfigUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *SLAConfigUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *SLAConfigUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // SLAConfigCreateBulk is the builder for creating many SLAConfig entities in bulk.
 type SLAConfigCreateBulk struct {
 	config
 	err      error
 	builders []*SLAConfigCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the SLAConfig entities in the database.
@@ -319,6 +705,7 @@ func (_c *SLAConfigCreateBulk) Save(ctx context.Context) ([]*SLAConfig, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -369,6 +756,250 @@ func (_c *SLAConfigCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *SLAConfigCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLAConfig.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLAConfigUpsert) {
+//			SetPriority(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLAConfigCreateBulk) OnConflict(opts ...sql.ConflictOption) *SLAConfigUpsertBulk {
+	_c.conflict = opts
+	return &SLAConfigUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLAConfig.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLAConfigCreateBulk) OnConflictColumns(columns ...string) *SLAConfigUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLAConfigUpsertBulk{
+		create: _c,
+	}
+}
+
+// SLAConfigUpsertBulk is the builder for "upsert"-ing
+// a bulk of SLAConfig nodes.
+type SLAConfigUpsertBulk struct {
+	create *SLAConfigCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.SLAConfig.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLAConfigUpsertBulk) UpdateNewValues() *SLAConfigUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLAConfig.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *SLAConfigUpsertBulk) Ignore() *SLAConfigUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLAConfigUpsertBulk) DoNothing() *SLAConfigUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLAConfigCreateBulk.OnConflict
+// documentation for more info.
+func (u *SLAConfigUpsertBulk) Update(set func(*SLAConfigUpsert)) *SLAConfigUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLAConfigUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetPriority sets the "priority" field.
+func (u *SLAConfigUpsertBulk) SetPriority(v string) *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *SLAConfigUpsertBulk) UpdatePriority() *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetTimeoutMinutes sets the "timeout_minutes" field.
+func (u *SLAConfigUpsertBulk) SetTimeoutMinutes(v int) *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetTimeoutMinutes(v)
+	})
+}
+
+// AddTimeoutMinutes adds v to the "timeout_minutes" field.
+func (u *SLAConfigUpsertBulk) AddTimeoutMinutes(v int) *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.AddTimeoutMinutes(v)
+	})
+}
+
+// UpdateTimeoutMinutes sets the "timeout_minutes" field to the value that was provided on create.
+func (u *SLAConfigUpsertBulk) UpdateTimeoutMinutes() *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateTimeoutMinutes()
+	})
+}
+
+// SetReminderPercent sets the "reminder_percent" field.
+func (u *SLAConfigUpsertBulk) SetReminderPercent(v int) *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetReminderPercent(v)
+	})
+}
+
+// AddReminderPercent adds v to the "reminder_percent" field.
+func (u *SLAConfigUpsertBulk) AddReminderPercent(v int) *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.AddReminderPercent(v)
+	})
+}
+
+// UpdateReminderPercent sets the "reminder_percent" field to the value that was provided on create.
+func (u *SLAConfigUpsertBulk) UpdateReminderPercent() *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateReminderPercent()
+	})
+}
+
+// SetEscalateToRole sets the "escalate_to_role" field.
+func (u *SLAConfigUpsertBulk) SetEscalateToRole(v string) *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetEscalateToRole(v)
+	})
+}
+
+// UpdateEscalateToRole sets the "escalate_to_role" field to the value that was provided on create.
+func (u *SLAConfigUpsertBulk) UpdateEscalateToRole() *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateEscalateToRole()
+	})
+}
+
+// SetEscalateToUser sets the "escalate_to_user" field.
+func (u *SLAConfigUpsertBulk) SetEscalateToUser(v string) *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetEscalateToUser(v)
+	})
+}
+
+// UpdateEscalateToUser sets the "escalate_to_user" field to the value that was provided on create.
+func (u *SLAConfigUpsertBulk) UpdateEscalateToUser() *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateEscalateToUser()
+	})
+}
+
+// SetAutoRejectEnabled sets the "auto_reject_enabled" field.
+func (u *SLAConfigUpsertBulk) SetAutoRejectEnabled(v bool) *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetAutoRejectEnabled(v)
+	})
+}
+
+// UpdateAutoRejectEnabled sets the "auto_reject_enabled" field to the value that was provided on create.
+func (u *SLAConfigUpsertBulk) UpdateAutoRejectEnabled() *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateAutoRejectEnabled()
+	})
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *SLAConfigUpsertBulk) SetEnabled(v bool) *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetEnabled(v)
+	})
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *SLAConfigUpsertBulk) UpdateEnabled() *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateEnabled()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAConfigUpsertBulk) SetCreatedAt(v time.Time) *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAConfigUpsertBulk) UpdateCreatedAt() *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SLAConfigUpsertBulk) SetUpdatedAt(v time.Time) *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SLAConfigUpsertBulk) UpdateUpdatedAt() *SLAConfigUpsertBulk {
+	return u.Update(func(s *SLAConfigUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SLAConfigUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the SLAConfigCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLAConfigCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLAConfigUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/sqltemplate"
@@ -18,6 +19,7 @@ type SQLTemplateCreate struct {
 	config
 	mutation *SQLTemplateMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetUserID sets the "user_id" field.
@@ -263,6 +265,7 @@ func (_c *SQLTemplateCreate) createSpec() (*SQLTemplate, *sqlgraph.CreateSpec) {
 		_node = &SQLTemplate{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(sqltemplate.Table, sqlgraph.NewFieldSpec(sqltemplate.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.UserID(); ok {
 		_spec.SetField(sqltemplate.FieldUserID, field.TypeInt64, value)
 		_node.UserID = value
@@ -306,11 +309,407 @@ func (_c *SQLTemplateCreate) createSpec() (*SQLTemplate, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SQLTemplate.Create().
+//		SetUserID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SQLTemplateUpsert) {
+//			SetUserID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SQLTemplateCreate) OnConflict(opts ...sql.ConflictOption) *SQLTemplateUpsertOne {
+	_c.conflict = opts
+	return &SQLTemplateUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SQLTemplate.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SQLTemplateCreate) OnConflictColumns(columns ...string) *SQLTemplateUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SQLTemplateUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// SQLTemplateUpsertOne is the builder for "upsert"-ing
+	//  one SQLTemplate node.
+	SQLTemplateUpsertOne struct {
+		create *SQLTemplateCreate
+	}
+
+	// SQLTemplateUpsert is the "OnConflict" setter.
+	SQLTemplateUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetUserID sets the "user_id" field.
+func (u *SQLTemplateUpsert) SetUserID(v int64) *SQLTemplateUpsert {
+	u.Set(sqltemplate.FieldUserID, v)
+	return u
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *SQLTemplateUpsert) UpdateUserID() *SQLTemplateUpsert {
+	u.SetExcluded(sqltemplate.FieldUserID)
+	return u
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *SQLTemplateUpsert) AddUserID(v int64) *SQLTemplateUpsert {
+	u.Add(sqltemplate.FieldUserID, v)
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *SQLTemplateUpsert) SetName(v string) *SQLTemplateUpsert {
+	u.Set(sqltemplate.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *SQLTemplateUpsert) UpdateName() *SQLTemplateUpsert {
+	u.SetExcluded(sqltemplate.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *SQLTemplateUpsert) SetDescription(v string) *SQLTemplateUpsert {
+	u.Set(sqltemplate.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *SQLTemplateUpsert) UpdateDescription() *SQLTemplateUpsert {
+	u.SetExcluded(sqltemplate.FieldDescription)
+	return u
+}
+
+// SetSQLContent sets the "sql_content" field.
+func (u *SQLTemplateUpsert) SetSQLContent(v string) *SQLTemplateUpsert {
+	u.Set(sqltemplate.FieldSQLContent, v)
+	return u
+}
+
+// UpdateSQLContent sets the "sql_content" field to the value that was provided on create.
+func (u *SQLTemplateUpsert) UpdateSQLContent() *SQLTemplateUpsert {
+	u.SetExcluded(sqltemplate.FieldSQLContent)
+	return u
+}
+
+// SetDbType sets the "db_type" field.
+func (u *SQLTemplateUpsert) SetDbType(v string) *SQLTemplateUpsert {
+	u.Set(sqltemplate.FieldDbType, v)
+	return u
+}
+
+// UpdateDbType sets the "db_type" field to the value that was provided on create.
+func (u *SQLTemplateUpsert) UpdateDbType() *SQLTemplateUpsert {
+	u.SetExcluded(sqltemplate.FieldDbType)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *SQLTemplateUpsert) SetCategory(v string) *SQLTemplateUpsert {
+	u.Set(sqltemplate.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *SQLTemplateUpsert) UpdateCategory() *SQLTemplateUpsert {
+	u.SetExcluded(sqltemplate.FieldCategory)
+	return u
+}
+
+// SetParamsJSON sets the "params_json" field.
+func (u *SQLTemplateUpsert) SetParamsJSON(v string) *SQLTemplateUpsert {
+	u.Set(sqltemplate.FieldParamsJSON, v)
+	return u
+}
+
+// UpdateParamsJSON sets the "params_json" field to the value that was provided on create.
+func (u *SQLTemplateUpsert) UpdateParamsJSON() *SQLTemplateUpsert {
+	u.SetExcluded(sqltemplate.FieldParamsJSON)
+	return u
+}
+
+// SetIsPublic sets the "is_public" field.
+func (u *SQLTemplateUpsert) SetIsPublic(v bool) *SQLTemplateUpsert {
+	u.Set(sqltemplate.FieldIsPublic, v)
+	return u
+}
+
+// UpdateIsPublic sets the "is_public" field to the value that was provided on create.
+func (u *SQLTemplateUpsert) UpdateIsPublic() *SQLTemplateUpsert {
+	u.SetExcluded(sqltemplate.FieldIsPublic)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SQLTemplateUpsert) SetCreatedAt(v time.Time) *SQLTemplateUpsert {
+	u.Set(sqltemplate.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SQLTemplateUpsert) UpdateCreatedAt() *SQLTemplateUpsert {
+	u.SetExcluded(sqltemplate.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SQLTemplateUpsert) SetUpdatedAt(v time.Time) *SQLTemplateUpsert {
+	u.Set(sqltemplate.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SQLTemplateUpsert) UpdateUpdatedAt() *SQLTemplateUpsert {
+	u.SetExcluded(sqltemplate.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.SQLTemplate.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SQLTemplateUpsertOne) UpdateNewValues() *SQLTemplateUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SQLTemplate.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *SQLTemplateUpsertOne) Ignore() *SQLTemplateUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SQLTemplateUpsertOne) DoNothing() *SQLTemplateUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SQLTemplateCreate.OnConflict
+// documentation for more info.
+func (u *SQLTemplateUpsertOne) Update(set func(*SQLTemplateUpsert)) *SQLTemplateUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SQLTemplateUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *SQLTemplateUpsertOne) SetUserID(v int64) *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *SQLTemplateUpsertOne) AddUserID(v int64) *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *SQLTemplateUpsertOne) UpdateUserID() *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *SQLTemplateUpsertOne) SetName(v string) *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *SQLTemplateUpsertOne) UpdateName() *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *SQLTemplateUpsertOne) SetDescription(v string) *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *SQLTemplateUpsertOne) UpdateDescription() *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// SetSQLContent sets the "sql_content" field.
+func (u *SQLTemplateUpsertOne) SetSQLContent(v string) *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetSQLContent(v)
+	})
+}
+
+// UpdateSQLContent sets the "sql_content" field to the value that was provided on create.
+func (u *SQLTemplateUpsertOne) UpdateSQLContent() *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateSQLContent()
+	})
+}
+
+// SetDbType sets the "db_type" field.
+func (u *SQLTemplateUpsertOne) SetDbType(v string) *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetDbType(v)
+	})
+}
+
+// UpdateDbType sets the "db_type" field to the value that was provided on create.
+func (u *SQLTemplateUpsertOne) UpdateDbType() *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateDbType()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *SQLTemplateUpsertOne) SetCategory(v string) *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *SQLTemplateUpsertOne) UpdateCategory() *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// SetParamsJSON sets the "params_json" field.
+func (u *SQLTemplateUpsertOne) SetParamsJSON(v string) *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetParamsJSON(v)
+	})
+}
+
+// UpdateParamsJSON sets the "params_json" field to the value that was provided on create.
+func (u *SQLTemplateUpsertOne) UpdateParamsJSON() *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateParamsJSON()
+	})
+}
+
+// SetIsPublic sets the "is_public" field.
+func (u *SQLTemplateUpsertOne) SetIsPublic(v bool) *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetIsPublic(v)
+	})
+}
+
+// UpdateIsPublic sets the "is_public" field to the value that was provided on create.
+func (u *SQLTemplateUpsertOne) UpdateIsPublic() *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateIsPublic()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SQLTemplateUpsertOne) SetCreatedAt(v time.Time) *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SQLTemplateUpsertOne) UpdateCreatedAt() *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SQLTemplateUpsertOne) SetUpdatedAt(v time.Time) *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SQLTemplateUpsertOne) UpdateUpdatedAt() *SQLTemplateUpsertOne {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SQLTemplateUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SQLTemplateCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SQLTemplateUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *SQLTemplateUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *SQLTemplateUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // SQLTemplateCreateBulk is the builder for creating many SQLTemplate entities in bulk.
 type SQLTemplateCreateBulk struct {
 	config
 	err      error
 	builders []*SQLTemplateCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the SQLTemplate entities in the database.
@@ -340,6 +739,7 @@ func (_c *SQLTemplateCreateBulk) Save(ctx context.Context) ([]*SQLTemplate, erro
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -390,6 +790,257 @@ func (_c *SQLTemplateCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *SQLTemplateCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SQLTemplate.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SQLTemplateUpsert) {
+//			SetUserID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SQLTemplateCreateBulk) OnConflict(opts ...sql.ConflictOption) *SQLTemplateUpsertBulk {
+	_c.conflict = opts
+	return &SQLTemplateUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SQLTemplate.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SQLTemplateCreateBulk) OnConflictColumns(columns ...string) *SQLTemplateUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SQLTemplateUpsertBulk{
+		create: _c,
+	}
+}
+
+// SQLTemplateUpsertBulk is the builder for "upsert"-ing
+// a bulk of SQLTemplate nodes.
+type SQLTemplateUpsertBulk struct {
+	create *SQLTemplateCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.SQLTemplate.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SQLTemplateUpsertBulk) UpdateNewValues() *SQLTemplateUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SQLTemplate.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *SQLTemplateUpsertBulk) Ignore() *SQLTemplateUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SQLTemplateUpsertBulk) DoNothing() *SQLTemplateUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SQLTemplateCreateBulk.OnConflict
+// documentation for more info.
+func (u *SQLTemplateUpsertBulk) Update(set func(*SQLTemplateUpsert)) *SQLTemplateUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SQLTemplateUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *SQLTemplateUpsertBulk) SetUserID(v int64) *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *SQLTemplateUpsertBulk) AddUserID(v int64) *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *SQLTemplateUpsertBulk) UpdateUserID() *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *SQLTemplateUpsertBulk) SetName(v string) *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *SQLTemplateUpsertBulk) UpdateName() *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *SQLTemplateUpsertBulk) SetDescription(v string) *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *SQLTemplateUpsertBulk) UpdateDescription() *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// SetSQLContent sets the "sql_content" field.
+func (u *SQLTemplateUpsertBulk) SetSQLContent(v string) *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetSQLContent(v)
+	})
+}
+
+// UpdateSQLContent sets the "sql_content" field to the value that was provided on create.
+func (u *SQLTemplateUpsertBulk) UpdateSQLContent() *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateSQLContent()
+	})
+}
+
+// SetDbType sets the "db_type" field.
+func (u *SQLTemplateUpsertBulk) SetDbType(v string) *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetDbType(v)
+	})
+}
+
+// UpdateDbType sets the "db_type" field to the value that was provided on create.
+func (u *SQLTemplateUpsertBulk) UpdateDbType() *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateDbType()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *SQLTemplateUpsertBulk) SetCategory(v string) *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *SQLTemplateUpsertBulk) UpdateCategory() *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// SetParamsJSON sets the "params_json" field.
+func (u *SQLTemplateUpsertBulk) SetParamsJSON(v string) *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetParamsJSON(v)
+	})
+}
+
+// UpdateParamsJSON sets the "params_json" field to the value that was provided on create.
+func (u *SQLTemplateUpsertBulk) UpdateParamsJSON() *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateParamsJSON()
+	})
+}
+
+// SetIsPublic sets the "is_public" field.
+func (u *SQLTemplateUpsertBulk) SetIsPublic(v bool) *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetIsPublic(v)
+	})
+}
+
+// UpdateIsPublic sets the "is_public" field to the value that was provided on create.
+func (u *SQLTemplateUpsertBulk) UpdateIsPublic() *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateIsPublic()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SQLTemplateUpsertBulk) SetCreatedAt(v time.Time) *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SQLTemplateUpsertBulk) UpdateCreatedAt() *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SQLTemplateUpsertBulk) SetUpdatedAt(v time.Time) *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SQLTemplateUpsertBulk) UpdateUpdatedAt() *SQLTemplateUpsertBulk {
+	return u.Update(func(s *SQLTemplateUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SQLTemplateUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the SQLTemplateCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SQLTemplateCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SQLTemplateUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

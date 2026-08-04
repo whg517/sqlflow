@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/maskrule"
@@ -18,6 +19,7 @@ type MaskRuleCreate struct {
 	config
 	mutation *MaskRuleMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetDatasourceID sets the "datasource_id" field.
@@ -268,6 +270,7 @@ func (_c *MaskRuleCreate) createSpec() (*MaskRule, *sqlgraph.CreateSpec) {
 		_node = &MaskRule{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(maskrule.Table, sqlgraph.NewFieldSpec(maskrule.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.DatasourceID(); ok {
 		_spec.SetField(maskrule.FieldDatasourceID, field.TypeInt64, value)
 		_node.DatasourceID = value
@@ -307,11 +310,381 @@ func (_c *MaskRuleCreate) createSpec() (*MaskRule, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.MaskRule.Create().
+//		SetDatasourceID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.MaskRuleUpsert) {
+//			SetDatasourceID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *MaskRuleCreate) OnConflict(opts ...sql.ConflictOption) *MaskRuleUpsertOne {
+	_c.conflict = opts
+	return &MaskRuleUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.MaskRule.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *MaskRuleCreate) OnConflictColumns(columns ...string) *MaskRuleUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &MaskRuleUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// MaskRuleUpsertOne is the builder for "upsert"-ing
+	//  one MaskRule node.
+	MaskRuleUpsertOne struct {
+		create *MaskRuleCreate
+	}
+
+	// MaskRuleUpsert is the "OnConflict" setter.
+	MaskRuleUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetDatasourceID sets the "datasource_id" field.
+func (u *MaskRuleUpsert) SetDatasourceID(v int64) *MaskRuleUpsert {
+	u.Set(maskrule.FieldDatasourceID, v)
+	return u
+}
+
+// UpdateDatasourceID sets the "datasource_id" field to the value that was provided on create.
+func (u *MaskRuleUpsert) UpdateDatasourceID() *MaskRuleUpsert {
+	u.SetExcluded(maskrule.FieldDatasourceID)
+	return u
+}
+
+// AddDatasourceID adds v to the "datasource_id" field.
+func (u *MaskRuleUpsert) AddDatasourceID(v int64) *MaskRuleUpsert {
+	u.Add(maskrule.FieldDatasourceID, v)
+	return u
+}
+
+// SetDatabase sets the "database" field.
+func (u *MaskRuleUpsert) SetDatabase(v string) *MaskRuleUpsert {
+	u.Set(maskrule.FieldDatabase, v)
+	return u
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *MaskRuleUpsert) UpdateDatabase() *MaskRuleUpsert {
+	u.SetExcluded(maskrule.FieldDatabase)
+	return u
+}
+
+// SetTableName sets the "table_name" field.
+func (u *MaskRuleUpsert) SetTableName(v string) *MaskRuleUpsert {
+	u.Set(maskrule.FieldTableName, v)
+	return u
+}
+
+// UpdateTableName sets the "table_name" field to the value that was provided on create.
+func (u *MaskRuleUpsert) UpdateTableName() *MaskRuleUpsert {
+	u.SetExcluded(maskrule.FieldTableName)
+	return u
+}
+
+// SetField sets the "field" field.
+func (u *MaskRuleUpsert) SetField(v string) *MaskRuleUpsert {
+	u.Set(maskrule.FieldField, v)
+	return u
+}
+
+// UpdateField sets the "field" field to the value that was provided on create.
+func (u *MaskRuleUpsert) UpdateField() *MaskRuleUpsert {
+	u.SetExcluded(maskrule.FieldField)
+	return u
+}
+
+// SetMaskType sets the "mask_type" field.
+func (u *MaskRuleUpsert) SetMaskType(v string) *MaskRuleUpsert {
+	u.Set(maskrule.FieldMaskType, v)
+	return u
+}
+
+// UpdateMaskType sets the "mask_type" field to the value that was provided on create.
+func (u *MaskRuleUpsert) UpdateMaskType() *MaskRuleUpsert {
+	u.SetExcluded(maskrule.FieldMaskType)
+	return u
+}
+
+// SetCustomRegex sets the "custom_regex" field.
+func (u *MaskRuleUpsert) SetCustomRegex(v string) *MaskRuleUpsert {
+	u.Set(maskrule.FieldCustomRegex, v)
+	return u
+}
+
+// UpdateCustomRegex sets the "custom_regex" field to the value that was provided on create.
+func (u *MaskRuleUpsert) UpdateCustomRegex() *MaskRuleUpsert {
+	u.SetExcluded(maskrule.FieldCustomRegex)
+	return u
+}
+
+// SetCustomTemplate sets the "custom_template" field.
+func (u *MaskRuleUpsert) SetCustomTemplate(v string) *MaskRuleUpsert {
+	u.Set(maskrule.FieldCustomTemplate, v)
+	return u
+}
+
+// UpdateCustomTemplate sets the "custom_template" field to the value that was provided on create.
+func (u *MaskRuleUpsert) UpdateCustomTemplate() *MaskRuleUpsert {
+	u.SetExcluded(maskrule.FieldCustomTemplate)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *MaskRuleUpsert) SetCreatedAt(v time.Time) *MaskRuleUpsert {
+	u.Set(maskrule.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *MaskRuleUpsert) UpdateCreatedAt() *MaskRuleUpsert {
+	u.SetExcluded(maskrule.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *MaskRuleUpsert) SetUpdatedAt(v time.Time) *MaskRuleUpsert {
+	u.Set(maskrule.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *MaskRuleUpsert) UpdateUpdatedAt() *MaskRuleUpsert {
+	u.SetExcluded(maskrule.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.MaskRule.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *MaskRuleUpsertOne) UpdateNewValues() *MaskRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.MaskRule.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *MaskRuleUpsertOne) Ignore() *MaskRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *MaskRuleUpsertOne) DoNothing() *MaskRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the MaskRuleCreate.OnConflict
+// documentation for more info.
+func (u *MaskRuleUpsertOne) Update(set func(*MaskRuleUpsert)) *MaskRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&MaskRuleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetDatasourceID sets the "datasource_id" field.
+func (u *MaskRuleUpsertOne) SetDatasourceID(v int64) *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetDatasourceID(v)
+	})
+}
+
+// AddDatasourceID adds v to the "datasource_id" field.
+func (u *MaskRuleUpsertOne) AddDatasourceID(v int64) *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.AddDatasourceID(v)
+	})
+}
+
+// UpdateDatasourceID sets the "datasource_id" field to the value that was provided on create.
+func (u *MaskRuleUpsertOne) UpdateDatasourceID() *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateDatasourceID()
+	})
+}
+
+// SetDatabase sets the "database" field.
+func (u *MaskRuleUpsertOne) SetDatabase(v string) *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetDatabase(v)
+	})
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *MaskRuleUpsertOne) UpdateDatabase() *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateDatabase()
+	})
+}
+
+// SetTableName sets the "table_name" field.
+func (u *MaskRuleUpsertOne) SetTableName(v string) *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetTableName(v)
+	})
+}
+
+// UpdateTableName sets the "table_name" field to the value that was provided on create.
+func (u *MaskRuleUpsertOne) UpdateTableName() *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateTableName()
+	})
+}
+
+// SetField sets the "field" field.
+func (u *MaskRuleUpsertOne) SetField(v string) *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetField(v)
+	})
+}
+
+// UpdateField sets the "field" field to the value that was provided on create.
+func (u *MaskRuleUpsertOne) UpdateField() *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateField()
+	})
+}
+
+// SetMaskType sets the "mask_type" field.
+func (u *MaskRuleUpsertOne) SetMaskType(v string) *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetMaskType(v)
+	})
+}
+
+// UpdateMaskType sets the "mask_type" field to the value that was provided on create.
+func (u *MaskRuleUpsertOne) UpdateMaskType() *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateMaskType()
+	})
+}
+
+// SetCustomRegex sets the "custom_regex" field.
+func (u *MaskRuleUpsertOne) SetCustomRegex(v string) *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetCustomRegex(v)
+	})
+}
+
+// UpdateCustomRegex sets the "custom_regex" field to the value that was provided on create.
+func (u *MaskRuleUpsertOne) UpdateCustomRegex() *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateCustomRegex()
+	})
+}
+
+// SetCustomTemplate sets the "custom_template" field.
+func (u *MaskRuleUpsertOne) SetCustomTemplate(v string) *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetCustomTemplate(v)
+	})
+}
+
+// UpdateCustomTemplate sets the "custom_template" field to the value that was provided on create.
+func (u *MaskRuleUpsertOne) UpdateCustomTemplate() *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateCustomTemplate()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *MaskRuleUpsertOne) SetCreatedAt(v time.Time) *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *MaskRuleUpsertOne) UpdateCreatedAt() *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *MaskRuleUpsertOne) SetUpdatedAt(v time.Time) *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *MaskRuleUpsertOne) UpdateUpdatedAt() *MaskRuleUpsertOne {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *MaskRuleUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for MaskRuleCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *MaskRuleUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *MaskRuleUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *MaskRuleUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // MaskRuleCreateBulk is the builder for creating many MaskRule entities in bulk.
 type MaskRuleCreateBulk struct {
 	config
 	err      error
 	builders []*MaskRuleCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the MaskRule entities in the database.
@@ -341,6 +714,7 @@ func (_c *MaskRuleCreateBulk) Save(ctx context.Context) ([]*MaskRule, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -391,6 +765,243 @@ func (_c *MaskRuleCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *MaskRuleCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.MaskRule.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.MaskRuleUpsert) {
+//			SetDatasourceID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *MaskRuleCreateBulk) OnConflict(opts ...sql.ConflictOption) *MaskRuleUpsertBulk {
+	_c.conflict = opts
+	return &MaskRuleUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.MaskRule.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *MaskRuleCreateBulk) OnConflictColumns(columns ...string) *MaskRuleUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &MaskRuleUpsertBulk{
+		create: _c,
+	}
+}
+
+// MaskRuleUpsertBulk is the builder for "upsert"-ing
+// a bulk of MaskRule nodes.
+type MaskRuleUpsertBulk struct {
+	create *MaskRuleCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.MaskRule.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *MaskRuleUpsertBulk) UpdateNewValues() *MaskRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.MaskRule.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *MaskRuleUpsertBulk) Ignore() *MaskRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *MaskRuleUpsertBulk) DoNothing() *MaskRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the MaskRuleCreateBulk.OnConflict
+// documentation for more info.
+func (u *MaskRuleUpsertBulk) Update(set func(*MaskRuleUpsert)) *MaskRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&MaskRuleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetDatasourceID sets the "datasource_id" field.
+func (u *MaskRuleUpsertBulk) SetDatasourceID(v int64) *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetDatasourceID(v)
+	})
+}
+
+// AddDatasourceID adds v to the "datasource_id" field.
+func (u *MaskRuleUpsertBulk) AddDatasourceID(v int64) *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.AddDatasourceID(v)
+	})
+}
+
+// UpdateDatasourceID sets the "datasource_id" field to the value that was provided on create.
+func (u *MaskRuleUpsertBulk) UpdateDatasourceID() *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateDatasourceID()
+	})
+}
+
+// SetDatabase sets the "database" field.
+func (u *MaskRuleUpsertBulk) SetDatabase(v string) *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetDatabase(v)
+	})
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *MaskRuleUpsertBulk) UpdateDatabase() *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateDatabase()
+	})
+}
+
+// SetTableName sets the "table_name" field.
+func (u *MaskRuleUpsertBulk) SetTableName(v string) *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetTableName(v)
+	})
+}
+
+// UpdateTableName sets the "table_name" field to the value that was provided on create.
+func (u *MaskRuleUpsertBulk) UpdateTableName() *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateTableName()
+	})
+}
+
+// SetField sets the "field" field.
+func (u *MaskRuleUpsertBulk) SetField(v string) *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetField(v)
+	})
+}
+
+// UpdateField sets the "field" field to the value that was provided on create.
+func (u *MaskRuleUpsertBulk) UpdateField() *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateField()
+	})
+}
+
+// SetMaskType sets the "mask_type" field.
+func (u *MaskRuleUpsertBulk) SetMaskType(v string) *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetMaskType(v)
+	})
+}
+
+// UpdateMaskType sets the "mask_type" field to the value that was provided on create.
+func (u *MaskRuleUpsertBulk) UpdateMaskType() *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateMaskType()
+	})
+}
+
+// SetCustomRegex sets the "custom_regex" field.
+func (u *MaskRuleUpsertBulk) SetCustomRegex(v string) *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetCustomRegex(v)
+	})
+}
+
+// UpdateCustomRegex sets the "custom_regex" field to the value that was provided on create.
+func (u *MaskRuleUpsertBulk) UpdateCustomRegex() *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateCustomRegex()
+	})
+}
+
+// SetCustomTemplate sets the "custom_template" field.
+func (u *MaskRuleUpsertBulk) SetCustomTemplate(v string) *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetCustomTemplate(v)
+	})
+}
+
+// UpdateCustomTemplate sets the "custom_template" field to the value that was provided on create.
+func (u *MaskRuleUpsertBulk) UpdateCustomTemplate() *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateCustomTemplate()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *MaskRuleUpsertBulk) SetCreatedAt(v time.Time) *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *MaskRuleUpsertBulk) UpdateCreatedAt() *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *MaskRuleUpsertBulk) SetUpdatedAt(v time.Time) *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *MaskRuleUpsertBulk) UpdateUpdatedAt() *MaskRuleUpsertBulk {
+	return u.Update(func(s *MaskRuleUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *MaskRuleUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the MaskRuleCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for MaskRuleCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *MaskRuleUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

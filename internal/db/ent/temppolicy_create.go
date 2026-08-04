@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/temppolicy"
@@ -18,6 +19,7 @@ type TempPolicyCreate struct {
 	config
 	mutation *TempPolicyMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetSub sets the "sub" field.
@@ -168,6 +170,7 @@ func (_c *TempPolicyCreate) createSpec() (*TempPolicy, *sqlgraph.CreateSpec) {
 		_node = &TempPolicy{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(temppolicy.Table, sqlgraph.NewFieldSpec(temppolicy.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Sub(); ok {
 		_spec.SetField(temppolicy.FieldSub, field.TypeString, value)
 		_node.Sub = value
@@ -195,11 +198,290 @@ func (_c *TempPolicyCreate) createSpec() (*TempPolicy, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TempPolicy.Create().
+//		SetSub(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TempPolicyUpsert) {
+//			SetSub(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TempPolicyCreate) OnConflict(opts ...sql.ConflictOption) *TempPolicyUpsertOne {
+	_c.conflict = opts
+	return &TempPolicyUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TempPolicy.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TempPolicyCreate) OnConflictColumns(columns ...string) *TempPolicyUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TempPolicyUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// TempPolicyUpsertOne is the builder for "upsert"-ing
+	//  one TempPolicy node.
+	TempPolicyUpsertOne struct {
+		create *TempPolicyCreate
+	}
+
+	// TempPolicyUpsert is the "OnConflict" setter.
+	TempPolicyUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetSub sets the "sub" field.
+func (u *TempPolicyUpsert) SetSub(v string) *TempPolicyUpsert {
+	u.Set(temppolicy.FieldSub, v)
+	return u
+}
+
+// UpdateSub sets the "sub" field to the value that was provided on create.
+func (u *TempPolicyUpsert) UpdateSub() *TempPolicyUpsert {
+	u.SetExcluded(temppolicy.FieldSub)
+	return u
+}
+
+// SetDom sets the "dom" field.
+func (u *TempPolicyUpsert) SetDom(v string) *TempPolicyUpsert {
+	u.Set(temppolicy.FieldDom, v)
+	return u
+}
+
+// UpdateDom sets the "dom" field to the value that was provided on create.
+func (u *TempPolicyUpsert) UpdateDom() *TempPolicyUpsert {
+	u.SetExcluded(temppolicy.FieldDom)
+	return u
+}
+
+// SetObj sets the "obj" field.
+func (u *TempPolicyUpsert) SetObj(v string) *TempPolicyUpsert {
+	u.Set(temppolicy.FieldObj, v)
+	return u
+}
+
+// UpdateObj sets the "obj" field to the value that was provided on create.
+func (u *TempPolicyUpsert) UpdateObj() *TempPolicyUpsert {
+	u.SetExcluded(temppolicy.FieldObj)
+	return u
+}
+
+// SetAct sets the "act" field.
+func (u *TempPolicyUpsert) SetAct(v string) *TempPolicyUpsert {
+	u.Set(temppolicy.FieldAct, v)
+	return u
+}
+
+// UpdateAct sets the "act" field to the value that was provided on create.
+func (u *TempPolicyUpsert) UpdateAct() *TempPolicyUpsert {
+	u.SetExcluded(temppolicy.FieldAct)
+	return u
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (u *TempPolicyUpsert) SetExpiresAt(v time.Time) *TempPolicyUpsert {
+	u.Set(temppolicy.FieldExpiresAt, v)
+	return u
+}
+
+// UpdateExpiresAt sets the "expires_at" field to the value that was provided on create.
+func (u *TempPolicyUpsert) UpdateExpiresAt() *TempPolicyUpsert {
+	u.SetExcluded(temppolicy.FieldExpiresAt)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TempPolicyUpsert) SetCreatedAt(v time.Time) *TempPolicyUpsert {
+	u.Set(temppolicy.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TempPolicyUpsert) UpdateCreatedAt() *TempPolicyUpsert {
+	u.SetExcluded(temppolicy.FieldCreatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.TempPolicy.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TempPolicyUpsertOne) UpdateNewValues() *TempPolicyUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TempPolicy.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *TempPolicyUpsertOne) Ignore() *TempPolicyUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TempPolicyUpsertOne) DoNothing() *TempPolicyUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TempPolicyCreate.OnConflict
+// documentation for more info.
+func (u *TempPolicyUpsertOne) Update(set func(*TempPolicyUpsert)) *TempPolicyUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TempPolicyUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetSub sets the "sub" field.
+func (u *TempPolicyUpsertOne) SetSub(v string) *TempPolicyUpsertOne {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.SetSub(v)
+	})
+}
+
+// UpdateSub sets the "sub" field to the value that was provided on create.
+func (u *TempPolicyUpsertOne) UpdateSub() *TempPolicyUpsertOne {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.UpdateSub()
+	})
+}
+
+// SetDom sets the "dom" field.
+func (u *TempPolicyUpsertOne) SetDom(v string) *TempPolicyUpsertOne {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.SetDom(v)
+	})
+}
+
+// UpdateDom sets the "dom" field to the value that was provided on create.
+func (u *TempPolicyUpsertOne) UpdateDom() *TempPolicyUpsertOne {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.UpdateDom()
+	})
+}
+
+// SetObj sets the "obj" field.
+func (u *TempPolicyUpsertOne) SetObj(v string) *TempPolicyUpsertOne {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.SetObj(v)
+	})
+}
+
+// UpdateObj sets the "obj" field to the value that was provided on create.
+func (u *TempPolicyUpsertOne) UpdateObj() *TempPolicyUpsertOne {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.UpdateObj()
+	})
+}
+
+// SetAct sets the "act" field.
+func (u *TempPolicyUpsertOne) SetAct(v string) *TempPolicyUpsertOne {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.SetAct(v)
+	})
+}
+
+// UpdateAct sets the "act" field to the value that was provided on create.
+func (u *TempPolicyUpsertOne) UpdateAct() *TempPolicyUpsertOne {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.UpdateAct()
+	})
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (u *TempPolicyUpsertOne) SetExpiresAt(v time.Time) *TempPolicyUpsertOne {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.SetExpiresAt(v)
+	})
+}
+
+// UpdateExpiresAt sets the "expires_at" field to the value that was provided on create.
+func (u *TempPolicyUpsertOne) UpdateExpiresAt() *TempPolicyUpsertOne {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.UpdateExpiresAt()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TempPolicyUpsertOne) SetCreatedAt(v time.Time) *TempPolicyUpsertOne {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TempPolicyUpsertOne) UpdateCreatedAt() *TempPolicyUpsertOne {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TempPolicyUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TempPolicyCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TempPolicyUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *TempPolicyUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *TempPolicyUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // TempPolicyCreateBulk is the builder for creating many TempPolicy entities in bulk.
 type TempPolicyCreateBulk struct {
 	config
 	err      error
 	builders []*TempPolicyCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the TempPolicy entities in the database.
@@ -229,6 +511,7 @@ func (_c *TempPolicyCreateBulk) Save(ctx context.Context) ([]*TempPolicy, error)
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -279,6 +562,194 @@ func (_c *TempPolicyCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *TempPolicyCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TempPolicy.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TempPolicyUpsert) {
+//			SetSub(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TempPolicyCreateBulk) OnConflict(opts ...sql.ConflictOption) *TempPolicyUpsertBulk {
+	_c.conflict = opts
+	return &TempPolicyUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TempPolicy.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TempPolicyCreateBulk) OnConflictColumns(columns ...string) *TempPolicyUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TempPolicyUpsertBulk{
+		create: _c,
+	}
+}
+
+// TempPolicyUpsertBulk is the builder for "upsert"-ing
+// a bulk of TempPolicy nodes.
+type TempPolicyUpsertBulk struct {
+	create *TempPolicyCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.TempPolicy.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TempPolicyUpsertBulk) UpdateNewValues() *TempPolicyUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TempPolicy.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *TempPolicyUpsertBulk) Ignore() *TempPolicyUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TempPolicyUpsertBulk) DoNothing() *TempPolicyUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TempPolicyCreateBulk.OnConflict
+// documentation for more info.
+func (u *TempPolicyUpsertBulk) Update(set func(*TempPolicyUpsert)) *TempPolicyUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TempPolicyUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetSub sets the "sub" field.
+func (u *TempPolicyUpsertBulk) SetSub(v string) *TempPolicyUpsertBulk {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.SetSub(v)
+	})
+}
+
+// UpdateSub sets the "sub" field to the value that was provided on create.
+func (u *TempPolicyUpsertBulk) UpdateSub() *TempPolicyUpsertBulk {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.UpdateSub()
+	})
+}
+
+// SetDom sets the "dom" field.
+func (u *TempPolicyUpsertBulk) SetDom(v string) *TempPolicyUpsertBulk {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.SetDom(v)
+	})
+}
+
+// UpdateDom sets the "dom" field to the value that was provided on create.
+func (u *TempPolicyUpsertBulk) UpdateDom() *TempPolicyUpsertBulk {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.UpdateDom()
+	})
+}
+
+// SetObj sets the "obj" field.
+func (u *TempPolicyUpsertBulk) SetObj(v string) *TempPolicyUpsertBulk {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.SetObj(v)
+	})
+}
+
+// UpdateObj sets the "obj" field to the value that was provided on create.
+func (u *TempPolicyUpsertBulk) UpdateObj() *TempPolicyUpsertBulk {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.UpdateObj()
+	})
+}
+
+// SetAct sets the "act" field.
+func (u *TempPolicyUpsertBulk) SetAct(v string) *TempPolicyUpsertBulk {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.SetAct(v)
+	})
+}
+
+// UpdateAct sets the "act" field to the value that was provided on create.
+func (u *TempPolicyUpsertBulk) UpdateAct() *TempPolicyUpsertBulk {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.UpdateAct()
+	})
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (u *TempPolicyUpsertBulk) SetExpiresAt(v time.Time) *TempPolicyUpsertBulk {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.SetExpiresAt(v)
+	})
+}
+
+// UpdateExpiresAt sets the "expires_at" field to the value that was provided on create.
+func (u *TempPolicyUpsertBulk) UpdateExpiresAt() *TempPolicyUpsertBulk {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.UpdateExpiresAt()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TempPolicyUpsertBulk) SetCreatedAt(v time.Time) *TempPolicyUpsertBulk {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TempPolicyUpsertBulk) UpdateCreatedAt() *TempPolicyUpsertBulk {
+	return u.Update(func(s *TempPolicyUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TempPolicyUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the TempPolicyCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TempPolicyCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TempPolicyUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

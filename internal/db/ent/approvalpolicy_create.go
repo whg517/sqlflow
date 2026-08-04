@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/approvalpolicy"
@@ -18,6 +19,7 @@ type ApprovalPolicyCreate struct {
 	config
 	mutation *ApprovalPolicyMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -289,6 +291,7 @@ func (_c *ApprovalPolicyCreate) createSpec() (*ApprovalPolicy, *sqlgraph.CreateS
 		_node = &ApprovalPolicy{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(approvalpolicy.Table, sqlgraph.NewFieldSpec(approvalpolicy.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(approvalpolicy.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -336,11 +339,459 @@ func (_c *ApprovalPolicyCreate) createSpec() (*ApprovalPolicy, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ApprovalPolicy.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ApprovalPolicyUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ApprovalPolicyCreate) OnConflict(opts ...sql.ConflictOption) *ApprovalPolicyUpsertOne {
+	_c.conflict = opts
+	return &ApprovalPolicyUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ApprovalPolicy.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ApprovalPolicyCreate) OnConflictColumns(columns ...string) *ApprovalPolicyUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ApprovalPolicyUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ApprovalPolicyUpsertOne is the builder for "upsert"-ing
+	//  one ApprovalPolicy node.
+	ApprovalPolicyUpsertOne struct {
+		create *ApprovalPolicyCreate
+	}
+
+	// ApprovalPolicyUpsert is the "OnConflict" setter.
+	ApprovalPolicyUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *ApprovalPolicyUpsert) SetName(v string) *ApprovalPolicyUpsert {
+	u.Set(approvalpolicy.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsert) UpdateName() *ApprovalPolicyUpsert {
+	u.SetExcluded(approvalpolicy.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *ApprovalPolicyUpsert) SetDescription(v string) *ApprovalPolicyUpsert {
+	u.Set(approvalpolicy.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsert) UpdateDescription() *ApprovalPolicyUpsert {
+	u.SetExcluded(approvalpolicy.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ApprovalPolicyUpsert) ClearDescription() *ApprovalPolicyUpsert {
+	u.SetNull(approvalpolicy.FieldDescription)
+	return u
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *ApprovalPolicyUpsert) SetEnabled(v bool) *ApprovalPolicyUpsert {
+	u.Set(approvalpolicy.FieldEnabled, v)
+	return u
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsert) UpdateEnabled() *ApprovalPolicyUpsert {
+	u.SetExcluded(approvalpolicy.FieldEnabled)
+	return u
+}
+
+// SetPriority sets the "priority" field.
+func (u *ApprovalPolicyUpsert) SetPriority(v int) *ApprovalPolicyUpsert {
+	u.Set(approvalpolicy.FieldPriority, v)
+	return u
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsert) UpdatePriority() *ApprovalPolicyUpsert {
+	u.SetExcluded(approvalpolicy.FieldPriority)
+	return u
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *ApprovalPolicyUpsert) AddPriority(v int) *ApprovalPolicyUpsert {
+	u.Add(approvalpolicy.FieldPriority, v)
+	return u
+}
+
+// SetConditions sets the "conditions" field.
+func (u *ApprovalPolicyUpsert) SetConditions(v string) *ApprovalPolicyUpsert {
+	u.Set(approvalpolicy.FieldConditions, v)
+	return u
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsert) UpdateConditions() *ApprovalPolicyUpsert {
+	u.SetExcluded(approvalpolicy.FieldConditions)
+	return u
+}
+
+// SetApprovalChain sets the "approval_chain" field.
+func (u *ApprovalPolicyUpsert) SetApprovalChain(v string) *ApprovalPolicyUpsert {
+	u.Set(approvalpolicy.FieldApprovalChain, v)
+	return u
+}
+
+// UpdateApprovalChain sets the "approval_chain" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsert) UpdateApprovalChain() *ApprovalPolicyUpsert {
+	u.SetExcluded(approvalpolicy.FieldApprovalChain)
+	return u
+}
+
+// SetAutoApproveEnabled sets the "auto_approve_enabled" field.
+func (u *ApprovalPolicyUpsert) SetAutoApproveEnabled(v bool) *ApprovalPolicyUpsert {
+	u.Set(approvalpolicy.FieldAutoApproveEnabled, v)
+	return u
+}
+
+// UpdateAutoApproveEnabled sets the "auto_approve_enabled" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsert) UpdateAutoApproveEnabled() *ApprovalPolicyUpsert {
+	u.SetExcluded(approvalpolicy.FieldAutoApproveEnabled)
+	return u
+}
+
+// SetAutoApproveReason sets the "auto_approve_reason" field.
+func (u *ApprovalPolicyUpsert) SetAutoApproveReason(v string) *ApprovalPolicyUpsert {
+	u.Set(approvalpolicy.FieldAutoApproveReason, v)
+	return u
+}
+
+// UpdateAutoApproveReason sets the "auto_approve_reason" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsert) UpdateAutoApproveReason() *ApprovalPolicyUpsert {
+	u.SetExcluded(approvalpolicy.FieldAutoApproveReason)
+	return u
+}
+
+// ClearAutoApproveReason clears the value of the "auto_approve_reason" field.
+func (u *ApprovalPolicyUpsert) ClearAutoApproveReason() *ApprovalPolicyUpsert {
+	u.SetNull(approvalpolicy.FieldAutoApproveReason)
+	return u
+}
+
+// SetIsDefault sets the "is_default" field.
+func (u *ApprovalPolicyUpsert) SetIsDefault(v bool) *ApprovalPolicyUpsert {
+	u.Set(approvalpolicy.FieldIsDefault, v)
+	return u
+}
+
+// UpdateIsDefault sets the "is_default" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsert) UpdateIsDefault() *ApprovalPolicyUpsert {
+	u.SetExcluded(approvalpolicy.FieldIsDefault)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ApprovalPolicyUpsert) SetCreatedAt(v time.Time) *ApprovalPolicyUpsert {
+	u.Set(approvalpolicy.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsert) UpdateCreatedAt() *ApprovalPolicyUpsert {
+	u.SetExcluded(approvalpolicy.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ApprovalPolicyUpsert) SetUpdatedAt(v time.Time) *ApprovalPolicyUpsert {
+	u.Set(approvalpolicy.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsert) UpdateUpdatedAt() *ApprovalPolicyUpsert {
+	u.SetExcluded(approvalpolicy.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ApprovalPolicy.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ApprovalPolicyUpsertOne) UpdateNewValues() *ApprovalPolicyUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ApprovalPolicy.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ApprovalPolicyUpsertOne) Ignore() *ApprovalPolicyUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ApprovalPolicyUpsertOne) DoNothing() *ApprovalPolicyUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ApprovalPolicyCreate.OnConflict
+// documentation for more info.
+func (u *ApprovalPolicyUpsertOne) Update(set func(*ApprovalPolicyUpsert)) *ApprovalPolicyUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ApprovalPolicyUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ApprovalPolicyUpsertOne) SetName(v string) *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertOne) UpdateName() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ApprovalPolicyUpsertOne) SetDescription(v string) *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertOne) UpdateDescription() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ApprovalPolicyUpsertOne) ClearDescription() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *ApprovalPolicyUpsertOne) SetEnabled(v bool) *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetEnabled(v)
+	})
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertOne) UpdateEnabled() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateEnabled()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *ApprovalPolicyUpsertOne) SetPriority(v int) *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *ApprovalPolicyUpsertOne) AddPriority(v int) *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.AddPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertOne) UpdatePriority() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetConditions sets the "conditions" field.
+func (u *ApprovalPolicyUpsertOne) SetConditions(v string) *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetConditions(v)
+	})
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertOne) UpdateConditions() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateConditions()
+	})
+}
+
+// SetApprovalChain sets the "approval_chain" field.
+func (u *ApprovalPolicyUpsertOne) SetApprovalChain(v string) *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetApprovalChain(v)
+	})
+}
+
+// UpdateApprovalChain sets the "approval_chain" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertOne) UpdateApprovalChain() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateApprovalChain()
+	})
+}
+
+// SetAutoApproveEnabled sets the "auto_approve_enabled" field.
+func (u *ApprovalPolicyUpsertOne) SetAutoApproveEnabled(v bool) *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetAutoApproveEnabled(v)
+	})
+}
+
+// UpdateAutoApproveEnabled sets the "auto_approve_enabled" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertOne) UpdateAutoApproveEnabled() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateAutoApproveEnabled()
+	})
+}
+
+// SetAutoApproveReason sets the "auto_approve_reason" field.
+func (u *ApprovalPolicyUpsertOne) SetAutoApproveReason(v string) *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetAutoApproveReason(v)
+	})
+}
+
+// UpdateAutoApproveReason sets the "auto_approve_reason" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertOne) UpdateAutoApproveReason() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateAutoApproveReason()
+	})
+}
+
+// ClearAutoApproveReason clears the value of the "auto_approve_reason" field.
+func (u *ApprovalPolicyUpsertOne) ClearAutoApproveReason() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.ClearAutoApproveReason()
+	})
+}
+
+// SetIsDefault sets the "is_default" field.
+func (u *ApprovalPolicyUpsertOne) SetIsDefault(v bool) *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetIsDefault(v)
+	})
+}
+
+// UpdateIsDefault sets the "is_default" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertOne) UpdateIsDefault() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateIsDefault()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ApprovalPolicyUpsertOne) SetCreatedAt(v time.Time) *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertOne) UpdateCreatedAt() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ApprovalPolicyUpsertOne) SetUpdatedAt(v time.Time) *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertOne) UpdateUpdatedAt() *ApprovalPolicyUpsertOne {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ApprovalPolicyUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ApprovalPolicyCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ApprovalPolicyUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ApprovalPolicyUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ApprovalPolicyUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ApprovalPolicyCreateBulk is the builder for creating many ApprovalPolicy entities in bulk.
 type ApprovalPolicyCreateBulk struct {
 	config
 	err      error
 	builders []*ApprovalPolicyCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ApprovalPolicy entities in the database.
@@ -370,6 +821,7 @@ func (_c *ApprovalPolicyCreateBulk) Save(ctx context.Context) ([]*ApprovalPolicy
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -420,6 +872,285 @@ func (_c *ApprovalPolicyCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ApprovalPolicyCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ApprovalPolicy.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ApprovalPolicyUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ApprovalPolicyCreateBulk) OnConflict(opts ...sql.ConflictOption) *ApprovalPolicyUpsertBulk {
+	_c.conflict = opts
+	return &ApprovalPolicyUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ApprovalPolicy.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ApprovalPolicyCreateBulk) OnConflictColumns(columns ...string) *ApprovalPolicyUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ApprovalPolicyUpsertBulk{
+		create: _c,
+	}
+}
+
+// ApprovalPolicyUpsertBulk is the builder for "upsert"-ing
+// a bulk of ApprovalPolicy nodes.
+type ApprovalPolicyUpsertBulk struct {
+	create *ApprovalPolicyCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ApprovalPolicy.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ApprovalPolicyUpsertBulk) UpdateNewValues() *ApprovalPolicyUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ApprovalPolicy.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ApprovalPolicyUpsertBulk) Ignore() *ApprovalPolicyUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ApprovalPolicyUpsertBulk) DoNothing() *ApprovalPolicyUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ApprovalPolicyCreateBulk.OnConflict
+// documentation for more info.
+func (u *ApprovalPolicyUpsertBulk) Update(set func(*ApprovalPolicyUpsert)) *ApprovalPolicyUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ApprovalPolicyUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ApprovalPolicyUpsertBulk) SetName(v string) *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertBulk) UpdateName() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ApprovalPolicyUpsertBulk) SetDescription(v string) *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertBulk) UpdateDescription() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ApprovalPolicyUpsertBulk) ClearDescription() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *ApprovalPolicyUpsertBulk) SetEnabled(v bool) *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetEnabled(v)
+	})
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertBulk) UpdateEnabled() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateEnabled()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *ApprovalPolicyUpsertBulk) SetPriority(v int) *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *ApprovalPolicyUpsertBulk) AddPriority(v int) *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.AddPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertBulk) UpdatePriority() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetConditions sets the "conditions" field.
+func (u *ApprovalPolicyUpsertBulk) SetConditions(v string) *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetConditions(v)
+	})
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertBulk) UpdateConditions() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateConditions()
+	})
+}
+
+// SetApprovalChain sets the "approval_chain" field.
+func (u *ApprovalPolicyUpsertBulk) SetApprovalChain(v string) *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetApprovalChain(v)
+	})
+}
+
+// UpdateApprovalChain sets the "approval_chain" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertBulk) UpdateApprovalChain() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateApprovalChain()
+	})
+}
+
+// SetAutoApproveEnabled sets the "auto_approve_enabled" field.
+func (u *ApprovalPolicyUpsertBulk) SetAutoApproveEnabled(v bool) *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetAutoApproveEnabled(v)
+	})
+}
+
+// UpdateAutoApproveEnabled sets the "auto_approve_enabled" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertBulk) UpdateAutoApproveEnabled() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateAutoApproveEnabled()
+	})
+}
+
+// SetAutoApproveReason sets the "auto_approve_reason" field.
+func (u *ApprovalPolicyUpsertBulk) SetAutoApproveReason(v string) *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetAutoApproveReason(v)
+	})
+}
+
+// UpdateAutoApproveReason sets the "auto_approve_reason" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertBulk) UpdateAutoApproveReason() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateAutoApproveReason()
+	})
+}
+
+// ClearAutoApproveReason clears the value of the "auto_approve_reason" field.
+func (u *ApprovalPolicyUpsertBulk) ClearAutoApproveReason() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.ClearAutoApproveReason()
+	})
+}
+
+// SetIsDefault sets the "is_default" field.
+func (u *ApprovalPolicyUpsertBulk) SetIsDefault(v bool) *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetIsDefault(v)
+	})
+}
+
+// UpdateIsDefault sets the "is_default" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertBulk) UpdateIsDefault() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateIsDefault()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ApprovalPolicyUpsertBulk) SetCreatedAt(v time.Time) *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertBulk) UpdateCreatedAt() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ApprovalPolicyUpsertBulk) SetUpdatedAt(v time.Time) *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ApprovalPolicyUpsertBulk) UpdateUpdatedAt() *ApprovalPolicyUpsertBulk {
+	return u.Update(func(s *ApprovalPolicyUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ApprovalPolicyUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ApprovalPolicyCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ApprovalPolicyCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ApprovalPolicyUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

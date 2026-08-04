@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/executionresult"
@@ -18,6 +19,7 @@ type ExecutionResultCreate struct {
 	config
 	mutation *ExecutionResultMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -231,6 +233,7 @@ func (_c *ExecutionResultCreate) createSpec() (*ExecutionResult, *sqlgraph.Creat
 		_node = &ExecutionResult{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(executionresult.Table, sqlgraph.NewFieldSpec(executionresult.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TicketID(); ok {
 		_spec.SetField(executionresult.FieldTicketID, field.TypeInt64, value)
 		_node.TicketID = value
@@ -266,11 +269,394 @@ func (_c *ExecutionResultCreate) createSpec() (*ExecutionResult, *sqlgraph.Creat
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ExecutionResult.Create().
+//		SetTicketID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ExecutionResultUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ExecutionResultCreate) OnConflict(opts ...sql.ConflictOption) *ExecutionResultUpsertOne {
+	_c.conflict = opts
+	return &ExecutionResultUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ExecutionResult.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ExecutionResultCreate) OnConflictColumns(columns ...string) *ExecutionResultUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ExecutionResultUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ExecutionResultUpsertOne is the builder for "upsert"-ing
+	//  one ExecutionResult node.
+	ExecutionResultUpsertOne struct {
+		create *ExecutionResultCreate
+	}
+
+	// ExecutionResultUpsert is the "OnConflict" setter.
+	ExecutionResultUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTicketID sets the "ticket_id" field.
+func (u *ExecutionResultUpsert) SetTicketID(v int64) *ExecutionResultUpsert {
+	u.Set(executionresult.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *ExecutionResultUpsert) UpdateTicketID() *ExecutionResultUpsert {
+	u.SetExcluded(executionresult.FieldTicketID)
+	return u
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *ExecutionResultUpsert) AddTicketID(v int64) *ExecutionResultUpsert {
+	u.Add(executionresult.FieldTicketID, v)
+	return u
+}
+
+// SetStatementIndex sets the "statement_index" field.
+func (u *ExecutionResultUpsert) SetStatementIndex(v int) *ExecutionResultUpsert {
+	u.Set(executionresult.FieldStatementIndex, v)
+	return u
+}
+
+// UpdateStatementIndex sets the "statement_index" field to the value that was provided on create.
+func (u *ExecutionResultUpsert) UpdateStatementIndex() *ExecutionResultUpsert {
+	u.SetExcluded(executionresult.FieldStatementIndex)
+	return u
+}
+
+// AddStatementIndex adds v to the "statement_index" field.
+func (u *ExecutionResultUpsert) AddStatementIndex(v int) *ExecutionResultUpsert {
+	u.Add(executionresult.FieldStatementIndex, v)
+	return u
+}
+
+// SetSQL sets the "sql" field.
+func (u *ExecutionResultUpsert) SetSQL(v string) *ExecutionResultUpsert {
+	u.Set(executionresult.FieldSQL, v)
+	return u
+}
+
+// UpdateSQL sets the "sql" field to the value that was provided on create.
+func (u *ExecutionResultUpsert) UpdateSQL() *ExecutionResultUpsert {
+	u.SetExcluded(executionresult.FieldSQL)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ExecutionResultUpsert) SetStatus(v string) *ExecutionResultUpsert {
+	u.Set(executionresult.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ExecutionResultUpsert) UpdateStatus() *ExecutionResultUpsert {
+	u.SetExcluded(executionresult.FieldStatus)
+	return u
+}
+
+// SetRowsAffected sets the "rows_affected" field.
+func (u *ExecutionResultUpsert) SetRowsAffected(v int64) *ExecutionResultUpsert {
+	u.Set(executionresult.FieldRowsAffected, v)
+	return u
+}
+
+// UpdateRowsAffected sets the "rows_affected" field to the value that was provided on create.
+func (u *ExecutionResultUpsert) UpdateRowsAffected() *ExecutionResultUpsert {
+	u.SetExcluded(executionresult.FieldRowsAffected)
+	return u
+}
+
+// AddRowsAffected adds v to the "rows_affected" field.
+func (u *ExecutionResultUpsert) AddRowsAffected(v int64) *ExecutionResultUpsert {
+	u.Add(executionresult.FieldRowsAffected, v)
+	return u
+}
+
+// SetError sets the "error" field.
+func (u *ExecutionResultUpsert) SetError(v string) *ExecutionResultUpsert {
+	u.Set(executionresult.FieldError, v)
+	return u
+}
+
+// UpdateError sets the "error" field to the value that was provided on create.
+func (u *ExecutionResultUpsert) UpdateError() *ExecutionResultUpsert {
+	u.SetExcluded(executionresult.FieldError)
+	return u
+}
+
+// SetDurationMs sets the "duration_ms" field.
+func (u *ExecutionResultUpsert) SetDurationMs(v int64) *ExecutionResultUpsert {
+	u.Set(executionresult.FieldDurationMs, v)
+	return u
+}
+
+// UpdateDurationMs sets the "duration_ms" field to the value that was provided on create.
+func (u *ExecutionResultUpsert) UpdateDurationMs() *ExecutionResultUpsert {
+	u.SetExcluded(executionresult.FieldDurationMs)
+	return u
+}
+
+// AddDurationMs adds v to the "duration_ms" field.
+func (u *ExecutionResultUpsert) AddDurationMs(v int64) *ExecutionResultUpsert {
+	u.Add(executionresult.FieldDurationMs, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ExecutionResultUpsert) SetCreatedAt(v time.Time) *ExecutionResultUpsert {
+	u.Set(executionresult.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ExecutionResultUpsert) UpdateCreatedAt() *ExecutionResultUpsert {
+	u.SetExcluded(executionresult.FieldCreatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ExecutionResult.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ExecutionResultUpsertOne) UpdateNewValues() *ExecutionResultUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ExecutionResult.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ExecutionResultUpsertOne) Ignore() *ExecutionResultUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ExecutionResultUpsertOne) DoNothing() *ExecutionResultUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ExecutionResultCreate.OnConflict
+// documentation for more info.
+func (u *ExecutionResultUpsertOne) Update(set func(*ExecutionResultUpsert)) *ExecutionResultUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ExecutionResultUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *ExecutionResultUpsertOne) SetTicketID(v int64) *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *ExecutionResultUpsertOne) AddTicketID(v int64) *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.AddTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *ExecutionResultUpsertOne) UpdateTicketID() *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetStatementIndex sets the "statement_index" field.
+func (u *ExecutionResultUpsertOne) SetStatementIndex(v int) *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetStatementIndex(v)
+	})
+}
+
+// AddStatementIndex adds v to the "statement_index" field.
+func (u *ExecutionResultUpsertOne) AddStatementIndex(v int) *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.AddStatementIndex(v)
+	})
+}
+
+// UpdateStatementIndex sets the "statement_index" field to the value that was provided on create.
+func (u *ExecutionResultUpsertOne) UpdateStatementIndex() *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateStatementIndex()
+	})
+}
+
+// SetSQL sets the "sql" field.
+func (u *ExecutionResultUpsertOne) SetSQL(v string) *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetSQL(v)
+	})
+}
+
+// UpdateSQL sets the "sql" field to the value that was provided on create.
+func (u *ExecutionResultUpsertOne) UpdateSQL() *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateSQL()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ExecutionResultUpsertOne) SetStatus(v string) *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ExecutionResultUpsertOne) UpdateStatus() *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetRowsAffected sets the "rows_affected" field.
+func (u *ExecutionResultUpsertOne) SetRowsAffected(v int64) *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetRowsAffected(v)
+	})
+}
+
+// AddRowsAffected adds v to the "rows_affected" field.
+func (u *ExecutionResultUpsertOne) AddRowsAffected(v int64) *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.AddRowsAffected(v)
+	})
+}
+
+// UpdateRowsAffected sets the "rows_affected" field to the value that was provided on create.
+func (u *ExecutionResultUpsertOne) UpdateRowsAffected() *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateRowsAffected()
+	})
+}
+
+// SetError sets the "error" field.
+func (u *ExecutionResultUpsertOne) SetError(v string) *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetError(v)
+	})
+}
+
+// UpdateError sets the "error" field to the value that was provided on create.
+func (u *ExecutionResultUpsertOne) UpdateError() *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateError()
+	})
+}
+
+// SetDurationMs sets the "duration_ms" field.
+func (u *ExecutionResultUpsertOne) SetDurationMs(v int64) *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetDurationMs(v)
+	})
+}
+
+// AddDurationMs adds v to the "duration_ms" field.
+func (u *ExecutionResultUpsertOne) AddDurationMs(v int64) *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.AddDurationMs(v)
+	})
+}
+
+// UpdateDurationMs sets the "duration_ms" field to the value that was provided on create.
+func (u *ExecutionResultUpsertOne) UpdateDurationMs() *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateDurationMs()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ExecutionResultUpsertOne) SetCreatedAt(v time.Time) *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ExecutionResultUpsertOne) UpdateCreatedAt() *ExecutionResultUpsertOne {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ExecutionResultUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ExecutionResultCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ExecutionResultUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ExecutionResultUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ExecutionResultUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ExecutionResultCreateBulk is the builder for creating many ExecutionResult entities in bulk.
 type ExecutionResultCreateBulk struct {
 	config
 	err      error
 	builders []*ExecutionResultCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ExecutionResult entities in the database.
@@ -300,6 +686,7 @@ func (_c *ExecutionResultCreateBulk) Save(ctx context.Context) ([]*ExecutionResu
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -350,6 +737,250 @@ func (_c *ExecutionResultCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ExecutionResultCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ExecutionResult.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ExecutionResultUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ExecutionResultCreateBulk) OnConflict(opts ...sql.ConflictOption) *ExecutionResultUpsertBulk {
+	_c.conflict = opts
+	return &ExecutionResultUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ExecutionResult.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ExecutionResultCreateBulk) OnConflictColumns(columns ...string) *ExecutionResultUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ExecutionResultUpsertBulk{
+		create: _c,
+	}
+}
+
+// ExecutionResultUpsertBulk is the builder for "upsert"-ing
+// a bulk of ExecutionResult nodes.
+type ExecutionResultUpsertBulk struct {
+	create *ExecutionResultCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ExecutionResult.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ExecutionResultUpsertBulk) UpdateNewValues() *ExecutionResultUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ExecutionResult.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ExecutionResultUpsertBulk) Ignore() *ExecutionResultUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ExecutionResultUpsertBulk) DoNothing() *ExecutionResultUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ExecutionResultCreateBulk.OnConflict
+// documentation for more info.
+func (u *ExecutionResultUpsertBulk) Update(set func(*ExecutionResultUpsert)) *ExecutionResultUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ExecutionResultUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *ExecutionResultUpsertBulk) SetTicketID(v int64) *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *ExecutionResultUpsertBulk) AddTicketID(v int64) *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.AddTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *ExecutionResultUpsertBulk) UpdateTicketID() *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetStatementIndex sets the "statement_index" field.
+func (u *ExecutionResultUpsertBulk) SetStatementIndex(v int) *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetStatementIndex(v)
+	})
+}
+
+// AddStatementIndex adds v to the "statement_index" field.
+func (u *ExecutionResultUpsertBulk) AddStatementIndex(v int) *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.AddStatementIndex(v)
+	})
+}
+
+// UpdateStatementIndex sets the "statement_index" field to the value that was provided on create.
+func (u *ExecutionResultUpsertBulk) UpdateStatementIndex() *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateStatementIndex()
+	})
+}
+
+// SetSQL sets the "sql" field.
+func (u *ExecutionResultUpsertBulk) SetSQL(v string) *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetSQL(v)
+	})
+}
+
+// UpdateSQL sets the "sql" field to the value that was provided on create.
+func (u *ExecutionResultUpsertBulk) UpdateSQL() *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateSQL()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ExecutionResultUpsertBulk) SetStatus(v string) *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ExecutionResultUpsertBulk) UpdateStatus() *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetRowsAffected sets the "rows_affected" field.
+func (u *ExecutionResultUpsertBulk) SetRowsAffected(v int64) *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetRowsAffected(v)
+	})
+}
+
+// AddRowsAffected adds v to the "rows_affected" field.
+func (u *ExecutionResultUpsertBulk) AddRowsAffected(v int64) *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.AddRowsAffected(v)
+	})
+}
+
+// UpdateRowsAffected sets the "rows_affected" field to the value that was provided on create.
+func (u *ExecutionResultUpsertBulk) UpdateRowsAffected() *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateRowsAffected()
+	})
+}
+
+// SetError sets the "error" field.
+func (u *ExecutionResultUpsertBulk) SetError(v string) *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetError(v)
+	})
+}
+
+// UpdateError sets the "error" field to the value that was provided on create.
+func (u *ExecutionResultUpsertBulk) UpdateError() *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateError()
+	})
+}
+
+// SetDurationMs sets the "duration_ms" field.
+func (u *ExecutionResultUpsertBulk) SetDurationMs(v int64) *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetDurationMs(v)
+	})
+}
+
+// AddDurationMs adds v to the "duration_ms" field.
+func (u *ExecutionResultUpsertBulk) AddDurationMs(v int64) *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.AddDurationMs(v)
+	})
+}
+
+// UpdateDurationMs sets the "duration_ms" field to the value that was provided on create.
+func (u *ExecutionResultUpsertBulk) UpdateDurationMs() *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateDurationMs()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ExecutionResultUpsertBulk) SetCreatedAt(v time.Time) *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ExecutionResultUpsertBulk) UpdateCreatedAt() *ExecutionResultUpsertBulk {
+	return u.Update(func(s *ExecutionResultUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ExecutionResultUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ExecutionResultCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ExecutionResultCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ExecutionResultUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

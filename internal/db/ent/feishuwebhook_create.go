@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/feishuwebhook"
@@ -18,6 +19,7 @@ type FeishuWebhookCreate struct {
 	config
 	mutation *FeishuWebhookMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -232,6 +234,7 @@ func (_c *FeishuWebhookCreate) createSpec() (*FeishuWebhook, *sqlgraph.CreateSpe
 		_node = &FeishuWebhook{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(feishuwebhook.Table, sqlgraph.NewFieldSpec(feishuwebhook.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(feishuwebhook.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -271,11 +274,381 @@ func (_c *FeishuWebhookCreate) createSpec() (*FeishuWebhook, *sqlgraph.CreateSpe
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.FeishuWebhook.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.FeishuWebhookUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *FeishuWebhookCreate) OnConflict(opts ...sql.ConflictOption) *FeishuWebhookUpsertOne {
+	_c.conflict = opts
+	return &FeishuWebhookUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.FeishuWebhook.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *FeishuWebhookCreate) OnConflictColumns(columns ...string) *FeishuWebhookUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &FeishuWebhookUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// FeishuWebhookUpsertOne is the builder for "upsert"-ing
+	//  one FeishuWebhook node.
+	FeishuWebhookUpsertOne struct {
+		create *FeishuWebhookCreate
+	}
+
+	// FeishuWebhookUpsert is the "OnConflict" setter.
+	FeishuWebhookUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *FeishuWebhookUpsert) SetName(v string) *FeishuWebhookUpsert {
+	u.Set(feishuwebhook.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *FeishuWebhookUpsert) UpdateName() *FeishuWebhookUpsert {
+	u.SetExcluded(feishuwebhook.FieldName)
+	return u
+}
+
+// SetEncryptedURL sets the "encrypted_url" field.
+func (u *FeishuWebhookUpsert) SetEncryptedURL(v string) *FeishuWebhookUpsert {
+	u.Set(feishuwebhook.FieldEncryptedURL, v)
+	return u
+}
+
+// UpdateEncryptedURL sets the "encrypted_url" field to the value that was provided on create.
+func (u *FeishuWebhookUpsert) UpdateEncryptedURL() *FeishuWebhookUpsert {
+	u.SetExcluded(feishuwebhook.FieldEncryptedURL)
+	return u
+}
+
+// SetURLHash sets the "url_hash" field.
+func (u *FeishuWebhookUpsert) SetURLHash(v string) *FeishuWebhookUpsert {
+	u.Set(feishuwebhook.FieldURLHash, v)
+	return u
+}
+
+// UpdateURLHash sets the "url_hash" field to the value that was provided on create.
+func (u *FeishuWebhookUpsert) UpdateURLHash() *FeishuWebhookUpsert {
+	u.SetExcluded(feishuwebhook.FieldURLHash)
+	return u
+}
+
+// SetScene sets the "scene" field.
+func (u *FeishuWebhookUpsert) SetScene(v string) *FeishuWebhookUpsert {
+	u.Set(feishuwebhook.FieldScene, v)
+	return u
+}
+
+// UpdateScene sets the "scene" field to the value that was provided on create.
+func (u *FeishuWebhookUpsert) UpdateScene() *FeishuWebhookUpsert {
+	u.SetExcluded(feishuwebhook.FieldScene)
+	return u
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *FeishuWebhookUpsert) SetEnabled(v bool) *FeishuWebhookUpsert {
+	u.Set(feishuwebhook.FieldEnabled, v)
+	return u
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *FeishuWebhookUpsert) UpdateEnabled() *FeishuWebhookUpsert {
+	u.SetExcluded(feishuwebhook.FieldEnabled)
+	return u
+}
+
+// SetRateLimitRps sets the "rate_limit_rps" field.
+func (u *FeishuWebhookUpsert) SetRateLimitRps(v float64) *FeishuWebhookUpsert {
+	u.Set(feishuwebhook.FieldRateLimitRps, v)
+	return u
+}
+
+// UpdateRateLimitRps sets the "rate_limit_rps" field to the value that was provided on create.
+func (u *FeishuWebhookUpsert) UpdateRateLimitRps() *FeishuWebhookUpsert {
+	u.SetExcluded(feishuwebhook.FieldRateLimitRps)
+	return u
+}
+
+// AddRateLimitRps adds v to the "rate_limit_rps" field.
+func (u *FeishuWebhookUpsert) AddRateLimitRps(v float64) *FeishuWebhookUpsert {
+	u.Add(feishuwebhook.FieldRateLimitRps, v)
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *FeishuWebhookUpsert) SetCreatedBy(v string) *FeishuWebhookUpsert {
+	u.Set(feishuwebhook.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *FeishuWebhookUpsert) UpdateCreatedBy() *FeishuWebhookUpsert {
+	u.SetExcluded(feishuwebhook.FieldCreatedBy)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *FeishuWebhookUpsert) SetCreatedAt(v time.Time) *FeishuWebhookUpsert {
+	u.Set(feishuwebhook.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *FeishuWebhookUpsert) UpdateCreatedAt() *FeishuWebhookUpsert {
+	u.SetExcluded(feishuwebhook.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *FeishuWebhookUpsert) SetUpdatedAt(v time.Time) *FeishuWebhookUpsert {
+	u.Set(feishuwebhook.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *FeishuWebhookUpsert) UpdateUpdatedAt() *FeishuWebhookUpsert {
+	u.SetExcluded(feishuwebhook.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.FeishuWebhook.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *FeishuWebhookUpsertOne) UpdateNewValues() *FeishuWebhookUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.FeishuWebhook.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *FeishuWebhookUpsertOne) Ignore() *FeishuWebhookUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *FeishuWebhookUpsertOne) DoNothing() *FeishuWebhookUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the FeishuWebhookCreate.OnConflict
+// documentation for more info.
+func (u *FeishuWebhookUpsertOne) Update(set func(*FeishuWebhookUpsert)) *FeishuWebhookUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&FeishuWebhookUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *FeishuWebhookUpsertOne) SetName(v string) *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertOne) UpdateName() *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetEncryptedURL sets the "encrypted_url" field.
+func (u *FeishuWebhookUpsertOne) SetEncryptedURL(v string) *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetEncryptedURL(v)
+	})
+}
+
+// UpdateEncryptedURL sets the "encrypted_url" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertOne) UpdateEncryptedURL() *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateEncryptedURL()
+	})
+}
+
+// SetURLHash sets the "url_hash" field.
+func (u *FeishuWebhookUpsertOne) SetURLHash(v string) *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetURLHash(v)
+	})
+}
+
+// UpdateURLHash sets the "url_hash" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertOne) UpdateURLHash() *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateURLHash()
+	})
+}
+
+// SetScene sets the "scene" field.
+func (u *FeishuWebhookUpsertOne) SetScene(v string) *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetScene(v)
+	})
+}
+
+// UpdateScene sets the "scene" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertOne) UpdateScene() *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateScene()
+	})
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *FeishuWebhookUpsertOne) SetEnabled(v bool) *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetEnabled(v)
+	})
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertOne) UpdateEnabled() *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateEnabled()
+	})
+}
+
+// SetRateLimitRps sets the "rate_limit_rps" field.
+func (u *FeishuWebhookUpsertOne) SetRateLimitRps(v float64) *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetRateLimitRps(v)
+	})
+}
+
+// AddRateLimitRps adds v to the "rate_limit_rps" field.
+func (u *FeishuWebhookUpsertOne) AddRateLimitRps(v float64) *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.AddRateLimitRps(v)
+	})
+}
+
+// UpdateRateLimitRps sets the "rate_limit_rps" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertOne) UpdateRateLimitRps() *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateRateLimitRps()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *FeishuWebhookUpsertOne) SetCreatedBy(v string) *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertOne) UpdateCreatedBy() *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *FeishuWebhookUpsertOne) SetCreatedAt(v time.Time) *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertOne) UpdateCreatedAt() *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *FeishuWebhookUpsertOne) SetUpdatedAt(v time.Time) *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertOne) UpdateUpdatedAt() *FeishuWebhookUpsertOne {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *FeishuWebhookUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for FeishuWebhookCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *FeishuWebhookUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *FeishuWebhookUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *FeishuWebhookUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // FeishuWebhookCreateBulk is the builder for creating many FeishuWebhook entities in bulk.
 type FeishuWebhookCreateBulk struct {
 	config
 	err      error
 	builders []*FeishuWebhookCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the FeishuWebhook entities in the database.
@@ -305,6 +678,7 @@ func (_c *FeishuWebhookCreateBulk) Save(ctx context.Context) ([]*FeishuWebhook, 
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -355,6 +729,243 @@ func (_c *FeishuWebhookCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *FeishuWebhookCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.FeishuWebhook.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.FeishuWebhookUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *FeishuWebhookCreateBulk) OnConflict(opts ...sql.ConflictOption) *FeishuWebhookUpsertBulk {
+	_c.conflict = opts
+	return &FeishuWebhookUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.FeishuWebhook.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *FeishuWebhookCreateBulk) OnConflictColumns(columns ...string) *FeishuWebhookUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &FeishuWebhookUpsertBulk{
+		create: _c,
+	}
+}
+
+// FeishuWebhookUpsertBulk is the builder for "upsert"-ing
+// a bulk of FeishuWebhook nodes.
+type FeishuWebhookUpsertBulk struct {
+	create *FeishuWebhookCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.FeishuWebhook.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *FeishuWebhookUpsertBulk) UpdateNewValues() *FeishuWebhookUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.FeishuWebhook.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *FeishuWebhookUpsertBulk) Ignore() *FeishuWebhookUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *FeishuWebhookUpsertBulk) DoNothing() *FeishuWebhookUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the FeishuWebhookCreateBulk.OnConflict
+// documentation for more info.
+func (u *FeishuWebhookUpsertBulk) Update(set func(*FeishuWebhookUpsert)) *FeishuWebhookUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&FeishuWebhookUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *FeishuWebhookUpsertBulk) SetName(v string) *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertBulk) UpdateName() *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetEncryptedURL sets the "encrypted_url" field.
+func (u *FeishuWebhookUpsertBulk) SetEncryptedURL(v string) *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetEncryptedURL(v)
+	})
+}
+
+// UpdateEncryptedURL sets the "encrypted_url" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertBulk) UpdateEncryptedURL() *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateEncryptedURL()
+	})
+}
+
+// SetURLHash sets the "url_hash" field.
+func (u *FeishuWebhookUpsertBulk) SetURLHash(v string) *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetURLHash(v)
+	})
+}
+
+// UpdateURLHash sets the "url_hash" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertBulk) UpdateURLHash() *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateURLHash()
+	})
+}
+
+// SetScene sets the "scene" field.
+func (u *FeishuWebhookUpsertBulk) SetScene(v string) *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetScene(v)
+	})
+}
+
+// UpdateScene sets the "scene" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertBulk) UpdateScene() *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateScene()
+	})
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *FeishuWebhookUpsertBulk) SetEnabled(v bool) *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetEnabled(v)
+	})
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertBulk) UpdateEnabled() *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateEnabled()
+	})
+}
+
+// SetRateLimitRps sets the "rate_limit_rps" field.
+func (u *FeishuWebhookUpsertBulk) SetRateLimitRps(v float64) *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetRateLimitRps(v)
+	})
+}
+
+// AddRateLimitRps adds v to the "rate_limit_rps" field.
+func (u *FeishuWebhookUpsertBulk) AddRateLimitRps(v float64) *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.AddRateLimitRps(v)
+	})
+}
+
+// UpdateRateLimitRps sets the "rate_limit_rps" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertBulk) UpdateRateLimitRps() *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateRateLimitRps()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *FeishuWebhookUpsertBulk) SetCreatedBy(v string) *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertBulk) UpdateCreatedBy() *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *FeishuWebhookUpsertBulk) SetCreatedAt(v time.Time) *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertBulk) UpdateCreatedAt() *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *FeishuWebhookUpsertBulk) SetUpdatedAt(v time.Time) *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *FeishuWebhookUpsertBulk) UpdateUpdatedAt() *FeishuWebhookUpsertBulk {
+	return u.Update(func(s *FeishuWebhookUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *FeishuWebhookUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the FeishuWebhookCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for FeishuWebhookCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *FeishuWebhookUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/slaactionlog"
@@ -18,6 +19,7 @@ type SLAActionLogCreate struct {
 	config
 	mutation *SLAActionLogMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -175,6 +177,7 @@ func (_c *SLAActionLogCreate) createSpec() (*SLAActionLog, *sqlgraph.CreateSpec)
 		_node = &SLAActionLog{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(slaactionlog.Table, sqlgraph.NewFieldSpec(slaactionlog.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TicketID(); ok {
 		_spec.SetField(slaactionlog.FieldTicketID, field.TypeInt64, value)
 		_node.TicketID = value
@@ -202,11 +205,329 @@ func (_c *SLAActionLogCreate) createSpec() (*SLAActionLog, *sqlgraph.CreateSpec)
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLAActionLog.Create().
+//		SetTicketID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLAActionLogUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLAActionLogCreate) OnConflict(opts ...sql.ConflictOption) *SLAActionLogUpsertOne {
+	_c.conflict = opts
+	return &SLAActionLogUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLAActionLog.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLAActionLogCreate) OnConflictColumns(columns ...string) *SLAActionLogUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLAActionLogUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// SLAActionLogUpsertOne is the builder for "upsert"-ing
+	//  one SLAActionLog node.
+	SLAActionLogUpsertOne struct {
+		create *SLAActionLogCreate
+	}
+
+	// SLAActionLogUpsert is the "OnConflict" setter.
+	SLAActionLogUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTicketID sets the "ticket_id" field.
+func (u *SLAActionLogUpsert) SetTicketID(v int64) *SLAActionLogUpsert {
+	u.Set(slaactionlog.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *SLAActionLogUpsert) UpdateTicketID() *SLAActionLogUpsert {
+	u.SetExcluded(slaactionlog.FieldTicketID)
+	return u
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *SLAActionLogUpsert) AddTicketID(v int64) *SLAActionLogUpsert {
+	u.Add(slaactionlog.FieldTicketID, v)
+	return u
+}
+
+// SetActionType sets the "action_type" field.
+func (u *SLAActionLogUpsert) SetActionType(v string) *SLAActionLogUpsert {
+	u.Set(slaactionlog.FieldActionType, v)
+	return u
+}
+
+// UpdateActionType sets the "action_type" field to the value that was provided on create.
+func (u *SLAActionLogUpsert) UpdateActionType() *SLAActionLogUpsert {
+	u.SetExcluded(slaactionlog.FieldActionType)
+	return u
+}
+
+// SetDedupKey sets the "dedup_key" field.
+func (u *SLAActionLogUpsert) SetDedupKey(v string) *SLAActionLogUpsert {
+	u.Set(slaactionlog.FieldDedupKey, v)
+	return u
+}
+
+// UpdateDedupKey sets the "dedup_key" field to the value that was provided on create.
+func (u *SLAActionLogUpsert) UpdateDedupKey() *SLAActionLogUpsert {
+	u.SetExcluded(slaactionlog.FieldDedupKey)
+	return u
+}
+
+// SetNotifiedUser sets the "notified_user" field.
+func (u *SLAActionLogUpsert) SetNotifiedUser(v string) *SLAActionLogUpsert {
+	u.Set(slaactionlog.FieldNotifiedUser, v)
+	return u
+}
+
+// UpdateNotifiedUser sets the "notified_user" field to the value that was provided on create.
+func (u *SLAActionLogUpsert) UpdateNotifiedUser() *SLAActionLogUpsert {
+	u.SetExcluded(slaactionlog.FieldNotifiedUser)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAActionLogUpsert) SetCreatedAt(v time.Time) *SLAActionLogUpsert {
+	u.Set(slaactionlog.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAActionLogUpsert) UpdateCreatedAt() *SLAActionLogUpsert {
+	u.SetExcluded(slaactionlog.FieldCreatedAt)
+	return u
+}
+
+// SetSLAConfigID sets the "sla_config_id" field.
+func (u *SLAActionLogUpsert) SetSLAConfigID(v int64) *SLAActionLogUpsert {
+	u.Set(slaactionlog.FieldSLAConfigID, v)
+	return u
+}
+
+// UpdateSLAConfigID sets the "sla_config_id" field to the value that was provided on create.
+func (u *SLAActionLogUpsert) UpdateSLAConfigID() *SLAActionLogUpsert {
+	u.SetExcluded(slaactionlog.FieldSLAConfigID)
+	return u
+}
+
+// AddSLAConfigID adds v to the "sla_config_id" field.
+func (u *SLAActionLogUpsert) AddSLAConfigID(v int64) *SLAActionLogUpsert {
+	u.Add(slaactionlog.FieldSLAConfigID, v)
+	return u
+}
+
+// ClearSLAConfigID clears the value of the "sla_config_id" field.
+func (u *SLAActionLogUpsert) ClearSLAConfigID() *SLAActionLogUpsert {
+	u.SetNull(slaactionlog.FieldSLAConfigID)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.SLAActionLog.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLAActionLogUpsertOne) UpdateNewValues() *SLAActionLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLAActionLog.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *SLAActionLogUpsertOne) Ignore() *SLAActionLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLAActionLogUpsertOne) DoNothing() *SLAActionLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLAActionLogCreate.OnConflict
+// documentation for more info.
+func (u *SLAActionLogUpsertOne) Update(set func(*SLAActionLogUpsert)) *SLAActionLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLAActionLogUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *SLAActionLogUpsertOne) SetTicketID(v int64) *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *SLAActionLogUpsertOne) AddTicketID(v int64) *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.AddTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *SLAActionLogUpsertOne) UpdateTicketID() *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetActionType sets the "action_type" field.
+func (u *SLAActionLogUpsertOne) SetActionType(v string) *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.SetActionType(v)
+	})
+}
+
+// UpdateActionType sets the "action_type" field to the value that was provided on create.
+func (u *SLAActionLogUpsertOne) UpdateActionType() *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.UpdateActionType()
+	})
+}
+
+// SetDedupKey sets the "dedup_key" field.
+func (u *SLAActionLogUpsertOne) SetDedupKey(v string) *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.SetDedupKey(v)
+	})
+}
+
+// UpdateDedupKey sets the "dedup_key" field to the value that was provided on create.
+func (u *SLAActionLogUpsertOne) UpdateDedupKey() *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.UpdateDedupKey()
+	})
+}
+
+// SetNotifiedUser sets the "notified_user" field.
+func (u *SLAActionLogUpsertOne) SetNotifiedUser(v string) *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.SetNotifiedUser(v)
+	})
+}
+
+// UpdateNotifiedUser sets the "notified_user" field to the value that was provided on create.
+func (u *SLAActionLogUpsertOne) UpdateNotifiedUser() *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.UpdateNotifiedUser()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAActionLogUpsertOne) SetCreatedAt(v time.Time) *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAActionLogUpsertOne) UpdateCreatedAt() *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetSLAConfigID sets the "sla_config_id" field.
+func (u *SLAActionLogUpsertOne) SetSLAConfigID(v int64) *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.SetSLAConfigID(v)
+	})
+}
+
+// AddSLAConfigID adds v to the "sla_config_id" field.
+func (u *SLAActionLogUpsertOne) AddSLAConfigID(v int64) *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.AddSLAConfigID(v)
+	})
+}
+
+// UpdateSLAConfigID sets the "sla_config_id" field to the value that was provided on create.
+func (u *SLAActionLogUpsertOne) UpdateSLAConfigID() *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.UpdateSLAConfigID()
+	})
+}
+
+// ClearSLAConfigID clears the value of the "sla_config_id" field.
+func (u *SLAActionLogUpsertOne) ClearSLAConfigID() *SLAActionLogUpsertOne {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.ClearSLAConfigID()
+	})
+}
+
+// Exec executes the query.
+func (u *SLAActionLogUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLAActionLogCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLAActionLogUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *SLAActionLogUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *SLAActionLogUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // SLAActionLogCreateBulk is the builder for creating many SLAActionLog entities in bulk.
 type SLAActionLogCreateBulk struct {
 	config
 	err      error
 	builders []*SLAActionLogCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the SLAActionLog entities in the database.
@@ -236,6 +557,7 @@ func (_c *SLAActionLogCreateBulk) Save(ctx context.Context) ([]*SLAActionLog, er
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -286,6 +608,215 @@ func (_c *SLAActionLogCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *SLAActionLogCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLAActionLog.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLAActionLogUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLAActionLogCreateBulk) OnConflict(opts ...sql.ConflictOption) *SLAActionLogUpsertBulk {
+	_c.conflict = opts
+	return &SLAActionLogUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLAActionLog.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLAActionLogCreateBulk) OnConflictColumns(columns ...string) *SLAActionLogUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLAActionLogUpsertBulk{
+		create: _c,
+	}
+}
+
+// SLAActionLogUpsertBulk is the builder for "upsert"-ing
+// a bulk of SLAActionLog nodes.
+type SLAActionLogUpsertBulk struct {
+	create *SLAActionLogCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.SLAActionLog.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLAActionLogUpsertBulk) UpdateNewValues() *SLAActionLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLAActionLog.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *SLAActionLogUpsertBulk) Ignore() *SLAActionLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLAActionLogUpsertBulk) DoNothing() *SLAActionLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLAActionLogCreateBulk.OnConflict
+// documentation for more info.
+func (u *SLAActionLogUpsertBulk) Update(set func(*SLAActionLogUpsert)) *SLAActionLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLAActionLogUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *SLAActionLogUpsertBulk) SetTicketID(v int64) *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *SLAActionLogUpsertBulk) AddTicketID(v int64) *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.AddTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *SLAActionLogUpsertBulk) UpdateTicketID() *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetActionType sets the "action_type" field.
+func (u *SLAActionLogUpsertBulk) SetActionType(v string) *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.SetActionType(v)
+	})
+}
+
+// UpdateActionType sets the "action_type" field to the value that was provided on create.
+func (u *SLAActionLogUpsertBulk) UpdateActionType() *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.UpdateActionType()
+	})
+}
+
+// SetDedupKey sets the "dedup_key" field.
+func (u *SLAActionLogUpsertBulk) SetDedupKey(v string) *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.SetDedupKey(v)
+	})
+}
+
+// UpdateDedupKey sets the "dedup_key" field to the value that was provided on create.
+func (u *SLAActionLogUpsertBulk) UpdateDedupKey() *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.UpdateDedupKey()
+	})
+}
+
+// SetNotifiedUser sets the "notified_user" field.
+func (u *SLAActionLogUpsertBulk) SetNotifiedUser(v string) *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.SetNotifiedUser(v)
+	})
+}
+
+// UpdateNotifiedUser sets the "notified_user" field to the value that was provided on create.
+func (u *SLAActionLogUpsertBulk) UpdateNotifiedUser() *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.UpdateNotifiedUser()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAActionLogUpsertBulk) SetCreatedAt(v time.Time) *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAActionLogUpsertBulk) UpdateCreatedAt() *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetSLAConfigID sets the "sla_config_id" field.
+func (u *SLAActionLogUpsertBulk) SetSLAConfigID(v int64) *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.SetSLAConfigID(v)
+	})
+}
+
+// AddSLAConfigID adds v to the "sla_config_id" field.
+func (u *SLAActionLogUpsertBulk) AddSLAConfigID(v int64) *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.AddSLAConfigID(v)
+	})
+}
+
+// UpdateSLAConfigID sets the "sla_config_id" field to the value that was provided on create.
+func (u *SLAActionLogUpsertBulk) UpdateSLAConfigID() *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.UpdateSLAConfigID()
+	})
+}
+
+// ClearSLAConfigID clears the value of the "sla_config_id" field.
+func (u *SLAActionLogUpsertBulk) ClearSLAConfigID() *SLAActionLogUpsertBulk {
+	return u.Update(func(s *SLAActionLogUpsert) {
+		s.ClearSLAConfigID()
+	})
+}
+
+// Exec executes the query.
+func (u *SLAActionLogUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the SLAActionLogCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLAActionLogCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLAActionLogUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

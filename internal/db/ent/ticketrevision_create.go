@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/ticketrevision"
@@ -18,6 +19,7 @@ type TicketRevisionCreate struct {
 	config
 	mutation *TicketRevisionMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -282,6 +284,7 @@ func (_c *TicketRevisionCreate) createSpec() (*TicketRevision, *sqlgraph.CreateS
 		_node = &TicketRevision{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(ticketrevision.Table, sqlgraph.NewFieldSpec(ticketrevision.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TicketID(); ok {
 		_spec.SetField(ticketrevision.FieldTicketID, field.TypeInt64, value)
 		_node.TicketID = value
@@ -329,11 +332,459 @@ func (_c *TicketRevisionCreate) createSpec() (*TicketRevision, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketRevision.Create().
+//		SetTicketID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketRevisionUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketRevisionCreate) OnConflict(opts ...sql.ConflictOption) *TicketRevisionUpsertOne {
+	_c.conflict = opts
+	return &TicketRevisionUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketRevision.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketRevisionCreate) OnConflictColumns(columns ...string) *TicketRevisionUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketRevisionUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// TicketRevisionUpsertOne is the builder for "upsert"-ing
+	//  one TicketRevision node.
+	TicketRevisionUpsertOne struct {
+		create *TicketRevisionCreate
+	}
+
+	// TicketRevisionUpsert is the "OnConflict" setter.
+	TicketRevisionUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketRevisionUpsert) SetTicketID(v int64) *TicketRevisionUpsert {
+	u.Set(ticketrevision.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketRevisionUpsert) UpdateTicketID() *TicketRevisionUpsert {
+	u.SetExcluded(ticketrevision.FieldTicketID)
+	return u
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *TicketRevisionUpsert) AddTicketID(v int64) *TicketRevisionUpsert {
+	u.Add(ticketrevision.FieldTicketID, v)
+	return u
+}
+
+// SetRevision sets the "revision" field.
+func (u *TicketRevisionUpsert) SetRevision(v int) *TicketRevisionUpsert {
+	u.Set(ticketrevision.FieldRevision, v)
+	return u
+}
+
+// UpdateRevision sets the "revision" field to the value that was provided on create.
+func (u *TicketRevisionUpsert) UpdateRevision() *TicketRevisionUpsert {
+	u.SetExcluded(ticketrevision.FieldRevision)
+	return u
+}
+
+// AddRevision adds v to the "revision" field.
+func (u *TicketRevisionUpsert) AddRevision(v int) *TicketRevisionUpsert {
+	u.Add(ticketrevision.FieldRevision, v)
+	return u
+}
+
+// SetSQLContent sets the "sql_content" field.
+func (u *TicketRevisionUpsert) SetSQLContent(v string) *TicketRevisionUpsert {
+	u.Set(ticketrevision.FieldSQLContent, v)
+	return u
+}
+
+// UpdateSQLContent sets the "sql_content" field to the value that was provided on create.
+func (u *TicketRevisionUpsert) UpdateSQLContent() *TicketRevisionUpsert {
+	u.SetExcluded(ticketrevision.FieldSQLContent)
+	return u
+}
+
+// SetSQLSummary sets the "sql_summary" field.
+func (u *TicketRevisionUpsert) SetSQLSummary(v string) *TicketRevisionUpsert {
+	u.Set(ticketrevision.FieldSQLSummary, v)
+	return u
+}
+
+// UpdateSQLSummary sets the "sql_summary" field to the value that was provided on create.
+func (u *TicketRevisionUpsert) UpdateSQLSummary() *TicketRevisionUpsert {
+	u.SetExcluded(ticketrevision.FieldSQLSummary)
+	return u
+}
+
+// SetChangeReason sets the "change_reason" field.
+func (u *TicketRevisionUpsert) SetChangeReason(v string) *TicketRevisionUpsert {
+	u.Set(ticketrevision.FieldChangeReason, v)
+	return u
+}
+
+// UpdateChangeReason sets the "change_reason" field to the value that was provided on create.
+func (u *TicketRevisionUpsert) UpdateChangeReason() *TicketRevisionUpsert {
+	u.SetExcluded(ticketrevision.FieldChangeReason)
+	return u
+}
+
+// SetRiskLevel sets the "risk_level" field.
+func (u *TicketRevisionUpsert) SetRiskLevel(v string) *TicketRevisionUpsert {
+	u.Set(ticketrevision.FieldRiskLevel, v)
+	return u
+}
+
+// UpdateRiskLevel sets the "risk_level" field to the value that was provided on create.
+func (u *TicketRevisionUpsert) UpdateRiskLevel() *TicketRevisionUpsert {
+	u.SetExcluded(ticketrevision.FieldRiskLevel)
+	return u
+}
+
+// SetAiReviewResult sets the "ai_review_result" field.
+func (u *TicketRevisionUpsert) SetAiReviewResult(v string) *TicketRevisionUpsert {
+	u.Set(ticketrevision.FieldAiReviewResult, v)
+	return u
+}
+
+// UpdateAiReviewResult sets the "ai_review_result" field to the value that was provided on create.
+func (u *TicketRevisionUpsert) UpdateAiReviewResult() *TicketRevisionUpsert {
+	u.SetExcluded(ticketrevision.FieldAiReviewResult)
+	return u
+}
+
+// SetReviewerID sets the "reviewer_id" field.
+func (u *TicketRevisionUpsert) SetReviewerID(v int64) *TicketRevisionUpsert {
+	u.Set(ticketrevision.FieldReviewerID, v)
+	return u
+}
+
+// UpdateReviewerID sets the "reviewer_id" field to the value that was provided on create.
+func (u *TicketRevisionUpsert) UpdateReviewerID() *TicketRevisionUpsert {
+	u.SetExcluded(ticketrevision.FieldReviewerID)
+	return u
+}
+
+// AddReviewerID adds v to the "reviewer_id" field.
+func (u *TicketRevisionUpsert) AddReviewerID(v int64) *TicketRevisionUpsert {
+	u.Add(ticketrevision.FieldReviewerID, v)
+	return u
+}
+
+// SetReviewComment sets the "review_comment" field.
+func (u *TicketRevisionUpsert) SetReviewComment(v string) *TicketRevisionUpsert {
+	u.Set(ticketrevision.FieldReviewComment, v)
+	return u
+}
+
+// UpdateReviewComment sets the "review_comment" field to the value that was provided on create.
+func (u *TicketRevisionUpsert) UpdateReviewComment() *TicketRevisionUpsert {
+	u.SetExcluded(ticketrevision.FieldReviewComment)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *TicketRevisionUpsert) SetStatus(v string) *TicketRevisionUpsert {
+	u.Set(ticketrevision.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TicketRevisionUpsert) UpdateStatus() *TicketRevisionUpsert {
+	u.SetExcluded(ticketrevision.FieldStatus)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketRevisionUpsert) SetCreatedAt(v time.Time) *TicketRevisionUpsert {
+	u.Set(ticketrevision.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketRevisionUpsert) UpdateCreatedAt() *TicketRevisionUpsert {
+	u.SetExcluded(ticketrevision.FieldCreatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.TicketRevision.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketRevisionUpsertOne) UpdateNewValues() *TicketRevisionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketRevision.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *TicketRevisionUpsertOne) Ignore() *TicketRevisionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketRevisionUpsertOne) DoNothing() *TicketRevisionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketRevisionCreate.OnConflict
+// documentation for more info.
+func (u *TicketRevisionUpsertOne) Update(set func(*TicketRevisionUpsert)) *TicketRevisionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketRevisionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketRevisionUpsertOne) SetTicketID(v int64) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *TicketRevisionUpsertOne) AddTicketID(v int64) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.AddTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketRevisionUpsertOne) UpdateTicketID() *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetRevision sets the "revision" field.
+func (u *TicketRevisionUpsertOne) SetRevision(v int) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetRevision(v)
+	})
+}
+
+// AddRevision adds v to the "revision" field.
+func (u *TicketRevisionUpsertOne) AddRevision(v int) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.AddRevision(v)
+	})
+}
+
+// UpdateRevision sets the "revision" field to the value that was provided on create.
+func (u *TicketRevisionUpsertOne) UpdateRevision() *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateRevision()
+	})
+}
+
+// SetSQLContent sets the "sql_content" field.
+func (u *TicketRevisionUpsertOne) SetSQLContent(v string) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetSQLContent(v)
+	})
+}
+
+// UpdateSQLContent sets the "sql_content" field to the value that was provided on create.
+func (u *TicketRevisionUpsertOne) UpdateSQLContent() *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateSQLContent()
+	})
+}
+
+// SetSQLSummary sets the "sql_summary" field.
+func (u *TicketRevisionUpsertOne) SetSQLSummary(v string) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetSQLSummary(v)
+	})
+}
+
+// UpdateSQLSummary sets the "sql_summary" field to the value that was provided on create.
+func (u *TicketRevisionUpsertOne) UpdateSQLSummary() *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateSQLSummary()
+	})
+}
+
+// SetChangeReason sets the "change_reason" field.
+func (u *TicketRevisionUpsertOne) SetChangeReason(v string) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetChangeReason(v)
+	})
+}
+
+// UpdateChangeReason sets the "change_reason" field to the value that was provided on create.
+func (u *TicketRevisionUpsertOne) UpdateChangeReason() *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateChangeReason()
+	})
+}
+
+// SetRiskLevel sets the "risk_level" field.
+func (u *TicketRevisionUpsertOne) SetRiskLevel(v string) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetRiskLevel(v)
+	})
+}
+
+// UpdateRiskLevel sets the "risk_level" field to the value that was provided on create.
+func (u *TicketRevisionUpsertOne) UpdateRiskLevel() *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateRiskLevel()
+	})
+}
+
+// SetAiReviewResult sets the "ai_review_result" field.
+func (u *TicketRevisionUpsertOne) SetAiReviewResult(v string) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetAiReviewResult(v)
+	})
+}
+
+// UpdateAiReviewResult sets the "ai_review_result" field to the value that was provided on create.
+func (u *TicketRevisionUpsertOne) UpdateAiReviewResult() *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateAiReviewResult()
+	})
+}
+
+// SetReviewerID sets the "reviewer_id" field.
+func (u *TicketRevisionUpsertOne) SetReviewerID(v int64) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetReviewerID(v)
+	})
+}
+
+// AddReviewerID adds v to the "reviewer_id" field.
+func (u *TicketRevisionUpsertOne) AddReviewerID(v int64) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.AddReviewerID(v)
+	})
+}
+
+// UpdateReviewerID sets the "reviewer_id" field to the value that was provided on create.
+func (u *TicketRevisionUpsertOne) UpdateReviewerID() *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateReviewerID()
+	})
+}
+
+// SetReviewComment sets the "review_comment" field.
+func (u *TicketRevisionUpsertOne) SetReviewComment(v string) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetReviewComment(v)
+	})
+}
+
+// UpdateReviewComment sets the "review_comment" field to the value that was provided on create.
+func (u *TicketRevisionUpsertOne) UpdateReviewComment() *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateReviewComment()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *TicketRevisionUpsertOne) SetStatus(v string) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TicketRevisionUpsertOne) UpdateStatus() *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketRevisionUpsertOne) SetCreatedAt(v time.Time) *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketRevisionUpsertOne) UpdateCreatedAt() *TicketRevisionUpsertOne {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketRevisionUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketRevisionCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketRevisionUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *TicketRevisionUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *TicketRevisionUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // TicketRevisionCreateBulk is the builder for creating many TicketRevision entities in bulk.
 type TicketRevisionCreateBulk struct {
 	config
 	err      error
 	builders []*TicketRevisionCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the TicketRevision entities in the database.
@@ -363,6 +814,7 @@ func (_c *TicketRevisionCreateBulk) Save(ctx context.Context) ([]*TicketRevision
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -413,6 +865,285 @@ func (_c *TicketRevisionCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *TicketRevisionCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketRevision.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketRevisionUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketRevisionCreateBulk) OnConflict(opts ...sql.ConflictOption) *TicketRevisionUpsertBulk {
+	_c.conflict = opts
+	return &TicketRevisionUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketRevision.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketRevisionCreateBulk) OnConflictColumns(columns ...string) *TicketRevisionUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketRevisionUpsertBulk{
+		create: _c,
+	}
+}
+
+// TicketRevisionUpsertBulk is the builder for "upsert"-ing
+// a bulk of TicketRevision nodes.
+type TicketRevisionUpsertBulk struct {
+	create *TicketRevisionCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.TicketRevision.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketRevisionUpsertBulk) UpdateNewValues() *TicketRevisionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketRevision.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *TicketRevisionUpsertBulk) Ignore() *TicketRevisionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketRevisionUpsertBulk) DoNothing() *TicketRevisionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketRevisionCreateBulk.OnConflict
+// documentation for more info.
+func (u *TicketRevisionUpsertBulk) Update(set func(*TicketRevisionUpsert)) *TicketRevisionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketRevisionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketRevisionUpsertBulk) SetTicketID(v int64) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *TicketRevisionUpsertBulk) AddTicketID(v int64) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.AddTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketRevisionUpsertBulk) UpdateTicketID() *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetRevision sets the "revision" field.
+func (u *TicketRevisionUpsertBulk) SetRevision(v int) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetRevision(v)
+	})
+}
+
+// AddRevision adds v to the "revision" field.
+func (u *TicketRevisionUpsertBulk) AddRevision(v int) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.AddRevision(v)
+	})
+}
+
+// UpdateRevision sets the "revision" field to the value that was provided on create.
+func (u *TicketRevisionUpsertBulk) UpdateRevision() *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateRevision()
+	})
+}
+
+// SetSQLContent sets the "sql_content" field.
+func (u *TicketRevisionUpsertBulk) SetSQLContent(v string) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetSQLContent(v)
+	})
+}
+
+// UpdateSQLContent sets the "sql_content" field to the value that was provided on create.
+func (u *TicketRevisionUpsertBulk) UpdateSQLContent() *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateSQLContent()
+	})
+}
+
+// SetSQLSummary sets the "sql_summary" field.
+func (u *TicketRevisionUpsertBulk) SetSQLSummary(v string) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetSQLSummary(v)
+	})
+}
+
+// UpdateSQLSummary sets the "sql_summary" field to the value that was provided on create.
+func (u *TicketRevisionUpsertBulk) UpdateSQLSummary() *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateSQLSummary()
+	})
+}
+
+// SetChangeReason sets the "change_reason" field.
+func (u *TicketRevisionUpsertBulk) SetChangeReason(v string) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetChangeReason(v)
+	})
+}
+
+// UpdateChangeReason sets the "change_reason" field to the value that was provided on create.
+func (u *TicketRevisionUpsertBulk) UpdateChangeReason() *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateChangeReason()
+	})
+}
+
+// SetRiskLevel sets the "risk_level" field.
+func (u *TicketRevisionUpsertBulk) SetRiskLevel(v string) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetRiskLevel(v)
+	})
+}
+
+// UpdateRiskLevel sets the "risk_level" field to the value that was provided on create.
+func (u *TicketRevisionUpsertBulk) UpdateRiskLevel() *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateRiskLevel()
+	})
+}
+
+// SetAiReviewResult sets the "ai_review_result" field.
+func (u *TicketRevisionUpsertBulk) SetAiReviewResult(v string) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetAiReviewResult(v)
+	})
+}
+
+// UpdateAiReviewResult sets the "ai_review_result" field to the value that was provided on create.
+func (u *TicketRevisionUpsertBulk) UpdateAiReviewResult() *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateAiReviewResult()
+	})
+}
+
+// SetReviewerID sets the "reviewer_id" field.
+func (u *TicketRevisionUpsertBulk) SetReviewerID(v int64) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetReviewerID(v)
+	})
+}
+
+// AddReviewerID adds v to the "reviewer_id" field.
+func (u *TicketRevisionUpsertBulk) AddReviewerID(v int64) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.AddReviewerID(v)
+	})
+}
+
+// UpdateReviewerID sets the "reviewer_id" field to the value that was provided on create.
+func (u *TicketRevisionUpsertBulk) UpdateReviewerID() *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateReviewerID()
+	})
+}
+
+// SetReviewComment sets the "review_comment" field.
+func (u *TicketRevisionUpsertBulk) SetReviewComment(v string) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetReviewComment(v)
+	})
+}
+
+// UpdateReviewComment sets the "review_comment" field to the value that was provided on create.
+func (u *TicketRevisionUpsertBulk) UpdateReviewComment() *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateReviewComment()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *TicketRevisionUpsertBulk) SetStatus(v string) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TicketRevisionUpsertBulk) UpdateStatus() *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketRevisionUpsertBulk) SetCreatedAt(v time.Time) *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketRevisionUpsertBulk) UpdateCreatedAt() *TicketRevisionUpsertBulk {
+	return u.Update(func(s *TicketRevisionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketRevisionUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the TicketRevisionCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketRevisionCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketRevisionUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/queryhistory"
@@ -18,6 +19,7 @@ type QueryHistoryCreate struct {
 	config
 	mutation *QueryHistoryMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetUserID sets the "user_id" field.
@@ -303,6 +305,7 @@ func (_c *QueryHistoryCreate) createSpec() (*QueryHistory, *sqlgraph.CreateSpec)
 		_node = &QueryHistory{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(queryhistory.Table, sqlgraph.NewFieldSpec(queryhistory.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.UserID(); ok {
 		_spec.SetField(queryhistory.FieldUserID, field.TypeInt64, value)
 		_node.UserID = value
@@ -354,11 +357,511 @@ func (_c *QueryHistoryCreate) createSpec() (*QueryHistory, *sqlgraph.CreateSpec)
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.QueryHistory.Create().
+//		SetUserID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.QueryHistoryUpsert) {
+//			SetUserID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *QueryHistoryCreate) OnConflict(opts ...sql.ConflictOption) *QueryHistoryUpsertOne {
+	_c.conflict = opts
+	return &QueryHistoryUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.QueryHistory.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *QueryHistoryCreate) OnConflictColumns(columns ...string) *QueryHistoryUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &QueryHistoryUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// QueryHistoryUpsertOne is the builder for "upsert"-ing
+	//  one QueryHistory node.
+	QueryHistoryUpsertOne struct {
+		create *QueryHistoryCreate
+	}
+
+	// QueryHistoryUpsert is the "OnConflict" setter.
+	QueryHistoryUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetUserID sets the "user_id" field.
+func (u *QueryHistoryUpsert) SetUserID(v int64) *QueryHistoryUpsert {
+	u.Set(queryhistory.FieldUserID, v)
+	return u
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *QueryHistoryUpsert) UpdateUserID() *QueryHistoryUpsert {
+	u.SetExcluded(queryhistory.FieldUserID)
+	return u
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *QueryHistoryUpsert) AddUserID(v int64) *QueryHistoryUpsert {
+	u.Add(queryhistory.FieldUserID, v)
+	return u
+}
+
+// SetDatasourceID sets the "datasource_id" field.
+func (u *QueryHistoryUpsert) SetDatasourceID(v int64) *QueryHistoryUpsert {
+	u.Set(queryhistory.FieldDatasourceID, v)
+	return u
+}
+
+// UpdateDatasourceID sets the "datasource_id" field to the value that was provided on create.
+func (u *QueryHistoryUpsert) UpdateDatasourceID() *QueryHistoryUpsert {
+	u.SetExcluded(queryhistory.FieldDatasourceID)
+	return u
+}
+
+// AddDatasourceID adds v to the "datasource_id" field.
+func (u *QueryHistoryUpsert) AddDatasourceID(v int64) *QueryHistoryUpsert {
+	u.Add(queryhistory.FieldDatasourceID, v)
+	return u
+}
+
+// SetDatabase sets the "database" field.
+func (u *QueryHistoryUpsert) SetDatabase(v string) *QueryHistoryUpsert {
+	u.Set(queryhistory.FieldDatabase, v)
+	return u
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *QueryHistoryUpsert) UpdateDatabase() *QueryHistoryUpsert {
+	u.SetExcluded(queryhistory.FieldDatabase)
+	return u
+}
+
+// SetSQLContent sets the "sql_content" field.
+func (u *QueryHistoryUpsert) SetSQLContent(v string) *QueryHistoryUpsert {
+	u.Set(queryhistory.FieldSQLContent, v)
+	return u
+}
+
+// UpdateSQLContent sets the "sql_content" field to the value that was provided on create.
+func (u *QueryHistoryUpsert) UpdateSQLContent() *QueryHistoryUpsert {
+	u.SetExcluded(queryhistory.FieldSQLContent)
+	return u
+}
+
+// SetSQLHash sets the "sql_hash" field.
+func (u *QueryHistoryUpsert) SetSQLHash(v string) *QueryHistoryUpsert {
+	u.Set(queryhistory.FieldSQLHash, v)
+	return u
+}
+
+// UpdateSQLHash sets the "sql_hash" field to the value that was provided on create.
+func (u *QueryHistoryUpsert) UpdateSQLHash() *QueryHistoryUpsert {
+	u.SetExcluded(queryhistory.FieldSQLHash)
+	return u
+}
+
+// SetParamsJSON sets the "params_json" field.
+func (u *QueryHistoryUpsert) SetParamsJSON(v string) *QueryHistoryUpsert {
+	u.Set(queryhistory.FieldParamsJSON, v)
+	return u
+}
+
+// UpdateParamsJSON sets the "params_json" field to the value that was provided on create.
+func (u *QueryHistoryUpsert) UpdateParamsJSON() *QueryHistoryUpsert {
+	u.SetExcluded(queryhistory.FieldParamsJSON)
+	return u
+}
+
+// SetSQLSummary sets the "sql_summary" field.
+func (u *QueryHistoryUpsert) SetSQLSummary(v string) *QueryHistoryUpsert {
+	u.Set(queryhistory.FieldSQLSummary, v)
+	return u
+}
+
+// UpdateSQLSummary sets the "sql_summary" field to the value that was provided on create.
+func (u *QueryHistoryUpsert) UpdateSQLSummary() *QueryHistoryUpsert {
+	u.SetExcluded(queryhistory.FieldSQLSummary)
+	return u
+}
+
+// SetDbType sets the "db_type" field.
+func (u *QueryHistoryUpsert) SetDbType(v string) *QueryHistoryUpsert {
+	u.Set(queryhistory.FieldDbType, v)
+	return u
+}
+
+// UpdateDbType sets the "db_type" field to the value that was provided on create.
+func (u *QueryHistoryUpsert) UpdateDbType() *QueryHistoryUpsert {
+	u.SetExcluded(queryhistory.FieldDbType)
+	return u
+}
+
+// SetExecutionTime sets the "execution_time" field.
+func (u *QueryHistoryUpsert) SetExecutionTime(v int64) *QueryHistoryUpsert {
+	u.Set(queryhistory.FieldExecutionTime, v)
+	return u
+}
+
+// UpdateExecutionTime sets the "execution_time" field to the value that was provided on create.
+func (u *QueryHistoryUpsert) UpdateExecutionTime() *QueryHistoryUpsert {
+	u.SetExcluded(queryhistory.FieldExecutionTime)
+	return u
+}
+
+// AddExecutionTime adds v to the "execution_time" field.
+func (u *QueryHistoryUpsert) AddExecutionTime(v int64) *QueryHistoryUpsert {
+	u.Add(queryhistory.FieldExecutionTime, v)
+	return u
+}
+
+// SetResultRows sets the "result_rows" field.
+func (u *QueryHistoryUpsert) SetResultRows(v int64) *QueryHistoryUpsert {
+	u.Set(queryhistory.FieldResultRows, v)
+	return u
+}
+
+// UpdateResultRows sets the "result_rows" field to the value that was provided on create.
+func (u *QueryHistoryUpsert) UpdateResultRows() *QueryHistoryUpsert {
+	u.SetExcluded(queryhistory.FieldResultRows)
+	return u
+}
+
+// AddResultRows adds v to the "result_rows" field.
+func (u *QueryHistoryUpsert) AddResultRows(v int64) *QueryHistoryUpsert {
+	u.Add(queryhistory.FieldResultRows, v)
+	return u
+}
+
+// SetAffectedRows sets the "affected_rows" field.
+func (u *QueryHistoryUpsert) SetAffectedRows(v int64) *QueryHistoryUpsert {
+	u.Set(queryhistory.FieldAffectedRows, v)
+	return u
+}
+
+// UpdateAffectedRows sets the "affected_rows" field to the value that was provided on create.
+func (u *QueryHistoryUpsert) UpdateAffectedRows() *QueryHistoryUpsert {
+	u.SetExcluded(queryhistory.FieldAffectedRows)
+	return u
+}
+
+// AddAffectedRows adds v to the "affected_rows" field.
+func (u *QueryHistoryUpsert) AddAffectedRows(v int64) *QueryHistoryUpsert {
+	u.Add(queryhistory.FieldAffectedRows, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *QueryHistoryUpsert) SetCreatedAt(v time.Time) *QueryHistoryUpsert {
+	u.Set(queryhistory.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *QueryHistoryUpsert) UpdateCreatedAt() *QueryHistoryUpsert {
+	u.SetExcluded(queryhistory.FieldCreatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.QueryHistory.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *QueryHistoryUpsertOne) UpdateNewValues() *QueryHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.QueryHistory.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *QueryHistoryUpsertOne) Ignore() *QueryHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *QueryHistoryUpsertOne) DoNothing() *QueryHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the QueryHistoryCreate.OnConflict
+// documentation for more info.
+func (u *QueryHistoryUpsertOne) Update(set func(*QueryHistoryUpsert)) *QueryHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&QueryHistoryUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *QueryHistoryUpsertOne) SetUserID(v int64) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *QueryHistoryUpsertOne) AddUserID(v int64) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *QueryHistoryUpsertOne) UpdateUserID() *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetDatasourceID sets the "datasource_id" field.
+func (u *QueryHistoryUpsertOne) SetDatasourceID(v int64) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetDatasourceID(v)
+	})
+}
+
+// AddDatasourceID adds v to the "datasource_id" field.
+func (u *QueryHistoryUpsertOne) AddDatasourceID(v int64) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.AddDatasourceID(v)
+	})
+}
+
+// UpdateDatasourceID sets the "datasource_id" field to the value that was provided on create.
+func (u *QueryHistoryUpsertOne) UpdateDatasourceID() *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateDatasourceID()
+	})
+}
+
+// SetDatabase sets the "database" field.
+func (u *QueryHistoryUpsertOne) SetDatabase(v string) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetDatabase(v)
+	})
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *QueryHistoryUpsertOne) UpdateDatabase() *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateDatabase()
+	})
+}
+
+// SetSQLContent sets the "sql_content" field.
+func (u *QueryHistoryUpsertOne) SetSQLContent(v string) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetSQLContent(v)
+	})
+}
+
+// UpdateSQLContent sets the "sql_content" field to the value that was provided on create.
+func (u *QueryHistoryUpsertOne) UpdateSQLContent() *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateSQLContent()
+	})
+}
+
+// SetSQLHash sets the "sql_hash" field.
+func (u *QueryHistoryUpsertOne) SetSQLHash(v string) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetSQLHash(v)
+	})
+}
+
+// UpdateSQLHash sets the "sql_hash" field to the value that was provided on create.
+func (u *QueryHistoryUpsertOne) UpdateSQLHash() *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateSQLHash()
+	})
+}
+
+// SetParamsJSON sets the "params_json" field.
+func (u *QueryHistoryUpsertOne) SetParamsJSON(v string) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetParamsJSON(v)
+	})
+}
+
+// UpdateParamsJSON sets the "params_json" field to the value that was provided on create.
+func (u *QueryHistoryUpsertOne) UpdateParamsJSON() *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateParamsJSON()
+	})
+}
+
+// SetSQLSummary sets the "sql_summary" field.
+func (u *QueryHistoryUpsertOne) SetSQLSummary(v string) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetSQLSummary(v)
+	})
+}
+
+// UpdateSQLSummary sets the "sql_summary" field to the value that was provided on create.
+func (u *QueryHistoryUpsertOne) UpdateSQLSummary() *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateSQLSummary()
+	})
+}
+
+// SetDbType sets the "db_type" field.
+func (u *QueryHistoryUpsertOne) SetDbType(v string) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetDbType(v)
+	})
+}
+
+// UpdateDbType sets the "db_type" field to the value that was provided on create.
+func (u *QueryHistoryUpsertOne) UpdateDbType() *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateDbType()
+	})
+}
+
+// SetExecutionTime sets the "execution_time" field.
+func (u *QueryHistoryUpsertOne) SetExecutionTime(v int64) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetExecutionTime(v)
+	})
+}
+
+// AddExecutionTime adds v to the "execution_time" field.
+func (u *QueryHistoryUpsertOne) AddExecutionTime(v int64) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.AddExecutionTime(v)
+	})
+}
+
+// UpdateExecutionTime sets the "execution_time" field to the value that was provided on create.
+func (u *QueryHistoryUpsertOne) UpdateExecutionTime() *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateExecutionTime()
+	})
+}
+
+// SetResultRows sets the "result_rows" field.
+func (u *QueryHistoryUpsertOne) SetResultRows(v int64) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetResultRows(v)
+	})
+}
+
+// AddResultRows adds v to the "result_rows" field.
+func (u *QueryHistoryUpsertOne) AddResultRows(v int64) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.AddResultRows(v)
+	})
+}
+
+// UpdateResultRows sets the "result_rows" field to the value that was provided on create.
+func (u *QueryHistoryUpsertOne) UpdateResultRows() *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateResultRows()
+	})
+}
+
+// SetAffectedRows sets the "affected_rows" field.
+func (u *QueryHistoryUpsertOne) SetAffectedRows(v int64) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetAffectedRows(v)
+	})
+}
+
+// AddAffectedRows adds v to the "affected_rows" field.
+func (u *QueryHistoryUpsertOne) AddAffectedRows(v int64) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.AddAffectedRows(v)
+	})
+}
+
+// UpdateAffectedRows sets the "affected_rows" field to the value that was provided on create.
+func (u *QueryHistoryUpsertOne) UpdateAffectedRows() *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateAffectedRows()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *QueryHistoryUpsertOne) SetCreatedAt(v time.Time) *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *QueryHistoryUpsertOne) UpdateCreatedAt() *QueryHistoryUpsertOne {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *QueryHistoryUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for QueryHistoryCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *QueryHistoryUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *QueryHistoryUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *QueryHistoryUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // QueryHistoryCreateBulk is the builder for creating many QueryHistory entities in bulk.
 type QueryHistoryCreateBulk struct {
 	config
 	err      error
 	builders []*QueryHistoryCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the QueryHistory entities in the database.
@@ -388,6 +891,7 @@ func (_c *QueryHistoryCreateBulk) Save(ctx context.Context) ([]*QueryHistory, er
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -438,6 +942,313 @@ func (_c *QueryHistoryCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *QueryHistoryCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.QueryHistory.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.QueryHistoryUpsert) {
+//			SetUserID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *QueryHistoryCreateBulk) OnConflict(opts ...sql.ConflictOption) *QueryHistoryUpsertBulk {
+	_c.conflict = opts
+	return &QueryHistoryUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.QueryHistory.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *QueryHistoryCreateBulk) OnConflictColumns(columns ...string) *QueryHistoryUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &QueryHistoryUpsertBulk{
+		create: _c,
+	}
+}
+
+// QueryHistoryUpsertBulk is the builder for "upsert"-ing
+// a bulk of QueryHistory nodes.
+type QueryHistoryUpsertBulk struct {
+	create *QueryHistoryCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.QueryHistory.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *QueryHistoryUpsertBulk) UpdateNewValues() *QueryHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.QueryHistory.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *QueryHistoryUpsertBulk) Ignore() *QueryHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *QueryHistoryUpsertBulk) DoNothing() *QueryHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the QueryHistoryCreateBulk.OnConflict
+// documentation for more info.
+func (u *QueryHistoryUpsertBulk) Update(set func(*QueryHistoryUpsert)) *QueryHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&QueryHistoryUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *QueryHistoryUpsertBulk) SetUserID(v int64) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *QueryHistoryUpsertBulk) AddUserID(v int64) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *QueryHistoryUpsertBulk) UpdateUserID() *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetDatasourceID sets the "datasource_id" field.
+func (u *QueryHistoryUpsertBulk) SetDatasourceID(v int64) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetDatasourceID(v)
+	})
+}
+
+// AddDatasourceID adds v to the "datasource_id" field.
+func (u *QueryHistoryUpsertBulk) AddDatasourceID(v int64) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.AddDatasourceID(v)
+	})
+}
+
+// UpdateDatasourceID sets the "datasource_id" field to the value that was provided on create.
+func (u *QueryHistoryUpsertBulk) UpdateDatasourceID() *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateDatasourceID()
+	})
+}
+
+// SetDatabase sets the "database" field.
+func (u *QueryHistoryUpsertBulk) SetDatabase(v string) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetDatabase(v)
+	})
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *QueryHistoryUpsertBulk) UpdateDatabase() *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateDatabase()
+	})
+}
+
+// SetSQLContent sets the "sql_content" field.
+func (u *QueryHistoryUpsertBulk) SetSQLContent(v string) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetSQLContent(v)
+	})
+}
+
+// UpdateSQLContent sets the "sql_content" field to the value that was provided on create.
+func (u *QueryHistoryUpsertBulk) UpdateSQLContent() *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateSQLContent()
+	})
+}
+
+// SetSQLHash sets the "sql_hash" field.
+func (u *QueryHistoryUpsertBulk) SetSQLHash(v string) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetSQLHash(v)
+	})
+}
+
+// UpdateSQLHash sets the "sql_hash" field to the value that was provided on create.
+func (u *QueryHistoryUpsertBulk) UpdateSQLHash() *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateSQLHash()
+	})
+}
+
+// SetParamsJSON sets the "params_json" field.
+func (u *QueryHistoryUpsertBulk) SetParamsJSON(v string) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetParamsJSON(v)
+	})
+}
+
+// UpdateParamsJSON sets the "params_json" field to the value that was provided on create.
+func (u *QueryHistoryUpsertBulk) UpdateParamsJSON() *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateParamsJSON()
+	})
+}
+
+// SetSQLSummary sets the "sql_summary" field.
+func (u *QueryHistoryUpsertBulk) SetSQLSummary(v string) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetSQLSummary(v)
+	})
+}
+
+// UpdateSQLSummary sets the "sql_summary" field to the value that was provided on create.
+func (u *QueryHistoryUpsertBulk) UpdateSQLSummary() *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateSQLSummary()
+	})
+}
+
+// SetDbType sets the "db_type" field.
+func (u *QueryHistoryUpsertBulk) SetDbType(v string) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetDbType(v)
+	})
+}
+
+// UpdateDbType sets the "db_type" field to the value that was provided on create.
+func (u *QueryHistoryUpsertBulk) UpdateDbType() *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateDbType()
+	})
+}
+
+// SetExecutionTime sets the "execution_time" field.
+func (u *QueryHistoryUpsertBulk) SetExecutionTime(v int64) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetExecutionTime(v)
+	})
+}
+
+// AddExecutionTime adds v to the "execution_time" field.
+func (u *QueryHistoryUpsertBulk) AddExecutionTime(v int64) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.AddExecutionTime(v)
+	})
+}
+
+// UpdateExecutionTime sets the "execution_time" field to the value that was provided on create.
+func (u *QueryHistoryUpsertBulk) UpdateExecutionTime() *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateExecutionTime()
+	})
+}
+
+// SetResultRows sets the "result_rows" field.
+func (u *QueryHistoryUpsertBulk) SetResultRows(v int64) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetResultRows(v)
+	})
+}
+
+// AddResultRows adds v to the "result_rows" field.
+func (u *QueryHistoryUpsertBulk) AddResultRows(v int64) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.AddResultRows(v)
+	})
+}
+
+// UpdateResultRows sets the "result_rows" field to the value that was provided on create.
+func (u *QueryHistoryUpsertBulk) UpdateResultRows() *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateResultRows()
+	})
+}
+
+// SetAffectedRows sets the "affected_rows" field.
+func (u *QueryHistoryUpsertBulk) SetAffectedRows(v int64) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetAffectedRows(v)
+	})
+}
+
+// AddAffectedRows adds v to the "affected_rows" field.
+func (u *QueryHistoryUpsertBulk) AddAffectedRows(v int64) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.AddAffectedRows(v)
+	})
+}
+
+// UpdateAffectedRows sets the "affected_rows" field to the value that was provided on create.
+func (u *QueryHistoryUpsertBulk) UpdateAffectedRows() *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateAffectedRows()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *QueryHistoryUpsertBulk) SetCreatedAt(v time.Time) *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *QueryHistoryUpsertBulk) UpdateCreatedAt() *QueryHistoryUpsertBulk {
+	return u.Update(func(s *QueryHistoryUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *QueryHistoryUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the QueryHistoryCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for QueryHistoryCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *QueryHistoryUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

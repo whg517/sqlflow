@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/exporttask"
@@ -18,6 +19,7 @@ type ExportTaskCreate struct {
 	config
 	mutation *ExportTaskMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetUserID sets the "user_id" field.
@@ -336,6 +338,7 @@ func (_c *ExportTaskCreate) createSpec() (*ExportTask, *sqlgraph.CreateSpec) {
 		_node = &ExportTask{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(exporttask.Table, sqlgraph.NewFieldSpec(exporttask.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.UserID(); ok {
 		_spec.SetField(exporttask.FieldUserID, field.TypeInt64, value)
 		_node.UserID = value
@@ -391,11 +394,524 @@ func (_c *ExportTaskCreate) createSpec() (*ExportTask, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ExportTask.Create().
+//		SetUserID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ExportTaskUpsert) {
+//			SetUserID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ExportTaskCreate) OnConflict(opts ...sql.ConflictOption) *ExportTaskUpsertOne {
+	_c.conflict = opts
+	return &ExportTaskUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ExportTask.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ExportTaskCreate) OnConflictColumns(columns ...string) *ExportTaskUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ExportTaskUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ExportTaskUpsertOne is the builder for "upsert"-ing
+	//  one ExportTask node.
+	ExportTaskUpsertOne struct {
+		create *ExportTaskCreate
+	}
+
+	// ExportTaskUpsert is the "OnConflict" setter.
+	ExportTaskUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetUserID sets the "user_id" field.
+func (u *ExportTaskUpsert) SetUserID(v int64) *ExportTaskUpsert {
+	u.Set(exporttask.FieldUserID, v)
+	return u
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateUserID() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldUserID)
+	return u
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *ExportTaskUpsert) AddUserID(v int64) *ExportTaskUpsert {
+	u.Add(exporttask.FieldUserID, v)
+	return u
+}
+
+// SetUsername sets the "username" field.
+func (u *ExportTaskUpsert) SetUsername(v string) *ExportTaskUpsert {
+	u.Set(exporttask.FieldUsername, v)
+	return u
+}
+
+// UpdateUsername sets the "username" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateUsername() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldUsername)
+	return u
+}
+
+// SetExportType sets the "export_type" field.
+func (u *ExportTaskUpsert) SetExportType(v string) *ExportTaskUpsert {
+	u.Set(exporttask.FieldExportType, v)
+	return u
+}
+
+// UpdateExportType sets the "export_type" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateExportType() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldExportType)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ExportTaskUpsert) SetStatus(v string) *ExportTaskUpsert {
+	u.Set(exporttask.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateStatus() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldStatus)
+	return u
+}
+
+// SetFileFormat sets the "file_format" field.
+func (u *ExportTaskUpsert) SetFileFormat(v string) *ExportTaskUpsert {
+	u.Set(exporttask.FieldFileFormat, v)
+	return u
+}
+
+// UpdateFileFormat sets the "file_format" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateFileFormat() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldFileFormat)
+	return u
+}
+
+// SetFilename sets the "filename" field.
+func (u *ExportTaskUpsert) SetFilename(v string) *ExportTaskUpsert {
+	u.Set(exporttask.FieldFilename, v)
+	return u
+}
+
+// UpdateFilename sets the "filename" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateFilename() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldFilename)
+	return u
+}
+
+// SetFilePath sets the "file_path" field.
+func (u *ExportTaskUpsert) SetFilePath(v string) *ExportTaskUpsert {
+	u.Set(exporttask.FieldFilePath, v)
+	return u
+}
+
+// UpdateFilePath sets the "file_path" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateFilePath() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldFilePath)
+	return u
+}
+
+// SetTotalRows sets the "total_rows" field.
+func (u *ExportTaskUpsert) SetTotalRows(v int64) *ExportTaskUpsert {
+	u.Set(exporttask.FieldTotalRows, v)
+	return u
+}
+
+// UpdateTotalRows sets the "total_rows" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateTotalRows() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldTotalRows)
+	return u
+}
+
+// AddTotalRows adds v to the "total_rows" field.
+func (u *ExportTaskUpsert) AddTotalRows(v int64) *ExportTaskUpsert {
+	u.Add(exporttask.FieldTotalRows, v)
+	return u
+}
+
+// SetFileBytes sets the "file_bytes" field.
+func (u *ExportTaskUpsert) SetFileBytes(v int64) *ExportTaskUpsert {
+	u.Set(exporttask.FieldFileBytes, v)
+	return u
+}
+
+// UpdateFileBytes sets the "file_bytes" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateFileBytes() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldFileBytes)
+	return u
+}
+
+// AddFileBytes adds v to the "file_bytes" field.
+func (u *ExportTaskUpsert) AddFileBytes(v int64) *ExportTaskUpsert {
+	u.Add(exporttask.FieldFileBytes, v)
+	return u
+}
+
+// SetFiltersJSON sets the "filters_json" field.
+func (u *ExportTaskUpsert) SetFiltersJSON(v string) *ExportTaskUpsert {
+	u.Set(exporttask.FieldFiltersJSON, v)
+	return u
+}
+
+// UpdateFiltersJSON sets the "filters_json" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateFiltersJSON() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldFiltersJSON)
+	return u
+}
+
+// SetErrorMsg sets the "error_msg" field.
+func (u *ExportTaskUpsert) SetErrorMsg(v string) *ExportTaskUpsert {
+	u.Set(exporttask.FieldErrorMsg, v)
+	return u
+}
+
+// UpdateErrorMsg sets the "error_msg" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateErrorMsg() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldErrorMsg)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ExportTaskUpsert) SetCreatedAt(v time.Time) *ExportTaskUpsert {
+	u.Set(exporttask.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateCreatedAt() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldCreatedAt)
+	return u
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *ExportTaskUpsert) SetCompletedAt(v time.Time) *ExportTaskUpsert {
+	u.Set(exporttask.FieldCompletedAt, v)
+	return u
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *ExportTaskUpsert) UpdateCompletedAt() *ExportTaskUpsert {
+	u.SetExcluded(exporttask.FieldCompletedAt)
+	return u
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *ExportTaskUpsert) ClearCompletedAt() *ExportTaskUpsert {
+	u.SetNull(exporttask.FieldCompletedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ExportTask.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ExportTaskUpsertOne) UpdateNewValues() *ExportTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ExportTask.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ExportTaskUpsertOne) Ignore() *ExportTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ExportTaskUpsertOne) DoNothing() *ExportTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ExportTaskCreate.OnConflict
+// documentation for more info.
+func (u *ExportTaskUpsertOne) Update(set func(*ExportTaskUpsert)) *ExportTaskUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ExportTaskUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ExportTaskUpsertOne) SetUserID(v int64) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *ExportTaskUpsertOne) AddUserID(v int64) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateUserID() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetUsername sets the "username" field.
+func (u *ExportTaskUpsertOne) SetUsername(v string) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetUsername(v)
+	})
+}
+
+// UpdateUsername sets the "username" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateUsername() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateUsername()
+	})
+}
+
+// SetExportType sets the "export_type" field.
+func (u *ExportTaskUpsertOne) SetExportType(v string) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetExportType(v)
+	})
+}
+
+// UpdateExportType sets the "export_type" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateExportType() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateExportType()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ExportTaskUpsertOne) SetStatus(v string) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateStatus() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetFileFormat sets the "file_format" field.
+func (u *ExportTaskUpsertOne) SetFileFormat(v string) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetFileFormat(v)
+	})
+}
+
+// UpdateFileFormat sets the "file_format" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateFileFormat() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateFileFormat()
+	})
+}
+
+// SetFilename sets the "filename" field.
+func (u *ExportTaskUpsertOne) SetFilename(v string) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetFilename(v)
+	})
+}
+
+// UpdateFilename sets the "filename" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateFilename() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateFilename()
+	})
+}
+
+// SetFilePath sets the "file_path" field.
+func (u *ExportTaskUpsertOne) SetFilePath(v string) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetFilePath(v)
+	})
+}
+
+// UpdateFilePath sets the "file_path" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateFilePath() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateFilePath()
+	})
+}
+
+// SetTotalRows sets the "total_rows" field.
+func (u *ExportTaskUpsertOne) SetTotalRows(v int64) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetTotalRows(v)
+	})
+}
+
+// AddTotalRows adds v to the "total_rows" field.
+func (u *ExportTaskUpsertOne) AddTotalRows(v int64) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.AddTotalRows(v)
+	})
+}
+
+// UpdateTotalRows sets the "total_rows" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateTotalRows() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateTotalRows()
+	})
+}
+
+// SetFileBytes sets the "file_bytes" field.
+func (u *ExportTaskUpsertOne) SetFileBytes(v int64) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetFileBytes(v)
+	})
+}
+
+// AddFileBytes adds v to the "file_bytes" field.
+func (u *ExportTaskUpsertOne) AddFileBytes(v int64) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.AddFileBytes(v)
+	})
+}
+
+// UpdateFileBytes sets the "file_bytes" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateFileBytes() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateFileBytes()
+	})
+}
+
+// SetFiltersJSON sets the "filters_json" field.
+func (u *ExportTaskUpsertOne) SetFiltersJSON(v string) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetFiltersJSON(v)
+	})
+}
+
+// UpdateFiltersJSON sets the "filters_json" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateFiltersJSON() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateFiltersJSON()
+	})
+}
+
+// SetErrorMsg sets the "error_msg" field.
+func (u *ExportTaskUpsertOne) SetErrorMsg(v string) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetErrorMsg(v)
+	})
+}
+
+// UpdateErrorMsg sets the "error_msg" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateErrorMsg() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateErrorMsg()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ExportTaskUpsertOne) SetCreatedAt(v time.Time) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateCreatedAt() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *ExportTaskUpsertOne) SetCompletedAt(v time.Time) *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetCompletedAt(v)
+	})
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *ExportTaskUpsertOne) UpdateCompletedAt() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateCompletedAt()
+	})
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *ExportTaskUpsertOne) ClearCompletedAt() *ExportTaskUpsertOne {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.ClearCompletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ExportTaskUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ExportTaskCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ExportTaskUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ExportTaskUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ExportTaskUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ExportTaskCreateBulk is the builder for creating many ExportTask entities in bulk.
 type ExportTaskCreateBulk struct {
 	config
 	err      error
 	builders []*ExportTaskCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ExportTask entities in the database.
@@ -425,6 +941,7 @@ func (_c *ExportTaskCreateBulk) Save(ctx context.Context) ([]*ExportTask, error)
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -475,6 +992,320 @@ func (_c *ExportTaskCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ExportTaskCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ExportTask.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ExportTaskUpsert) {
+//			SetUserID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ExportTaskCreateBulk) OnConflict(opts ...sql.ConflictOption) *ExportTaskUpsertBulk {
+	_c.conflict = opts
+	return &ExportTaskUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ExportTask.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ExportTaskCreateBulk) OnConflictColumns(columns ...string) *ExportTaskUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ExportTaskUpsertBulk{
+		create: _c,
+	}
+}
+
+// ExportTaskUpsertBulk is the builder for "upsert"-ing
+// a bulk of ExportTask nodes.
+type ExportTaskUpsertBulk struct {
+	create *ExportTaskCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ExportTask.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ExportTaskUpsertBulk) UpdateNewValues() *ExportTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ExportTask.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ExportTaskUpsertBulk) Ignore() *ExportTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ExportTaskUpsertBulk) DoNothing() *ExportTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ExportTaskCreateBulk.OnConflict
+// documentation for more info.
+func (u *ExportTaskUpsertBulk) Update(set func(*ExportTaskUpsert)) *ExportTaskUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ExportTaskUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ExportTaskUpsertBulk) SetUserID(v int64) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *ExportTaskUpsertBulk) AddUserID(v int64) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateUserID() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetUsername sets the "username" field.
+func (u *ExportTaskUpsertBulk) SetUsername(v string) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetUsername(v)
+	})
+}
+
+// UpdateUsername sets the "username" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateUsername() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateUsername()
+	})
+}
+
+// SetExportType sets the "export_type" field.
+func (u *ExportTaskUpsertBulk) SetExportType(v string) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetExportType(v)
+	})
+}
+
+// UpdateExportType sets the "export_type" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateExportType() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateExportType()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ExportTaskUpsertBulk) SetStatus(v string) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateStatus() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetFileFormat sets the "file_format" field.
+func (u *ExportTaskUpsertBulk) SetFileFormat(v string) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetFileFormat(v)
+	})
+}
+
+// UpdateFileFormat sets the "file_format" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateFileFormat() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateFileFormat()
+	})
+}
+
+// SetFilename sets the "filename" field.
+func (u *ExportTaskUpsertBulk) SetFilename(v string) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetFilename(v)
+	})
+}
+
+// UpdateFilename sets the "filename" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateFilename() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateFilename()
+	})
+}
+
+// SetFilePath sets the "file_path" field.
+func (u *ExportTaskUpsertBulk) SetFilePath(v string) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetFilePath(v)
+	})
+}
+
+// UpdateFilePath sets the "file_path" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateFilePath() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateFilePath()
+	})
+}
+
+// SetTotalRows sets the "total_rows" field.
+func (u *ExportTaskUpsertBulk) SetTotalRows(v int64) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetTotalRows(v)
+	})
+}
+
+// AddTotalRows adds v to the "total_rows" field.
+func (u *ExportTaskUpsertBulk) AddTotalRows(v int64) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.AddTotalRows(v)
+	})
+}
+
+// UpdateTotalRows sets the "total_rows" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateTotalRows() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateTotalRows()
+	})
+}
+
+// SetFileBytes sets the "file_bytes" field.
+func (u *ExportTaskUpsertBulk) SetFileBytes(v int64) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetFileBytes(v)
+	})
+}
+
+// AddFileBytes adds v to the "file_bytes" field.
+func (u *ExportTaskUpsertBulk) AddFileBytes(v int64) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.AddFileBytes(v)
+	})
+}
+
+// UpdateFileBytes sets the "file_bytes" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateFileBytes() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateFileBytes()
+	})
+}
+
+// SetFiltersJSON sets the "filters_json" field.
+func (u *ExportTaskUpsertBulk) SetFiltersJSON(v string) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetFiltersJSON(v)
+	})
+}
+
+// UpdateFiltersJSON sets the "filters_json" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateFiltersJSON() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateFiltersJSON()
+	})
+}
+
+// SetErrorMsg sets the "error_msg" field.
+func (u *ExportTaskUpsertBulk) SetErrorMsg(v string) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetErrorMsg(v)
+	})
+}
+
+// UpdateErrorMsg sets the "error_msg" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateErrorMsg() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateErrorMsg()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ExportTaskUpsertBulk) SetCreatedAt(v time.Time) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateCreatedAt() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *ExportTaskUpsertBulk) SetCompletedAt(v time.Time) *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.SetCompletedAt(v)
+	})
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *ExportTaskUpsertBulk) UpdateCompletedAt() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.UpdateCompletedAt()
+	})
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *ExportTaskUpsertBulk) ClearCompletedAt() *ExportTaskUpsertBulk {
+	return u.Update(func(s *ExportTaskUpsert) {
+		s.ClearCompletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ExportTaskUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ExportTaskCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ExportTaskCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ExportTaskUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

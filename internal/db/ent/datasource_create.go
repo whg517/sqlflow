@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/datasource"
@@ -18,6 +19,7 @@ type DataSourceCreate struct {
 	config
 	mutation *DataSourceMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -526,6 +528,7 @@ func (_c *DataSourceCreate) createSpec() (*DataSource, *sqlgraph.CreateSpec) {
 		_node = &DataSource{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(datasource.Table, sqlgraph.NewFieldSpec(datasource.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(datasource.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -621,11 +624,810 @@ func (_c *DataSourceCreate) createSpec() (*DataSource, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.DataSource.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.DataSourceUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *DataSourceCreate) OnConflict(opts ...sql.ConflictOption) *DataSourceUpsertOne {
+	_c.conflict = opts
+	return &DataSourceUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.DataSource.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *DataSourceCreate) OnConflictColumns(columns ...string) *DataSourceUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &DataSourceUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// DataSourceUpsertOne is the builder for "upsert"-ing
+	//  one DataSource node.
+	DataSourceUpsertOne struct {
+		create *DataSourceCreate
+	}
+
+	// DataSourceUpsert is the "OnConflict" setter.
+	DataSourceUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *DataSourceUpsert) SetName(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateName() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldName)
+	return u
+}
+
+// SetType sets the "type" field.
+func (u *DataSourceUpsert) SetType(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldType, v)
+	return u
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateType() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldType)
+	return u
+}
+
+// SetHost sets the "host" field.
+func (u *DataSourceUpsert) SetHost(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldHost, v)
+	return u
+}
+
+// UpdateHost sets the "host" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateHost() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldHost)
+	return u
+}
+
+// SetPort sets the "port" field.
+func (u *DataSourceUpsert) SetPort(v int) *DataSourceUpsert {
+	u.Set(datasource.FieldPort, v)
+	return u
+}
+
+// UpdatePort sets the "port" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdatePort() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldPort)
+	return u
+}
+
+// AddPort adds v to the "port" field.
+func (u *DataSourceUpsert) AddPort(v int) *DataSourceUpsert {
+	u.Add(datasource.FieldPort, v)
+	return u
+}
+
+// SetUsername sets the "username" field.
+func (u *DataSourceUpsert) SetUsername(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldUsername, v)
+	return u
+}
+
+// UpdateUsername sets the "username" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateUsername() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldUsername)
+	return u
+}
+
+// SetPasswordEncrypted sets the "password_encrypted" field.
+func (u *DataSourceUpsert) SetPasswordEncrypted(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldPasswordEncrypted, v)
+	return u
+}
+
+// UpdatePasswordEncrypted sets the "password_encrypted" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdatePasswordEncrypted() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldPasswordEncrypted)
+	return u
+}
+
+// SetDatabase sets the "database" field.
+func (u *DataSourceUpsert) SetDatabase(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldDatabase, v)
+	return u
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateDatabase() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldDatabase)
+	return u
+}
+
+// SetMaxOpen sets the "max_open" field.
+func (u *DataSourceUpsert) SetMaxOpen(v int) *DataSourceUpsert {
+	u.Set(datasource.FieldMaxOpen, v)
+	return u
+}
+
+// UpdateMaxOpen sets the "max_open" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateMaxOpen() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldMaxOpen)
+	return u
+}
+
+// AddMaxOpen adds v to the "max_open" field.
+func (u *DataSourceUpsert) AddMaxOpen(v int) *DataSourceUpsert {
+	u.Add(datasource.FieldMaxOpen, v)
+	return u
+}
+
+// SetMaxIdle sets the "max_idle" field.
+func (u *DataSourceUpsert) SetMaxIdle(v int) *DataSourceUpsert {
+	u.Set(datasource.FieldMaxIdle, v)
+	return u
+}
+
+// UpdateMaxIdle sets the "max_idle" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateMaxIdle() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldMaxIdle)
+	return u
+}
+
+// AddMaxIdle adds v to the "max_idle" field.
+func (u *DataSourceUpsert) AddMaxIdle(v int) *DataSourceUpsert {
+	u.Add(datasource.FieldMaxIdle, v)
+	return u
+}
+
+// SetMaxLifetime sets the "max_lifetime" field.
+func (u *DataSourceUpsert) SetMaxLifetime(v int) *DataSourceUpsert {
+	u.Set(datasource.FieldMaxLifetime, v)
+	return u
+}
+
+// UpdateMaxLifetime sets the "max_lifetime" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateMaxLifetime() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldMaxLifetime)
+	return u
+}
+
+// AddMaxLifetime adds v to the "max_lifetime" field.
+func (u *DataSourceUpsert) AddMaxLifetime(v int) *DataSourceUpsert {
+	u.Add(datasource.FieldMaxLifetime, v)
+	return u
+}
+
+// SetMaxIdleTime sets the "max_idle_time" field.
+func (u *DataSourceUpsert) SetMaxIdleTime(v int) *DataSourceUpsert {
+	u.Set(datasource.FieldMaxIdleTime, v)
+	return u
+}
+
+// UpdateMaxIdleTime sets the "max_idle_time" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateMaxIdleTime() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldMaxIdleTime)
+	return u
+}
+
+// AddMaxIdleTime adds v to the "max_idle_time" field.
+func (u *DataSourceUpsert) AddMaxIdleTime(v int) *DataSourceUpsert {
+	u.Add(datasource.FieldMaxIdleTime, v)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *DataSourceUpsert) SetStatus(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateStatus() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldStatus)
+	return u
+}
+
+// SetSslmode sets the "sslmode" field.
+func (u *DataSourceUpsert) SetSslmode(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldSslmode, v)
+	return u
+}
+
+// UpdateSslmode sets the "sslmode" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateSslmode() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldSslmode)
+	return u
+}
+
+// SetSchemaName sets the "schema_name" field.
+func (u *DataSourceUpsert) SetSchemaName(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldSchemaName, v)
+	return u
+}
+
+// UpdateSchemaName sets the "schema_name" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateSchemaName() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldSchemaName)
+	return u
+}
+
+// SetEsUrls sets the "es_urls" field.
+func (u *DataSourceUpsert) SetEsUrls(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldEsUrls, v)
+	return u
+}
+
+// UpdateEsUrls sets the "es_urls" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateEsUrls() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldEsUrls)
+	return u
+}
+
+// SetEsVersion sets the "es_version" field.
+func (u *DataSourceUpsert) SetEsVersion(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldEsVersion, v)
+	return u
+}
+
+// UpdateEsVersion sets the "es_version" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateEsVersion() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldEsVersion)
+	return u
+}
+
+// SetEsAuthType sets the "es_auth_type" field.
+func (u *DataSourceUpsert) SetEsAuthType(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldEsAuthType, v)
+	return u
+}
+
+// UpdateEsAuthType sets the "es_auth_type" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateEsAuthType() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldEsAuthType)
+	return u
+}
+
+// SetEsAPIKey sets the "es_api_key" field.
+func (u *DataSourceUpsert) SetEsAPIKey(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldEsAPIKey, v)
+	return u
+}
+
+// UpdateEsAPIKey sets the "es_api_key" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateEsAPIKey() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldEsAPIKey)
+	return u
+}
+
+// SetEsIndexPattern sets the "es_index_pattern" field.
+func (u *DataSourceUpsert) SetEsIndexPattern(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldEsIndexPattern, v)
+	return u
+}
+
+// UpdateEsIndexPattern sets the "es_index_pattern" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateEsIndexPattern() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldEsIndexPattern)
+	return u
+}
+
+// SetEsVerifyCerts sets the "es_verify_certs" field.
+func (u *DataSourceUpsert) SetEsVerifyCerts(v bool) *DataSourceUpsert {
+	u.Set(datasource.FieldEsVerifyCerts, v)
+	return u
+}
+
+// UpdateEsVerifyCerts sets the "es_verify_certs" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateEsVerifyCerts() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldEsVerifyCerts)
+	return u
+}
+
+// SetExtraConfig sets the "extra_config" field.
+func (u *DataSourceUpsert) SetExtraConfig(v string) *DataSourceUpsert {
+	u.Set(datasource.FieldExtraConfig, v)
+	return u
+}
+
+// UpdateExtraConfig sets the "extra_config" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateExtraConfig() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldExtraConfig)
+	return u
+}
+
+// ClearExtraConfig clears the value of the "extra_config" field.
+func (u *DataSourceUpsert) ClearExtraConfig() *DataSourceUpsert {
+	u.SetNull(datasource.FieldExtraConfig)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DataSourceUpsert) SetCreatedAt(v time.Time) *DataSourceUpsert {
+	u.Set(datasource.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateCreatedAt() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DataSourceUpsert) SetUpdatedAt(v time.Time) *DataSourceUpsert {
+	u.Set(datasource.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DataSourceUpsert) UpdateUpdatedAt() *DataSourceUpsert {
+	u.SetExcluded(datasource.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.DataSource.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *DataSourceUpsertOne) UpdateNewValues() *DataSourceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.DataSource.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *DataSourceUpsertOne) Ignore() *DataSourceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *DataSourceUpsertOne) DoNothing() *DataSourceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the DataSourceCreate.OnConflict
+// documentation for more info.
+func (u *DataSourceUpsertOne) Update(set func(*DataSourceUpsert)) *DataSourceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&DataSourceUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *DataSourceUpsertOne) SetName(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateName() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *DataSourceUpsertOne) SetType(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateType() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetHost sets the "host" field.
+func (u *DataSourceUpsertOne) SetHost(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetHost(v)
+	})
+}
+
+// UpdateHost sets the "host" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateHost() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateHost()
+	})
+}
+
+// SetPort sets the "port" field.
+func (u *DataSourceUpsertOne) SetPort(v int) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetPort(v)
+	})
+}
+
+// AddPort adds v to the "port" field.
+func (u *DataSourceUpsertOne) AddPort(v int) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.AddPort(v)
+	})
+}
+
+// UpdatePort sets the "port" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdatePort() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdatePort()
+	})
+}
+
+// SetUsername sets the "username" field.
+func (u *DataSourceUpsertOne) SetUsername(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetUsername(v)
+	})
+}
+
+// UpdateUsername sets the "username" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateUsername() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateUsername()
+	})
+}
+
+// SetPasswordEncrypted sets the "password_encrypted" field.
+func (u *DataSourceUpsertOne) SetPasswordEncrypted(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetPasswordEncrypted(v)
+	})
+}
+
+// UpdatePasswordEncrypted sets the "password_encrypted" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdatePasswordEncrypted() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdatePasswordEncrypted()
+	})
+}
+
+// SetDatabase sets the "database" field.
+func (u *DataSourceUpsertOne) SetDatabase(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetDatabase(v)
+	})
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateDatabase() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateDatabase()
+	})
+}
+
+// SetMaxOpen sets the "max_open" field.
+func (u *DataSourceUpsertOne) SetMaxOpen(v int) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetMaxOpen(v)
+	})
+}
+
+// AddMaxOpen adds v to the "max_open" field.
+func (u *DataSourceUpsertOne) AddMaxOpen(v int) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.AddMaxOpen(v)
+	})
+}
+
+// UpdateMaxOpen sets the "max_open" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateMaxOpen() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateMaxOpen()
+	})
+}
+
+// SetMaxIdle sets the "max_idle" field.
+func (u *DataSourceUpsertOne) SetMaxIdle(v int) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetMaxIdle(v)
+	})
+}
+
+// AddMaxIdle adds v to the "max_idle" field.
+func (u *DataSourceUpsertOne) AddMaxIdle(v int) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.AddMaxIdle(v)
+	})
+}
+
+// UpdateMaxIdle sets the "max_idle" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateMaxIdle() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateMaxIdle()
+	})
+}
+
+// SetMaxLifetime sets the "max_lifetime" field.
+func (u *DataSourceUpsertOne) SetMaxLifetime(v int) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetMaxLifetime(v)
+	})
+}
+
+// AddMaxLifetime adds v to the "max_lifetime" field.
+func (u *DataSourceUpsertOne) AddMaxLifetime(v int) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.AddMaxLifetime(v)
+	})
+}
+
+// UpdateMaxLifetime sets the "max_lifetime" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateMaxLifetime() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateMaxLifetime()
+	})
+}
+
+// SetMaxIdleTime sets the "max_idle_time" field.
+func (u *DataSourceUpsertOne) SetMaxIdleTime(v int) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetMaxIdleTime(v)
+	})
+}
+
+// AddMaxIdleTime adds v to the "max_idle_time" field.
+func (u *DataSourceUpsertOne) AddMaxIdleTime(v int) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.AddMaxIdleTime(v)
+	})
+}
+
+// UpdateMaxIdleTime sets the "max_idle_time" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateMaxIdleTime() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateMaxIdleTime()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *DataSourceUpsertOne) SetStatus(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateStatus() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetSslmode sets the "sslmode" field.
+func (u *DataSourceUpsertOne) SetSslmode(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetSslmode(v)
+	})
+}
+
+// UpdateSslmode sets the "sslmode" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateSslmode() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateSslmode()
+	})
+}
+
+// SetSchemaName sets the "schema_name" field.
+func (u *DataSourceUpsertOne) SetSchemaName(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetSchemaName(v)
+	})
+}
+
+// UpdateSchemaName sets the "schema_name" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateSchemaName() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateSchemaName()
+	})
+}
+
+// SetEsUrls sets the "es_urls" field.
+func (u *DataSourceUpsertOne) SetEsUrls(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetEsUrls(v)
+	})
+}
+
+// UpdateEsUrls sets the "es_urls" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateEsUrls() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateEsUrls()
+	})
+}
+
+// SetEsVersion sets the "es_version" field.
+func (u *DataSourceUpsertOne) SetEsVersion(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetEsVersion(v)
+	})
+}
+
+// UpdateEsVersion sets the "es_version" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateEsVersion() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateEsVersion()
+	})
+}
+
+// SetEsAuthType sets the "es_auth_type" field.
+func (u *DataSourceUpsertOne) SetEsAuthType(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetEsAuthType(v)
+	})
+}
+
+// UpdateEsAuthType sets the "es_auth_type" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateEsAuthType() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateEsAuthType()
+	})
+}
+
+// SetEsAPIKey sets the "es_api_key" field.
+func (u *DataSourceUpsertOne) SetEsAPIKey(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetEsAPIKey(v)
+	})
+}
+
+// UpdateEsAPIKey sets the "es_api_key" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateEsAPIKey() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateEsAPIKey()
+	})
+}
+
+// SetEsIndexPattern sets the "es_index_pattern" field.
+func (u *DataSourceUpsertOne) SetEsIndexPattern(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetEsIndexPattern(v)
+	})
+}
+
+// UpdateEsIndexPattern sets the "es_index_pattern" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateEsIndexPattern() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateEsIndexPattern()
+	})
+}
+
+// SetEsVerifyCerts sets the "es_verify_certs" field.
+func (u *DataSourceUpsertOne) SetEsVerifyCerts(v bool) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetEsVerifyCerts(v)
+	})
+}
+
+// UpdateEsVerifyCerts sets the "es_verify_certs" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateEsVerifyCerts() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateEsVerifyCerts()
+	})
+}
+
+// SetExtraConfig sets the "extra_config" field.
+func (u *DataSourceUpsertOne) SetExtraConfig(v string) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetExtraConfig(v)
+	})
+}
+
+// UpdateExtraConfig sets the "extra_config" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateExtraConfig() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateExtraConfig()
+	})
+}
+
+// ClearExtraConfig clears the value of the "extra_config" field.
+func (u *DataSourceUpsertOne) ClearExtraConfig() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.ClearExtraConfig()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DataSourceUpsertOne) SetCreatedAt(v time.Time) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateCreatedAt() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DataSourceUpsertOne) SetUpdatedAt(v time.Time) *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DataSourceUpsertOne) UpdateUpdatedAt() *DataSourceUpsertOne {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *DataSourceUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for DataSourceCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *DataSourceUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *DataSourceUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *DataSourceUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // DataSourceCreateBulk is the builder for creating many DataSource entities in bulk.
 type DataSourceCreateBulk struct {
 	config
 	err      error
 	builders []*DataSourceCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the DataSource entities in the database.
@@ -655,6 +1457,7 @@ func (_c *DataSourceCreateBulk) Save(ctx context.Context) ([]*DataSource, error)
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -705,6 +1508,474 @@ func (_c *DataSourceCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *DataSourceCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.DataSource.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.DataSourceUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *DataSourceCreateBulk) OnConflict(opts ...sql.ConflictOption) *DataSourceUpsertBulk {
+	_c.conflict = opts
+	return &DataSourceUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.DataSource.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *DataSourceCreateBulk) OnConflictColumns(columns ...string) *DataSourceUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &DataSourceUpsertBulk{
+		create: _c,
+	}
+}
+
+// DataSourceUpsertBulk is the builder for "upsert"-ing
+// a bulk of DataSource nodes.
+type DataSourceUpsertBulk struct {
+	create *DataSourceCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.DataSource.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *DataSourceUpsertBulk) UpdateNewValues() *DataSourceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.DataSource.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *DataSourceUpsertBulk) Ignore() *DataSourceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *DataSourceUpsertBulk) DoNothing() *DataSourceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the DataSourceCreateBulk.OnConflict
+// documentation for more info.
+func (u *DataSourceUpsertBulk) Update(set func(*DataSourceUpsert)) *DataSourceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&DataSourceUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *DataSourceUpsertBulk) SetName(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateName() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *DataSourceUpsertBulk) SetType(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateType() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetHost sets the "host" field.
+func (u *DataSourceUpsertBulk) SetHost(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetHost(v)
+	})
+}
+
+// UpdateHost sets the "host" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateHost() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateHost()
+	})
+}
+
+// SetPort sets the "port" field.
+func (u *DataSourceUpsertBulk) SetPort(v int) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetPort(v)
+	})
+}
+
+// AddPort adds v to the "port" field.
+func (u *DataSourceUpsertBulk) AddPort(v int) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.AddPort(v)
+	})
+}
+
+// UpdatePort sets the "port" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdatePort() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdatePort()
+	})
+}
+
+// SetUsername sets the "username" field.
+func (u *DataSourceUpsertBulk) SetUsername(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetUsername(v)
+	})
+}
+
+// UpdateUsername sets the "username" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateUsername() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateUsername()
+	})
+}
+
+// SetPasswordEncrypted sets the "password_encrypted" field.
+func (u *DataSourceUpsertBulk) SetPasswordEncrypted(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetPasswordEncrypted(v)
+	})
+}
+
+// UpdatePasswordEncrypted sets the "password_encrypted" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdatePasswordEncrypted() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdatePasswordEncrypted()
+	})
+}
+
+// SetDatabase sets the "database" field.
+func (u *DataSourceUpsertBulk) SetDatabase(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetDatabase(v)
+	})
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateDatabase() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateDatabase()
+	})
+}
+
+// SetMaxOpen sets the "max_open" field.
+func (u *DataSourceUpsertBulk) SetMaxOpen(v int) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetMaxOpen(v)
+	})
+}
+
+// AddMaxOpen adds v to the "max_open" field.
+func (u *DataSourceUpsertBulk) AddMaxOpen(v int) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.AddMaxOpen(v)
+	})
+}
+
+// UpdateMaxOpen sets the "max_open" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateMaxOpen() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateMaxOpen()
+	})
+}
+
+// SetMaxIdle sets the "max_idle" field.
+func (u *DataSourceUpsertBulk) SetMaxIdle(v int) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetMaxIdle(v)
+	})
+}
+
+// AddMaxIdle adds v to the "max_idle" field.
+func (u *DataSourceUpsertBulk) AddMaxIdle(v int) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.AddMaxIdle(v)
+	})
+}
+
+// UpdateMaxIdle sets the "max_idle" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateMaxIdle() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateMaxIdle()
+	})
+}
+
+// SetMaxLifetime sets the "max_lifetime" field.
+func (u *DataSourceUpsertBulk) SetMaxLifetime(v int) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetMaxLifetime(v)
+	})
+}
+
+// AddMaxLifetime adds v to the "max_lifetime" field.
+func (u *DataSourceUpsertBulk) AddMaxLifetime(v int) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.AddMaxLifetime(v)
+	})
+}
+
+// UpdateMaxLifetime sets the "max_lifetime" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateMaxLifetime() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateMaxLifetime()
+	})
+}
+
+// SetMaxIdleTime sets the "max_idle_time" field.
+func (u *DataSourceUpsertBulk) SetMaxIdleTime(v int) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetMaxIdleTime(v)
+	})
+}
+
+// AddMaxIdleTime adds v to the "max_idle_time" field.
+func (u *DataSourceUpsertBulk) AddMaxIdleTime(v int) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.AddMaxIdleTime(v)
+	})
+}
+
+// UpdateMaxIdleTime sets the "max_idle_time" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateMaxIdleTime() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateMaxIdleTime()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *DataSourceUpsertBulk) SetStatus(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateStatus() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetSslmode sets the "sslmode" field.
+func (u *DataSourceUpsertBulk) SetSslmode(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetSslmode(v)
+	})
+}
+
+// UpdateSslmode sets the "sslmode" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateSslmode() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateSslmode()
+	})
+}
+
+// SetSchemaName sets the "schema_name" field.
+func (u *DataSourceUpsertBulk) SetSchemaName(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetSchemaName(v)
+	})
+}
+
+// UpdateSchemaName sets the "schema_name" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateSchemaName() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateSchemaName()
+	})
+}
+
+// SetEsUrls sets the "es_urls" field.
+func (u *DataSourceUpsertBulk) SetEsUrls(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetEsUrls(v)
+	})
+}
+
+// UpdateEsUrls sets the "es_urls" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateEsUrls() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateEsUrls()
+	})
+}
+
+// SetEsVersion sets the "es_version" field.
+func (u *DataSourceUpsertBulk) SetEsVersion(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetEsVersion(v)
+	})
+}
+
+// UpdateEsVersion sets the "es_version" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateEsVersion() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateEsVersion()
+	})
+}
+
+// SetEsAuthType sets the "es_auth_type" field.
+func (u *DataSourceUpsertBulk) SetEsAuthType(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetEsAuthType(v)
+	})
+}
+
+// UpdateEsAuthType sets the "es_auth_type" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateEsAuthType() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateEsAuthType()
+	})
+}
+
+// SetEsAPIKey sets the "es_api_key" field.
+func (u *DataSourceUpsertBulk) SetEsAPIKey(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetEsAPIKey(v)
+	})
+}
+
+// UpdateEsAPIKey sets the "es_api_key" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateEsAPIKey() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateEsAPIKey()
+	})
+}
+
+// SetEsIndexPattern sets the "es_index_pattern" field.
+func (u *DataSourceUpsertBulk) SetEsIndexPattern(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetEsIndexPattern(v)
+	})
+}
+
+// UpdateEsIndexPattern sets the "es_index_pattern" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateEsIndexPattern() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateEsIndexPattern()
+	})
+}
+
+// SetEsVerifyCerts sets the "es_verify_certs" field.
+func (u *DataSourceUpsertBulk) SetEsVerifyCerts(v bool) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetEsVerifyCerts(v)
+	})
+}
+
+// UpdateEsVerifyCerts sets the "es_verify_certs" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateEsVerifyCerts() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateEsVerifyCerts()
+	})
+}
+
+// SetExtraConfig sets the "extra_config" field.
+func (u *DataSourceUpsertBulk) SetExtraConfig(v string) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetExtraConfig(v)
+	})
+}
+
+// UpdateExtraConfig sets the "extra_config" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateExtraConfig() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateExtraConfig()
+	})
+}
+
+// ClearExtraConfig clears the value of the "extra_config" field.
+func (u *DataSourceUpsertBulk) ClearExtraConfig() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.ClearExtraConfig()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DataSourceUpsertBulk) SetCreatedAt(v time.Time) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateCreatedAt() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DataSourceUpsertBulk) SetUpdatedAt(v time.Time) *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DataSourceUpsertBulk) UpdateUpdatedAt() *DataSourceUpsertBulk {
+	return u.Update(func(s *DataSourceUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *DataSourceUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the DataSourceCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for DataSourceCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *DataSourceUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/gitlink"
@@ -18,6 +19,7 @@ type GitLinkCreate struct {
 	config
 	mutation *GitLinkMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetEntityType sets the "entity_type" field.
@@ -376,6 +378,7 @@ func (_c *GitLinkCreate) createSpec() (*GitLink, *sqlgraph.CreateSpec) {
 		_node = &GitLink{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(gitlink.Table, sqlgraph.NewFieldSpec(gitlink.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.EntityType(); ok {
 		_spec.SetField(gitlink.FieldEntityType, field.TypeString, value)
 		_node.EntityType = value
@@ -435,11 +438,537 @@ func (_c *GitLinkCreate) createSpec() (*GitLink, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.GitLink.Create().
+//		SetEntityType(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.GitLinkUpsert) {
+//			SetEntityType(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *GitLinkCreate) OnConflict(opts ...sql.ConflictOption) *GitLinkUpsertOne {
+	_c.conflict = opts
+	return &GitLinkUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.GitLink.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *GitLinkCreate) OnConflictColumns(columns ...string) *GitLinkUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &GitLinkUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// GitLinkUpsertOne is the builder for "upsert"-ing
+	//  one GitLink node.
+	GitLinkUpsertOne struct {
+		create *GitLinkCreate
+	}
+
+	// GitLinkUpsert is the "OnConflict" setter.
+	GitLinkUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetEntityType sets the "entity_type" field.
+func (u *GitLinkUpsert) SetEntityType(v string) *GitLinkUpsert {
+	u.Set(gitlink.FieldEntityType, v)
+	return u
+}
+
+// UpdateEntityType sets the "entity_type" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdateEntityType() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldEntityType)
+	return u
+}
+
+// SetEntityID sets the "entity_id" field.
+func (u *GitLinkUpsert) SetEntityID(v int64) *GitLinkUpsert {
+	u.Set(gitlink.FieldEntityID, v)
+	return u
+}
+
+// UpdateEntityID sets the "entity_id" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdateEntityID() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldEntityID)
+	return u
+}
+
+// AddEntityID adds v to the "entity_id" field.
+func (u *GitLinkUpsert) AddEntityID(v int64) *GitLinkUpsert {
+	u.Add(gitlink.FieldEntityID, v)
+	return u
+}
+
+// SetLinkType sets the "link_type" field.
+func (u *GitLinkUpsert) SetLinkType(v string) *GitLinkUpsert {
+	u.Set(gitlink.FieldLinkType, v)
+	return u
+}
+
+// UpdateLinkType sets the "link_type" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdateLinkType() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldLinkType)
+	return u
+}
+
+// SetCommitHash sets the "commit_hash" field.
+func (u *GitLinkUpsert) SetCommitHash(v string) *GitLinkUpsert {
+	u.Set(gitlink.FieldCommitHash, v)
+	return u
+}
+
+// UpdateCommitHash sets the "commit_hash" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdateCommitHash() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldCommitHash)
+	return u
+}
+
+// SetCommitMsg sets the "commit_msg" field.
+func (u *GitLinkUpsert) SetCommitMsg(v string) *GitLinkUpsert {
+	u.Set(gitlink.FieldCommitMsg, v)
+	return u
+}
+
+// UpdateCommitMsg sets the "commit_msg" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdateCommitMsg() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldCommitMsg)
+	return u
+}
+
+// SetAuthorName sets the "author_name" field.
+func (u *GitLinkUpsert) SetAuthorName(v string) *GitLinkUpsert {
+	u.Set(gitlink.FieldAuthorName, v)
+	return u
+}
+
+// UpdateAuthorName sets the "author_name" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdateAuthorName() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldAuthorName)
+	return u
+}
+
+// SetAuthorEmail sets the "author_email" field.
+func (u *GitLinkUpsert) SetAuthorEmail(v string) *GitLinkUpsert {
+	u.Set(gitlink.FieldAuthorEmail, v)
+	return u
+}
+
+// UpdateAuthorEmail sets the "author_email" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdateAuthorEmail() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldAuthorEmail)
+	return u
+}
+
+// SetPrNumber sets the "pr_number" field.
+func (u *GitLinkUpsert) SetPrNumber(v int) *GitLinkUpsert {
+	u.Set(gitlink.FieldPrNumber, v)
+	return u
+}
+
+// UpdatePrNumber sets the "pr_number" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdatePrNumber() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldPrNumber)
+	return u
+}
+
+// AddPrNumber adds v to the "pr_number" field.
+func (u *GitLinkUpsert) AddPrNumber(v int) *GitLinkUpsert {
+	u.Add(gitlink.FieldPrNumber, v)
+	return u
+}
+
+// SetPrTitle sets the "pr_title" field.
+func (u *GitLinkUpsert) SetPrTitle(v string) *GitLinkUpsert {
+	u.Set(gitlink.FieldPrTitle, v)
+	return u
+}
+
+// UpdatePrTitle sets the "pr_title" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdatePrTitle() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldPrTitle)
+	return u
+}
+
+// SetPrURL sets the "pr_url" field.
+func (u *GitLinkUpsert) SetPrURL(v string) *GitLinkUpsert {
+	u.Set(gitlink.FieldPrURL, v)
+	return u
+}
+
+// UpdatePrURL sets the "pr_url" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdatePrURL() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldPrURL)
+	return u
+}
+
+// SetRepoURL sets the "repo_url" field.
+func (u *GitLinkUpsert) SetRepoURL(v string) *GitLinkUpsert {
+	u.Set(gitlink.FieldRepoURL, v)
+	return u
+}
+
+// UpdateRepoURL sets the "repo_url" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdateRepoURL() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldRepoURL)
+	return u
+}
+
+// SetBranch sets the "branch" field.
+func (u *GitLinkUpsert) SetBranch(v string) *GitLinkUpsert {
+	u.Set(gitlink.FieldBranch, v)
+	return u
+}
+
+// UpdateBranch sets the "branch" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdateBranch() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldBranch)
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *GitLinkUpsert) SetCreatedBy(v int64) *GitLinkUpsert {
+	u.Set(gitlink.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdateCreatedBy() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldCreatedBy)
+	return u
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *GitLinkUpsert) AddCreatedBy(v int64) *GitLinkUpsert {
+	u.Add(gitlink.FieldCreatedBy, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *GitLinkUpsert) SetCreatedAt(v time.Time) *GitLinkUpsert {
+	u.Set(gitlink.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *GitLinkUpsert) UpdateCreatedAt() *GitLinkUpsert {
+	u.SetExcluded(gitlink.FieldCreatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.GitLink.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *GitLinkUpsertOne) UpdateNewValues() *GitLinkUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.GitLink.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *GitLinkUpsertOne) Ignore() *GitLinkUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *GitLinkUpsertOne) DoNothing() *GitLinkUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the GitLinkCreate.OnConflict
+// documentation for more info.
+func (u *GitLinkUpsertOne) Update(set func(*GitLinkUpsert)) *GitLinkUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&GitLinkUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetEntityType sets the "entity_type" field.
+func (u *GitLinkUpsertOne) SetEntityType(v string) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetEntityType(v)
+	})
+}
+
+// UpdateEntityType sets the "entity_type" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdateEntityType() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateEntityType()
+	})
+}
+
+// SetEntityID sets the "entity_id" field.
+func (u *GitLinkUpsertOne) SetEntityID(v int64) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetEntityID(v)
+	})
+}
+
+// AddEntityID adds v to the "entity_id" field.
+func (u *GitLinkUpsertOne) AddEntityID(v int64) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.AddEntityID(v)
+	})
+}
+
+// UpdateEntityID sets the "entity_id" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdateEntityID() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateEntityID()
+	})
+}
+
+// SetLinkType sets the "link_type" field.
+func (u *GitLinkUpsertOne) SetLinkType(v string) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetLinkType(v)
+	})
+}
+
+// UpdateLinkType sets the "link_type" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdateLinkType() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateLinkType()
+	})
+}
+
+// SetCommitHash sets the "commit_hash" field.
+func (u *GitLinkUpsertOne) SetCommitHash(v string) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetCommitHash(v)
+	})
+}
+
+// UpdateCommitHash sets the "commit_hash" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdateCommitHash() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateCommitHash()
+	})
+}
+
+// SetCommitMsg sets the "commit_msg" field.
+func (u *GitLinkUpsertOne) SetCommitMsg(v string) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetCommitMsg(v)
+	})
+}
+
+// UpdateCommitMsg sets the "commit_msg" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdateCommitMsg() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateCommitMsg()
+	})
+}
+
+// SetAuthorName sets the "author_name" field.
+func (u *GitLinkUpsertOne) SetAuthorName(v string) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetAuthorName(v)
+	})
+}
+
+// UpdateAuthorName sets the "author_name" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdateAuthorName() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateAuthorName()
+	})
+}
+
+// SetAuthorEmail sets the "author_email" field.
+func (u *GitLinkUpsertOne) SetAuthorEmail(v string) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetAuthorEmail(v)
+	})
+}
+
+// UpdateAuthorEmail sets the "author_email" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdateAuthorEmail() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateAuthorEmail()
+	})
+}
+
+// SetPrNumber sets the "pr_number" field.
+func (u *GitLinkUpsertOne) SetPrNumber(v int) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetPrNumber(v)
+	})
+}
+
+// AddPrNumber adds v to the "pr_number" field.
+func (u *GitLinkUpsertOne) AddPrNumber(v int) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.AddPrNumber(v)
+	})
+}
+
+// UpdatePrNumber sets the "pr_number" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdatePrNumber() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdatePrNumber()
+	})
+}
+
+// SetPrTitle sets the "pr_title" field.
+func (u *GitLinkUpsertOne) SetPrTitle(v string) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetPrTitle(v)
+	})
+}
+
+// UpdatePrTitle sets the "pr_title" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdatePrTitle() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdatePrTitle()
+	})
+}
+
+// SetPrURL sets the "pr_url" field.
+func (u *GitLinkUpsertOne) SetPrURL(v string) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetPrURL(v)
+	})
+}
+
+// UpdatePrURL sets the "pr_url" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdatePrURL() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdatePrURL()
+	})
+}
+
+// SetRepoURL sets the "repo_url" field.
+func (u *GitLinkUpsertOne) SetRepoURL(v string) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetRepoURL(v)
+	})
+}
+
+// UpdateRepoURL sets the "repo_url" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdateRepoURL() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateRepoURL()
+	})
+}
+
+// SetBranch sets the "branch" field.
+func (u *GitLinkUpsertOne) SetBranch(v string) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetBranch(v)
+	})
+}
+
+// UpdateBranch sets the "branch" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdateBranch() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateBranch()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *GitLinkUpsertOne) SetCreatedBy(v int64) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *GitLinkUpsertOne) AddCreatedBy(v int64) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdateCreatedBy() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *GitLinkUpsertOne) SetCreatedAt(v time.Time) *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *GitLinkUpsertOne) UpdateCreatedAt() *GitLinkUpsertOne {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *GitLinkUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for GitLinkCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *GitLinkUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *GitLinkUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *GitLinkUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // GitLinkCreateBulk is the builder for creating many GitLink entities in bulk.
 type GitLinkCreateBulk struct {
 	config
 	err      error
 	builders []*GitLinkCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the GitLink entities in the database.
@@ -469,6 +998,7 @@ func (_c *GitLinkCreateBulk) Save(ctx context.Context) ([]*GitLink, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -519,6 +1049,327 @@ func (_c *GitLinkCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *GitLinkCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.GitLink.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.GitLinkUpsert) {
+//			SetEntityType(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *GitLinkCreateBulk) OnConflict(opts ...sql.ConflictOption) *GitLinkUpsertBulk {
+	_c.conflict = opts
+	return &GitLinkUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.GitLink.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *GitLinkCreateBulk) OnConflictColumns(columns ...string) *GitLinkUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &GitLinkUpsertBulk{
+		create: _c,
+	}
+}
+
+// GitLinkUpsertBulk is the builder for "upsert"-ing
+// a bulk of GitLink nodes.
+type GitLinkUpsertBulk struct {
+	create *GitLinkCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.GitLink.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *GitLinkUpsertBulk) UpdateNewValues() *GitLinkUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.GitLink.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *GitLinkUpsertBulk) Ignore() *GitLinkUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *GitLinkUpsertBulk) DoNothing() *GitLinkUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the GitLinkCreateBulk.OnConflict
+// documentation for more info.
+func (u *GitLinkUpsertBulk) Update(set func(*GitLinkUpsert)) *GitLinkUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&GitLinkUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetEntityType sets the "entity_type" field.
+func (u *GitLinkUpsertBulk) SetEntityType(v string) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetEntityType(v)
+	})
+}
+
+// UpdateEntityType sets the "entity_type" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdateEntityType() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateEntityType()
+	})
+}
+
+// SetEntityID sets the "entity_id" field.
+func (u *GitLinkUpsertBulk) SetEntityID(v int64) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetEntityID(v)
+	})
+}
+
+// AddEntityID adds v to the "entity_id" field.
+func (u *GitLinkUpsertBulk) AddEntityID(v int64) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.AddEntityID(v)
+	})
+}
+
+// UpdateEntityID sets the "entity_id" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdateEntityID() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateEntityID()
+	})
+}
+
+// SetLinkType sets the "link_type" field.
+func (u *GitLinkUpsertBulk) SetLinkType(v string) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetLinkType(v)
+	})
+}
+
+// UpdateLinkType sets the "link_type" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdateLinkType() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateLinkType()
+	})
+}
+
+// SetCommitHash sets the "commit_hash" field.
+func (u *GitLinkUpsertBulk) SetCommitHash(v string) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetCommitHash(v)
+	})
+}
+
+// UpdateCommitHash sets the "commit_hash" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdateCommitHash() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateCommitHash()
+	})
+}
+
+// SetCommitMsg sets the "commit_msg" field.
+func (u *GitLinkUpsertBulk) SetCommitMsg(v string) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetCommitMsg(v)
+	})
+}
+
+// UpdateCommitMsg sets the "commit_msg" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdateCommitMsg() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateCommitMsg()
+	})
+}
+
+// SetAuthorName sets the "author_name" field.
+func (u *GitLinkUpsertBulk) SetAuthorName(v string) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetAuthorName(v)
+	})
+}
+
+// UpdateAuthorName sets the "author_name" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdateAuthorName() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateAuthorName()
+	})
+}
+
+// SetAuthorEmail sets the "author_email" field.
+func (u *GitLinkUpsertBulk) SetAuthorEmail(v string) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetAuthorEmail(v)
+	})
+}
+
+// UpdateAuthorEmail sets the "author_email" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdateAuthorEmail() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateAuthorEmail()
+	})
+}
+
+// SetPrNumber sets the "pr_number" field.
+func (u *GitLinkUpsertBulk) SetPrNumber(v int) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetPrNumber(v)
+	})
+}
+
+// AddPrNumber adds v to the "pr_number" field.
+func (u *GitLinkUpsertBulk) AddPrNumber(v int) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.AddPrNumber(v)
+	})
+}
+
+// UpdatePrNumber sets the "pr_number" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdatePrNumber() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdatePrNumber()
+	})
+}
+
+// SetPrTitle sets the "pr_title" field.
+func (u *GitLinkUpsertBulk) SetPrTitle(v string) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetPrTitle(v)
+	})
+}
+
+// UpdatePrTitle sets the "pr_title" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdatePrTitle() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdatePrTitle()
+	})
+}
+
+// SetPrURL sets the "pr_url" field.
+func (u *GitLinkUpsertBulk) SetPrURL(v string) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetPrURL(v)
+	})
+}
+
+// UpdatePrURL sets the "pr_url" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdatePrURL() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdatePrURL()
+	})
+}
+
+// SetRepoURL sets the "repo_url" field.
+func (u *GitLinkUpsertBulk) SetRepoURL(v string) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetRepoURL(v)
+	})
+}
+
+// UpdateRepoURL sets the "repo_url" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdateRepoURL() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateRepoURL()
+	})
+}
+
+// SetBranch sets the "branch" field.
+func (u *GitLinkUpsertBulk) SetBranch(v string) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetBranch(v)
+	})
+}
+
+// UpdateBranch sets the "branch" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdateBranch() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateBranch()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *GitLinkUpsertBulk) SetCreatedBy(v int64) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *GitLinkUpsertBulk) AddCreatedBy(v int64) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdateCreatedBy() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *GitLinkUpsertBulk) SetCreatedAt(v time.Time) *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *GitLinkUpsertBulk) UpdateCreatedAt() *GitLinkUpsertBulk {
+	return u.Update(func(s *GitLinkUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *GitLinkUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the GitLinkCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for GitLinkCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *GitLinkUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

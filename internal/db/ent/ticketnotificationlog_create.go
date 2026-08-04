@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/ticketnotificationlog"
@@ -18,6 +19,7 @@ type TicketNotificationLogCreate struct {
 	config
 	mutation *TicketNotificationLogMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -142,6 +144,7 @@ func (_c *TicketNotificationLogCreate) createSpec() (*TicketNotificationLog, *sq
 		_node = &TicketNotificationLog{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(ticketnotificationlog.Table, sqlgraph.NewFieldSpec(ticketnotificationlog.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TicketID(); ok {
 		_spec.SetField(ticketnotificationlog.FieldTicketID, field.TypeInt64, value)
 		_node.TicketID = value
@@ -161,11 +164,251 @@ func (_c *TicketNotificationLogCreate) createSpec() (*TicketNotificationLog, *sq
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketNotificationLog.Create().
+//		SetTicketID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketNotificationLogUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketNotificationLogCreate) OnConflict(opts ...sql.ConflictOption) *TicketNotificationLogUpsertOne {
+	_c.conflict = opts
+	return &TicketNotificationLogUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketNotificationLog.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketNotificationLogCreate) OnConflictColumns(columns ...string) *TicketNotificationLogUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketNotificationLogUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// TicketNotificationLogUpsertOne is the builder for "upsert"-ing
+	//  one TicketNotificationLog node.
+	TicketNotificationLogUpsertOne struct {
+		create *TicketNotificationLogCreate
+	}
+
+	// TicketNotificationLogUpsert is the "OnConflict" setter.
+	TicketNotificationLogUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketNotificationLogUpsert) SetTicketID(v int64) *TicketNotificationLogUpsert {
+	u.Set(ticketnotificationlog.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketNotificationLogUpsert) UpdateTicketID() *TicketNotificationLogUpsert {
+	u.SetExcluded(ticketnotificationlog.FieldTicketID)
+	return u
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *TicketNotificationLogUpsert) AddTicketID(v int64) *TicketNotificationLogUpsert {
+	u.Add(ticketnotificationlog.FieldTicketID, v)
+	return u
+}
+
+// SetEventType sets the "event_type" field.
+func (u *TicketNotificationLogUpsert) SetEventType(v string) *TicketNotificationLogUpsert {
+	u.Set(ticketnotificationlog.FieldEventType, v)
+	return u
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *TicketNotificationLogUpsert) UpdateEventType() *TicketNotificationLogUpsert {
+	u.SetExcluded(ticketnotificationlog.FieldEventType)
+	return u
+}
+
+// SetSentAt sets the "sent_at" field.
+func (u *TicketNotificationLogUpsert) SetSentAt(v time.Time) *TicketNotificationLogUpsert {
+	u.Set(ticketnotificationlog.FieldSentAt, v)
+	return u
+}
+
+// UpdateSentAt sets the "sent_at" field to the value that was provided on create.
+func (u *TicketNotificationLogUpsert) UpdateSentAt() *TicketNotificationLogUpsert {
+	u.SetExcluded(ticketnotificationlog.FieldSentAt)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *TicketNotificationLogUpsert) SetStatus(v string) *TicketNotificationLogUpsert {
+	u.Set(ticketnotificationlog.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TicketNotificationLogUpsert) UpdateStatus() *TicketNotificationLogUpsert {
+	u.SetExcluded(ticketnotificationlog.FieldStatus)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.TicketNotificationLog.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketNotificationLogUpsertOne) UpdateNewValues() *TicketNotificationLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketNotificationLog.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *TicketNotificationLogUpsertOne) Ignore() *TicketNotificationLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketNotificationLogUpsertOne) DoNothing() *TicketNotificationLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketNotificationLogCreate.OnConflict
+// documentation for more info.
+func (u *TicketNotificationLogUpsertOne) Update(set func(*TicketNotificationLogUpsert)) *TicketNotificationLogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketNotificationLogUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketNotificationLogUpsertOne) SetTicketID(v int64) *TicketNotificationLogUpsertOne {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *TicketNotificationLogUpsertOne) AddTicketID(v int64) *TicketNotificationLogUpsertOne {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.AddTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketNotificationLogUpsertOne) UpdateTicketID() *TicketNotificationLogUpsertOne {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetEventType sets the "event_type" field.
+func (u *TicketNotificationLogUpsertOne) SetEventType(v string) *TicketNotificationLogUpsertOne {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.SetEventType(v)
+	})
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *TicketNotificationLogUpsertOne) UpdateEventType() *TicketNotificationLogUpsertOne {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.UpdateEventType()
+	})
+}
+
+// SetSentAt sets the "sent_at" field.
+func (u *TicketNotificationLogUpsertOne) SetSentAt(v time.Time) *TicketNotificationLogUpsertOne {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.SetSentAt(v)
+	})
+}
+
+// UpdateSentAt sets the "sent_at" field to the value that was provided on create.
+func (u *TicketNotificationLogUpsertOne) UpdateSentAt() *TicketNotificationLogUpsertOne {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.UpdateSentAt()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *TicketNotificationLogUpsertOne) SetStatus(v string) *TicketNotificationLogUpsertOne {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TicketNotificationLogUpsertOne) UpdateStatus() *TicketNotificationLogUpsertOne {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketNotificationLogUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketNotificationLogCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketNotificationLogUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *TicketNotificationLogUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *TicketNotificationLogUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // TicketNotificationLogCreateBulk is the builder for creating many TicketNotificationLog entities in bulk.
 type TicketNotificationLogCreateBulk struct {
 	config
 	err      error
 	builders []*TicketNotificationLogCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the TicketNotificationLog entities in the database.
@@ -195,6 +438,7 @@ func (_c *TicketNotificationLogCreateBulk) Save(ctx context.Context) ([]*TicketN
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -245,6 +489,173 @@ func (_c *TicketNotificationLogCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *TicketNotificationLogCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketNotificationLog.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketNotificationLogUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketNotificationLogCreateBulk) OnConflict(opts ...sql.ConflictOption) *TicketNotificationLogUpsertBulk {
+	_c.conflict = opts
+	return &TicketNotificationLogUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketNotificationLog.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketNotificationLogCreateBulk) OnConflictColumns(columns ...string) *TicketNotificationLogUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketNotificationLogUpsertBulk{
+		create: _c,
+	}
+}
+
+// TicketNotificationLogUpsertBulk is the builder for "upsert"-ing
+// a bulk of TicketNotificationLog nodes.
+type TicketNotificationLogUpsertBulk struct {
+	create *TicketNotificationLogCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.TicketNotificationLog.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketNotificationLogUpsertBulk) UpdateNewValues() *TicketNotificationLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketNotificationLog.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *TicketNotificationLogUpsertBulk) Ignore() *TicketNotificationLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketNotificationLogUpsertBulk) DoNothing() *TicketNotificationLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketNotificationLogCreateBulk.OnConflict
+// documentation for more info.
+func (u *TicketNotificationLogUpsertBulk) Update(set func(*TicketNotificationLogUpsert)) *TicketNotificationLogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketNotificationLogUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketNotificationLogUpsertBulk) SetTicketID(v int64) *TicketNotificationLogUpsertBulk {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *TicketNotificationLogUpsertBulk) AddTicketID(v int64) *TicketNotificationLogUpsertBulk {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.AddTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketNotificationLogUpsertBulk) UpdateTicketID() *TicketNotificationLogUpsertBulk {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetEventType sets the "event_type" field.
+func (u *TicketNotificationLogUpsertBulk) SetEventType(v string) *TicketNotificationLogUpsertBulk {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.SetEventType(v)
+	})
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *TicketNotificationLogUpsertBulk) UpdateEventType() *TicketNotificationLogUpsertBulk {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.UpdateEventType()
+	})
+}
+
+// SetSentAt sets the "sent_at" field.
+func (u *TicketNotificationLogUpsertBulk) SetSentAt(v time.Time) *TicketNotificationLogUpsertBulk {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.SetSentAt(v)
+	})
+}
+
+// UpdateSentAt sets the "sent_at" field to the value that was provided on create.
+func (u *TicketNotificationLogUpsertBulk) UpdateSentAt() *TicketNotificationLogUpsertBulk {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.UpdateSentAt()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *TicketNotificationLogUpsertBulk) SetStatus(v string) *TicketNotificationLogUpsertBulk {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TicketNotificationLogUpsertBulk) UpdateStatus() *TicketNotificationLogUpsertBulk {
+	return u.Update(func(s *TicketNotificationLogUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketNotificationLogUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the TicketNotificationLogCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketNotificationLogCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketNotificationLogUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

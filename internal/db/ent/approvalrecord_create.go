@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/whg517/sqlflow/internal/db/ent/approvalrecord"
@@ -18,6 +19,7 @@ type ApprovalRecordCreate struct {
 	config
 	mutation *ApprovalRecordMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -287,6 +289,7 @@ func (_c *ApprovalRecordCreate) createSpec() (*ApprovalRecord, *sqlgraph.CreateS
 		_node = &ApprovalRecord{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(approvalrecord.Table, sqlgraph.NewFieldSpec(approvalrecord.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TicketID(); ok {
 		_spec.SetField(approvalrecord.FieldTicketID, field.TypeInt64, value)
 		_node.TicketID = value
@@ -338,11 +341,576 @@ func (_c *ApprovalRecordCreate) createSpec() (*ApprovalRecord, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ApprovalRecord.Create().
+//		SetTicketID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ApprovalRecordUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ApprovalRecordCreate) OnConflict(opts ...sql.ConflictOption) *ApprovalRecordUpsertOne {
+	_c.conflict = opts
+	return &ApprovalRecordUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ApprovalRecord.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ApprovalRecordCreate) OnConflictColumns(columns ...string) *ApprovalRecordUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ApprovalRecordUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ApprovalRecordUpsertOne is the builder for "upsert"-ing
+	//  one ApprovalRecord node.
+	ApprovalRecordUpsertOne struct {
+		create *ApprovalRecordCreate
+	}
+
+	// ApprovalRecordUpsert is the "OnConflict" setter.
+	ApprovalRecordUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTicketID sets the "ticket_id" field.
+func (u *ApprovalRecordUpsert) SetTicketID(v int64) *ApprovalRecordUpsert {
+	u.Set(approvalrecord.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *ApprovalRecordUpsert) UpdateTicketID() *ApprovalRecordUpsert {
+	u.SetExcluded(approvalrecord.FieldTicketID)
+	return u
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *ApprovalRecordUpsert) AddTicketID(v int64) *ApprovalRecordUpsert {
+	u.Add(approvalrecord.FieldTicketID, v)
+	return u
+}
+
+// SetPolicyID sets the "policy_id" field.
+func (u *ApprovalRecordUpsert) SetPolicyID(v int64) *ApprovalRecordUpsert {
+	u.Set(approvalrecord.FieldPolicyID, v)
+	return u
+}
+
+// UpdatePolicyID sets the "policy_id" field to the value that was provided on create.
+func (u *ApprovalRecordUpsert) UpdatePolicyID() *ApprovalRecordUpsert {
+	u.SetExcluded(approvalrecord.FieldPolicyID)
+	return u
+}
+
+// AddPolicyID adds v to the "policy_id" field.
+func (u *ApprovalRecordUpsert) AddPolicyID(v int64) *ApprovalRecordUpsert {
+	u.Add(approvalrecord.FieldPolicyID, v)
+	return u
+}
+
+// ClearPolicyID clears the value of the "policy_id" field.
+func (u *ApprovalRecordUpsert) ClearPolicyID() *ApprovalRecordUpsert {
+	u.SetNull(approvalrecord.FieldPolicyID)
+	return u
+}
+
+// SetStage sets the "stage" field.
+func (u *ApprovalRecordUpsert) SetStage(v int) *ApprovalRecordUpsert {
+	u.Set(approvalrecord.FieldStage, v)
+	return u
+}
+
+// UpdateStage sets the "stage" field to the value that was provided on create.
+func (u *ApprovalRecordUpsert) UpdateStage() *ApprovalRecordUpsert {
+	u.SetExcluded(approvalrecord.FieldStage)
+	return u
+}
+
+// AddStage adds v to the "stage" field.
+func (u *ApprovalRecordUpsert) AddStage(v int) *ApprovalRecordUpsert {
+	u.Add(approvalrecord.FieldStage, v)
+	return u
+}
+
+// SetTotalStages sets the "total_stages" field.
+func (u *ApprovalRecordUpsert) SetTotalStages(v int) *ApprovalRecordUpsert {
+	u.Set(approvalrecord.FieldTotalStages, v)
+	return u
+}
+
+// UpdateTotalStages sets the "total_stages" field to the value that was provided on create.
+func (u *ApprovalRecordUpsert) UpdateTotalStages() *ApprovalRecordUpsert {
+	u.SetExcluded(approvalrecord.FieldTotalStages)
+	return u
+}
+
+// AddTotalStages adds v to the "total_stages" field.
+func (u *ApprovalRecordUpsert) AddTotalStages(v int) *ApprovalRecordUpsert {
+	u.Add(approvalrecord.FieldTotalStages, v)
+	return u
+}
+
+// SetApproverRole sets the "approver_role" field.
+func (u *ApprovalRecordUpsert) SetApproverRole(v string) *ApprovalRecordUpsert {
+	u.Set(approvalrecord.FieldApproverRole, v)
+	return u
+}
+
+// UpdateApproverRole sets the "approver_role" field to the value that was provided on create.
+func (u *ApprovalRecordUpsert) UpdateApproverRole() *ApprovalRecordUpsert {
+	u.SetExcluded(approvalrecord.FieldApproverRole)
+	return u
+}
+
+// SetApproverID sets the "approver_id" field.
+func (u *ApprovalRecordUpsert) SetApproverID(v int64) *ApprovalRecordUpsert {
+	u.Set(approvalrecord.FieldApproverID, v)
+	return u
+}
+
+// UpdateApproverID sets the "approver_id" field to the value that was provided on create.
+func (u *ApprovalRecordUpsert) UpdateApproverID() *ApprovalRecordUpsert {
+	u.SetExcluded(approvalrecord.FieldApproverID)
+	return u
+}
+
+// AddApproverID adds v to the "approver_id" field.
+func (u *ApprovalRecordUpsert) AddApproverID(v int64) *ApprovalRecordUpsert {
+	u.Add(approvalrecord.FieldApproverID, v)
+	return u
+}
+
+// ClearApproverID clears the value of the "approver_id" field.
+func (u *ApprovalRecordUpsert) ClearApproverID() *ApprovalRecordUpsert {
+	u.SetNull(approvalrecord.FieldApproverID)
+	return u
+}
+
+// SetApproverName sets the "approver_name" field.
+func (u *ApprovalRecordUpsert) SetApproverName(v string) *ApprovalRecordUpsert {
+	u.Set(approvalrecord.FieldApproverName, v)
+	return u
+}
+
+// UpdateApproverName sets the "approver_name" field to the value that was provided on create.
+func (u *ApprovalRecordUpsert) UpdateApproverName() *ApprovalRecordUpsert {
+	u.SetExcluded(approvalrecord.FieldApproverName)
+	return u
+}
+
+// ClearApproverName clears the value of the "approver_name" field.
+func (u *ApprovalRecordUpsert) ClearApproverName() *ApprovalRecordUpsert {
+	u.SetNull(approvalrecord.FieldApproverName)
+	return u
+}
+
+// SetAction sets the "action" field.
+func (u *ApprovalRecordUpsert) SetAction(v string) *ApprovalRecordUpsert {
+	u.Set(approvalrecord.FieldAction, v)
+	return u
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *ApprovalRecordUpsert) UpdateAction() *ApprovalRecordUpsert {
+	u.SetExcluded(approvalrecord.FieldAction)
+	return u
+}
+
+// SetComment sets the "comment" field.
+func (u *ApprovalRecordUpsert) SetComment(v string) *ApprovalRecordUpsert {
+	u.Set(approvalrecord.FieldComment, v)
+	return u
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *ApprovalRecordUpsert) UpdateComment() *ApprovalRecordUpsert {
+	u.SetExcluded(approvalrecord.FieldComment)
+	return u
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *ApprovalRecordUpsert) ClearComment() *ApprovalRecordUpsert {
+	u.SetNull(approvalrecord.FieldComment)
+	return u
+}
+
+// SetAutoApproved sets the "auto_approved" field.
+func (u *ApprovalRecordUpsert) SetAutoApproved(v bool) *ApprovalRecordUpsert {
+	u.Set(approvalrecord.FieldAutoApproved, v)
+	return u
+}
+
+// UpdateAutoApproved sets the "auto_approved" field to the value that was provided on create.
+func (u *ApprovalRecordUpsert) UpdateAutoApproved() *ApprovalRecordUpsert {
+	u.SetExcluded(approvalrecord.FieldAutoApproved)
+	return u
+}
+
+// SetAutoReason sets the "auto_reason" field.
+func (u *ApprovalRecordUpsert) SetAutoReason(v string) *ApprovalRecordUpsert {
+	u.Set(approvalrecord.FieldAutoReason, v)
+	return u
+}
+
+// UpdateAutoReason sets the "auto_reason" field to the value that was provided on create.
+func (u *ApprovalRecordUpsert) UpdateAutoReason() *ApprovalRecordUpsert {
+	u.SetExcluded(approvalrecord.FieldAutoReason)
+	return u
+}
+
+// ClearAutoReason clears the value of the "auto_reason" field.
+func (u *ApprovalRecordUpsert) ClearAutoReason() *ApprovalRecordUpsert {
+	u.SetNull(approvalrecord.FieldAutoReason)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ApprovalRecordUpsert) SetCreatedAt(v time.Time) *ApprovalRecordUpsert {
+	u.Set(approvalrecord.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ApprovalRecordUpsert) UpdateCreatedAt() *ApprovalRecordUpsert {
+	u.SetExcluded(approvalrecord.FieldCreatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ApprovalRecord.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ApprovalRecordUpsertOne) UpdateNewValues() *ApprovalRecordUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ApprovalRecord.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ApprovalRecordUpsertOne) Ignore() *ApprovalRecordUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ApprovalRecordUpsertOne) DoNothing() *ApprovalRecordUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ApprovalRecordCreate.OnConflict
+// documentation for more info.
+func (u *ApprovalRecordUpsertOne) Update(set func(*ApprovalRecordUpsert)) *ApprovalRecordUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ApprovalRecordUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *ApprovalRecordUpsertOne) SetTicketID(v int64) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *ApprovalRecordUpsertOne) AddTicketID(v int64) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.AddTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertOne) UpdateTicketID() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetPolicyID sets the "policy_id" field.
+func (u *ApprovalRecordUpsertOne) SetPolicyID(v int64) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetPolicyID(v)
+	})
+}
+
+// AddPolicyID adds v to the "policy_id" field.
+func (u *ApprovalRecordUpsertOne) AddPolicyID(v int64) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.AddPolicyID(v)
+	})
+}
+
+// UpdatePolicyID sets the "policy_id" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertOne) UpdatePolicyID() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdatePolicyID()
+	})
+}
+
+// ClearPolicyID clears the value of the "policy_id" field.
+func (u *ApprovalRecordUpsertOne) ClearPolicyID() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.ClearPolicyID()
+	})
+}
+
+// SetStage sets the "stage" field.
+func (u *ApprovalRecordUpsertOne) SetStage(v int) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetStage(v)
+	})
+}
+
+// AddStage adds v to the "stage" field.
+func (u *ApprovalRecordUpsertOne) AddStage(v int) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.AddStage(v)
+	})
+}
+
+// UpdateStage sets the "stage" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertOne) UpdateStage() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateStage()
+	})
+}
+
+// SetTotalStages sets the "total_stages" field.
+func (u *ApprovalRecordUpsertOne) SetTotalStages(v int) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetTotalStages(v)
+	})
+}
+
+// AddTotalStages adds v to the "total_stages" field.
+func (u *ApprovalRecordUpsertOne) AddTotalStages(v int) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.AddTotalStages(v)
+	})
+}
+
+// UpdateTotalStages sets the "total_stages" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertOne) UpdateTotalStages() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateTotalStages()
+	})
+}
+
+// SetApproverRole sets the "approver_role" field.
+func (u *ApprovalRecordUpsertOne) SetApproverRole(v string) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetApproverRole(v)
+	})
+}
+
+// UpdateApproverRole sets the "approver_role" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertOne) UpdateApproverRole() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateApproverRole()
+	})
+}
+
+// SetApproverID sets the "approver_id" field.
+func (u *ApprovalRecordUpsertOne) SetApproverID(v int64) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetApproverID(v)
+	})
+}
+
+// AddApproverID adds v to the "approver_id" field.
+func (u *ApprovalRecordUpsertOne) AddApproverID(v int64) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.AddApproverID(v)
+	})
+}
+
+// UpdateApproverID sets the "approver_id" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertOne) UpdateApproverID() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateApproverID()
+	})
+}
+
+// ClearApproverID clears the value of the "approver_id" field.
+func (u *ApprovalRecordUpsertOne) ClearApproverID() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.ClearApproverID()
+	})
+}
+
+// SetApproverName sets the "approver_name" field.
+func (u *ApprovalRecordUpsertOne) SetApproverName(v string) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetApproverName(v)
+	})
+}
+
+// UpdateApproverName sets the "approver_name" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertOne) UpdateApproverName() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateApproverName()
+	})
+}
+
+// ClearApproverName clears the value of the "approver_name" field.
+func (u *ApprovalRecordUpsertOne) ClearApproverName() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.ClearApproverName()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *ApprovalRecordUpsertOne) SetAction(v string) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertOne) UpdateAction() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *ApprovalRecordUpsertOne) SetComment(v string) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertOne) UpdateComment() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *ApprovalRecordUpsertOne) ClearComment() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetAutoApproved sets the "auto_approved" field.
+func (u *ApprovalRecordUpsertOne) SetAutoApproved(v bool) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetAutoApproved(v)
+	})
+}
+
+// UpdateAutoApproved sets the "auto_approved" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertOne) UpdateAutoApproved() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateAutoApproved()
+	})
+}
+
+// SetAutoReason sets the "auto_reason" field.
+func (u *ApprovalRecordUpsertOne) SetAutoReason(v string) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetAutoReason(v)
+	})
+}
+
+// UpdateAutoReason sets the "auto_reason" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertOne) UpdateAutoReason() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateAutoReason()
+	})
+}
+
+// ClearAutoReason clears the value of the "auto_reason" field.
+func (u *ApprovalRecordUpsertOne) ClearAutoReason() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.ClearAutoReason()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ApprovalRecordUpsertOne) SetCreatedAt(v time.Time) *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertOne) UpdateCreatedAt() *ApprovalRecordUpsertOne {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ApprovalRecordUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ApprovalRecordCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ApprovalRecordUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ApprovalRecordUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ApprovalRecordUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ApprovalRecordCreateBulk is the builder for creating many ApprovalRecord entities in bulk.
 type ApprovalRecordCreateBulk struct {
 	config
 	err      error
 	builders []*ApprovalRecordCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ApprovalRecord entities in the database.
@@ -372,6 +940,7 @@ func (_c *ApprovalRecordCreateBulk) Save(ctx context.Context) ([]*ApprovalRecord
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -422,6 +991,348 @@ func (_c *ApprovalRecordCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ApprovalRecordCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ApprovalRecord.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ApprovalRecordUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ApprovalRecordCreateBulk) OnConflict(opts ...sql.ConflictOption) *ApprovalRecordUpsertBulk {
+	_c.conflict = opts
+	return &ApprovalRecordUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ApprovalRecord.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ApprovalRecordCreateBulk) OnConflictColumns(columns ...string) *ApprovalRecordUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ApprovalRecordUpsertBulk{
+		create: _c,
+	}
+}
+
+// ApprovalRecordUpsertBulk is the builder for "upsert"-ing
+// a bulk of ApprovalRecord nodes.
+type ApprovalRecordUpsertBulk struct {
+	create *ApprovalRecordCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ApprovalRecord.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ApprovalRecordUpsertBulk) UpdateNewValues() *ApprovalRecordUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ApprovalRecord.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ApprovalRecordUpsertBulk) Ignore() *ApprovalRecordUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ApprovalRecordUpsertBulk) DoNothing() *ApprovalRecordUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ApprovalRecordCreateBulk.OnConflict
+// documentation for more info.
+func (u *ApprovalRecordUpsertBulk) Update(set func(*ApprovalRecordUpsert)) *ApprovalRecordUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ApprovalRecordUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *ApprovalRecordUpsertBulk) SetTicketID(v int64) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *ApprovalRecordUpsertBulk) AddTicketID(v int64) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.AddTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertBulk) UpdateTicketID() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetPolicyID sets the "policy_id" field.
+func (u *ApprovalRecordUpsertBulk) SetPolicyID(v int64) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetPolicyID(v)
+	})
+}
+
+// AddPolicyID adds v to the "policy_id" field.
+func (u *ApprovalRecordUpsertBulk) AddPolicyID(v int64) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.AddPolicyID(v)
+	})
+}
+
+// UpdatePolicyID sets the "policy_id" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertBulk) UpdatePolicyID() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdatePolicyID()
+	})
+}
+
+// ClearPolicyID clears the value of the "policy_id" field.
+func (u *ApprovalRecordUpsertBulk) ClearPolicyID() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.ClearPolicyID()
+	})
+}
+
+// SetStage sets the "stage" field.
+func (u *ApprovalRecordUpsertBulk) SetStage(v int) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetStage(v)
+	})
+}
+
+// AddStage adds v to the "stage" field.
+func (u *ApprovalRecordUpsertBulk) AddStage(v int) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.AddStage(v)
+	})
+}
+
+// UpdateStage sets the "stage" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertBulk) UpdateStage() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateStage()
+	})
+}
+
+// SetTotalStages sets the "total_stages" field.
+func (u *ApprovalRecordUpsertBulk) SetTotalStages(v int) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetTotalStages(v)
+	})
+}
+
+// AddTotalStages adds v to the "total_stages" field.
+func (u *ApprovalRecordUpsertBulk) AddTotalStages(v int) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.AddTotalStages(v)
+	})
+}
+
+// UpdateTotalStages sets the "total_stages" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertBulk) UpdateTotalStages() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateTotalStages()
+	})
+}
+
+// SetApproverRole sets the "approver_role" field.
+func (u *ApprovalRecordUpsertBulk) SetApproverRole(v string) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetApproverRole(v)
+	})
+}
+
+// UpdateApproverRole sets the "approver_role" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertBulk) UpdateApproverRole() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateApproverRole()
+	})
+}
+
+// SetApproverID sets the "approver_id" field.
+func (u *ApprovalRecordUpsertBulk) SetApproverID(v int64) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetApproverID(v)
+	})
+}
+
+// AddApproverID adds v to the "approver_id" field.
+func (u *ApprovalRecordUpsertBulk) AddApproverID(v int64) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.AddApproverID(v)
+	})
+}
+
+// UpdateApproverID sets the "approver_id" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertBulk) UpdateApproverID() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateApproverID()
+	})
+}
+
+// ClearApproverID clears the value of the "approver_id" field.
+func (u *ApprovalRecordUpsertBulk) ClearApproverID() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.ClearApproverID()
+	})
+}
+
+// SetApproverName sets the "approver_name" field.
+func (u *ApprovalRecordUpsertBulk) SetApproverName(v string) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetApproverName(v)
+	})
+}
+
+// UpdateApproverName sets the "approver_name" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertBulk) UpdateApproverName() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateApproverName()
+	})
+}
+
+// ClearApproverName clears the value of the "approver_name" field.
+func (u *ApprovalRecordUpsertBulk) ClearApproverName() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.ClearApproverName()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *ApprovalRecordUpsertBulk) SetAction(v string) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertBulk) UpdateAction() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *ApprovalRecordUpsertBulk) SetComment(v string) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertBulk) UpdateComment() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *ApprovalRecordUpsertBulk) ClearComment() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetAutoApproved sets the "auto_approved" field.
+func (u *ApprovalRecordUpsertBulk) SetAutoApproved(v bool) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetAutoApproved(v)
+	})
+}
+
+// UpdateAutoApproved sets the "auto_approved" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertBulk) UpdateAutoApproved() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateAutoApproved()
+	})
+}
+
+// SetAutoReason sets the "auto_reason" field.
+func (u *ApprovalRecordUpsertBulk) SetAutoReason(v string) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetAutoReason(v)
+	})
+}
+
+// UpdateAutoReason sets the "auto_reason" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertBulk) UpdateAutoReason() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateAutoReason()
+	})
+}
+
+// ClearAutoReason clears the value of the "auto_reason" field.
+func (u *ApprovalRecordUpsertBulk) ClearAutoReason() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.ClearAutoReason()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ApprovalRecordUpsertBulk) SetCreatedAt(v time.Time) *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ApprovalRecordUpsertBulk) UpdateCreatedAt() *ApprovalRecordUpsertBulk {
+	return u.Update(func(s *ApprovalRecordUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ApprovalRecordUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ApprovalRecordCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ApprovalRecordCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ApprovalRecordUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

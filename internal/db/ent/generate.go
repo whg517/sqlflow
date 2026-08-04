@@ -8,4 +8,9 @@ package ent
 // what ADR-0010 sets out to eliminate. The modifier is the sanctioned escape
 // hatch: still ent, still dialect-aware, just below the typed layer.
 //
-//go:generate go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/modifier ./schema
+// sql/upsert is enabled for the two paths whose correctness depends on ON
+// CONFLICT: SLA action logging dedupes scheduler runs by a unique key, and
+// notification preferences are written blind by the UI. Emulating either with
+// a read-then-write would reintroduce the race the constraint exists to close.
+//
+//go:generate go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/modifier,sql/upsert ./schema
