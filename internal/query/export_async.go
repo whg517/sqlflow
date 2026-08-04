@@ -276,13 +276,22 @@ func (s *AsyncExportService) executeExport(task *model.ExportTask, username, rol
 }
 
 // updateTaskStatus updates the task status in both DB and in-memory cache.
-// Uses raw SQL (no context) to match Phase 3 Scheduler pattern for background goroutines.
+//
+// It runs on a background goroutine with no request context of its own, so it
+// takes context.Background(): a caller's cancelled context must not leave the
+// task stuck in processing forever.
 func (s *AsyncExportService) updateTaskStatus(taskID int64, status model.ExportTaskStatus, errMsg string, totalRows, fileBytes int64, completedAt *time.Time) {
-	_, err := s.database.Exec(
-		`UPDATE export_tasks SET status = $1, error_msg = $2, total_rows = $3, file_bytes = $4, completed_at = $5 WHERE id = $6`,
-		string(status), errMsg, totalRows, fileBytes, completedAt, taskID,
-	)
-	if err != nil {
+	upd := s.client.ExportTask.UpdateOneID(int(taskID)).
+		SetStatus(string(status)).
+		SetErrorMsg(errMsg).
+		SetTotalRows(totalRows).
+		SetFileBytes(fileBytes)
+	if completedAt != nil {
+		upd = upd.SetCompletedAt(*completedAt)
+	} else {
+		upd = upd.ClearCompletedAt()
+	}
+	if err := upd.Exec(context.Background()); err != nil {
 		log.Printf("updateTaskStatus error (task %d): %v", taskID, err)
 	}
 
@@ -297,13 +306,19 @@ func (s *AsyncExportService) updateTaskStatus(taskID int64, status model.ExportT
 	}
 }
 
-// recoverPendingTasks re-marks any tasks left in processing state as failed (server restart recovery).
-// Uses raw SQL — same pattern as Phase 3 Scheduler.
+// recoverPendingTasks re-marks any tasks left in processing state as failed.
+//
+// A task in flight when the process died has no worker any more, so leaving it
+// pending would show the user a job that never finishes.
 func (s *AsyncExportService) recoverPendingTasks() {
-	_, err := s.database.Exec(
-		`UPDATE export_tasks SET status = $1, error_msg = $2 WHERE status IN ($3, $4)`,
-		string(model.ExportTaskStatusFailed), "服务器重启，任务中断", string(model.ExportTaskStatusPending), string(model.ExportTaskStatusProcessing),
-	)
+	_, err := s.client.ExportTask.Update().
+		Where(entexporttask.StatusIn(
+			string(model.ExportTaskStatusPending),
+			string(model.ExportTaskStatusProcessing),
+		)).
+		SetStatus(string(model.ExportTaskStatusFailed)).
+		SetErrorMsg("服务器重启，任务中断").
+		Save(context.Background())
 	if err != nil {
 		log.Printf("recoverPendingTasks error: %v", err)
 	}
@@ -325,47 +340,49 @@ func (s *AsyncExportService) cleanupLoop() {
 }
 
 // cleanupExpiredFiles removes export files older than ExportFileTTL.
-// Uses raw SQL for the file path query — no ent equivalent for this pattern.
 func (s *AsyncExportService) cleanupExpiredFiles() {
+	ctx := context.Background()
 	cutoff := time.Now().Add(-ExportFileTTL)
 
-	// Find expired completed tasks
-	rows, err := s.database.Query(
-		`SELECT id, file_path FROM export_tasks WHERE status = $1 AND completed_at < $2`,
-		string(model.ExportTaskStatusCompleted), cutoff,
-	)
+	expired, err := s.client.ExportTask.Query().
+		Where(
+			entexporttask.StatusEQ(string(model.ExportTaskStatusCompleted)),
+			entexporttask.CompletedAtLT(cutoff),
+		).
+		All(ctx)
 	if err != nil {
 		log.Printf("cleanupExpiredFiles query error: %v", err)
 		return
 	}
 
-	var taskIDs []int64
-	for rows.Next() {
-		var id int64
-		var fp string
-		if err := rows.Scan(&id, &fp); err != nil {
-			continue
+	taskIDs := make([]int, 0, len(expired))
+	for _, t := range expired {
+		if err := os.Remove(t.FilePath); err != nil && !os.IsNotExist(err) {
+			// The row is still marked expired: leaving it completed would offer
+			// the user a download for a file that may already be gone.
+			log.Printf("cleanupExpiredFiles: remove %s error: %v", t.FilePath, err)
 		}
-		// Remove the file
-		if err := os.Remove(fp); err != nil && !os.IsNotExist(err) {
-			log.Printf("cleanupExpiredFiles: remove %s error: %v", fp, err)
-		}
-		taskIDs = append(taskIDs, id)
+		taskIDs = append(taskIDs, t.ID)
 	}
-	rows.Close()
+	if len(taskIDs) == 0 {
+		return
+	}
 
-	// Mark as failed (archived) to indicate file no longer available
+	// One statement rather than one per task: the previous loop issued an
+	// update per row, and this runs hourly over whatever accumulated.
+	if _, err := s.client.ExportTask.Update().
+		Where(entexporttask.IDIn(taskIDs...)).
+		SetStatus(string(model.ExportTaskStatusFailed)).
+		SetErrorMsg("导出文件已过期清理（24小时）").
+		Save(ctx); err != nil {
+		log.Printf("cleanupExpiredFiles update error: %v", err)
+		return
+	}
 	for _, id := range taskIDs {
-		_, _ = s.database.Exec(
-			`UPDATE export_tasks SET status = $1, error_msg = $2 WHERE id = $3`,
-			string(model.ExportTaskStatusFailed), "导出文件已过期清理（24小时）", id,
-		)
-		s.tasks.Delete(id)
+		s.tasks.Delete(int64(id))
 	}
 
-	if len(taskIDs) > 0 {
-		log.Printf("cleanupExpiredFiles: cleaned up %d expired export files", len(taskIDs))
-	}
+	log.Printf("cleanupExpiredFiles: cleaned up %d expired export files", len(taskIDs))
 }
 
 // generateExportFilename creates a unique filename for an export file.

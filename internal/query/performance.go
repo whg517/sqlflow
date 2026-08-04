@@ -2,10 +2,14 @@ package query
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
+
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entdatasource "github.com/whg517/sqlflow/internal/db/ent/datasource"
+	entqueryhistory "github.com/whg517/sqlflow/internal/db/ent/queryhistory"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 )
@@ -38,11 +42,11 @@ type DatasourceStats struct {
 
 // TopSlowQuery represents a top slow query entry.
 type TopSlowQuery struct {
-	ID             int64  `json:"id"`
-	SQLSummary     string `json:"sql_summary"`
-	ExecutionTime  int64  `json:"execution_time"`
-	DatasourceName string `json:"datasource_name"`
-	CreatedAt      string `json:"created_at"`
+	ID             int64     `json:"id"`
+	SQLSummary     string    `json:"sql_summary"`
+	ExecutionTime  int64     `json:"execution_time"`
+	DatasourceName string    `json:"datasource_name"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // PerformanceStats holds aggregated performance statistics.
@@ -62,64 +66,79 @@ func (s *HistoryService) ListSlowQueries(ctx context.Context, params SlowQueryPa
 
 	threshold := params.Threshold
 	if threshold <= 0 {
-		threshold = 1000
+		threshold = defaultSlowQueryThresholdMs
 	}
 
-	filters := []sqlutil.FilterClause{
-		{Condition: "qh.execution_time >= ?", Args: []interface{}{threshold}},
-	}
+	q := s.client.QueryHistory.Query().
+		Where(entqueryhistory.ExecutionTimeGTE(threshold))
 	if params.DatasourceID > 0 {
-		filters = append(filters, sqlutil.FilterClause{
-			Condition: "qh.datasource_id = ?", Args: []interface{}{params.DatasourceID},
-		})
+		q = q.Where(entqueryhistory.DatasourceIDEQ(params.DatasourceID))
 	}
-	if params.StartDate != "" {
-		filters = append(filters, sqlutil.FilterClause{
-			Condition: "qh.created_at >= ?", Args: []interface{}{params.StartDate + " 00:00:00"},
-		})
+	if from, ok := parseDayStart(params.StartDate); ok {
+		q = q.Where(entqueryhistory.CreatedAtGTE(from))
 	}
-	if params.EndDate != "" {
-		filters = append(filters, sqlutil.FilterClause{
-			Condition: "qh.created_at <= ?", Args: []interface{}{params.EndDate + " 23:59:59"},
-		})
+	if to, ok := parseDayStart(params.EndDate); ok {
+		// The caller passes a date; comparing against it directly would drop
+		// everything recorded on the end date itself.
+		q = q.Where(entqueryhistory.CreatedAtLT(to.AddDate(0, 0, 1)))
 	}
 
-	whereClause, args := sqlutil.BuildWhereClause(filters)
-
-	var total int
-	countSQL := sqlutil.NumberPlaceholders(fmt.Sprintf("SELECT COUNT(*) FROM query_history qh %s", whereClause))
-	if err := s.database.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
 		return nil, 0, fmt.Errorf("count slow queries: %w", err)
 	}
 
-	// Numbered after assembly: LIMIT and OFFSET follow however many placeholders
-	// the WHERE clause contributed, so writing $1/$2 here collides with it.
-	querySQL := sqlutil.NumberPlaceholders(fmt.Sprintf(
-		"SELECT qh.id, qh.user_id, qh.datasource_id, qh.database, qh.sql_content, qh.sql_summary, qh.db_type, qh.execution_time, qh.result_rows, qh.affected_rows, qh.created_at FROM query_history qh %s ORDER BY qh.execution_time DESC LIMIT ? OFFSET ?",
-		whereClause,
-	))
-	queryArgs := sqlutil.AppendLimitArgs(args, p)
-
-	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := q.
+		Order(ent.Desc(entqueryhistory.FieldExecutionTime)).
+		Limit(p.PageSize).
+		Offset(p.Offset).
+		All(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query slow queries: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
-	var list []model.QueryHistory
-	for rows.Next() {
-		var h model.QueryHistory
-		var createdAt string
-		if err := rows.Scan(&h.ID, &h.UserID, &h.DatasourceID, &h.Database,
-			&h.SQLContent, &h.SQLSummary, &h.DBType, &h.ExecutionTime,
-			&h.ResultRows, &h.AffectedRows, &createdAt); err != nil {
-			return nil, 0, fmt.Errorf("scan slow query: %w", err)
-		}
-		h.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		list = append(list, h)
+	list := make([]model.QueryHistory, 0, len(rows))
+	for _, h := range rows {
+		list = append(list, model.QueryHistory{
+			ID:            int64(h.ID),
+			UserID:        h.UserID,
+			DatasourceID:  h.DatasourceID,
+			Database:      h.Database,
+			SQLContent:    h.SQLContent,
+			SQLSummary:    h.SQLSummary,
+			DBType:        h.DbType,
+			ExecutionTime: h.ExecutionTime,
+			ResultRows:    h.ResultRows,
+			AffectedRows:  h.AffectedRows,
+			CreatedAt:     h.CreatedAt,
+		})
 	}
+	return list, total, nil
+}
 
-	return list, total, rows.Err()
+// defaultSlowQueryThresholdMs is what counts as slow when the caller says
+// nothing.
+//
+// Shared with the statistics query below, which classified slow queries with
+// its own literal — the two could disagree, and the dashboard would then
+// contradict the list it links to.
+const defaultSlowQueryThresholdMs = 1000
+
+// parseDayStart reads a YYYY-MM-DD filter value.
+//
+// An empty or malformed value means "no bound" rather than an error: these
+// arrive as optional query parameters, and the previous version appended the
+// string straight into the comparison, which PostgreSQL rejected outright for
+// an empty value.
+func parseDayStart(v string) (time.Time, bool) {
+	if v == "" {
+		return time.Time{}, false
+	}
+	t, err := time.Parse("2006-01-02", v)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 // GetPerformanceStats returns aggregated performance statistics for the given number of days.
@@ -127,106 +146,134 @@ func (s *HistoryService) GetPerformanceStats(ctx context.Context, days int) (*Pe
 	if days <= 0 {
 		days = 7
 	}
+	since := time.Now().AddDate(0, 0, -days)
+	inWindow := s.client.QueryHistory.Query().Where(entqueryhistory.CreatedAtGTE(since))
 
-	startDate := time.Now().AddDate(0, 0, -days).Format("2006-01-02") + " 00:00:00"
-
-	// Overall stats
-	var totalQueries, slowQueries int
-	var avgTime sql.NullFloat64
-	err := s.database.QueryRowContext(ctx,
-		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN execution_time >= 1000 THEN 1 ELSE 0 END), 0), CAST(COALESCE(AVG(execution_time), 0) AS REAL)
-		 FROM query_history WHERE created_at >= $1`, startDate,
-	).Scan(&totalQueries, &slowQueries, &avgTime)
+	totalQueries, err := inWindow.Clone().Count(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("get overall stats: %w", err)
+		return nil, fmt.Errorf("count queries: %w", err)
+	}
+	slowQueries, err := inWindow.Clone().
+		Where(entqueryhistory.ExecutionTimeGTE(defaultSlowQueryThresholdMs)).
+		Count(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("count slow queries: %w", err)
 	}
 
+	var avgTime int64
 	slowRate := float64(0)
 	if totalQueries > 0 {
 		slowRate = float64(slowQueries) / float64(totalQueries) * 100
-	}
 
-	// Daily trend
-	rows, err := s.database.QueryContext(ctx,
-		`SELECT to_char(created_at, 'YYYY-MM-DD') as date, COUNT(*) as count,
-		        CAST(COALESCE(AVG(execution_time), 0) AS INTEGER) as avg_time,
-		        SUM(CASE WHEN execution_time >= 1000 THEN 1 ELSE 0 END) as slow_count
-		 FROM query_history WHERE created_at >= $1
-		 GROUP BY to_char(created_at, 'YYYY-MM-DD') ORDER BY date`, startDate)
-	if err != nil {
-		return nil, fmt.Errorf("get daily trend: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var dailyTrend []DailyTrend
-	for rows.Next() {
-		var d DailyTrend
-		if err := rows.Scan(&d.Date, &d.Count, &d.AvgTime, &d.SlowCount); err != nil {
-			return nil, fmt.Errorf("scan daily trend: %w", err)
+		// AVG over an empty set is NULL and will not scan into a number, so the
+		// aggregate only runs when there is something to average.
+		var avg []struct {
+			Avg float64 `json:"avg"`
 		}
-		dailyTrend = append(dailyTrend, d)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate daily trend: %w", err)
-	}
-
-	// Per-datasource stats
-	dsRows, err := s.database.QueryContext(ctx,
-		`SELECT qh.datasource_id, COALESCE(ds.name, '未知'), COUNT(*) as count,
-		        CAST(COALESCE(AVG(qh.execution_time), 0) AS INTEGER) as avg_time
-		 FROM query_history qh
-		 LEFT JOIN datasources ds ON qh.datasource_id = ds.id
-		 WHERE qh.created_at >= $1
-		 GROUP BY qh.datasource_id, ds.name
-		 ORDER BY count DESC`, startDate)
-	if err != nil {
-		return nil, fmt.Errorf("get datasource stats: %w", err)
-	}
-	defer func() { _ = dsRows.Close() }()
-
-	var dsStats []DatasourceStats
-	for dsRows.Next() {
-		var d DatasourceStats
-		if err := dsRows.Scan(&d.DatasourceID, &d.DatasourceName, &d.Count, &d.AvgTime); err != nil {
-			return nil, fmt.Errorf("scan datasource stats: %w", err)
+		if err := inWindow.Clone().
+			Aggregate(ent.Mean(entqueryhistory.FieldExecutionTime)).
+			Scan(ctx, &avg); err != nil {
+			return nil, fmt.Errorf("average execution time: %w", err)
 		}
-		dsStats = append(dsStats, d)
-	}
-	if err := dsRows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate datasource stats: %w", err)
-	}
-
-	// Top 10 slow queries
-	topRows, err := s.database.QueryContext(ctx,
-		`SELECT qh.id, qh.sql_summary, qh.execution_time, COALESCE(ds.name, '未知'), qh.created_at
-		 FROM query_history qh
-		 LEFT JOIN datasources ds ON qh.datasource_id = ds.id
-		 WHERE qh.created_at >= $1
-		 ORDER BY qh.execution_time DESC LIMIT 10`, startDate)
-	if err != nil {
-		return nil, fmt.Errorf("get top slow queries: %w", err)
-	}
-	defer func() { _ = topRows.Close() }()
-
-	var topSlow []TopSlowQuery
-	for topRows.Next() {
-		var t TopSlowQuery
-		if err := topRows.Scan(&t.ID, &t.SQLSummary, &t.ExecutionTime, &t.DatasourceName, &t.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan top slow query: %w", err)
+		if len(avg) > 0 {
+			avgTime = int64(avg[0].Avg)
 		}
-		topSlow = append(topSlow, t)
 	}
-	if err := topRows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate top slow queries: %w", err)
+
+	dailyTrend, err := s.dailyPerformanceTrend(ctx, since)
+	if err != nil {
+		return nil, err
+	}
+	dsStats, err := s.datasourcePerformance(ctx, since)
+	if err != nil {
+		return nil, err
+	}
+	topSlow, err := s.topSlowQueries(ctx, since)
+	if err != nil {
+		return nil, err
 	}
 
 	return &PerformanceStats{
 		TotalQueries:    totalQueries,
 		SlowQueries:     slowQueries,
-		AvgTime:         int64(avgTime.Float64),
+		AvgTime:         avgTime,
 		SlowQueryRate:   slowRate,
 		DailyTrend:      dailyTrend,
 		DatasourceStats: dsStats,
 		TopSlowQueries:  topSlow,
 	}, nil
 }
+
+// dailyPerformanceTrend buckets the window by day.
+func (s *HistoryService) dailyPerformanceTrend(ctx context.Context, since time.Time) ([]DailyTrend, error) {
+	var rows []DailyTrend
+	err := s.client.QueryHistory.Query().
+		Where(entqueryhistory.CreatedAtGTE(since)).
+		Modify(func(sel *entsql.Selector) {
+			day := "to_char(" + sel.C(entqueryhistory.FieldCreatedAt) + ", 'YYYY-MM-DD')"
+			exec := sel.C(entqueryhistory.FieldExecutionTime)
+			sel.Select().AppendSelect(
+				entsql.As(day, "date"),
+				entsql.As("COUNT(*)", "count"),
+				entsql.As("CAST(COALESCE(AVG("+exec+"), 0) AS BIGINT)", "avg_time"),
+				entsql.As("COUNT(*) FILTER (WHERE "+exec+" >= 1000)", "slow_count"),
+			).GroupBy(day).OrderBy("date")
+		}).
+		Scan(ctx, &rows)
+	if err != nil {
+		return nil, fmt.Errorf("get daily trend: %w", err)
+	}
+	return rows, nil
+}
+
+// datasourcePerformance breaks the window down per datasource.
+func (s *HistoryService) datasourcePerformance(ctx context.Context, since time.Time) ([]DatasourceStats, error) {
+	var rows []DatasourceStats
+	err := s.client.QueryHistory.Query().
+		Where(entqueryhistory.CreatedAtGTE(since)).
+		Modify(func(sel *entsql.Selector) {
+			ds := entsql.Table(entdatasource.Table).As("ds")
+			sel.LeftJoin(ds).On(sel.C(entqueryhistory.FieldDatasourceID), ds.C(entdatasource.FieldID))
+			exec := sel.C(entqueryhistory.FieldExecutionTime)
+			sel.Select().AppendSelect(
+				entsql.As(sel.C(entqueryhistory.FieldDatasourceID), "datasource_id"),
+				entsql.As("COALESCE("+ds.C(entdatasource.FieldName)+", '未知')", "datasource_name"),
+				entsql.As("COUNT(*)", "count"),
+				entsql.As("CAST(COALESCE(AVG("+exec+"), 0) AS BIGINT)", "avg_time"),
+			).GroupBy(sel.C(entqueryhistory.FieldDatasourceID), ds.C(entdatasource.FieldName)).
+				OrderExpr(entsql.Expr("count DESC"))
+		}).
+		Scan(ctx, &rows)
+	if err != nil {
+		return nil, fmt.Errorf("get datasource stats: %w", err)
+	}
+	return rows, nil
+}
+
+// topSlowQueries returns the slowest statements in the window.
+func (s *HistoryService) topSlowQueries(ctx context.Context, since time.Time) ([]TopSlowQuery, error) {
+	var rows []TopSlowQuery
+	err := s.client.QueryHistory.Query().
+		Where(entqueryhistory.CreatedAtGTE(since)).
+		Modify(func(sel *entsql.Selector) {
+			ds := entsql.Table(entdatasource.Table).As("ds")
+			sel.LeftJoin(ds).On(sel.C(entqueryhistory.FieldDatasourceID), ds.C(entdatasource.FieldID))
+			sel.Select(
+				sel.C(entqueryhistory.FieldID),
+				sel.C(entqueryhistory.FieldSQLSummary),
+				sel.C(entqueryhistory.FieldExecutionTime),
+				sel.C(entqueryhistory.FieldCreatedAt),
+			).AppendSelect(
+				entsql.As("COALESCE("+ds.C(entdatasource.FieldName)+", '未知')", "datasource_name"),
+			).OrderBy(entsql.Desc(sel.C(entqueryhistory.FieldExecutionTime))).
+				Limit(topSlowQueryLimit)
+		}).
+		Scan(ctx, &rows)
+	if err != nil {
+		return nil, fmt.Errorf("get top slow queries: %w", err)
+	}
+	return rows, nil
+}
+
+// topSlowQueryLimit bounds the slowest-query list on the dashboard.
+const topSlowQueryLimit = 10

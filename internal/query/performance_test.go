@@ -117,8 +117,10 @@ func TestPerformanceService_ListSlowQueries(t *testing.T) {
 		if total != 0 {
 			t.Errorf("total = %d, want 0", total)
 		}
-		if list != nil {
-			t.Errorf("list should be nil for empty result, got %v", list)
+		// An empty result is an empty list, not null. The frontend already
+		// carries an Array.isArray guard for the null this used to return.
+		if len(list) != 0 {
+			t.Errorf("list = %v, want empty", list)
 		}
 	})
 }

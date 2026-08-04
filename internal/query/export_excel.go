@@ -2,14 +2,11 @@ package query
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/xuri/excelize/v2"
-
-	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -64,47 +61,18 @@ func (s *ExportService) StreamExportAuditLogsExcel(ctx context.Context, w io.Wri
 		return 0, fmt.Errorf("写入 Excel 表头失败: %w", err)
 	}
 
-	// Query data
-	filterClauses := buildAuditFilterClauses(filters)
-	whereClause, args := sqlutil.BuildWhereClause(filterClauses)
-
-	querySQL := fmt.Sprintf(
-		`SELECT a.id, a.user_id, a.action, a.datasource_id, a.database, a.sql_content, a.sql_summary,
-		        a.result_rows, a.affected_rows, a.execution_time_ms, a.error_message,
-		        a.desensitized_fields, a.ip_address, a.ai_review_result, a.ticket_id, a.created_at,
-		        COALESCE(u.username, '') AS username
-		 FROM audit_logs a
-		 LEFT JOIN users u ON a.user_id = u.id
-		 %s ORDER BY a.created_at DESC LIMIT $1`,
-		whereClause,
-	)
-	queryArgs := append(args, ExportMaxRows)
-
-	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.fetchAuditExportRows(ctx, filters)
 	if err != nil {
-		return 0, fmt.Errorf("查询审计日志失败: %w", err)
+		return 0, err
 	}
-	defer rows.Close()
 
 	var written int64
-	for rows.Next() {
+	for _, a := range rows {
 		select {
 		case <-ctx.Done():
 			_ = sw.Flush()
 			return written, ctx.Err()
 		default:
-		}
-
-		var a auditCSVRow
-		if err := rows.Scan(
-			&a.ID, &a.UserID, &a.Action, &a.DatasourceID, &a.Database,
-			&a.SQLContent, &a.SQLSummary,
-			&a.ResultRows, &a.AffectedRows, &a.ExecutionTimeMs,
-			&a.ErrorMessage, &a.DesensitizedFields, &a.IPAddress,
-			&a.AIReviewResult, &a.TicketID, &a.CreatedAt,
-			&a.Username,
-		); err != nil {
-			continue
 		}
 
 		row := buildAuditExcelRow(&a, colIndices)
@@ -114,11 +82,6 @@ func (s *ExportService) StreamExportAuditLogsExcel(ctx context.Context, w io.Wri
 			continue
 		}
 		written++
-	}
-
-	if err := rows.Err(); err != nil {
-		_ = sw.Flush()
-		return written, fmt.Errorf("iterate audit rows: %w", err)
 	}
 
 	if err := sw.Flush(); err != nil {
@@ -188,52 +151,18 @@ func (s *ExportService) StreamExportTicketsExcel(ctx context.Context, w io.Write
 	}
 
 	// Query data
-	filterClauses := buildTicketFilterClauses(filters)
-	whereClause, args := sqlutil.BuildWhereClause(filterClauses)
-
-	querySQL := fmt.Sprintf(
-		`SELECT t.id, t.submitter_id, COALESCE(su.username, '') AS submitter_name,
-		        t.datasource_id, t.database, t.sql_content, t.sql_summary,
-		        t.db_type, t.change_reason, t.status, t.risk_level,
-		        t.reviewer_id, COALESCE(rev.username, '') AS reviewer_name,
-		        t.review_comment, t.scheduled_at, t.executed_at,
-		        t.created_at, t.updated_at
-		 FROM tickets t
-		 LEFT JOIN users su ON t.submitter_id = su.id
-		 LEFT JOIN users rev ON t.reviewer_id = rev.id
-		 %s ORDER BY t.created_at DESC LIMIT $1`,
-		whereClause,
-	)
-	queryArgs := append(args, ExportMaxRows)
-
-	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.fetchTicketExportRows(ctx, filters)
 	if err != nil {
-		return 0, fmt.Errorf("查询工单失败: %w", err)
+		return 0, err
 	}
-	defer rows.Close()
 
 	var written int64
-	for rows.Next() {
+	for _, t := range rows {
 		select {
 		case <-ctx.Done():
 			_ = sw.Flush()
 			return written, ctx.Err()
 		default:
-		}
-
-		var t ticketCSVRow
-		if err := rows.Scan(
-			&t.ID, &t.SubmitterID, &t.SubmitterName,
-			&t.DatasourceID, &t.Database,
-			&t.SQLContent, &t.SQLSummary,
-			&t.DBType, &t.ChangeReason,
-			&t.Status, &t.RiskLevel,
-			&t.ReviewerID, &t.ReviewerName,
-			&t.ReviewComment,
-			&t.ScheduledAt, &t.ExecutedAt,
-			&t.CreatedAt, &t.UpdatedAt,
-		); err != nil {
-			continue
 		}
 
 		row := buildTicketExcelRow(&t, colIndices)
@@ -243,11 +172,6 @@ func (s *ExportService) StreamExportTicketsExcel(ctx context.Context, w io.Write
 			continue
 		}
 		written++
-	}
-
-	if err := rows.Err(); err != nil {
-		_ = sw.Flush()
-		return written, fmt.Errorf("iterate ticket rows: %w", err)
 	}
 
 	if err := sw.Flush(); err != nil {
@@ -320,8 +244,8 @@ func buildTicketExcelRow(t *ticketCSVRow, colIndices []int) []interface{} {
 		t.RiskLevel,
 		t.ReviewerName,
 		t.ReviewComment,
-		formatNullTime(t.ScheduledAt),
-		formatNullTime(t.ExecutedAt),
+		formatOptionalTime(t.ScheduledAt),
+		formatOptionalTime(t.ExecutedAt),
 		formatTimeValue(t.CreatedAt),
 		formatTimeValue(t.UpdatedAt),
 	}
@@ -410,11 +334,4 @@ func formatTimeValue(t time.Time) string {
 		return ""
 	}
 	return t.Format("2006-01-02 15:04:05")
-}
-
-func formatNullTime(t sql.NullTime) string {
-	if !t.Valid {
-		return ""
-	}
-	return t.Time.Format("2006-01-02 15:04:05")
 }

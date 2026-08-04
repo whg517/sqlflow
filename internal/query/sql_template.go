@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,9 +13,10 @@ import (
 
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
+	"github.com/whg517/sqlflow/internal/db/ent/predicate"
+	entsqltemplate "github.com/whg517/sqlflow/internal/db/ent/sqltemplate"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
-	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 )
 
 var (
@@ -64,18 +64,25 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, userID int64, name
 
 	now := time.Now()
 
-	var id int64
-	err = s.database.QueryRowContext(ctx,
-		`INSERT INTO sql_templates (user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-		userID, name, description, sqlContent, dbType, category, paramsJSON, isPublic, now, now,
-	).Scan(&id)
+	created, err := s.client.SQLTemplate.Create().
+		SetUserID(userID).
+		SetName(name).
+		SetDescription(description).
+		SetSQLContent(sqlContent).
+		SetDbType(dbType).
+		SetCategory(category).
+		SetParamsJSON(paramsJSON).
+		SetIsPublic(isPublic).
+		SetCreatedAt(now).
+		SetUpdatedAt(now).
+		Save(ctx)
 	if err != nil {
-		if sqlutil.IsUniqueViolation(err) {
+		if ent.IsConstraintError(err) {
 			return nil, ErrTemplateNameExists
 		}
 		return nil, fmt.Errorf("insert template: %w", err)
 	}
+	id := int64(created.ID)
 
 	return &model.SQLTemplate{
 		ID:          id,
@@ -102,31 +109,52 @@ func (s *TemplateService) GetTemplateForUser(ctx context.Context, id, userID int
 	return s.getTemplate(ctx, id, userID, true)
 }
 
-func (s *TemplateService) getTemplate(ctx context.Context, id, userID int64, enforceAccess bool) (*model.SQLTemplate, error) {
-	t := &model.SQLTemplate{}
-	var pub bool
-	// Placeholders are written as ? and numbered once the clause is final: the
-	// owner check used to hard-code $1, which is the template id, so it compared
-	// user_id against the id and let any user read another's private template.
-	query := `SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at
-		 FROM sql_templates WHERE id = ?`
-	args := []interface{}{id}
-	if enforceAccess {
-		query += " AND (user_id = ? OR is_public = TRUE)"
-		args = append(args, userID)
+// entTemplateToModel converts a generated template to the API shape.
+func entTemplateToModel(t *ent.SQLTemplate) *model.SQLTemplate {
+	return &model.SQLTemplate{
+		ID:          int64(t.ID),
+		UserID:      t.UserID,
+		Name:        t.Name,
+		Description: t.Description,
+		SQLContent:  t.SQLContent,
+		DBType:      t.DbType,
+		Category:    t.Category,
+		ParamsJSON:  t.ParamsJSON,
+		IsPublic:    t.IsPublic,
+		CreatedAt:   t.CreatedAt,
+		UpdatedAt:   t.UpdatedAt,
 	}
-	query = sqlutil.NumberPlaceholders(query)
-	err := s.database.QueryRowContext(ctx,
-		query, args...,
-	).Scan(&t.ID, &t.UserID, &t.Name, &t.Description, &t.SQLContent, &t.DBType, &t.Category, &t.ParamsJSON, &pub, &t.CreatedAt, &t.UpdatedAt)
-	if err == sql.ErrNoRows {
+}
+
+// visibleToUser is the access boundary: a template is readable if it is public
+// or the caller owns it.
+//
+// It is one predicate rather than a clause appended per call site because the
+// hand-assembled version reused $1 — the template id — for the owner check, so
+// it compared user_id against the id and let any user read another's private
+// template.
+func visibleToUser(userID int64) predicate.SQLTemplate {
+	return entsqltemplate.Or(
+		entsqltemplate.IsPublic(true),
+		entsqltemplate.UserIDEQ(userID),
+	)
+}
+
+func (s *TemplateService) getTemplate(ctx context.Context, id, userID int64, enforceAccess bool) (*model.SQLTemplate, error) {
+	q := s.client.SQLTemplate.Query().Where(entsqltemplate.IDEQ(int(id)))
+	if enforceAccess {
+		q = q.Where(visibleToUser(userID))
+	}
+	t, err := q.Only(ctx)
+	if ent.IsNotFound(err) {
+		// A template the caller may not see is reported as missing rather than
+		// forbidden: telling them it exists is itself a disclosure.
 		return nil, ErrTemplateNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get template: %w", err)
 	}
-	t.IsPublic = pub
-	return t, nil
+	return entTemplateToModel(t), nil
 }
 
 // ListTemplates returns paginated templates. userID=0 returns all public + user's own.
@@ -139,67 +167,39 @@ func (s *TemplateService) ListTemplates(ctx context.Context, userID int64, categ
 	}
 	offset := (page - 1) * pageSize
 
-	var rows *sql.Rows
-	var err error
-	var total int64
-
+	// userID 0 means an unauthenticated or system caller, which sees only what
+	// is public. The two branches used to be written out separately, and the
+	// category filter was appended to both with its own placeholder numbering —
+	// which is where the collision came from.
+	q := s.client.SQLTemplate.Query()
 	if userID == 0 {
-		// All public templates
-		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE is_public = TRUE"
-		args := []interface{}{}
-		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE is_public = TRUE"
-		if category != "" {
-			countQuery += " AND category = ?"
-			listQuery += " AND category = ?"
-			args = append(args, category)
-		}
-		listQuery += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
-
-		err = s.database.QueryRowContext(ctx, sqlutil.NumberPlaceholders(countQuery), args...).Scan(&total)
-		if err != nil {
-			return nil, 0, fmt.Errorf("count templates: %w", err)
-		}
-
-		listArgs := append(args, pageSize, offset)
-		rows, err = s.database.QueryContext(ctx, sqlutil.NumberPlaceholders(listQuery), listArgs...)
+		q = q.Where(entsqltemplate.IsPublic(true))
 	} else {
-		// User's own + all public
-		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE (user_id = ? OR is_public = TRUE)"
-		args := []interface{}{userID}
-		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE (user_id = ? OR is_public = TRUE)"
-		if category != "" {
-			countQuery += " AND category = ?"
-			listQuery += " AND category = ?"
-			args = append(args, category)
-		}
-		listQuery += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
-
-		err = s.database.QueryRowContext(ctx, sqlutil.NumberPlaceholders(countQuery), args...).Scan(&total)
-		if err != nil {
-			return nil, 0, fmt.Errorf("count templates: %w", err)
-		}
-
-		listArgs := append(args, pageSize, offset)
-		rows, err = s.database.QueryContext(ctx, sqlutil.NumberPlaceholders(listQuery), listArgs...)
+		q = q.Where(visibleToUser(userID))
+	}
+	if category != "" {
+		q = q.Where(entsqltemplate.CategoryEQ(category))
 	}
 
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count templates: %w", err)
+	}
+
+	rows, err := q.
+		Order(ent.Desc(entsqltemplate.FieldUpdatedAt)).
+		Limit(pageSize).
+		Offset(offset).
+		All(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list templates: %w", err)
 	}
-	defer rows.Close()
 
-	var templates []*model.SQLTemplate
-	for rows.Next() {
-		t := &model.SQLTemplate{}
-		var pub bool
-		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Description, &t.SQLContent, &t.DBType, &t.Category, &t.ParamsJSON, &pub, &t.CreatedAt, &t.UpdatedAt); err != nil {
-			return nil, 0, fmt.Errorf("scan template: %w", err)
-		}
-		t.IsPublic = pub
-		templates = append(templates, t)
+	templates := make([]*model.SQLTemplate, 0, len(rows))
+	for _, t := range rows {
+		templates = append(templates, entTemplateToModel(t))
 	}
-
-	return templates, total, nil
+	return templates, int64(total), nil
 }
 
 // UpdateTemplate updates an existing template (only the creator can update).
@@ -217,20 +217,29 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id, userID int64, 
 		return fmt.Errorf("extract params: %w", err)
 	}
 
-	result, err := s.database.ExecContext(ctx,
-		`UPDATE sql_templates SET name=$1, description=$2, sql_content=$3, db_type=$4, category=$5, params_json=$6, is_public=$7, updated_at=$8
-		 WHERE id = $9 AND user_id = $10`,
-		name, description, sqlContent, dbType, category, paramsJSON, isPublic, time.Now(), id, userID,
-	)
+	// The owner predicate is part of the update, not a check before it: a
+	// separate read would leave a window in which ownership changed, and would
+	// need two round trips to reach the same conclusion.
+	n, err := s.client.SQLTemplate.Update().
+		Where(entsqltemplate.IDEQ(int(id)), entsqltemplate.UserIDEQ(userID)).
+		SetName(name).
+		SetDescription(description).
+		SetSQLContent(sqlContent).
+		SetDbType(dbType).
+		SetCategory(category).
+		SetParamsJSON(paramsJSON).
+		SetIsPublic(isPublic).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
 	if err != nil {
-		if sqlutil.IsUniqueViolation(err) {
+		if ent.IsConstraintError(err) {
 			return ErrTemplateNameExists
 		}
 		return fmt.Errorf("update template: %w", err)
 	}
-
-	n, _ := result.RowsAffected()
 	if n == 0 {
+		// Either the template is gone or it belongs to someone else. Both are
+		// reported as missing; distinguishing them would confirm its existence.
 		return ErrTemplateNotFound
 	}
 	return nil
@@ -238,11 +247,12 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id, userID int64, 
 
 // DeleteTemplate deletes a template (only the creator can delete).
 func (s *TemplateService) DeleteTemplate(ctx context.Context, id, userID int64) error {
-	result, err := s.database.ExecContext(ctx, `DELETE FROM sql_templates WHERE id = $1 AND user_id = $2`, id, userID)
+	n, err := s.client.SQLTemplate.Delete().
+		Where(entsqltemplate.IDEQ(int(id)), entsqltemplate.UserIDEQ(userID)).
+		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("delete template: %w", err)
 	}
-	n, _ := result.RowsAffected()
 	if n == 0 {
 		return ErrTemplateNotFound
 	}

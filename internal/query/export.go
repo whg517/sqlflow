@@ -2,18 +2,23 @@ package query
 
 import (
 	"context"
-	"database/sql"
 	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
+
 	"github.com/whg517/sqlflow/internal/db"
-	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entauditlog "github.com/whg517/sqlflow/internal/db/ent/auditlog"
+	"github.com/whg517/sqlflow/internal/db/ent/predicate"
+	entticket "github.com/whg517/sqlflow/internal/db/ent/ticket"
+	entuser "github.com/whg517/sqlflow/internal/db/ent/user"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
-	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 )
 
 const (
@@ -52,13 +57,13 @@ type ExportResult struct {
 
 // ExportService handles data export for audit logs and tickets.
 type ExportService struct {
-	database *db.DB
+	client   *ent.Client
 	auditSvc auditlog.Writer
 }
 
 // NewExportService creates a new ExportService.
 func NewExportService(database *db.DB, auditSvc auditlog.Writer) *ExportService {
-	return &ExportService{database: database, auditSvc: auditlog.OrDiscard(auditSvc)}
+	return &ExportService{client: database.Client(), auditSvc: auditlog.OrDiscard(auditSvc)}
 }
 
 // hasExportPermission checks if a user has export permission.
@@ -107,33 +112,24 @@ func (s *ExportService) ValidateExport(ctx context.Context, role string, exportT
 
 // countAuditLogs counts audit logs matching the filters.
 func (s *ExportService) countAuditLogs(ctx context.Context, filters AuditExportFilters) (int64, error) {
-	filterClauses := buildAuditFilterClauses(filters)
-	whereClause, args := sqlutil.BuildWhereClause(filterClauses)
-
-	countTable := "audit_logs a"
-	if filters.Keyword != "" {
-		countTable = "audit_logs a LEFT JOIN users u ON a.user_id = u.id"
+	preds, err := s.auditExportPredicates(ctx, filters)
+	if err != nil {
+		return 0, err
 	}
-	countSQL := sqlutil.PaginatedCountSQL(countTable, whereClause)
-
-	var total int64
-	if err := s.database.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	total, err := s.client.AuditLog.Query().Where(preds...).Count(ctx)
+	if err != nil {
 		return 0, fmt.Errorf("统计审计日志失败: %w", err)
 	}
-	return total, nil
+	return int64(total), nil
 }
 
 // countTickets counts tickets matching the filters.
 func (s *ExportService) countTickets(ctx context.Context, filters TicketExportFilters) (int64, error) {
-	filterClauses := buildTicketFilterClauses(filters)
-	whereClause, args := sqlutil.BuildWhereClause(filterClauses)
-
-	var total int64
-	countSQL := sqlutil.PaginatedCountSQL("tickets", whereClause)
-	if err := s.database.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	total, err := s.client.Ticket.Query().Where(ticketExportPredicates(filters)...).Count(ctx)
+	if err != nil {
 		return 0, fmt.Errorf("统计工单失败: %w", err)
 	}
-	return total, nil
+	return int64(total), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -147,9 +143,6 @@ func (s *ExportService) StreamExportAuditLogs(ctx context.Context, w io.Writer, 
 	csvW := csv.NewWriter(w)
 	defer csvW.Flush()
 
-	filterClauses := buildAuditFilterClauses(filters)
-	whereClause, args := sqlutil.BuildWhereClause(filterClauses)
-
 	// Write CSV header
 	_ = csvW.Write([]string{
 		"ID", "时间", "用户", "操作", "数据源ID", "数据库",
@@ -157,42 +150,17 @@ func (s *ExportService) StreamExportAuditLogs(ctx context.Context, w io.Writer, 
 		"错误信息", "脱敏字段", "IP地址", "AI评审", "工单ID",
 	})
 
-	querySQL := sqlutil.NumberPlaceholders(fmt.Sprintf(
-		`SELECT a.id, a.user_id, a.action, a.datasource_id, a.database, a.sql_content, a.sql_summary,
-		        a.result_rows, a.affected_rows, a.execution_time_ms, a.error_message,
-		        a.desensitized_fields, a.ip_address, a.ai_review_result, a.ticket_id, a.created_at,
-		        COALESCE(u.username, '') AS username
-		 FROM audit_logs a
-		 LEFT JOIN users u ON a.user_id = u.id
-		 %s ORDER BY a.created_at DESC LIMIT ?`,
-		whereClause,
-	))
-	queryArgs := append(args, ExportMaxRows)
-
-	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.fetchAuditExportRows(ctx, filters)
 	if err != nil {
-		return 0, fmt.Errorf("查询审计日志失败: %w", err)
+		return 0, err
 	}
-	defer rows.Close()
 
 	var written int64
-	for rows.Next() {
+	for _, a := range rows {
 		select {
 		case <-ctx.Done():
 			return written, ctx.Err()
 		default:
-		}
-
-		var a auditCSVRow
-		if err := rows.Scan(
-			&a.ID, &a.UserID, &a.Action, &a.DatasourceID, &a.Database,
-			&a.SQLContent, &a.SQLSummary,
-			&a.ResultRows, &a.AffectedRows, &a.ExecutionTimeMs,
-			&a.ErrorMessage, &a.DesensitizedFields, &a.IPAddress,
-			&a.AIReviewResult, &a.TicketID, &a.CreatedAt,
-			&a.Username,
-		); err != nil {
-			continue
 		}
 
 		createdAtStr := ""
@@ -225,10 +193,6 @@ func (s *ExportService) StreamExportAuditLogs(ctx context.Context, w io.Writer, 
 		}
 	}
 
-	if err := rows.Err(); err != nil {
-		return written, fmt.Errorf("iterate audit rows: %w", err)
-	}
-
 	return written, nil
 }
 
@@ -238,9 +202,6 @@ func (s *ExportService) StreamExportTickets(ctx context.Context, w io.Writer, us
 	csvW := csv.NewWriter(w)
 	defer csvW.Flush()
 
-	filterClauses := buildTicketFilterClauses(filters)
-	whereClause, args := sqlutil.BuildWhereClause(filterClauses)
-
 	_ = csvW.Write([]string{
 		"ID", "提交人", "提交人ID", "数据源ID", "数据库",
 		"SQL内容", "SQL摘要", "数据库类型", "变更原因",
@@ -248,58 +209,21 @@ func (s *ExportService) StreamExportTickets(ctx context.Context, w io.Writer, us
 		"定时执行时间", "实际执行时间", "创建时间", "更新时间",
 	})
 
-	querySQL := sqlutil.NumberPlaceholders(fmt.Sprintf(
-		`SELECT t.id, t.submitter_id, COALESCE(su.username, '') AS submitter_name,
-		        t.datasource_id, t.database, t.sql_content, t.sql_summary,
-		        t.db_type, t.change_reason, t.status, t.risk_level,
-		        t.reviewer_id, COALESCE(rev.username, '') AS reviewer_name,
-		        t.review_comment, t.scheduled_at, t.executed_at,
-		        t.created_at, t.updated_at
-		 FROM tickets t
-		 LEFT JOIN users su ON t.submitter_id = su.id
-		 LEFT JOIN users rev ON t.reviewer_id = rev.id
-		 %s ORDER BY t.created_at DESC LIMIT ?`,
-		whereClause,
-	))
-	queryArgs := append(args, ExportMaxRows)
-
-	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := s.fetchTicketExportRows(ctx, filters)
 	if err != nil {
-		return 0, fmt.Errorf("查询工单失败: %w", err)
+		return 0, err
 	}
-	defer rows.Close()
 
 	var written int64
-	for rows.Next() {
+	for _, t := range rows {
 		select {
 		case <-ctx.Done():
 			return written, ctx.Err()
 		default:
 		}
 
-		var t ticketCSVRow
-		if err := rows.Scan(
-			&t.ID, &t.SubmitterID, &t.SubmitterName,
-			&t.DatasourceID, &t.Database,
-			&t.SQLContent, &t.SQLSummary,
-			&t.DBType, &t.ChangeReason,
-			&t.Status, &t.RiskLevel,
-			&t.ReviewerID, &t.ReviewerName,
-			&t.ReviewComment,
-			&t.ScheduledAt, &t.ExecutedAt,
-			&t.CreatedAt, &t.UpdatedAt,
-		); err != nil {
-			continue
-		}
-
-		scheduledAtStr := ""
-		if t.ScheduledAt.Valid {
-			scheduledAtStr = t.ScheduledAt.Time.Format("2006-01-02 15:04:05")
-		}
-		executedAtStr := ""
-		if t.ExecutedAt.Valid {
-			executedAtStr = t.ExecutedAt.Time.Format("2006-01-02 15:04:05")
-		}
+		scheduledAtStr := formatOptionalTime(t.ScheduledAt)
+		executedAtStr := formatOptionalTime(t.ExecutedAt)
 
 		_ = csvW.Write([]string{
 			fmt.Sprintf("%d", t.ID),
@@ -325,10 +249,6 @@ func (s *ExportService) StreamExportTickets(ctx context.Context, w io.Writer, us
 		if written%ExportStreamFlushInterval == 0 {
 			csvW.Flush()
 		}
-	}
-
-	if err := rows.Err(); err != nil {
-		return written, fmt.Errorf("iterate ticket rows: %w", err)
 	}
 
 	return written, nil
@@ -429,49 +349,78 @@ func (s *ExportService) ExportTickets(ctx context.Context, userID int64, usernam
 // Filter helpers
 // ---------------------------------------------------------------------------
 
-func buildAuditFilterClauses(filters AuditExportFilters) []sqlutil.FilterClause {
-	var filterClauses []sqlutil.FilterClause
-	if filters.UserID != "" {
-		filterClauses = append(filterClauses, sqlutil.FilterClause{Condition: "a.user_id = ?", Args: []interface{}{filters.UserID}})
+// auditExportPredicates translates the export filters into typed predicates.
+//
+// The keyword also matches the acting user's name, which lives on a joined
+// table that typed predicates cannot reach. It is resolved to a set of user ids
+// first: one extra query, and the whole filter stays expressible without raw
+// SQL. This mirrors what the audit domain's own search does.
+func (s *ExportService) auditExportPredicates(ctx context.Context, filters AuditExportFilters) ([]predicate.AuditLog, error) {
+	var preds []predicate.AuditLog
+	if id, err := strconv.ParseInt(filters.UserID, 10, 64); err == nil && filters.UserID != "" {
+		preds = append(preds, entauditlog.UserIDEQ(id))
 	}
 	if filters.Action != "" {
-		filterClauses = append(filterClauses, sqlutil.FilterClause{Condition: "a.action = ?", Args: []interface{}{filters.Action}})
+		preds = append(preds, entauditlog.ActionEQ(filters.Action))
 	}
-	if filters.DatasourceID != "" {
-		filterClauses = append(filterClauses, sqlutil.FilterClause{Condition: "a.datasource_id = ?", Args: []interface{}{filters.DatasourceID}})
+	if id, err := strconv.ParseInt(filters.DatasourceID, 10, 64); err == nil && filters.DatasourceID != "" {
+		preds = append(preds, entauditlog.DatasourceIDEQ(id))
 	}
-	if filters.Start != "" {
-		filterClauses = append(filterClauses, sqlutil.FilterClause{Condition: "a.created_at >= ?", Args: []interface{}{filters.Start}})
+	if from, ok := parseDayStart(filters.Start); ok {
+		preds = append(preds, entauditlog.CreatedAtGTE(from))
 	}
-	if filters.End != "" {
-		filterClauses = append(filterClauses, sqlutil.FilterClause{Condition: "a.created_at <= ?", Args: []interface{}{filters.End}})
+	if to, ok := parseDayStart(filters.End); ok {
+		// A date bound resolves to midnight, which would drop everything
+		// recorded on the end date the caller asked for.
+		preds = append(preds, entauditlog.CreatedAtLT(to.AddDate(0, 0, 1)))
 	}
 	if filters.Keyword != "" {
-		keywordLike := "%" + sqlutil.EscapeLike(filters.Keyword) + "%"
-		filterClauses = append(filterClauses, sqlutil.FilterClause{
-			Condition: "(a.sql_content LIKE ? ESCAPE '\\' OR a.sql_summary LIKE ? ESCAPE '\\' OR u.username LIKE ? ESCAPE '\\' OR a.action LIKE ? ESCAPE '\\' OR a.error_message LIKE ? ESCAPE '\\' OR a.database LIKE ? ESCAPE '\\' OR a.ip_address LIKE ? ESCAPE '\\')",
-			Args:      []interface{}{keywordLike, keywordLike, keywordLike, keywordLike, keywordLike, keywordLike, keywordLike},
-		})
+		userIDs, err := s.client.User.Query().
+			Where(entuser.UsernameContainsFold(filters.Keyword)).
+			IDs(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("解析用户关键词失败: %w", err)
+		}
+		match := []predicate.AuditLog{
+			entauditlog.SQLContentContainsFold(filters.Keyword),
+			entauditlog.SQLSummaryContainsFold(filters.Keyword),
+			entauditlog.ActionContainsFold(filters.Keyword),
+			entauditlog.ErrorMessageContainsFold(filters.Keyword),
+			entauditlog.DatabaseContainsFold(filters.Keyword),
+			entauditlog.IPAddressContainsFold(filters.Keyword),
+		}
+		if len(userIDs) > 0 {
+			ids := make([]int64, len(userIDs))
+			for i, id := range userIDs {
+				ids[i] = int64(id)
+			}
+			match = append(match, entauditlog.UserIDIn(ids...))
+		}
+		preds = append(preds, entauditlog.Or(match...))
 	}
-	return filterClauses
+	return preds, nil
 }
 
-func buildTicketFilterClauses(filters TicketExportFilters) []sqlutil.FilterClause {
-	var filterClauses []sqlutil.FilterClause
+// ticketExportPredicates translates the ticket export filters.
+func ticketExportPredicates(filters TicketExportFilters) []predicate.Ticket {
+	var preds []predicate.Ticket
 	if filters.Status != "" {
-		filterClauses = append(filterClauses, sqlutil.FilterClause{Condition: "status = ?", Args: []interface{}{filters.Status}})
+		preds = append(preds, entticket.StatusEQ(filters.Status))
 	}
-	if filters.DatasourceID != "" {
-		filterClauses = append(filterClauses, sqlutil.FilterClause{Condition: "datasource_id = ?", Args: []interface{}{filters.DatasourceID}})
+	if id, err := strconv.ParseInt(filters.DatasourceID, 10, 64); err == nil && filters.DatasourceID != "" {
+		preds = append(preds, entticket.DatasourceIDEQ(id))
 	}
 	if filters.RiskLevel != "" {
-		filterClauses = append(filterClauses, sqlutil.FilterClause{Condition: "risk_level = ?", Args: []interface{}{filters.RiskLevel}})
+		preds = append(preds, entticket.RiskLevelEQ(filters.RiskLevel))
 	}
 	if filters.Keyword != "" {
-		like := "%" + sqlutil.EscapeLike(filters.Keyword) + "%"
-		filterClauses = append(filterClauses, sqlutil.FilterClause{Condition: "(sql_content LIKE ? OR change_reason LIKE ? OR sql_summary LIKE ?)", Args: []interface{}{like, like, like}})
+		preds = append(preds, entticket.Or(
+			entticket.SQLContentContainsFold(filters.Keyword),
+			entticket.ChangeReasonContainsFold(filters.Keyword),
+			entticket.SQLSummaryContainsFold(filters.Keyword),
+		))
 	}
-	return filterClauses
+	return preds
 }
 
 // ---------------------------------------------------------------------------
@@ -497,30 +446,138 @@ type TicketExportFilters struct {
 }
 
 // auditCSVRow holds the scan target for a single audit log row.
+//
+// Flat rather than embedding model.AuditLog: ent's scanner matches result
+// columns to fields by tag and does not descend into embedded structs. The
+// omitempty tags the model carries would also not match the columns, since the
+// scanner reads the tag name verbatim.
 type auditCSVRow struct {
-	model.AuditLog
+	ID                 int64     `json:"id"`
+	UserID             int64     `json:"user_id"`
+	Username           string    `json:"username"`
+	Action             string    `json:"action"`
+	DatasourceID       int64     `json:"datasource_id"`
+	Database           string    `json:"database"`
+	SQLContent         string    `json:"sql_content"`
+	SQLSummary         string    `json:"sql_summary"`
+	ResultRows         int64     `json:"result_rows"`
+	AffectedRows       int64     `json:"affected_rows"`
+	ExecutionTimeMs    int64     `json:"execution_time_ms"`
+	ErrorMessage       string    `json:"error_message"`
+	DesensitizedFields string    `json:"desensitized_fields"`
+	IPAddress          string    `json:"ip_address"`
+	AIReviewResult     string    `json:"ai_review_result"`
+	TicketID           int64     `json:"ticket_id"`
+	CreatedAt          time.Time `json:"created_at"`
+}
+
+// fetchAuditExportRows reads the rows an audit export writes out.
+//
+// Shared by the CSV and Excel writers, which each built the same query with
+// their own placeholder numbering. One of them got it wrong: the Excel path
+// interpolated a WHERE clause written with ? and then hard-coded $1 for the
+// limit, so every filtered Excel export failed with a syntax error. Only the
+// unfiltered case — the one the tests covered — produced a valid statement.
+func (s *ExportService) fetchAuditExportRows(ctx context.Context, filters AuditExportFilters) ([]auditCSVRow, error) {
+	preds, err := s.auditExportPredicates(ctx, filters)
+	if err != nil {
+		return nil, err
+	}
+	var rows []auditCSVRow
+	err = s.client.AuditLog.Query().
+		Where(preds...).
+		Modify(func(sel *entsql.Selector) {
+			u := entsql.Table(entuser.Table).As("u")
+			sel.LeftJoin(u).On(sel.C(entauditlog.FieldUserID), u.C(entuser.FieldID))
+			cols := make([]string, 0, len(entauditlog.Columns)+1)
+			for _, c := range entauditlog.Columns {
+				cols = append(cols, sel.C(c))
+			}
+			sel.Select(cols...).
+				AppendSelect(entsql.As("COALESCE("+u.C(entuser.FieldUsername)+", '')", "username")).
+				OrderBy(entsql.Desc(sel.C(entauditlog.FieldCreatedAt))).
+				Limit(ExportMaxRows)
+		}).
+		Scan(ctx, &rows)
+	if err != nil {
+		return nil, fmt.Errorf("查询审计日志失败: %w", err)
+	}
+	return rows, nil
+}
+
+// fetchTicketExportRows reads the rows a ticket export writes out.
+//
+// Two joins on users, because a ticket names both a submitter and a reviewer.
+func (s *ExportService) fetchTicketExportRows(ctx context.Context, filters TicketExportFilters) ([]ticketCSVRow, error) {
+	var rows []ticketCSVRow
+	err := s.client.Ticket.Query().
+		Where(ticketExportPredicates(filters)...).
+		Modify(func(sel *entsql.Selector) {
+			su := entsql.Table(entuser.Table).As("su")
+			rev := entsql.Table(entuser.Table).As("rev")
+			sel.LeftJoin(su).On(sel.C(entticket.FieldSubmitterID), su.C(entuser.FieldID))
+			sel.LeftJoin(rev).On(sel.C(entticket.FieldReviewerID), rev.C(entuser.FieldID))
+			sel.Select(
+				sel.C(entticket.FieldID),
+				sel.C(entticket.FieldSubmitterID),
+				sel.C(entticket.FieldDatasourceID),
+				sel.C(entticket.FieldDatabase),
+				sel.C(entticket.FieldSQLContent),
+				sel.C(entticket.FieldSQLSummary),
+				sel.C(entticket.FieldDbType),
+				sel.C(entticket.FieldChangeReason),
+				sel.C(entticket.FieldStatus),
+				sel.C(entticket.FieldRiskLevel),
+				sel.C(entticket.FieldReviewerID),
+				sel.C(entticket.FieldReviewComment),
+				sel.C(entticket.FieldScheduledAt),
+				sel.C(entticket.FieldExecutedAt),
+				sel.C(entticket.FieldCreatedAt),
+				sel.C(entticket.FieldUpdatedAt),
+			).AppendSelect(
+				entsql.As("COALESCE("+su.C(entuser.FieldUsername)+", '')", "submitter_name"),
+				entsql.As("COALESCE("+rev.C(entuser.FieldUsername)+", '')", "reviewer_name"),
+			).OrderBy(entsql.Desc(sel.C(entticket.FieldCreatedAt))).
+				Limit(ExportMaxRows)
+		}).
+		Scan(ctx, &rows)
+	if err != nil {
+		return nil, fmt.Errorf("查询工单失败: %w", err)
+	}
+	return rows, nil
 }
 
 // ticketCSVRow holds the scan target for a single ticket row.
+// The tags are how ent's scanner maps result columns onto fields; the names
+// must match the columns the select produces, including the two joined
+// usernames.
 type ticketCSVRow struct {
-	ID            int64
-	SubmitterID   int64
-	SubmitterName string
-	DatasourceID  int64
-	Database      string
-	SQLContent    string
-	SQLSummary    string
-	DBType        string
-	ChangeReason  string
-	Status        string
-	RiskLevel     string
-	ReviewerID    int64
-	ReviewerName  string
-	ReviewComment string
-	ScheduledAt   sql.NullTime
-	ExecutedAt    sql.NullTime
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID            int64      `json:"id"`
+	SubmitterID   int64      `json:"submitter_id"`
+	SubmitterName string     `json:"submitter_name"`
+	DatasourceID  int64      `json:"datasource_id"`
+	Database      string     `json:"database"`
+	SQLContent    string     `json:"sql_content"`
+	SQLSummary    string     `json:"sql_summary"`
+	DBType        string     `json:"db_type"`
+	ChangeReason  string     `json:"change_reason"`
+	Status        string     `json:"status"`
+	RiskLevel     string     `json:"risk_level"`
+	ReviewerID    int64      `json:"reviewer_id"`
+	ReviewerName  string     `json:"reviewer_name"`
+	ReviewComment string     `json:"review_comment"`
+	ScheduledAt   *time.Time `json:"scheduled_at"`
+	ExecutedAt    *time.Time `json:"executed_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
+// formatOptionalTime renders a nullable timestamp, or "" when it is unset.
+func formatOptionalTime(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.Format("2006-01-02 15:04:05")
 }
 
 // WriteAuditExportLog records an audit log entry for an audit export.

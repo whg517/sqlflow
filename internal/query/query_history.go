@@ -8,9 +8,11 @@ import (
 	"sync"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/whg517/sqlflow/internal/db"
+
 	"github.com/whg517/sqlflow/internal/db/ent"
-	"github.com/whg517/sqlflow/internal/db/ent/queryhistory"
+	entqueryhistory "github.com/whg517/sqlflow/internal/db/ent/queryhistory"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 )
@@ -68,59 +70,57 @@ func (s *HistoryService) CreateHistory(ctx context.Context, h *model.QueryHistor
 }
 
 // ListHistory returns paginated query history for a user.
-// Uses raw SQL for the LIKE keyword search across multiple fields.
 func (s *HistoryService) ListHistory(ctx context.Context, userID int64, page, pageSize int, keyword string) ([]model.QueryHistory, int, error) {
 	p := sqlutil.ParsePagination(page, pageSize)
 
-	filters := []sqlutil.FilterClause{
-		{Condition: "user_id = ?", Args: []interface{}{userID}},
-	}
+	q := s.client.QueryHistory.Query().Where(entqueryhistory.UserIDEQ(userID))
 	if keyword != "" {
-		keywordLike := "%" + sqlutil.EscapeLike(keyword) + "%"
-		filters = append(filters, sqlutil.FilterClause{
-			Condition: "(sql_content LIKE ? ESCAPE '\\' OR sql_summary LIKE ? ESCAPE '\\')",
-			Args:      []interface{}{keywordLike, keywordLike},
-		})
+		// ContainsFold renders as ILIKE and escapes the pattern itself, which
+		// replaces a hand-built LIKE with its own ESCAPE clause.
+		q = q.Where(entqueryhistory.Or(
+			entqueryhistory.SQLContentContainsFold(keyword),
+			entqueryhistory.SQLSummaryContainsFold(keyword),
+		))
 	}
-	whereClause, args := sqlutil.BuildWhereClause(filters)
 
-	var total int
-	countSQL := sqlutil.PaginatedCountSQL("query_history", whereClause)
-	if err := s.database.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
 		return nil, 0, fmt.Errorf("count query history: %w", err)
 	}
 
-	querySQL := sqlutil.PaginatedQuerySQL(
-		"SELECT id, user_id, datasource_id, database, sql_content, params_json, sql_summary, db_type, execution_time, result_rows, affected_rows, created_at",
-		"query_history", whereClause, "id DESC", p,
-	)
-	queryArgs := sqlutil.AppendLimitArgs(args, p)
-	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := q.
+		Order(ent.Desc(entqueryhistory.FieldID)).
+		Limit(p.PageSize).
+		Offset(p.Offset).
+		All(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query history: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
-	var list []model.QueryHistory
-	for rows.Next() {
-		var h model.QueryHistory
-		var createdAt string
-		if err := rows.Scan(&h.ID, &h.UserID, &h.DatasourceID, &h.Database,
-			&h.SQLContent, &h.ParamsJSON, &h.SQLSummary, &h.DBType, &h.ExecutionTime,
-			&h.ResultRows, &h.AffectedRows, &createdAt); err != nil {
-			return nil, 0, fmt.Errorf("scan query history: %w", err)
-		}
-		h.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		list = append(list, h)
+	list := make([]model.QueryHistory, 0, len(rows))
+	for _, h := range rows {
+		list = append(list, model.QueryHistory{
+			ID:            int64(h.ID),
+			UserID:        h.UserID,
+			DatasourceID:  h.DatasourceID,
+			Database:      h.Database,
+			SQLContent:    h.SQLContent,
+			ParamsJSON:    h.ParamsJSON,
+			SQLSummary:    h.SQLSummary,
+			DBType:        h.DbType,
+			ExecutionTime: h.ExecutionTime,
+			ResultRows:    h.ResultRows,
+			AffectedRows:  h.AffectedRows,
+			CreatedAt:     h.CreatedAt,
+		})
 	}
-
-	return list, total, rows.Err()
+	return list, total, nil
 }
 
 // DeleteHistory deletes a single query history record (only if it belongs to the user).
 func (s *HistoryService) DeleteHistory(ctx context.Context, id, userID int64) error {
 	n, err := s.client.QueryHistory.Delete().
-		Where(queryhistory.ID(int(id)), queryhistory.UserID(userID)).
+		Where(entqueryhistory.ID(int(id)), entqueryhistory.UserID(userID)).
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("delete query history: %w", err)
@@ -134,7 +134,7 @@ func (s *HistoryService) DeleteHistory(ctx context.Context, id, userID int64) er
 // ClearHistory deletes all query history for a user.
 func (s *HistoryService) ClearHistory(ctx context.Context, userID int64) error {
 	_, err := s.client.QueryHistory.Delete().
-		Where(queryhistory.UserID(userID)).
+		Where(entqueryhistory.UserID(userID)).
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("clear query history: %w", err)
@@ -148,7 +148,10 @@ type FrequentQuery struct {
 	SQLHash        string `json:"sql_hash"`
 	Snippet        string `json:"snippet"`
 	ExecutionCount int    `json:"execution_count"`
-	LastExecutedAt string `json:"last_executed_at"` // SQLite stores datetime as text
+	// time.Time rather than the driver's text: the field held whatever string
+	// the SQLite driver produced for a datetime. The frontend parses it with
+	// new Date(), which RFC3339 satisfies and the old format did not always.
+	LastExecutedAt time.Time `json:"last_executed_at"`
 }
 
 const (
@@ -174,41 +177,51 @@ func (s *HistoryService) GetFrequentQueries(ctx context.Context, userID int64) (
 	}
 	fqMu.RUnlock()
 
-	// Query DB: group by sql_hash, count executions, get latest
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT
-			sql_hash,
-			-- Grouped by hash, so every row in a group has the same SQL; MIN
-			-- picks one. PostgreSQL requires the choice to be explicit, where
-			-- SQLite silently returned an arbitrary row's value.
-			MIN(sql_content) as sql_content,
-			COUNT(*) as execution_count,
-			MAX(created_at) as last_executed_at
-		FROM query_history
-		WHERE user_id = $1 AND sql_hash != ''
-		GROUP BY sql_hash
-		ORDER BY execution_count DESC
-		LIMIT $2`,
-		userID, frequentQueryLimit,
-	)
+	// Grouped by hash, so every row in a group holds the same SQL and MIN picks
+	// one. PostgreSQL requires that choice to be explicit where SQLite returned
+	// an arbitrary row's value.
+	var rows []struct {
+		SQLHash        string    `json:"sql_hash"`
+		SQLContent     string    `json:"sql_content"`
+		ExecutionCount int       `json:"execution_count"`
+		LastExecutedAt time.Time `json:"last_executed_at"`
+	}
+	err := s.client.QueryHistory.Query().
+		Where(
+			entqueryhistory.UserIDEQ(userID),
+			entqueryhistory.SQLHashNEQ(""),
+		).
+		Modify(func(sel *entsql.Selector) {
+			// ent's typed GroupBy cannot order by an aggregate or limit the
+			// result, so this drops to the query builder — the escape hatch
+			// ADR-0010 allows, because the typed API has no expression for it.
+			sel.Select(
+				sel.C(entqueryhistory.FieldSQLHash),
+				entsql.As("MIN("+sel.C(entqueryhistory.FieldSQLContent)+")", "sql_content"),
+				entsql.As("COUNT(*)", "execution_count"),
+				entsql.As("MAX("+sel.C(entqueryhistory.FieldCreatedAt)+")", "last_executed_at"),
+			).
+				GroupBy(sel.C(entqueryhistory.FieldSQLHash)).
+				OrderExpr(entsql.Expr("execution_count DESC")).
+				Limit(frequentQueryLimit)
+		}).
+		Scan(ctx, &rows)
 	if err != nil {
 		return nil, fmt.Errorf("query frequent templates: %w", err)
 	}
-	defer rows.Close()
 
-	results := make([]FrequentQuery, 0, frequentQueryLimit)
-	for rows.Next() {
-		var fq FrequentQuery
-		if err := rows.Scan(&fq.SQLHash, &fq.SQLContent, &fq.ExecutionCount, &fq.LastExecutedAt); err != nil {
-			continue
-		}
-		// Snippet: first 80 chars of SQL
-		snippet := fq.SQLContent
-		if len(snippet) > 80 {
-			snippet = snippet[:80]
-		}
-		fq.Snippet = snippet
-		results = append(results, fq)
+	results := make([]FrequentQuery, 0, len(rows))
+	for _, r := range rows {
+		results = append(results, FrequentQuery{
+			SQLHash:        r.SQLHash,
+			SQLContent:     r.SQLContent,
+			ExecutionCount: r.ExecutionCount,
+			LastExecutedAt: r.LastExecutedAt,
+			// Cut on a rune boundary. Slicing bytes splits a multi-byte
+			// character and produces replacement characters in the UI — the
+			// same defect the audit summary carried.
+			Snippet: truncateRunes(r.SQLContent, frequentQuerySnippetRunes),
+		})
 	}
 
 	// Update cache
@@ -228,13 +241,44 @@ func InvalidateFrequentQueryCache() {
 	fqMu.Unlock()
 }
 
+// frequentQuerySnippetRunes bounds the preview shown for a frequent query.
+const frequentQuerySnippetRunes = 80
+
+// truncateRunes cuts s to at most n runes.
+//
+// Runes rather than bytes: SQL carries Chinese identifiers and comments, and
+// cutting mid-character renders as a replacement glyph.
+func truncateRunes(s string, n int) string {
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	return string(runes[:n])
+}
+
 // cleanupOldRecords removes records exceeding the per-user limit.
-// Uses raw SQL for the subquery-based DELETE (ent doesn't support this pattern directly).
+//
+// Two statements rather than a NOT IN subquery: the ids to keep are read first,
+// then everything else for that user is deleted. The extra round trip buys a
+// query whose column names are checked at compile time, and this runs after a
+// write rather than on a read path.
 func (s *HistoryService) cleanupOldRecords(userID int64) {
-	_, _ = s.database.Exec(
-		`DELETE FROM query_history WHERE user_id = $1 AND id NOT IN (
-			SELECT id FROM query_history WHERE user_id = $2 ORDER BY id DESC LIMIT $3
-		)`,
-		userID, userID, maxHistoryPerUser,
-	)
+	ctx := context.Background()
+	keep, err := s.client.QueryHistory.Query().
+		Where(entqueryhistory.UserIDEQ(userID)).
+		Order(ent.Desc(entqueryhistory.FieldID)).
+		Limit(maxHistoryPerUser).
+		IDs(ctx)
+	if err != nil {
+		return
+	}
+	if len(keep) < maxHistoryPerUser {
+		return // nothing to trim
+	}
+	_, _ = s.client.QueryHistory.Delete().
+		Where(
+			entqueryhistory.UserIDEQ(userID),
+			entqueryhistory.IDNotIn(keep...),
+		).
+		Exec(ctx)
 }
