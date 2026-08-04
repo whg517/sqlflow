@@ -5,7 +5,6 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -18,6 +17,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entwebhooksubscription "github.com/whg517/sqlflow/internal/db/ent/webhooksubscription"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/crypto"
 )
@@ -52,17 +54,19 @@ const (
 
 // WebhookSubscriptionService manages outbound webhook subscriptions.
 type WebhookSubscriptionService struct {
-	db     *sql.DB
-	key    string       // AES encryption key
-	client *http.Client // SSRF-safe HTTP client (reused across calls)
+	// entClient reads and writes subscriptions; client posts to them. The names
+	// are kept distinct because both are "the client" in their own layer.
+	entClient *ent.Client
+	key       string       // AES encryption key
+	client    *http.Client // SSRF-safe HTTP client (reused across calls)
 }
 
 // NewWebhookSubscriptionService creates a new service instance.
-func NewWebhookSubscriptionService(db *sql.DB, encryptionKey string) *WebhookSubscriptionService {
+func NewWebhookSubscriptionService(database *db.DB, encryptionKey string) *WebhookSubscriptionService {
 	return &WebhookSubscriptionService{
-		db:     db,
-		key:    encryptionKey,
-		client: newSSRFSafeClient(),
+		entClient: database.Client(),
+		key:       encryptionKey,
+		client:    newSSRFSafeClient(),
 	}
 }
 
@@ -229,107 +233,97 @@ func (s *WebhookSubscriptionService) Create(ctx context.Context, req CreateSubsc
 
 	eventsJSON, _ := json.Marshal(req.Events)
 
-	var id int64
-	if err := s.db.QueryRowContext(ctx,
-		`INSERT INTO webhook_subscriptions (name, url, encrypted_secret, events, enabled, failure_count, created_by)
-		 VALUES ($1, $2, $3, $4, TRUE, 0, $5) RETURNING id`,
-		req.Name, req.URL, encryptedSecret, string(eventsJSON), createdBy,
-	).Scan(&id); err != nil {
+	created, err := s.entClient.WebhookSubscription.Create().
+		SetName(req.Name).
+		SetURL(req.URL).
+		SetEncryptedSecret(encryptedSecret).
+		SetEvents(string(eventsJSON)).
+		SetEnabled(true).
+		SetFailureCount(0).
+		SetCreatedBy(createdBy).
+		Save(ctx)
+	if err != nil {
 		return nil, "", fmt.Errorf("创建订阅失败: %w", err)
 	}
-	sub, err := s.GetByID(ctx, id)
-	if err != nil {
-		return nil, "", err
-	}
+	id := int64(created.ID)
+	sub := entWebhookSubscriptionToModel(created)
 
 	s.writeAuditLog(ctx, "webhook_subscription.create", 0, createdBy, fmt.Sprintf("创建 Webhook 订阅: %s (ID:%d)", req.Name, id))
 
 	return sub, plainSecret, nil
 }
 
+// entWebhookSubscriptionToModel converts a generated row to the API shape.
+//
+// The secret is deliberately left empty: it is encrypted at rest and no read
+// path returns it. Only delivery decrypts, and it does so into a value that
+// never reaches a response.
+func entWebhookSubscriptionToModel(w *ent.WebhookSubscription) *model.WebhookSubscription {
+	return &model.WebhookSubscription{
+		ID:              int64(w.ID),
+		Name:            w.Name,
+		URL:             w.URL,
+		Secret:          "",
+		Events:          w.Events,
+		Enabled:         w.Enabled,
+		FailureCount:    int(w.FailureCount),
+		LastTriggeredAt: w.LastTriggeredAt,
+		CreatedBy:       w.CreatedBy,
+		CreatedAt:       w.CreatedAt,
+		UpdatedAt:       w.UpdatedAt,
+	}
+}
+
 func (s *WebhookSubscriptionService) GetByID(ctx context.Context, id int64) (*model.WebhookSubscription, error) {
-	row := s.db.QueryRowContext(ctx,
-		`SELECT id, name, url, encrypted_secret, events, enabled, failure_count, last_triggered_at, created_by, created_at, updated_at
-		 FROM webhook_subscriptions WHERE id = $1`, id)
-
-	sub := &model.WebhookSubscription{}
-	var lastTriggered sql.NullTime
-	var enabled bool
-
-	err := row.Scan(&sub.ID, &sub.Name, &sub.URL, &sub.Secret, &sub.Events, &enabled,
-		&sub.FailureCount, &lastTriggered, &sub.CreatedBy, &sub.CreatedAt, &sub.UpdatedAt)
+	w, err := s.entClient.WebhookSubscription.Get(ctx, int(id))
+	if ent.IsNotFound(err) {
+		return nil, ErrNotFound
+	}
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, ErrNotFound
-		}
 		return nil, fmt.Errorf("查询订阅失败: %w", err)
 	}
-
-	sub.Enabled = enabled
-	if lastTriggered.Valid {
-		sub.LastTriggeredAt = &lastTriggered.Time
-	}
-	sub.Secret = ""
-	return sub, nil
+	return entWebhookSubscriptionToModel(w), nil
 }
 
 func (s *WebhookSubscriptionService) List(ctx context.Context) ([]*model.WebhookSubscription, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, url, encrypted_secret, events, enabled, failure_count, last_triggered_at, created_by, created_at, updated_at
-		 FROM webhook_subscriptions ORDER BY created_at DESC`)
+	rows, err := s.entClient.WebhookSubscription.Query().
+		Order(ent.Desc(entwebhooksubscription.FieldCreatedAt)).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询订阅列表失败: %w", err)
 	}
-	defer rows.Close()
-
-	var subs []*model.WebhookSubscription
-	for rows.Next() {
-		sub := &model.WebhookSubscription{}
-		var lastTriggered sql.NullTime
-		var enabled bool
-		var encryptedSecret string
-
-		if err := rows.Scan(&sub.ID, &sub.Name, &sub.URL, &encryptedSecret, &sub.Events, &enabled,
-			&sub.FailureCount, &lastTriggered, &sub.CreatedBy, &sub.CreatedAt, &sub.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("扫描订阅数据失败: %w", err)
-		}
-
-		sub.Enabled = enabled
-		if lastTriggered.Valid {
-			sub.LastTriggeredAt = &lastTriggered.Time
-		}
-		sub.Secret = ""
-		subs = append(subs, sub)
+	subs := make([]*model.WebhookSubscription, 0, len(rows))
+	for _, w := range rows {
+		subs = append(subs, entWebhookSubscriptionToModel(w))
 	}
-	return subs, rows.Err()
+	return subs, nil
 }
 
 // listForDelivery returns all enabled subscriptions with decrypted secrets in a single query pass.
 // This avoids N+1 queries compared to List + per-item decryptSecret.
 func (s *WebhookSubscriptionService) listForDelivery(ctx context.Context) ([]*deliveryTarget, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, url, encrypted_secret, events FROM webhook_subscriptions WHERE enabled = TRUE`)
+	rows, err := s.entClient.WebhookSubscription.Query().
+		Where(entwebhooksubscription.EnabledEQ(true)).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询订阅失败: %w", err)
 	}
-	defer rows.Close()
 
-	var targets []*deliveryTarget
-	for rows.Next() {
-		var id int64
-		var targetURL, encryptedSecret, eventsJSON string
-		if err := rows.Scan(&id, &targetURL, &encryptedSecret, &eventsJSON); err != nil {
-			return nil, fmt.Errorf("扫描订阅数据失败: %w", err)
-		}
+	targets := make([]*deliveryTarget, 0, len(rows))
+	for _, w := range rows {
+		id := int64(w.ID)
+		targetURL := w.URL
 
-		plainSecret, err := crypto.Decrypt(encryptedSecret, s.key)
+		plainSecret, err := crypto.Decrypt(w.EncryptedSecret, s.key)
 		if err != nil {
+			// Skipped rather than failed: one unreadable secret must not stop
+			// delivery to every other subscriber.
 			log.Printf("webhook: failed to decrypt secret for subscription %d: %v", id, err)
 			continue
 		}
 
 		var events []string
-		if err := json.Unmarshal([]byte(eventsJSON), &events); err != nil {
+		if err := json.Unmarshal([]byte(w.Events), &events); err != nil {
 			log.Printf("webhook: invalid events JSON for subscription %d: %v", id, err)
 			continue
 		}
@@ -341,7 +335,7 @@ func (s *WebhookSubscriptionService) listForDelivery(ctx context.Context) ([]*de
 			Events:      events,
 		})
 	}
-	return targets, rows.Err()
+	return targets, nil
 }
 
 func (s *WebhookSubscriptionService) Update(ctx context.Context, id int64, req UpdateSubscriptionRequest, username string) (*model.WebhookSubscription, error) {
@@ -377,16 +371,19 @@ func (s *WebhookSubscriptionService) Update(ctx context.Context, id int64, req U
 		events = string(eventsJSON)
 	}
 
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE webhook_subscriptions SET name = $1, url = $2, events = $3, updated_at = now() WHERE id = $4`,
-		name, webURL, events, id)
+	updated, err := s.entClient.WebhookSubscription.UpdateOneID(int(id)).
+		SetName(name).
+		SetURL(webURL).
+		SetEvents(events).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新订阅失败: %w", err)
 	}
 
 	s.writeAuditLog(ctx, "webhook_subscription.update", 0, username, fmt.Sprintf("更新 Webhook 订阅: %s (ID:%d)", name, id))
 
-	return s.GetByID(ctx, id)
+	return entWebhookSubscriptionToModel(updated), nil
 }
 
 func (s *WebhookSubscriptionService) Delete(ctx context.Context, id int64, username string) error {
@@ -395,13 +392,12 @@ func (s *WebhookSubscriptionService) Delete(ctx context.Context, id int64, usern
 		return err
 	}
 
-	result, err := s.db.ExecContext(ctx, `DELETE FROM webhook_subscriptions WHERE id = $1`, id)
+	err = s.entClient.WebhookSubscription.DeleteOneID(int(id)).Exec(ctx)
+	if ent.IsNotFound(err) {
+		return ErrNotFound
+	}
 	if err != nil {
 		return fmt.Errorf("删除订阅失败: %w", err)
-	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		return ErrNotFound
 	}
 
 	s.writeAuditLog(ctx, "webhook_subscription.delete", 0, username, fmt.Sprintf("删除 Webhook 订阅: %s (ID:%d)", existing.Name, id))
@@ -417,16 +413,21 @@ func (s *WebhookSubscriptionService) Toggle(ctx context.Context, id int64, usern
 
 	newEnabled := !existing.Enabled
 	// Atomic: reset failure_count on re-enable, keep on disable
-	var failureCount int
+	var failureCount int64
 	if newEnabled {
 		failureCount = 0
 	} else {
-		failureCount = existing.FailureCount
+		failureCount = int64(existing.FailureCount)
 	}
 
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE webhook_subscriptions SET enabled = $1, failure_count = $2, updated_at = now() WHERE id = $3`,
-		boolToInt(newEnabled), failureCount, id)
+	// The boolean goes through as a boolean. It used to be converted to 0/1,
+	// which PostgreSQL rejects outright for a boolean column — so toggling a
+	// subscription failed every time.
+	toggled, err := s.entClient.WebhookSubscription.UpdateOneID(int(id)).
+		SetEnabled(newEnabled).
+		SetFailureCount(failureCount).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("切换订阅状态失败: %w", err)
 	}
@@ -437,7 +438,7 @@ func (s *WebhookSubscriptionService) Toggle(ctx context.Context, id int64, usern
 	}
 	s.writeAuditLog(ctx, "webhook_subscription.toggle", 0, username, fmt.Sprintf("%s Webhook 订阅: %s (ID:%d)", action, existing.Name, id))
 
-	return s.GetByID(ctx, id)
+	return entWebhookSubscriptionToModel(toggled), nil
 }
 
 // --- Test Send ---
@@ -526,9 +527,12 @@ func (s *WebhookSubscriptionService) deliverWithRetry(subID int64, targetURL, pl
 func (s *WebhookSubscriptionService) handleSuccess(subID int64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE webhook_subscriptions SET failure_count = 0, last_triggered_at = now(), updated_at = now() WHERE id = $1`,
-		subID)
+	now := time.Now()
+	err := s.entClient.WebhookSubscription.UpdateOneID(int(subID)).
+		SetFailureCount(0).
+		SetLastTriggeredAt(now).
+		SetUpdatedAt(now).
+		Exec(ctx)
 	if err != nil {
 		log.Printf("webhook: failed to update success for subscription %d: %v", subID, err)
 	}
@@ -538,40 +542,52 @@ func (s *WebhookSubscriptionService) handleFailure(subID int64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Atomic: increment and check in single SQL statement
-	var result struct {
-		FailureCount int
-		Enabled      int
-	}
-	err := s.db.QueryRowContext(ctx,
-		`UPDATE webhook_subscriptions SET failure_count = failure_count + 1, updated_at = now() WHERE id = $1
-		 RETURNING failure_count, enabled`, subID).Scan(&result.FailureCount, &result.Enabled)
+	// AddFailureCount is an atomic increment, so two failing deliveries do not
+	// lose a count between them.
+	updated, err := s.entClient.WebhookSubscription.UpdateOneID(int(subID)).
+		AddFailureCount(1).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
 	if err != nil {
 		log.Printf("webhook: failed to increment failure for subscription %d: %v", subID, err)
 		return
 	}
 
-	if result.FailureCount >= MaxConsecutiveFailures && result.Enabled == 1 {
-		_, err = s.db.ExecContext(ctx,
-			`UPDATE webhook_subscriptions SET enabled = FALSE, updated_at = now() WHERE id = $1 AND enabled = TRUE`,
-			subID)
-		if err != nil {
-			log.Printf("webhook: failed to auto-disable subscription %d: %v", subID, err)
-			return
-		}
-		log.Printf("webhook: subscription %d auto-disabled after %d consecutive failures", subID, result.FailureCount)
+	if updated.FailureCount < MaxConsecutiveFailures || !updated.Enabled {
+		return
+	}
+
+	// Guarded on enabled so that two deliveries failing at once disable it
+	// once, and a subscription an operator disabled meanwhile is left alone.
+	// The comparison read enabled into an int, which PostgreSQL will not scan a
+	// boolean into — so auto-disable never ran at all.
+	n, err := s.entClient.WebhookSubscription.Update().
+		Where(
+			entwebhooksubscription.IDEQ(int(subID)),
+			entwebhooksubscription.EnabledEQ(true),
+		).
+		SetEnabled(false).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		log.Printf("webhook: failed to auto-disable subscription %d: %v", subID, err)
+		return
+	}
+	if n > 0 {
+		log.Printf("webhook: subscription %d auto-disabled after %d consecutive failures", subID, updated.FailureCount)
 	}
 }
 
 // decryptSecret decrypts the stored encrypted secret for a subscription.
 func (s *WebhookSubscriptionService) decryptSecret(ctx context.Context, id int64) (string, error) {
-	var encryptedSecret string
-	err := s.db.QueryRowContext(ctx,
-		`SELECT encrypted_secret FROM webhook_subscriptions WHERE id = $1`, id).Scan(&encryptedSecret)
+	encryptedSecret, err := s.entClient.WebhookSubscription.Query().
+		Where(entwebhooksubscription.IDEQ(int(id))).
+		Select(entwebhooksubscription.FieldEncryptedSecret).
+		String(ctx)
+	if ent.IsNotFound(err) {
+		return "", ErrNotFound
+	}
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return "", ErrNotFound
-		}
 		return "", fmt.Errorf("查询加密密钥失败: %w", err)
 	}
 	plain, err := crypto.Decrypt(encryptedSecret, s.key)
@@ -618,22 +634,22 @@ func (s *WebhookSubscriptionService) sendWebhookRequest(targetURL, secret string
 // --- Audit Logging ---
 
 func (s *WebhookSubscriptionService) writeAuditLog(ctx context.Context, action string, userID int64, username, details string) {
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO audit_logs (user_id, action, ip_address, error_message, created_at) VALUES ($1, $2, '', $3, now())`,
-		userID, action, fmt.Sprintf("%s — %s", username, details))
+	err := s.entClient.AuditLog.Create().
+		SetUserID(userID).
+		SetAction(action).
+		SetIPAddress("").
+		SetErrorMessage(fmt.Sprintf("%s — %s", username, details)).
+		SetCreatedAt(time.Now()).
+		Exec(ctx)
 	if err != nil {
+		// A failed audit write must not fail the operation it describes, but it
+		// must be visible: the records nobody can find are the ones operations
+		// needs most.
 		log.Printf("webhook: failed to write audit log: %v", err)
 	}
 }
 
 // --- Utility ---
-
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
 
 func maskWebhookURL(rawURL string) string {
 	if len(rawURL) <= 12 {

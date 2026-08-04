@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -18,17 +19,22 @@ import (
 	"sync"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entticketnotificationlog "github.com/whg517/sqlflow/internal/db/ent/ticketnotificationlog"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
 // Service handles webhook (DingTalk-compatible) and Feishu notification logic.
 type Service struct {
-	webhookURL       string  // webhook
-	secret           string  // webhook secret
-	enabled          bool    // webhook enabled
-	feishuURL        string  // Feishu webhook (legacy single-URL mode)
-	feishuEnabled    bool    // Feishu
-	db               *sql.DB // notification log (nil = no dedup)
+	webhookURL    string // webhook
+	secret        string // webhook secret
+	enabled       bool   // webhook enabled
+	feishuURL     string // Feishu webhook (legacy single-URL mode)
+	feishuEnabled bool   // Feishu
+	// entClient backs notification-log dedup; nil disables it. Named apart
+	// from client, which is the HTTP client this service posts with.
+	entClient        *ent.Client
 	client           *http.Client
 	feishuWebhookSvc *FeishuService // multi-webhook DB-backed service
 	mu               sync.RWMutex
@@ -50,7 +56,19 @@ type Deps struct {
 	Feishu *FeishuService
 	// DB backs notification-log deduplication. Without it every notification is
 	// sent, including repeats.
-	DB *sql.DB
+	DB *db.DB
+}
+
+// entClientOrNil unwraps the platform handle, tolerating a nil one.
+//
+// Notification dedup is optional — several tests and the no-database
+// configuration pass nothing — so this keeps the nil check in one place rather
+// than at both call sites.
+func entClientOrNil(database *db.DB) *ent.Client {
+	if database == nil {
+		return nil
+	}
+	return database.Client()
 }
 
 // NewService creates a Service from its dependencies.
@@ -62,7 +80,7 @@ func NewService(deps Deps) *Service {
 		feishuURL:        deps.FeishuURL,
 		feishuEnabled:    deps.FeishuURL != "",
 		feishuWebhookSvc: deps.Feishu,
-		db:               deps.DB,
+		entClient:        entClientOrNil(deps.DB),
 		client:           &http.Client{Timeout: 5 * time.Second},
 	}
 }
@@ -135,40 +153,52 @@ func (s *Service) IsEnabled() bool {
 // been sent (idempotency). Returns true if the notification should proceed.
 func (s *Service) shouldNotify(ctx context.Context, ticketID int64, eventType string) bool {
 	s.mu.RLock()
-	db := s.db
+	entClient := s.entClient
 	s.mu.RUnlock()
 
-	if db == nil {
+	if entClient == nil {
 		return true // no dedup available
 	}
 
-	var count int
-	err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM ticket_notification_logs WHERE ticket_id = $1 AND event_type = $2`,
-		ticketID, eventType,
-	).Scan(&count)
+	sent, err := entClient.TicketNotificationLog.Query().
+		Where(
+			entticketnotificationlog.TicketIDEQ(ticketID),
+			entticketnotificationlog.EventTypeEQ(eventType),
+		).
+		Exist(ctx)
 	if err != nil {
+		// A dedup lookup that fails allows the send: a duplicate notification is
+		// a smaller failure than a silently missing one.
 		log.Printf("notify: check log: %v", err)
-		return true // on error, allow notification
+		return true
 	}
-	return count == 0
+	return !sent
 }
 
 // recordNotification records that a notification was sent for deduplication.
 func (s *Service) recordNotification(ctx context.Context, ticketID int64, eventType string) {
 	s.mu.RLock()
-	db := s.db
+	entClient := s.entClient
 	s.mu.RUnlock()
 
-	if db == nil {
+	if entClient == nil {
 		return
 	}
 
-	_, err := db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO ticket_notification_logs (ticket_id, event_type) VALUES ($1, $2)`,
-		ticketID, eventType,
-	)
-	if err != nil {
+	// ON CONFLICT DO NOTHING against the unique index on (ticket_id,
+	// event_type). This was written as INSERT OR IGNORE, which is SQLite's
+	// spelling and a syntax error on PostgreSQL — so no dedup record was ever
+	// written, and every re-trigger sent the notification again.
+	err := entClient.TicketNotificationLog.Create().
+		SetTicketID(ticketID).
+		SetEventType(eventType).
+		OnConflictColumns(
+			entticketnotificationlog.FieldTicketID,
+			entticketnotificationlog.FieldEventType,
+		).
+		DoNothing().
+		Exec(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		log.Printf("notify: record log: %v", err)
 	}
 }

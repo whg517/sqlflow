@@ -129,13 +129,13 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 
 	// Feishu 多 webhook service 不依赖 NotifyService，先构造它就能让 NotifyService
 	// 一次性拿全依赖，不再需要事后 setter。
-	feishuWebhookSvc := notify.NewFeishuService(database.DB, cfg.EncryptionKey)
+	feishuWebhookSvc := notify.NewFeishuService(database, cfg.EncryptionKey)
 	notifySvc := notify.NewService(notify.Deps{
 		WebhookURL: cfg.Notify.WebhookURL,
 		Secret:     cfg.Notify.Secret,
 		FeishuURL:  cfg.Feishu.WebhookURL,
 		Feishu:     feishuWebhookSvc,
-		DB:         database.DB,
+		DB:         database,
 	})
 
 	// QueryService 依赖 ds/perm/audit + 连接池
@@ -208,7 +208,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 
 	// router 内部曾各自 new 的 service（提到 Container，消除重复实例）
 	notifPrefSvc := notify.NewPreferenceService(database)
-	webhookSubSvc := notify.NewWebhookSubscriptionService(database.DB, cfg.EncryptionKey)
+	webhookSubSvc := notify.NewWebhookSubscriptionService(database, cfg.EncryptionKey)
 	// slaSvc 已在上面构造，复用同一个实例（修复原 router.go 重复 new 的隐患）
 
 	// --- admin seed ---

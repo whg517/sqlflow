@@ -14,7 +14,7 @@ import (
 func setupWebhookSubscriptionTest(t *testing.T) (*echo.Echo, *WebhookSubscriptionService, *SubscriptionHandler) {
 	t.Helper()
 	d := testutil.NewDB(t)
-	svc := NewWebhookSubscriptionService(d.DB, "test-encryption-key-32byte-len!!")
+	svc := NewWebhookSubscriptionService(d, "test-encryption-key-32byte-len!!")
 	h := NewSubscriptionHandler(svc)
 	return echo.New(), svc, h
 }

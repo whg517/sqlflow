@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entnotificationpreference "github.com/whg517/sqlflow/internal/db/ent/notificationpreference"
 )
 
 // ---------------------------------------------------------------------------
@@ -34,16 +36,16 @@ var AllowedChannels = map[string]bool{
 
 // Preference represents a single user-event preference row.
 type Preference struct {
-	ID        int64    `json:"id"`
-	UserID    int64    `json:"user_id"`
-	EventType string   `json:"event_type"`
-	Channels  []string `json:"channels"`
-	UpdatedAt string   `json:"updated_at"`
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	EventType string    `json:"event_type"`
+	Channels  []string  `json:"channels"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // PreferenceService manages per-user notification preferences.
 type PreferenceService struct {
-	database *db.DB
+	client *ent.Client
 
 	// prefCache caches per-user preferences to avoid N+1 in Service.
 	// Key: "userID:eventType", Value: channels slice (nil = use defaults).
@@ -55,7 +57,7 @@ type PreferenceService struct {
 // NewPreferenceService creates a new service.
 func NewPreferenceService(database *db.DB) *PreferenceService {
 	return &PreferenceService{
-		database:  database,
+		client:    database.Client(),
 		prefCache: make(map[string][]string),
 	}
 }
@@ -67,24 +69,26 @@ func NewPreferenceService(database *db.DB) *PreferenceService {
 // GetPreferences returns all preferences for a user.
 // If the user has no saved preferences, returns defaults for all event types.
 func (s *PreferenceService) GetPreferences(ctx context.Context, userID int64) ([]Preference, error) {
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT id, user_id, event_type, channels, updated_at
-		 FROM notification_preferences
-		 WHERE user_id = $1
-		 ORDER BY event_type`, userID)
+	rows, err := s.client.NotificationPreference.Query().
+		Where(entnotificationpreference.UserIDEQ(userID)).
+		Order(ent.Asc(entnotificationpreference.FieldEventType)).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询通知偏好失败: %w", err)
 	}
-	defer rows.Close()
 
-	prefs := make([]Preference, 0)
-	for rows.Next() {
-		var p Preference
-		var channelsJSON string
-		if err := rows.Scan(&p.ID, &p.UserID, &p.EventType, &channelsJSON, &p.UpdatedAt); err != nil {
-			continue
+	prefs := make([]Preference, 0, len(rows))
+	for _, r := range rows {
+		p := Preference{
+			ID:        int64(r.ID),
+			UserID:    r.UserID,
+			EventType: r.EventType,
+			UpdatedAt: r.UpdatedAt,
 		}
-		_ = json.Unmarshal([]byte(channelsJSON), &p.Channels)
+		// Channels are stored as a JSON array. A row that will not parse is
+		// carried through with no channels rather than dropped, so the user can
+		// still see and correct the entry.
+		_ = json.Unmarshal([]byte(r.Channels), &p.Channels)
 		prefs = append(prefs, p)
 	}
 
@@ -121,15 +125,22 @@ func (s *PreferenceService) UpdatePreferences(ctx context.Context, userID int64,
 		}
 
 		channelsJSON, _ := json.Marshal(pref.Channels)
-		now := time.Now().Format("2006-01-02 15:04:05")
+		now := time.Now()
 
-		_, err := s.database.DB.ExecContext(ctx,
-			`INSERT INTO notification_preferences (user_id, event_type, channels, updated_at)
-			 VALUES ($1, $2, $3, $4)
-			 ON CONFLICT(user_id, event_type) DO UPDATE SET channels = $5, updated_at = $6`,
-			userID, pref.EventType, string(channelsJSON), now,
-			string(channelsJSON), now,
-		)
+		// Upsert on (user_id, event_type): the UI submits the whole set every
+		// time without knowing which rows already exist, so a plain insert would
+		// collide and a plain update would silently do nothing for a new one.
+		err := s.client.NotificationPreference.Create().
+			SetUserID(userID).
+			SetEventType(pref.EventType).
+			SetChannels(string(channelsJSON)).
+			SetUpdatedAt(now).
+			OnConflictColumns(
+				entnotificationpreference.FieldUserID,
+				entnotificationpreference.FieldEventType,
+			).
+			UpdateNewValues().
+			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("更新通知偏好失败: %w", err)
 		}

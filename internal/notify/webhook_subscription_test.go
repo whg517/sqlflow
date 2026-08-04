@@ -107,12 +107,6 @@ func TestOutboundFormatSubscriptionNoSecret(t *testing.T) {
 	}
 }
 
-func TestOutboundBoolToInt(t *testing.T) {
-	if boolToInt(true) != 1 || boolToInt(false) != 0 {
-		t.Error("boolToInt failed")
-	}
-}
-
 func TestOutboundMaxURLLength(t *testing.T) {
 	if MaxWebhookURLLength != 2048 {
 		t.Errorf("MaxWebhookURLLength = %d, want 2048", MaxWebhookURLLength)

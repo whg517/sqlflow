@@ -3,7 +3,6 @@ package notify
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -13,8 +12,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entfeishudeadletter "github.com/whg517/sqlflow/internal/db/ent/feishudeadletter"
+	entfeishuwebhook "github.com/whg517/sqlflow/internal/db/ent/feishuwebhook"
 	"github.com/whg517/sqlflow/internal/platform/crypto"
-	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 )
 
 // FeishuWebhook represents a stored Feishu webhook configuration.
@@ -27,8 +29,10 @@ type FeishuWebhook struct {
 	Enabled      bool    `json:"enabled"`
 	RateLimitRPS float64 `json:"rate_limit_rps"`
 	CreatedBy    string  `json:"created_by"`
-	CreatedAt    string  `json:"created_at"`
-	UpdatedAt    string  `json:"updated_at"`
+	// time.Time rather than the driver's text, matching every other timestamp
+	// the API returns.
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // FeishuCreateRequest is the input for creating a new webhook.
@@ -50,13 +54,13 @@ type FeishuUpdateRequest struct {
 
 // FeishuDeadLetter represents a failed notification queued for retry.
 type FeishuDeadLetter struct {
-	ID            int64  `json:"id"`
-	WebhookID     int64  `json:"webhook_id"`
-	Payload       string `json:"payload"`
-	ErrorMessage  string `json:"error_message"`
-	AttemptCount  int    `json:"attempt_count"`
-	LastAttemptAt string `json:"last_attempt_at"`
-	CreatedAt     string `json:"created_at"`
+	ID            int64     `json:"id"`
+	WebhookID     int64     `json:"webhook_id"`
+	Payload       string    `json:"payload"`
+	ErrorMessage  string    `json:"error_message"`
+	AttemptCount  int64     `json:"attempt_count"`
+	LastAttemptAt time.Time `json:"last_attempt_at"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 const (
@@ -69,8 +73,8 @@ const (
 
 // FeishuService manages Feishu webhook CRUD, encryption, and SSRF protection.
 type FeishuService struct {
-	db  *sql.DB
-	key string // AES encryption key (same as config.EncryptionKey)
+	client *ent.Client
+	key    string // AES encryption key (same as config.EncryptionKey)
 
 	// In-memory rate limiters per webhook ID
 	mu       sync.Mutex
@@ -83,9 +87,9 @@ type rateLimiter struct {
 }
 
 // NewFeishuService creates a new service instance.
-func NewFeishuService(db *sql.DB, encryptionKey string) *FeishuService {
+func NewFeishuService(database *db.DB, encryptionKey string) *FeishuService {
 	return &FeishuService{
-		db:       db,
+		client:   database.Client(),
 		key:      encryptionKey,
 		limiters: make(map[int64]*rateLimiter),
 	}
@@ -180,14 +184,13 @@ func (s *FeishuService) Create(ctx context.Context, req FeishuCreateRequest, cre
 
 	// Check duplicate by URL hash
 	urlHash := hashURL(req.WebhookURL)
-	var count int
-	err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM feishu_webhooks WHERE url_hash = $1`, urlHash,
-	).Scan(&count)
+	exists, err := s.client.FeishuWebhook.Query().
+		Where(entfeishuwebhook.URLHashEQ(urlHash)).
+		Exist(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("检查重复 URL: %w", err)
 	}
-	if count > 0 {
+	if exists {
 		return nil, fmt.Errorf("该 Webhook URL 已存在")
 	}
 
@@ -205,62 +208,65 @@ func (s *FeishuService) Create(ctx context.Context, req FeishuCreateRequest, cre
 		req.RateLimitRPS = 1.0
 	}
 
-	var id int64
-	if err := s.db.QueryRowContext(ctx,
-		`INSERT INTO feishu_webhooks (name, encrypted_url, url_hash, scene, enabled, rate_limit_rps, created_by)
-		 VALUES ($1, $2, $3, $4, TRUE, $5, $6) RETURNING id`,
-		req.Name, encryptedURL, urlHash, req.Scene, req.RateLimitRPS, createdBy,
-	).Scan(&id); err != nil {
+	created, err := s.client.FeishuWebhook.Create().
+		SetName(req.Name).
+		SetEncryptedURL(encryptedURL).
+		SetURLHash(urlHash).
+		SetScene(req.Scene).
+		SetEnabled(true).
+		SetRateLimitRps(req.RateLimitRPS).
+		SetCreatedBy(createdBy).
+		Save(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("插入记录失败: %w", err)
 	}
-	return s.GetByID(ctx, id)
+	return entFeishuWebhookToModel(created), nil
 }
 
 // GetByID returns a webhook by ID.
 func (s *FeishuService) GetByID(ctx context.Context, id int64) (*FeishuWebhook, error) {
-	row := s.db.QueryRowContext(ctx,
-		`SELECT id, name, encrypted_url, url_hash, scene, enabled, rate_limit_rps, created_by, created_at, updated_at
-		 FROM feishu_webhooks WHERE id = $1`, id,
-	)
-
-	var wh FeishuWebhook
-	var enabled bool
-	if err := row.Scan(&wh.ID, &wh.Name, &wh.EncryptedURL, &wh.URLHash, &wh.Scene, &enabled, &wh.RateLimitRPS, &wh.CreatedBy, &wh.CreatedAt, &wh.UpdatedAt); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("webhook 不存在 (id=%d)", id)
-		}
+	wh, err := s.client.FeishuWebhook.Get(ctx, int(id))
+	if ent.IsNotFound(err) {
+		return nil, fmt.Errorf("webhook 不存在 (id=%d)", id)
+	}
+	if err != nil {
 		return nil, err
 	}
-	wh.Enabled = enabled
-	return &wh, nil
+	return entFeishuWebhookToModel(wh), nil
+}
+
+// entFeishuWebhookToModel converts a generated webhook to the service shape.
+func entFeishuWebhookToModel(w *ent.FeishuWebhook) *FeishuWebhook {
+	return &FeishuWebhook{
+		ID:           int64(w.ID),
+		Name:         w.Name,
+		EncryptedURL: w.EncryptedURL,
+		URLHash:      w.URLHash,
+		Scene:        w.Scene,
+		Enabled:      w.Enabled,
+		RateLimitRPS: w.RateLimitRps,
+		CreatedBy:    w.CreatedBy,
+		CreatedAt:    w.CreatedAt,
+		UpdatedAt:    w.UpdatedAt,
+	}
 }
 
 // List returns all webhooks (URLs masked for non-admin views).
 func (s *FeishuService) List(ctx context.Context, showFullURL bool) ([]map[string]interface{}, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, encrypted_url, scene, enabled, rate_limit_rps, created_by, created_at, updated_at
-		 FROM feishu_webhooks ORDER BY id`,
-	)
+	rows, err := s.client.FeishuWebhook.Query().
+		Order(ent.Asc(entfeishuwebhook.FieldID)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var results []map[string]interface{}
-	for rows.Next() {
-		var id int64
-		var name, encryptedURL, scene, createdBy, createdAt, updatedAt string
-		var enabled bool
-		var rateLimitRPS float64
-
-		if err := rows.Scan(&id, &name, &encryptedURL, &scene, &enabled, &rateLimitRPS, &createdBy, &createdAt, &updatedAt); err != nil {
-			return nil, err
-		}
-
-		// Decrypt URL for potential display
-		decryptedURL, err := crypto.Decrypt(encryptedURL, s.key)
+	results := make([]map[string]interface{}, 0, len(rows))
+	for _, w := range rows {
+		// A webhook whose URL will not decrypt is still listed: hiding it would
+		// leave an entry the operator cannot see or delete.
+		decryptedURL, err := crypto.Decrypt(w.EncryptedURL, s.key)
 		if err != nil {
-			log.Printf("feishu webhook: decrypt url id=%d: %v", id, err)
+			log.Printf("feishu webhook: decrypt url id=%d: %v", w.ID, err)
 			decryptedURL = "[解密失败]"
 		}
 
@@ -270,15 +276,15 @@ func (s *FeishuService) List(ctx context.Context, showFullURL bool) ([]map[strin
 		}
 
 		results = append(results, map[string]interface{}{
-			"id":             id,
-			"name":           name,
+			"id":             int64(w.ID),
+			"name":           w.Name,
 			"webhook_url":    displayURL,
-			"scene":          scene,
-			"enabled":        enabled,
-			"rate_limit_rps": rateLimitRPS,
-			"created_by":     createdBy,
-			"created_at":     createdAt,
-			"updated_at":     updatedAt,
+			"scene":          w.Scene,
+			"enabled":        w.Enabled,
+			"rate_limit_rps": w.RateLimitRps,
+			"created_by":     w.CreatedBy,
+			"created_at":     w.CreatedAt,
+			"updated_at":     w.UpdatedAt,
 		})
 	}
 	return results, nil
@@ -291,86 +297,82 @@ func (s *FeishuService) Update(ctx context.Context, id int64, req FeishuUpdateRe
 		return nil, err
 	}
 
-	sets := []string{}
-	args := []interface{}{}
+	// The builder replaces a slice of "column = ?" fragments whose placeholders
+	// were numbered after assembly. Only fields the request set are touched, so
+	// a partial update still cannot blank the rest.
+	upd := s.client.FeishuWebhook.UpdateOneID(int(id))
+	changed := false
 
 	if req.Name != nil {
-		sets = append(sets, "name = ?")
-		args = append(args, *req.Name)
+		upd = upd.SetName(*req.Name)
+		changed = true
 	}
-
 	if req.WebhookURL != nil {
 		if err := ValidateWebhookURL(*req.WebhookURL); err != nil {
 			return nil, fmt.Errorf("URL 校验失败: %w", err)
 		}
 		urlHash := hashURL(*req.WebhookURL)
-		// Check duplicate (excluding self)
-		var count int
-		err := s.db.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM feishu_webhooks WHERE url_hash = $1 AND id != $2`, urlHash, id,
-		).Scan(&count)
+		// Excluding self: re-saving a webhook without changing its URL must not
+		// collide with its own row.
+		taken, err := s.client.FeishuWebhook.Query().
+			Where(
+				entfeishuwebhook.URLHashEQ(urlHash),
+				entfeishuwebhook.IDNEQ(int(id)),
+			).
+			Exist(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("检查重复 URL: %w", err)
 		}
-		if count > 0 {
+		if taken {
 			return nil, fmt.Errorf("该 Webhook URL 已被其他配置使用")
 		}
 		encryptedURL, err := crypto.Encrypt(*req.WebhookURL, s.key)
 		if err != nil {
 			return nil, fmt.Errorf("加密 Webhook URL 失败: %w", err)
 		}
-		sets = append(sets, "encrypted_url = ?", "url_hash = ?")
-		args = append(args, encryptedURL, urlHash)
-		_ = existing // suppress unused
+		upd = upd.SetEncryptedURL(encryptedURL).SetURLHash(urlHash)
+		changed = true
 	}
-
 	if req.Scene != nil {
-		sets = append(sets, "scene = ?")
-		args = append(args, *req.Scene)
+		upd = upd.SetScene(*req.Scene)
+		changed = true
 	}
-
 	if req.Enabled != nil {
-		sets = append(sets, "enabled = ?")
-		args = append(args, *req.Enabled)
+		upd = upd.SetEnabled(*req.Enabled)
+		changed = true
 	}
-
 	if req.RateLimitRPS != nil {
-		sets = append(sets, "rate_limit_rps = ?")
-		args = append(args, *req.RateLimitRPS)
+		upd = upd.SetRateLimitRps(*req.RateLimitRPS)
+		changed = true
 	}
 
-	if len(sets) == 0 {
+	if !changed {
 		return existing, nil
 	}
 
-	sets = append(sets, "updated_at = now()")
-	args = append(args, id)
-
-	// Numbered once, after every fragment is in place: each fragment writes ?
-	// because it cannot know how many placeholders precede it.
-	query := sqlutil.NumberPlaceholders(
-		"UPDATE feishu_webhooks SET " + strings.Join(sets, ", ") + " WHERE id = ?")
-	if _, err := s.db.ExecContext(ctx, query, args...); err != nil {
+	updated, err := upd.SetUpdatedAt(time.Now()).Save(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("更新失败: %w", err)
 	}
-
-	return s.GetByID(ctx, id)
+	return entFeishuWebhookToModel(updated), nil
 }
 
 // Delete removes a webhook and its dead letter entries.
 func (s *FeishuService) Delete(ctx context.Context, id int64) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM feishu_dead_letters WHERE webhook_id = $1`, id); err != nil {
+	// Dead letters first: they reference the webhook, and leaving them would
+	// keep a retry queue pointing at a configuration that no longer exists.
+	if _, err := s.client.FeishuDeadLetter.Delete().
+		Where(entfeishudeadletter.WebhookIDEQ(id)).
+		Exec(ctx); err != nil {
 		log.Printf("feishu webhook: delete dead letters for webhook %d: %v", id, err)
 	}
 
-	result, err := s.db.ExecContext(ctx, `DELETE FROM feishu_webhooks WHERE id = $1`, id)
+	err := s.client.FeishuWebhook.DeleteOneID(int(id)).Exec(ctx)
+	if ent.IsNotFound(err) {
+		return fmt.Errorf("webhook 不存在 (id=%d)", id)
+	}
 	if err != nil {
 		return fmt.Errorf("删除失败: %w", err)
-	}
-
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		return fmt.Errorf("webhook 不存在 (id=%d)", id)
 	}
 
 	// Clean up rate limiter
@@ -391,36 +393,29 @@ func (s *FeishuService) GetEnabledWebhooks(ctx context.Context) ([]struct {
 	ID  int64
 	URL string
 }, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, encrypted_url FROM feishu_webhooks WHERE enabled = TRUE`,
-	)
+	rows, err := s.client.FeishuWebhook.Query().
+		Where(entfeishuwebhook.EnabledEQ(true)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var results []struct {
+	results := make([]struct {
 		ID  int64
 		URL string
-	}
-
-	for rows.Next() {
-		var id int64
-		var encryptedURL string
-		if err := rows.Scan(&id, &encryptedURL); err != nil {
-			return nil, err
-		}
-
-		decryptedURL, err := crypto.Decrypt(encryptedURL, s.key)
+	}, 0, len(rows))
+	for _, w := range rows {
+		decryptedURL, err := crypto.Decrypt(w.EncryptedURL, s.key)
 		if err != nil {
-			log.Printf("feishu webhook: decrypt url id=%d: %v", id, err)
+			// Skipped rather than failed: one unreadable webhook must not stop
+			// the notification reaching every other destination.
+			log.Printf("feishu webhook: decrypt url id=%d: %v", w.ID, err)
 			continue
 		}
-
 		results = append(results, struct {
 			ID  int64
 			URL string
-		}{ID: id, URL: decryptedURL})
+		}{ID: int64(w.ID), URL: decryptedURL})
 	}
 	return results, nil
 }
@@ -451,35 +446,36 @@ func (s *FeishuService) CheckRateLimit(webhookID int64, rps float64) bool {
 
 // RecordDeadLetter stores a failed notification for later retry.
 func (s *FeishuService) RecordDeadLetter(ctx context.Context, webhookID int64, payload, errMsg string) error {
-	// Check if there's an existing entry for this payload
-	var existingID int64
-	var attemptCount int
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, attempt_count FROM feishu_dead_letters WHERE webhook_id = $1 AND payload = $2`,
-		webhookID, payload,
-	).Scan(&existingID, &attemptCount)
-
-	if err == sql.ErrNoRows {
-		// New dead letter
-		_, err := s.db.ExecContext(ctx,
-			`INSERT INTO feishu_dead_letters (webhook_id, payload, error_message, attempt_count, last_attempt_at)
-			 VALUES ($1, $2, $3, 1, now())`,
-			webhookID, payload, errMsg,
-		)
-		return err
+	// Read then write, because (webhook_id, payload) carries no unique
+	// constraint. Two workers failing the same notification at once can
+	// therefore create two rows, which shows up as a duplicated retry. Closing
+	// that needs a schema change rather than a different query here.
+	existing, err := s.client.FeishuDeadLetter.Query().
+		Where(
+			entfeishudeadletter.WebhookIDEQ(webhookID),
+			entfeishudeadletter.PayloadEQ(payload),
+		).
+		First(ctx)
+	if ent.IsNotFound(err) {
+		return s.client.FeishuDeadLetter.Create().
+			SetWebhookID(webhookID).
+			SetPayload(payload).
+			SetErrorMessage(errMsg).
+			SetAttemptCount(1).
+			SetLastAttemptAt(time.Now()).
+			Exec(ctx)
 	}
-
 	if err != nil {
 		return err
 	}
 
-	// Update existing
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE feishu_dead_letters SET attempt_count = $1, error_message = $2, last_attempt_at = now()
-		 WHERE id = $3`,
-		attemptCount+1, errMsg, existingID,
-	)
-	return err
+	// AddAttemptCount is an atomic increment, so two workers updating the same
+	// row do not lose a count between them.
+	return s.client.FeishuDeadLetter.UpdateOneID(existing.ID).
+		AddAttemptCount(1).
+		SetErrorMessage(errMsg).
+		SetLastAttemptAt(time.Now()).
+		Exec(ctx)
 }
 
 // ListDeadLetters returns dead letter entries, optionally filtered by webhook ID.
@@ -488,47 +484,40 @@ func (s *FeishuService) ListDeadLetters(ctx context.Context, webhookID int64, li
 		limit = 50
 	}
 
-	var rows *sql.Rows
-	var err error
-
+	q := s.client.FeishuDeadLetter.Query()
 	if webhookID > 0 {
-		rows, err = s.db.QueryContext(ctx,
-			`SELECT id, webhook_id, payload, error_message, attempt_count, last_attempt_at, created_at
-			 FROM feishu_dead_letters WHERE webhook_id = $1 ORDER BY created_at DESC LIMIT $2`,
-			webhookID, limit,
-		)
-	} else {
-		rows, err = s.db.QueryContext(ctx,
-			`SELECT id, webhook_id, payload, error_message, attempt_count, last_attempt_at, created_at
-			 FROM feishu_dead_letters ORDER BY created_at DESC LIMIT $1`,
-			limit,
-		)
+		q = q.Where(entfeishudeadletter.WebhookIDEQ(webhookID))
 	}
-
+	rows, err := q.
+		Order(ent.Desc(entfeishudeadletter.FieldCreatedAt)).
+		Limit(limit).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var results []FeishuDeadLetter
-	for rows.Next() {
-		var dl FeishuDeadLetter
-		if err := rows.Scan(&dl.ID, &dl.WebhookID, &dl.Payload, &dl.ErrorMessage, &dl.AttemptCount, &dl.LastAttemptAt, &dl.CreatedAt); err != nil {
-			return nil, err
-		}
-		results = append(results, dl)
+	results := make([]FeishuDeadLetter, 0, len(rows))
+	for _, dl := range rows {
+		results = append(results, FeishuDeadLetter{
+			ID:            int64(dl.ID),
+			WebhookID:     dl.WebhookID,
+			Payload:       dl.Payload,
+			ErrorMessage:  dl.ErrorMessage,
+			AttemptCount:  dl.AttemptCount,
+			LastAttemptAt: dl.LastAttemptAt,
+			CreatedAt:     dl.CreatedAt,
+		})
 	}
 	return results, nil
 }
 
 // CleanExpiredDeadLetters removes dead letters that have exceeded max retries.
 func (s *FeishuService) CleanExpiredDeadLetters(ctx context.Context) (int64, error) {
-	result, err := s.db.ExecContext(ctx,
-		`DELETE FROM feishu_dead_letters WHERE attempt_count >= $1`,
-		MaxDeadLetterRetries,
-	)
+	n, err := s.client.FeishuDeadLetter.Delete().
+		Where(entfeishudeadletter.AttemptCountGTE(MaxDeadLetterRetries)).
+		Exec(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	return int64(n), nil
 }

@@ -2,7 +2,6 @@ package notify
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,21 +9,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/platform/crypto"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 const testEncryptionKey = "0123456789abcdef0123456789abcdef" // 32 bytes for AES-256
 
-func setupFeishuWebhookTestDB(t *testing.T) *sql.DB {
+func setupFeishuWebhookTestDB(t *testing.T) *db.DB {
 	t.Helper()
-	return testutil.NewDB(t).DB
+	return testutil.NewDB(t)
 }
 
 func newTestFeishuWebhookService(t *testing.T) *FeishuService {
 	t.Helper()
-	db := setupFeishuWebhookTestDB(t)
-	return NewFeishuService(db, testEncryptionKey)
+	return NewFeishuService(setupFeishuWebhookTestDB(t), testEncryptionKey)
 }
 
 // ---------------------------------------------------------------------------
@@ -377,7 +376,10 @@ func TestFeishuWebhookService_DeadLetter(t *testing.T) {
 
 	t.Run("clean expired", func(t *testing.T) {
 		// Manually set attempt_count to max
-		svc.db.ExecContext(ctx, `UPDATE feishu_dead_letters SET attempt_count = $1`, MaxDeadLetterRetries)
+		if err := svc.client.FeishuDeadLetter.Update().
+			SetAttemptCount(MaxDeadLetterRetries).Exec(ctx); err != nil {
+			t.Fatalf("age the dead letters: %v", err)
+		}
 
 		affected, err := svc.CleanExpiredDeadLetters(ctx)
 		if err != nil {
@@ -415,18 +417,24 @@ func TestNotifyService_MultiWebhookSend(t *testing.T) {
 	defer server.Close()
 
 	// Setup DB-backed service
-	db := setupFeishuWebhookTestDB(t)
-	svc := NewFeishuService(db, testEncryptionKey)
+	database := setupFeishuWebhookTestDB(t)
+	svc := NewFeishuService(database, testEncryptionKey)
 	ctx := context.Background()
 
 	// Create webhook — bypass URL validation for test server
 	encryptedURL := encryptHelper(server.URL, testEncryptionKey)
 	urlHash := hashURLHelper(server.URL)
-	db.ExecContext(ctx,
-		`INSERT INTO feishu_webhooks (name, encrypted_url, url_hash, scene, enabled, rate_limit_rps, created_by)
-		 VALUES ($1, $2, $3, 'general', TRUE, 100.0, 'test')`,
-		"Test Webhook", encryptedURL, urlHash,
-	)
+	if err := database.Client().FeishuWebhook.Create().
+		SetName("Test Webhook").
+		SetEncryptedURL(encryptedURL).
+		SetURLHash(urlHash).
+		SetScene("general").
+		SetEnabled(true).
+		SetRateLimitRps(100.0).
+		SetCreatedBy("test").
+		Exec(ctx); err != nil {
+		t.Fatalf("seed webhook: %v", err)
+	}
 
 	// Setup Service
 	notifySvc := NewService(Deps{Feishu: svc})

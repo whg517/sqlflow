@@ -14,7 +14,7 @@ import (
 func setupFeishuWebhookTest(t *testing.T) (*echo.Echo, *FeishuService, *FeishuHandler) {
 	t.Helper()
 	d := testutil.NewDB(t)
-	svc := NewFeishuService(d.DB, "test-encryption-key-32byte-len!!")
+	svc := NewFeishuService(d, "test-encryption-key-32byte-len!!")
 	h := NewFeishuHandler(svc)
 	return echo.New(), svc, h
 }
