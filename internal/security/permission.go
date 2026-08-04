@@ -2,7 +2,6 @@ package security
 
 import (
 	"context"
-	"database/sql"
 	"embed"
 	"errors"
 	"fmt"
@@ -21,7 +20,11 @@ import (
 
 	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/db"
-	entTemp "github.com/whg517/sqlflow/internal/db/ent/temppolicy"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entcasbinrule "github.com/whg517/sqlflow/internal/db/ent/casbinrule"
+	entrole "github.com/whg517/sqlflow/internal/db/ent/role"
+	enttemppolicy "github.com/whg517/sqlflow/internal/db/ent/temppolicy"
+	entuser "github.com/whg517/sqlflow/internal/db/ent/user"
 	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 )
 
@@ -112,44 +115,46 @@ func PlatformPermissionKeys() []string {
 	return keys
 }
 
-// sqliteAdapter implements persist.Adapter using database/sql for SQLite.
-// RAW_SQL: casbin_rule has no ent schema — the Casbin adapter contract requires
-// direct table access for LoadPolicy/SavePolicy/AddPolicy/RemovePolicy.
-type sqliteAdapter struct {
-	db *sql.DB
+// entAdapter implements persist.Adapter over the casbin_rule table.
+//
+// Casbin owns the shape of that table, so the adapter is the one place that
+// reads and writes it. The name says ent rather than sqlite because the store
+// changed; the previous name outlived the database it described.
+type entAdapter struct {
+	client *ent.Client
 }
 
-func newSQLiteAdapter(db *sql.DB) *sqliteAdapter {
-	return &sqliteAdapter{db: db}
+func newEntAdapter(client *ent.Client) *entAdapter {
+	return &entAdapter{client: client}
 }
 
-func (a *sqliteAdapter) loadPolicyData(ctx context.Context) ([]CasbinRule, error) {
-	rows, err := a.db.QueryContext(ctx, `SELECT id, ptype, v0, v1, v2, v3, v4, v5 FROM casbin_rule ORDER BY id`)
+func (a *entAdapter) loadPolicyData(ctx context.Context) ([]CasbinRule, error) {
+	rows, err := a.client.CasbinRule.Query().
+		Order(ent.Asc(entcasbinrule.FieldID)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-
-	var rules []CasbinRule
-	for rows.Next() {
-		var r CasbinRule
-		if err := rows.Scan(&r.ID, &r.PType, &r.V0, &r.V1, &r.V2, &r.V3, &r.V4, &r.V5); err != nil {
-			return nil, err
-		}
-		rules = append(rules, r)
+	rules := make([]CasbinRule, 0, len(rows))
+	for _, r := range rows {
+		rules = append(rules, CasbinRule{
+			ID:    int64(r.ID),
+			PType: r.Ptype,
+			V0:    r.V0, V1: r.V1, V2: r.V2,
+			V3: r.V3, V4: r.V4, V5: r.V5,
+		})
 	}
-	return rules, rows.Err()
+	return rules, nil
 }
 
-func (a *sqliteAdapter) LoadPolicy(model casbinModel.Model) error {
+func (a *entAdapter) LoadPolicy(model casbinModel.Model) error {
 	rules, err := a.loadPolicyData(context.Background())
 	if err != nil {
 		return err
 	}
 	for _, r := range rules {
 		line := r.PType
-		parts := []string{r.V0, r.V1, r.V2, r.V3, r.V4, r.V5}
-		for _, p := range parts {
+		for _, p := range []string{r.V0, r.V1, r.V2, r.V3, r.V4, r.V5} {
 			if p != "" {
 				line += ", " + p
 			}
@@ -159,45 +164,29 @@ func (a *sqliteAdapter) LoadPolicy(model casbinModel.Model) error {
 	return nil
 }
 
-func (a *sqliteAdapter) SavePolicy(model casbinModel.Model) error {
-	tx, err := a.db.BeginTx(context.Background(), nil)
+// SavePolicy replaces the whole policy set.
+//
+// In one transaction, because the delete and the reinsert must not be
+// separately visible: a request arriving between them would be evaluated
+// against an empty policy, which denies everything — or, for a rule that
+// defaults open, allows it.
+func (a *entAdapter) SavePolicy(model casbinModel.Model) error {
+	ctx := context.Background()
+	tx, err := a.client.Tx(ctx)
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(context.Background(), `DELETE FROM casbin_rule`)
-	if err != nil {
-		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
-			slog.Warn("failed to rollback", "error", err)
-		}
-		return err
+
+	if _, err := tx.CasbinRule.Delete().Exec(ctx); err != nil {
+		return rollbackPolicyTx(tx, err)
 	}
 
-	for ptype, ast := range model["p"] {
-		for _, rule := range ast.Policy {
-			_, err := tx.ExecContext(context.Background(),
-				`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-				ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
-			)
-			if err != nil {
-				if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
-					slog.Warn("failed to rollback", "error", err)
+	for _, section := range []string{"p", "g"} {
+		for ptype, ast := range model[section] {
+			for _, rule := range ast.Policy {
+				if err := createPolicyRow(ctx, tx.CasbinRule, ptype, rule); err != nil {
+					return rollbackPolicyTx(tx, err)
 				}
-				return err
-			}
-		}
-	}
-
-	for ptype, ast := range model["g"] {
-		for _, rule := range ast.Policy {
-			_, err := tx.ExecContext(context.Background(),
-				`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-				ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
-			)
-			if err != nil {
-				if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
-					slog.Warn("failed to rollback", "error", err)
-				}
-				return err
 			}
 		}
 	}
@@ -205,23 +194,51 @@ func (a *sqliteAdapter) SavePolicy(model casbinModel.Model) error {
 	return tx.Commit()
 }
 
-func (a *sqliteAdapter) AddPolicy(sec string, ptype string, rule []string) error {
-	_, err := a.db.ExecContext(context.Background(),
-		`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3, v4, v5) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
-	)
+// rollbackPolicyTx unwinds a failed policy write, reporting the original cause.
+func rollbackPolicyTx(tx *ent.Tx, cause error) error {
+	if err := tx.Rollback(); err != nil {
+		slog.Warn("failed to rollback", "error", err)
+	}
+	return cause
+}
+
+// createPolicyRow writes one Casbin rule.
+//
+// The six value columns are positional and Casbin supplies however many the
+// rule uses, so the missing ones are stored as empty strings — which is what
+// loadPolicyData skips when rebuilding the line.
+func createPolicyRow(ctx context.Context, rules *ent.CasbinRuleClient, ptype string, rule []string) error {
+	return rules.Create().
+		SetPtype(ptype).
+		SetV0(getArg(rule, 0)).
+		SetV1(getArg(rule, 1)).
+		SetV2(getArg(rule, 2)).
+		SetV3(getArg(rule, 3)).
+		SetV4(getArg(rule, 4)).
+		SetV5(getArg(rule, 5)).
+		Exec(ctx)
+}
+
+func (a *entAdapter) AddPolicy(sec string, ptype string, rule []string) error {
+	return createPolicyRow(context.Background(), a.client.CasbinRule, ptype, rule)
+}
+
+func (a *entAdapter) RemovePolicy(sec string, ptype string, rule []string) error {
+	_, err := a.client.CasbinRule.Delete().
+		Where(
+			entcasbinrule.PtypeEQ(ptype),
+			entcasbinrule.V0EQ(getArg(rule, 0)),
+			entcasbinrule.V1EQ(getArg(rule, 1)),
+			entcasbinrule.V2EQ(getArg(rule, 2)),
+			entcasbinrule.V3EQ(getArg(rule, 3)),
+			entcasbinrule.V4EQ(getArg(rule, 4)),
+			entcasbinrule.V5EQ(getArg(rule, 5)),
+		).
+		Exec(context.Background())
 	return err
 }
 
-func (a *sqliteAdapter) RemovePolicy(sec string, ptype string, rule []string) error {
-	_, err := a.db.ExecContext(context.Background(),
-		`DELETE FROM casbin_rule WHERE ptype=$1 AND v0=$2 AND v1=$3 AND v2=$4 AND v3=$5 AND v4=$6 AND v5=$7`,
-		ptype, getArg(rule, 0), getArg(rule, 1), getArg(rule, 2), getArg(rule, 3), getArg(rule, 4), getArg(rule, 5),
-	)
-	return err
-}
-
-func (a *sqliteAdapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int, fieldValues ...string) error {
+func (a *entAdapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int, fieldValues ...string) error {
 	// Not needed for our use case; satisfy interface.
 	return errors.New("RemoveFilteredPolicy not implemented")
 }
@@ -235,14 +252,14 @@ func getArg(rule []string, idx int) string {
 
 // Service handles permission management logic.
 type Service struct {
-	database *db.DB
+	client   *ent.Client
 	enforcer *casbin.Enforcer
-	adapter  *sqliteAdapter
+	adapter  *entAdapter
 }
 
 // NewService creates a new Service with a Casbin enforcer.
 func NewService(database *db.DB) (*Service, error) {
-	adapter := newSQLiteAdapter(database.DB)
+	adapter := newEntAdapter(database.Client())
 
 	// Load model from embedded FS
 	modelData, err := fs.ReadFile(casbinModelFS, "casbin_model.conf")
@@ -261,7 +278,7 @@ func NewService(database *db.DB) (*Service, error) {
 	}
 
 	svc := &Service{
-		database: database,
+		client:   database.Client(),
 		enforcer: enforcer,
 		adapter:  adapter,
 	}
@@ -283,14 +300,12 @@ func (s *Service) ensureBuiltinPlatformPolicies() error {
 }
 
 // seedIfEmpty loads initial policies from policy.csv if casbin_rule table is empty.
-// RAW_SQL: casbin_rule table — no ent schema, raw SQL required.
 func (s *Service) seedIfEmpty(ctx context.Context) error {
-	var count int
-	err := s.database.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM casbin_rule`).Scan(&count)
+	seeded, err := s.client.CasbinRule.Query().Exist(ctx)
 	if err != nil {
 		return err
 	}
-	if count > 0 {
+	if seeded {
 		return nil
 	}
 
@@ -369,20 +384,22 @@ func (s *Service) EnforceActor(ctx context.Context, userID int64, role, dom, obj
 		return false, err
 	}
 
-	var expiresAt time.Time
-	err = s.database.DB.QueryRowContext(ctx,
-		`SELECT expires_at FROM temp_policies
-		 WHERE sub = $1 AND dom = $2 AND obj = $3 AND act = $4`,
-		userSub, dom, obj, act,
-	).Scan(&expiresAt)
-	if errors.Is(err, sql.ErrNoRows) {
+	temp, err := s.client.TempPolicy.Query().
+		Where(
+			enttemppolicy.SubEQ(userSub),
+			enttemppolicy.DomEQ(dom),
+			enttemppolicy.ObjEQ(obj),
+			enttemppolicy.ActEQ(act),
+		).
+		Only(ctx)
+	if ent.IsNotFound(err) {
 		// A non-temporary individual policy is a permanent explicit grant.
 		return true, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("check temporary policy expiry: %w", err)
 	}
-	if !expiresAt.After(time.Now().UTC()) {
+	if !temp.ExpiresAt.After(time.Now().UTC()) {
 		_, _ = s.enforcer.RemovePolicy(userSub, dom, obj, act)
 		return false, nil
 	}
@@ -427,19 +444,18 @@ func (s *Service) AddPolicy(sub, dom, obj, act string) error {
 }
 
 // RemovePolicy removes a policy rule by its database ID.
-// RAW_SQL: casbin_rule table — no ent schema.
+//
+// The row is read first so the removal goes through the enforcer, which drops
+// it from the in-memory model as well. Deleting the row directly would leave
+// the policy in force until the next reload.
 func (s *Service) RemovePolicy(ctx context.Context, id int64) error {
-	var r CasbinRule
-	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT id, ptype, v0, v1, v2, v3, v4, v5 FROM casbin_rule WHERE id = $1`, id,
-	).Scan(&r.ID, &r.PType, &r.V0, &r.V1, &r.V2, &r.V3, &r.V4, &r.V5)
+	r, err := s.client.CasbinRule.Get(ctx, int(id))
+	if ent.IsNotFound(err) {
+		return errors.New("策略不存在")
+	}
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return errors.New("策略不存在")
-		}
 		return err
 	}
-
 	_, err = s.enforcer.RemovePolicy(r.V0, r.V1, r.V2, r.V3)
 	return err
 }
@@ -449,67 +465,65 @@ func (s *Service) RemovePolicy(ctx context.Context, id int64) error {
 func (s *Service) GetPolicies(ctx context.Context, page, pageSize int64, ptype, sub string) ([]Policy, int64, error) {
 	p := sqlutil.ParsePagination(int(page), int(pageSize))
 
-	var filters []sqlutil.FilterClause
-	filters = append(filters, sqlutil.FilterClause{Condition: "ptype = 'p'"})
+	// The caller's ptype replaces the default rather than being added to it.
+	// Both conditions used to be applied, so asking for "g" produced
+	// ptype = 'p' AND ptype = 'g' and always returned nothing.
+	wanted := "p"
 	if ptype != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "ptype = ?", Args: []interface{}{ptype}})
+		wanted = ptype
 	}
+	q := s.client.CasbinRule.Query().Where(entcasbinrule.PtypeEQ(wanted))
 	if sub != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "v0 = ?", Args: []interface{}{sub}})
+		q = q.Where(entcasbinrule.V0EQ(sub))
 	}
 
-	whereClause, args := sqlutil.BuildWhereClause(filters)
-
-	var total int64
-	countSQL := sqlutil.PaginatedCountSQL("casbin_rule", whereClause)
-	if err := s.database.DB.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-
-	// Numbered after assembly: LIMIT and OFFSET follow however many placeholders
-	// the WHERE clause contributed, so writing $1/$2 here collides with it.
-	querySQL := sqlutil.NumberPlaceholders(fmt.Sprintf(
-		`SELECT id, ptype, v0, v1, v2, v3 FROM casbin_rule %s ORDER BY id LIMIT ? OFFSET ?`,
-		whereClause,
-	))
-	queryArgs := sqlutil.AppendLimitArgs(args, p)
-	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
+	total, err := q.Clone().Count(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
-	defer func() { _ = rows.Close() }()
 
-	var policies []Policy
-	for rows.Next() {
-		var p Policy
-		if err := rows.Scan(&p.ID, &p.PType, &p.Sub, &p.Dom, &p.Obj, &p.Act); err != nil {
-			return nil, 0, err
-		}
-		policies = append(policies, p)
+	rows, err := q.
+		Order(ent.Asc(entcasbinrule.FieldID)).
+		Limit(p.PageSize).
+		Offset(p.Offset).
+		All(ctx)
+	if err != nil {
+		return nil, 0, err
 	}
-	return policies, total, rows.Err()
+	return casbinRulesToPolicies(rows), int64(total), nil
+}
+
+// casbinRulesToPolicies maps stored rules onto the API shape.
+//
+// Casbin's columns are positional: v0..v3 are subject, domain, object and
+// action for a "p" rule. The names live here so the callers do not each have to
+// remember the order.
+func casbinRulesToPolicies(rows []*ent.CasbinRule) []Policy {
+	policies := make([]Policy, 0, len(rows))
+	for _, r := range rows {
+		policies = append(policies, Policy{
+			ID:    int64(r.ID),
+			PType: r.Ptype,
+			Sub:   r.V0,
+			Dom:   r.V1,
+			Obj:   r.V2,
+			Act:   r.V3,
+		})
+	}
+	return policies
 }
 
 // GetPoliciesForRole returns all policies for a given role (v0 matches).
 // RAW_SQL: casbin_rule table — no ent schema.
 func (s *Service) GetPoliciesForRole(ctx context.Context, role string) ([]Policy, error) {
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT id, ptype, v0, v1, v2, v3 FROM casbin_rule WHERE ptype = 'p' AND v0 = $1 ORDER BY id`, role,
-	)
+	rows, err := s.client.CasbinRule.Query().
+		Where(entcasbinrule.PtypeEQ("p"), entcasbinrule.V0EQ(role)).
+		Order(ent.Asc(entcasbinrule.FieldID)).
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-
-	var policies []Policy
-	for rows.Next() {
-		var p Policy
-		if err := rows.Scan(&p.ID, &p.PType, &p.Sub, &p.Dom, &p.Obj, &p.Act); err != nil {
-			return nil, err
-		}
-		policies = append(policies, p)
-	}
-	return policies, rows.Err()
+	return casbinRulesToPolicies(rows), nil
 }
 
 // GetRoles returns all known roles (built-in list).
@@ -519,64 +533,75 @@ func (s *Service) GetRoles() []string {
 
 // ListRoles returns persisted roles with membership and policy counts.
 func (s *Service) ListRoles(ctx context.Context) ([]Role, error) {
-	rows, err := s.database.DB.QueryContext(ctx, `
-		SELECT r.id, r.name, r.display_name, r.description, r.is_builtin, r.status,
-		       r.created_at, r.updated_at,
-		       (SELECT COUNT(*) FROM users u WHERE u.role = r.name) AS user_count,
-		       (SELECT COUNT(*) FROM casbin_rule c WHERE c.ptype = 'p' AND c.v0 = r.name) AS policy_count
-		FROM roles r
-		ORDER BY r.is_builtin DESC, r.id`)
+	rows, err := s.client.Role.Query().
+		Order(ent.Desc(entrole.FieldIsBuiltin), ent.Asc(entrole.FieldID)).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list roles: %w", err)
 	}
-	defer rows.Close()
 
-	roles := make([]Role, 0)
-	for rows.Next() {
-		var role Role
-		if err := rows.Scan(
-			&role.ID, &role.Name, &role.DisplayName, &role.Description,
-			&role.IsBuiltin, &role.Status, &role.CreatedAt, &role.UpdatedAt,
-			&role.UserCount, &role.PolicyCount,
-		); err != nil {
-			return nil, fmt.Errorf("scan role: %w", err)
-		}
-		roles = append(roles, role)
-	}
-	for i := range roles {
-		roles[i].Permissions, err = s.GetPlatformPermissions(roles[i].Name)
+	roles := make([]Role, 0, len(rows))
+	for _, r := range rows {
+		role, err := s.roleWithCounts(ctx, r)
 		if err != nil {
 			return nil, err
 		}
+		roles = append(roles, *role)
 	}
-	return roles, rows.Err()
+	return roles, nil
+}
+
+// roleWithCounts fills in the membership and policy counts a role is shown
+// with.
+//
+// They were correlated subqueries in the listing statement. As separate counts
+// they cost one query each, which is what makes the whole listing expressible
+// in typed predicates — and the list is a handful of roles, not a page of
+// tickets.
+func (s *Service) roleWithCounts(ctx context.Context, r *ent.Role) (*Role, error) {
+	userCount, err := s.client.User.Query().
+		Where(entuser.RoleEQ(r.Name)).
+		Count(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("count role members: %w", err)
+	}
+	policyCount, err := s.client.CasbinRule.Query().
+		Where(entcasbinrule.PtypeEQ("p"), entcasbinrule.V0EQ(r.Name)).
+		Count(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("count role policies: %w", err)
+	}
+	permissions, err := s.GetPlatformPermissions(r.Name)
+	if err != nil {
+		return nil, err
+	}
+	return &Role{
+		ID:          int64(r.ID),
+		Name:        r.Name,
+		DisplayName: r.DisplayName,
+		Description: r.Description,
+		IsBuiltin:   r.IsBuiltin,
+		Status:      r.Status,
+		CreatedAt:   r.CreatedAt,
+		UpdatedAt:   r.UpdatedAt,
+		UserCount:   int64(userCount),
+		PolicyCount: int64(policyCount),
+		Permissions: permissions,
+	}, nil
 }
 
 // GetRole returns a persisted role with counts.
 func (s *Service) GetRole(ctx context.Context, name string) (*Role, error) {
-	var role Role
-	err := s.database.DB.QueryRowContext(ctx, `
-		SELECT r.id, r.name, r.display_name, r.description, r.is_builtin, r.status,
-		       r.created_at, r.updated_at,
-		       (SELECT COUNT(*) FROM users u WHERE u.role = r.name),
-		       (SELECT COUNT(*) FROM casbin_rule c WHERE c.ptype = 'p' AND c.v0 = r.name)
-		FROM roles r WHERE r.name = $1`, name).
-		Scan(
-			&role.ID, &role.Name, &role.DisplayName, &role.Description,
-			&role.IsBuiltin, &role.Status, &role.CreatedAt, &role.UpdatedAt,
-			&role.UserCount, &role.PolicyCount,
-		)
-	if errors.Is(err, sql.ErrNoRows) {
+	r, err := s.client.Role.Query().
+		Where(entrole.NameEQ(name)).
+		Only(ctx)
+	if ent.IsNotFound(err) {
 		return nil, ErrRoleNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get role: %w", err)
 	}
-	role.Permissions, err = s.GetPlatformPermissions(role.Name)
-	if err != nil {
-		return nil, err
-	}
-	return &role, nil
+	return s.roleWithCounts(ctx, r)
 }
 
 // GetPlatformPermissions resolves effective platform permissions for a role.
@@ -612,40 +637,52 @@ func (s *Service) SetPlatformPermissions(ctx context.Context, roleName string, p
 		seen[key] = struct{}{}
 	}
 
-	tx, err := s.database.DB.BeginTx(ctx, nil)
+	// One transaction: between the delete and the reinsert the role holds no
+	// platform permissions at all, and a request evaluated in that window would
+	// be denied outright.
+	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM casbin_rule WHERE ptype = 'p' AND v0 = $1 AND v1 = 'system'`,
-		roleName,
-	); err != nil {
-		return err
+	if _, err := tx.CasbinRule.Delete().
+		Where(
+			entcasbinrule.PtypeEQ("p"),
+			entcasbinrule.V0EQ(roleName),
+			entcasbinrule.V1EQ("system"),
+		).
+		Exec(ctx); err != nil {
+		return rollbackPolicyTx(tx, err)
 	}
 	for _, key := range PlatformPermissionKeys() {
 		if _, ok := seen[key]; !ok {
 			continue
 		}
 		definition := platformPermissions[key]
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES ('p', $1, 'system', $2, $3)`,
-			roleName, definition[0], definition[1],
-		); err != nil {
-			return err
+		if err := tx.CasbinRule.Create().
+			SetPtype("p").
+			SetV0(roleName).
+			SetV1("system").
+			SetV2(definition[0]).
+			SetV3(definition[1]).
+			Exec(ctx); err != nil {
+			return rollbackPolicyTx(tx, err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	// The enforcer holds the policy in memory; without a reload the change is
+	// on disk only and takes effect at the next restart.
 	return s.enforcer.LoadPolicy()
 }
 
 // IsRoleActive checks whether a role exists and can be assigned or authenticated.
 func (s *Service) IsRoleActive(ctx context.Context, name string) (bool, error) {
-	var status string
-	err := s.database.DB.QueryRowContext(ctx, `SELECT status FROM roles WHERE name = $1`, name).Scan(&status)
-	if errors.Is(err, sql.ErrNoRows) {
+	status, err := s.client.Role.Query().
+		Where(entrole.NameEQ(name)).
+		Select(entrole.FieldStatus).
+		String(ctx)
+	if ent.IsNotFound(err) {
 		return false, nil
 	}
 	if err != nil {
@@ -664,11 +701,17 @@ func (s *Service) CreateRole(ctx context.Context, name, displayName, description
 	if displayName == "" {
 		return nil, errors.New("角色显示名称不能为空")
 	}
-	_, err := s.database.DB.ExecContext(ctx, `
-		INSERT INTO roles (name, display_name, description, is_builtin, status)
-		VALUES ($1, $2, $3, FALSE, 'active')`, name, displayName, strings.TrimSpace(description))
+	err := s.client.Role.Create().
+		SetName(name).
+		SetDisplayName(displayName).
+		SetDescription(strings.TrimSpace(description)).
+		SetIsBuiltin(false).
+		SetStatus("active").
+		Exec(ctx)
 	if err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "unique") {
+		// ent classifies the constraint violation, replacing a substring match
+		// on the driver's message text.
+		if ent.IsConstraintError(err) {
 			return nil, ErrRoleExists
 		}
 		return nil, fmt.Errorf("create role: %w", err)
@@ -695,14 +738,16 @@ func (s *Service) UpdateRole(ctx context.Context, name, displayName, description
 	if status == "disabled" && role.UserCount > 0 {
 		return nil, ErrRoleInUse
 	}
-	result, err := s.database.DB.ExecContext(ctx, `
-		UPDATE roles
-		SET display_name = $1, description = $2, status = $3, updated_at = now()
-		WHERE name = $4`, displayName, strings.TrimSpace(description), status, name)
+	affected, err := s.client.Role.Update().
+		Where(entrole.NameEQ(name)).
+		SetDisplayName(displayName).
+		SetDescription(strings.TrimSpace(description)).
+		SetStatus(status).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("update role: %w", err)
 	}
-	affected, _ := result.RowsAffected()
 	if affected == 0 {
 		return nil, ErrRoleNotFound
 	}
@@ -722,16 +767,25 @@ func (s *Service) DeleteRole(ctx context.Context, name string) error {
 		return ErrRoleInUse
 	}
 
-	tx, err := s.database.DB.BeginTx(ctx, nil)
+	// One transaction: a role removed while its policies survive would leave
+	// grants addressed to a subject that no longer exists, which the enforcer
+	// still matches.
+	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM casbin_rule WHERE v0 = $1 AND ptype IN ('p', 'g')`, name); err != nil {
-		return fmt.Errorf("delete role policies: %w", err)
+	if _, err := tx.CasbinRule.Delete().
+		Where(
+			entcasbinrule.V0EQ(name),
+			entcasbinrule.PtypeIn("p", "g"),
+		).
+		Exec(ctx); err != nil {
+		return rollbackPolicyTx(tx, fmt.Errorf("delete role policies: %w", err))
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM roles WHERE name = $1`, name); err != nil {
-		return fmt.Errorf("delete role: %w", err)
+	if _, err := tx.Role.Delete().
+		Where(entrole.NameEQ(name)).
+		Exec(ctx); err != nil {
+		return rollbackPolicyTx(tx, fmt.Errorf("delete role: %w", err))
 	}
 	if err := tx.Commit(); err != nil {
 		return err
@@ -761,7 +815,7 @@ func (s *Service) AddTemporaryPolicy(ctx context.Context, sub, dom, obj, act str
 		return nil // already exists
 	}
 
-	_, err = s.database.Client().TempPolicy.Create().
+	_, err = s.client.TempPolicy.Create().
 		SetSub(sub).
 		SetDom(dom).
 		SetObj(obj).
@@ -781,12 +835,12 @@ func (s *Service) RemoveTemporaryPolicy(ctx context.Context, sub, dom, obj, act 
 	if err != nil {
 		return err
 	}
-	_, _ = s.database.Client().TempPolicy.Delete().
+	_, _ = s.client.TempPolicy.Delete().
 		Where(
-			entTemp.SubEQ(sub),
-			entTemp.DomEQ(dom),
-			entTemp.ObjEQ(obj),
-			entTemp.ActEQ(act),
+			enttemppolicy.SubEQ(sub),
+			enttemppolicy.DomEQ(dom),
+			enttemppolicy.ObjEQ(obj),
+			enttemppolicy.ActEQ(act),
 		).
 		Exec(ctx)
 	return nil
@@ -796,8 +850,8 @@ func (s *Service) RemoveTemporaryPolicy(ctx context.Context, sub, dom, obj, act 
 func (s *Service) PurgeExpiredPolicies(ctx context.Context) (int64, error) {
 	now := time.Now().UTC()
 
-	expired, err := s.database.Client().TempPolicy.Query().
-		Where(entTemp.ExpiresAtLTE(now)).
+	expired, err := s.client.TempPolicy.Query().
+		Where(enttemppolicy.ExpiresAtLTE(now)).
 		All(ctx)
 	if err != nil {
 		return 0, err
@@ -809,8 +863,8 @@ func (s *Service) PurgeExpiredPolicies(ctx context.Context) (int64, error) {
 		count++
 	}
 
-	deleted, err := s.database.Client().TempPolicy.Delete().
-		Where(entTemp.ExpiresAtLTE(now)).
+	deleted, err := s.client.TempPolicy.Delete().
+		Where(enttemppolicy.ExpiresAtLTE(now)).
 		Exec(ctx)
 	if err != nil {
 		return count, err

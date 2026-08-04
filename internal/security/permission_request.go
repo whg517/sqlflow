@@ -2,7 +2,6 @@ package security
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -10,10 +9,13 @@ import (
 
 	"strconv"
 
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
+	entdatasource "github.com/whg517/sqlflow/internal/db/ent/datasource"
 	entPermReq "github.com/whg517/sqlflow/internal/db/ent/permissionrequest"
+	entuser "github.com/whg517/sqlflow/internal/db/ent/user"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/platform/sqlutil"
@@ -78,55 +80,102 @@ func (s *RequestService) CreateRequest(ctx context.Context, applicantID, datasou
 	return s.GetRequestByID(ctx, int64(saved.ID))
 }
 
-// GetRequestByID retrieves a permission request with user and datasource names.
-// RAW_SQL: LEFT JOIN across users/datasources — no ent edges defined, raw SQL required.
-func (s *RequestService) GetRequestByID(ctx context.Context, id int64) (*model.PermissionRequest, error) {
-	r := &model.PermissionRequest{}
-	var approvedAt, revokedAt sql.NullTime
-	var approverName, datasourceName, applicantName, approveComment, revokeReason sql.NullString
+// permRequestRow is a permission request with the three names it is displayed
+// with.
+//
+// Applicant, approver and datasource all live on other tables with no ent edge,
+// so they arrive through joins rather than on the entity.
+type permRequestRow struct {
+	ID             int64      `json:"id"`
+	ApplicantID    int64      `json:"applicant_id"`
+	ApplicantName  string     `json:"applicant_name"`
+	ApproverID     int64      `json:"approver_id"`
+	ApproverName   string     `json:"approver_name"`
+	DatasourceID   int64      `json:"datasource_id"`
+	DatasourceName string     `json:"datasource_name"`
+	Database       string     `json:"database"`
+	TableName      string     `json:"table_name"`
+	Actions        string     `json:"actions"`
+	Reason         string     `json:"reason"`
+	Status         string     `json:"status"`
+	ApproveComment string     `json:"approve_comment"`
+	ApprovedAt     *time.Time `json:"approved_at"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	RevokedAt      *time.Time `json:"revoked_at"`
+	RevokedBy      int64      `json:"revoked_by"`
+	RevokeReason   string     `json:"revoke_reason"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
 
-	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT r.id, r.applicant_id, COALESCE(u1.username, ''),
-		        COALESCE(r.approver_id, 0), COALESCE(u2.username, ''),
-		        r.datasource_id, COALESCE(ds.name, ''),
-		        r.database, COALESCE(r.table_name, ''), r.actions, COALESCE(r.reason, ''),
-		        r.status, COALESCE(r.approve_comment, ''),
-		        r.approved_at, r.expires_at, r.revoked_at,
-		        COALESCE(r.revoked_by, 0), COALESCE(r.revoke_reason, ''),
-		        r.created_at, r.updated_at
-		 FROM permission_requests r
-		 LEFT JOIN users u1 ON u1.id = r.applicant_id
-		 LEFT JOIN users u2 ON u2.id = r.approver_id
-		 LEFT JOIN datasources ds ON ds.id = r.datasource_id
-		 WHERE r.id = $1`,
-		id,
-	).Scan(&r.ID, &r.ApplicantID, &applicantName,
-		&r.ApproverID, &approverName,
-		&r.DatasourceID, &datasourceName,
-		&r.Database, &r.TableName, &r.Actions, &r.Reason,
-		&r.Status, &approveComment,
-		&approvedAt, &r.ExpiresAt, &revokedAt,
-		&r.RevokedBy, &revokeReason,
-		&r.CreatedAt, &r.UpdatedAt)
+func (r permRequestRow) toModel() *model.PermissionRequest {
+	return &model.PermissionRequest{
+		ID: r.ID, ApplicantID: r.ApplicantID, ApplicantName: r.ApplicantName,
+		ApproverID: r.ApproverID, ApproverName: r.ApproverName,
+		DatasourceID: r.DatasourceID, DatasourceName: r.DatasourceName,
+		Database: r.Database, TableName: r.TableName,
+		Actions: r.Actions, Reason: r.Reason,
+		Status:         model.PermissionRequestStatus(r.Status),
+		ApproveComment: r.ApproveComment, ApprovedAt: r.ApprovedAt,
+		ExpiresAt: r.ExpiresAt, RevokedAt: r.RevokedAt,
+		RevokedBy: r.RevokedBy, RevokeReason: r.RevokeReason,
+		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+	}
+}
+
+// selectPermRequestsWithNames joins the three tables the display names come
+// from.
+//
+// One helper, because the same select was written out at three call sites and
+// each carried its own copy of twenty columns.
+func selectPermRequestsWithNames(sel *entsql.Selector) {
+	u1 := entsql.Table(entuser.Table).As("u1")
+	u2 := entsql.Table(entuser.Table).As("u2")
+	ds := entsql.Table(entdatasource.Table).As("ds")
+	sel.LeftJoin(u1).On(sel.C(entPermReq.FieldApplicantID), u1.C(entuser.FieldID))
+	sel.LeftJoin(u2).On(sel.C(entPermReq.FieldApproverID), u2.C(entuser.FieldID))
+	sel.LeftJoin(ds).On(sel.C(entPermReq.FieldDatasourceID), ds.C(entdatasource.FieldID))
+
+	cols := make([]string, 0, len(entPermReq.Columns))
+	for _, c := range entPermReq.Columns {
+		cols = append(cols, sel.C(c))
+	}
+	sel.Select(cols...).AppendSelect(
+		entsql.As("COALESCE("+u1.C(entuser.FieldUsername)+", '')", "applicant_name"),
+		entsql.As("COALESCE("+u2.C(entuser.FieldUsername)+", '')", "approver_name"),
+		entsql.As("COALESCE("+ds.C(entdatasource.FieldName)+", '')", "datasource_name"),
+	)
+}
+
+// fetchPermRequests runs a joined query and converts the rows.
+func (s *RequestService) fetchPermRequests(ctx context.Context, q *ent.PermissionRequestQuery, order func(*entsql.Selector)) ([]*model.PermissionRequest, error) {
+	var rows []permRequestRow
+	err := q.Modify(func(sel *entsql.Selector) {
+		selectPermRequestsWithNames(sel)
+		order(sel)
+	}).Scan(ctx, &rows)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrPermReqNotFound
-		}
-		return nil, fmt.Errorf("query permission request: %w", err)
+		return nil, err
 	}
+	requests := make([]*model.PermissionRequest, 0, len(rows))
+	for _, r := range rows {
+		requests = append(requests, r.toModel())
+	}
+	return requests, nil
+}
 
-	r.ApplicantName = applicantName.String
-	r.ApproverName = approverName.String
-	r.DatasourceName = datasourceName.String
-	r.ApproveComment = approveComment.String
-	r.RevokeReason = revokeReason.String
-	if approvedAt.Valid {
-		r.ApprovedAt = &approvedAt.Time
+// GetRequestByID retrieves a permission request with user and datasource names.
+func (s *RequestService) GetRequestByID(ctx context.Context, id int64) (*model.PermissionRequest, error) {
+	requests, err := s.fetchPermRequests(ctx,
+		s.client.PermissionRequest.Query().Where(entPermReq.IDEQ(int(id))),
+		func(*entsql.Selector) {})
+	if err != nil {
+		return nil, fmt.Errorf("get permission request: %w", err)
 	}
-	if revokedAt.Valid {
-		r.RevokedAt = &revokedAt.Time
+	if len(requests) == 0 {
+		return nil, ErrPermReqNotFound
 	}
-	return r, nil
+	return requests[0], nil
 }
 
 // ApproveRequest approves a permission request and grants temporary casbin policies.
@@ -246,65 +295,35 @@ func (s *RequestService) RevokeRequest(ctx context.Context, requestID, revokerID
 }
 
 // ListRequests returns paginated permission requests with optional filters.
-// RAW_SQL: LEFT JOIN across users/datasources — no ent edges defined, raw SQL required.
 func (s *RequestService) ListRequests(ctx context.Context, page, pageSize int, status, applicantIDStr string) ([]*model.PermissionRequest, int64, error) {
 	p := sqlutil.ParsePagination(page, pageSize)
 
-	var whereParts []string
-	var args []interface{}
-
+	q := s.client.PermissionRequest.Query()
 	if status != "" {
-		whereParts = append(whereParts, "r.status = ?")
-		args = append(args, status)
+		q = q.Where(entPermReq.StatusEQ(status))
 	}
-	// applicant_id is a bigint; passing the raw query-string value made
+	// applicant_id is a bigint. Passing the raw query-string value made
 	// PostgreSQL reject the comparison, and only worked under SQLite's dynamic
 	// typing. An unparseable value filters nothing rather than erroring, which
 	// matches how the other filters treat an empty parameter.
 	if id, err := strconv.ParseInt(applicantIDStr, 10, 64); err == nil && applicantIDStr != "" {
-		whereParts = append(whereParts, "r.applicant_id = ?")
-		args = append(args, id)
+		q = q.Where(entPermReq.ApplicantIDEQ(id))
 	}
 
-	whereClause := ""
-	if len(whereParts) > 0 {
-		whereClause = "WHERE " + strings.Join(whereParts, " AND ")
-	}
-
-	var total int64
-	countSQL := sqlutil.NumberPlaceholders(fmt.Sprintf(`SELECT COUNT(*) FROM permission_requests r %s`, whereClause))
-	if err := s.database.DB.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
 		return nil, 0, fmt.Errorf("count permission requests: %w", err)
 	}
 
-	querySQL := fmt.Sprintf(
-		`SELECT r.id, r.applicant_id, COALESCE(u1.username, ''),
-		        COALESCE(r.approver_id, 0), COALESCE(u2.username, ''),
-		        r.datasource_id, COALESCE(ds.name, ''),
-		        r.database, COALESCE(r.table_name, ''), r.actions, COALESCE(r.reason, ''),
-		        r.status, COALESCE(r.approve_comment, ''),
-		        r.approved_at, r.expires_at, r.revoked_at,
-		        COALESCE(r.revoked_by, 0), COALESCE(r.revoke_reason, ''),
-		        r.created_at, r.updated_at
-		 FROM permission_requests r
-		 LEFT JOIN users u1 ON u1.id = r.applicant_id
-		 LEFT JOIN users u2 ON u2.id = r.approver_id
-		 LEFT JOIN datasources ds ON ds.id = r.datasource_id
-		 %s ORDER BY r.created_at DESC`, whereClause)
-
-	querySQL = sqlutil.NumberPlaceholders(querySQL) +
-		fmt.Sprintf(" LIMIT %d OFFSET %d", p.PageSize, (p.Page-1)*p.PageSize)
-	rows, err := s.database.DB.QueryContext(ctx, querySQL, args...)
+	requests, err := s.fetchPermRequests(ctx, q, func(sel *entsql.Selector) {
+		sel.OrderBy(entsql.Desc(sel.C(entPermReq.FieldCreatedAt))).
+			Limit(p.PageSize).
+			Offset(p.Offset)
+	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("query permission requests: %w", err)
 	}
-	defer rows.Close()
-
-	requests, err := scanPermRequests(rows)
-	if err != nil {
-		return nil, 0, err
-	}
-	return requests, total, nil
+	return requests, int64(total), nil
 }
 
 // ExpireOverdue marks expired approved requests as EXPIRED and removes their policies.
@@ -349,33 +368,19 @@ func (s *RequestService) ExpireOverdue(ctx context.Context) (int64, error) {
 }
 
 // MyActiveRequests returns the current user's active (approved, not expired) permission requests.
-// RAW_SQL: LEFT JOIN across users/datasources — no ent edges defined, raw SQL required.
 func (s *RequestService) MyActiveRequests(ctx context.Context, userID int64) ([]*model.PermissionRequest, int64, error) {
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT r.id, r.applicant_id, COALESCE(u1.username, ''),
-		        COALESCE(r.approver_id, 0), COALESCE(u2.username, ''),
-		        r.datasource_id, COALESCE(ds.name, ''),
-		        r.database, COALESCE(r.table_name, ''), r.actions, COALESCE(r.reason, ''),
-		        r.status, COALESCE(r.approve_comment, ''),
-		        r.approved_at, r.expires_at, r.revoked_at,
-		        COALESCE(r.revoked_by, 0), COALESCE(r.revoke_reason, ''),
-		        r.created_at, r.updated_at
-		 FROM permission_requests r
-		 LEFT JOIN users u1 ON u1.id = r.applicant_id
-		 LEFT JOIN users u2 ON u2.id = r.approver_id
-		 LEFT JOIN datasources ds ON ds.id = r.datasource_id
-		 WHERE r.applicant_id = $1 AND r.status = 'APPROVED' AND r.expires_at > now()
-		 ORDER BY r.expires_at ASC`,
-		userID,
+	q := s.client.PermissionRequest.Query().Where(
+		entPermReq.ApplicantIDEQ(userID),
+		entPermReq.StatusEQ("APPROVED"),
+		entPermReq.ExpiresAtGT(time.Now()),
 	)
+	requests, err := s.fetchPermRequests(ctx, q, func(sel *entsql.Selector) {
+		// Soonest to expire first: the list exists so the user can renew before
+		// losing access.
+		sel.OrderBy(entsql.Asc(sel.C(entPermReq.FieldExpiresAt)))
+	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("query active requests: %w", err)
-	}
-	defer rows.Close()
-
-	requests, err := scanPermRequests(rows)
-	if err != nil {
-		return nil, 0, err
 	}
 	return requests, int64(len(requests)), nil
 }
@@ -420,39 +425,4 @@ func (s *RequestService) logAudit(ctx context.Context, actorID int64, r *model.P
 		SQLContent: fmt.Sprintf("permission_request:%d:%s:%s", r.ID, r.Database, r.TableName),
 		SQLSummary: fmt.Sprintf("%s permission request #%d for %s/%s", action, r.ID, r.Database, r.TableName),
 	})
-}
-
-func scanPermRequests(rows *sql.Rows) ([]*model.PermissionRequest, error) {
-	var requests []*model.PermissionRequest
-	for rows.Next() {
-		r := &model.PermissionRequest{}
-		var approvedAt, revokedAt sql.NullTime
-		var approverName, datasourceName, applicantName, approveComment, revokeReason sql.NullString
-
-		err := rows.Scan(&r.ID, &r.ApplicantID, &applicantName,
-			&r.ApproverID, &approverName,
-			&r.DatasourceID, &datasourceName,
-			&r.Database, &r.TableName, &r.Actions, &r.Reason,
-			&r.Status, &approveComment,
-			&approvedAt, &r.ExpiresAt, &revokedAt,
-			&r.RevokedBy, &revokeReason,
-			&r.CreatedAt, &r.UpdatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("scan permission request: %w", err)
-		}
-
-		r.ApplicantName = applicantName.String
-		r.ApproverName = approverName.String
-		r.DatasourceName = datasourceName.String
-		r.ApproveComment = approveComment.String
-		r.RevokeReason = revokeReason.String
-		if approvedAt.Valid {
-			r.ApprovedAt = &approvedAt.Time
-		}
-		if revokedAt.Valid {
-			r.RevokedAt = &revokedAt.Time
-		}
-		requests = append(requests, r)
-	}
-	return requests, rows.Err()
 }

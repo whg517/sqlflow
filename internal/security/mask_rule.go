@@ -2,7 +2,6 @@ package security
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -76,13 +75,21 @@ func (s *MaskService) CreateMaskRule(ctx context.Context, userID int64, datasour
 		return nil, ErrMaskRuleCustomRegexRequired
 	}
 
-	// Check for duplicate rule
-	var count int
-	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM mask_rules WHERE datasource_id = $1 AND database = $2 AND table_name = $3 AND field = $4`,
-		datasourceID, database, tableName, field,
-	).Scan(&count)
-	if err == nil && count > 0 {
+	// The error is returned rather than swallowed: the previous form only acted
+	// on the count when the query succeeded, so a failed lookup fell through to
+	// the insert and created a second rule for the same field.
+	duplicate, err := s.client.MaskRule.Query().
+		Where(
+			entmaskrule.DatasourceIDEQ(datasourceID),
+			entmaskrule.DatabaseEQ(database),
+			entmaskrule.TableNameEQ(tableName),
+			entmaskrule.FieldEQ(field),
+		).
+		Exist(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("检查重复脱敏规则失败: %w", err)
+	}
+	if duplicate {
 		return nil, ErrMaskRuleDuplicate
 	}
 
@@ -124,18 +131,25 @@ func (s *MaskService) CreateMaskRule(ctx context.Context, userID int64, datasour
 
 // GetMaskRule retrieves a mask rule by ID.
 func (s *MaskService) GetMaskRule(ctx context.Context, id int64) (*model.MaskRule, error) {
-	r := &model.MaskRule{}
-	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT id, datasource_id, database, table_name, field, mask_type, custom_regex, custom_template, created_at, updated_at
-		 FROM mask_rules WHERE id = $1`, id,
-	).Scan(&r.ID, &r.DatasourceID, &r.Database, &r.TableName, &r.Field, &r.MaskType, &r.CustomRegex, &r.CustomTemplate, &r.CreatedAt, &r.UpdatedAt)
+	r, err := s.client.MaskRule.Get(ctx, int(id))
+	if ent.IsNotFound(err) {
+		return nil, ErrMaskRuleNotFound
+	}
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrMaskRuleNotFound
-		}
 		return nil, fmt.Errorf("获取脱敏规则失败: %w", err)
 	}
-	return r, nil
+	return &model.MaskRule{
+		ID:             int64(r.ID),
+		DatasourceID:   r.DatasourceID,
+		Database:       r.Database,
+		TableName:      r.TableName,
+		Field:          r.Field,
+		MaskType:       r.MaskType,
+		CustomRegex:    r.CustomRegex,
+		CustomTemplate: r.CustomTemplate,
+		CreatedAt:      r.CreatedAt,
+		UpdatedAt:      r.UpdatedAt,
+	}, nil
 }
 
 // ListMaskRules returns a paginated list of mask rules with optional filtering.
@@ -212,10 +226,14 @@ func (s *MaskService) UpdateMaskRule(ctx context.Context, userID, id int64, tabl
 	}
 
 	now := time.Now()
-	_, err = s.database.DB.ExecContext(ctx,
-		`UPDATE mask_rules SET table_name = $1, field = $2, mask_type = $3, custom_regex = $4, custom_template = $5, updated_at = $6 WHERE id = $7`,
-		tableName, field, maskType, customRegex, customTemplate, now, id,
-	)
+	err = s.client.MaskRule.UpdateOneID(int(id)).
+		SetTableName(tableName).
+		SetField(field).
+		SetMaskType(maskType).
+		SetCustomRegex(customRegex).
+		SetCustomTemplate(customTemplate).
+		SetUpdatedAt(now).
+		Exec(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新脱敏规则失败: %w", err)
 	}
@@ -237,13 +255,12 @@ func (s *MaskService) UpdateMaskRule(ctx context.Context, userID, id int64, tabl
 
 // DeleteMaskRule deletes a mask rule by ID and records an audit log for the given userID.
 func (s *MaskService) DeleteMaskRule(ctx context.Context, userID, id int64) error {
-	result, err := s.database.DB.ExecContext(ctx, `DELETE FROM mask_rules WHERE id = $1`, id)
+	err := s.client.MaskRule.DeleteOneID(int(id)).Exec(ctx)
+	if ent.IsNotFound(err) {
+		return ErrMaskRuleNotFound
+	}
 	if err != nil {
 		return fmt.Errorf("删除脱敏规则失败: %w", err)
-	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		return ErrMaskRuleNotFound
 	}
 	s.auditSvc.Write(ctx, auditlog.Record{
 		UserID:     userID,
@@ -265,13 +282,17 @@ func (s *MaskService) CreateSensitiveTable(ctx context.Context, userID, datasour
 		return nil, ErrInvalidSensitivityLevel
 	}
 
-	// Check for duplicate
-	var count int
-	err := s.database.DB.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM sensitive_tables WHERE datasource_id = $1 AND database = $2 AND table_name = $3`,
-		datasourceID, database, tableName,
-	).Scan(&count)
-	if err == nil && count > 0 {
+	duplicate, err := s.client.SensitiveTable.Query().
+		Where(
+			entsensitivetable.DatasourceIDEQ(datasourceID),
+			entsensitivetable.DatabaseEQ(database),
+			entsensitivetable.TableNameEQ(tableName),
+		).
+		Exist(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("检查重复敏感表失败: %w", err)
+	}
+	if duplicate {
 		return nil, ErrSensitiveTableDuplicate
 	}
 
@@ -353,13 +374,12 @@ func (s *MaskService) ListSensitiveTables(ctx context.Context, page, pageSize in
 
 // DeleteSensitiveTable removes a sensitive table marking and records an audit log for the given userID.
 func (s *MaskService) DeleteSensitiveTable(ctx context.Context, userID, id int64) error {
-	result, err := s.database.DB.ExecContext(ctx, `DELETE FROM sensitive_tables WHERE id = $1`, id)
+	err := s.client.SensitiveTable.DeleteOneID(int(id)).Exec(ctx)
+	if ent.IsNotFound(err) {
+		return ErrSensitiveTableNotFound
+	}
 	if err != nil {
 		return fmt.Errorf("删除敏感表记录失败: %w", err)
-	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		return ErrSensitiveTableNotFound
 	}
 	s.auditSvc.Write(ctx, auditlog.Record{
 		UserID:     userID,
