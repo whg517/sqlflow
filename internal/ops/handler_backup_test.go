@@ -5,42 +5,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/config"
-	"github.com/whg517/sqlflow/internal/db"
 )
 
 func setupBackupHandlerTest(t *testing.T) (*echo.Echo, *BackupService, *BackupHandler, string) {
 	t.Helper()
 
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-	backupDir := filepath.Join(tmpDir, "backups")
-
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-
-	cfg := config.BackupConfig{
-		Enabled:  true,
-		Dir:      backupDir,
-		Interval: 999 * 24 * 60 * 60 * 1000000000, // very long to prevent auto-start
-		Keep:     5,
-		Compress: false,
-	}
-
-	wrapped, _ := db.WrapSQL(database.DB)
-	backupSvc := NewBackupService(wrapped, dbPath, cfg)
+	backupSvc, backupDir := newBackupService(t, defaultBackupConfig())
 	handler := NewBackupHandler(backupSvc)
 	e := echo.New()
 
@@ -48,9 +22,6 @@ func setupBackupHandlerTest(t *testing.T) (*echo.Echo, *BackupService, *BackupHa
 }
 
 func TestBackupHandler_TriggerBackup(t *testing.T) {
-	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
-		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
-
 	e, _, h, _ := setupBackupHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/backups", nil)
@@ -84,9 +55,6 @@ func TestBackupHandler_TriggerBackup(t *testing.T) {
 }
 
 func TestBackupHandler_ListBackups(t *testing.T) {
-	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
-		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
-
 	e, backupSvc, h, backupDir := setupBackupHandlerTest(t)
 
 	// Create a backup manually
@@ -117,9 +85,6 @@ func TestBackupHandler_ListBackups(t *testing.T) {
 }
 
 func TestBackupHandler_ListBackups_Empty(t *testing.T) {
-	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
-		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
-
 	e, _, h, _ := setupBackupHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/backups", nil)
@@ -147,9 +112,6 @@ func TestBackupHandler_ListBackups_Empty(t *testing.T) {
 }
 
 func TestBackupHandler_DeleteBackup(t *testing.T) {
-	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
-		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
-
 	e, backupSvc, h, _ := setupBackupHandlerTest(t)
 
 	// Create a backup first
@@ -201,9 +163,6 @@ func TestBackupHandler_DeleteBackup(t *testing.T) {
 }
 
 func TestBackupHandler_DeleteBackup_EmptyFilename(t *testing.T) {
-	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
-		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
-
 	e, _, h, _ := setupBackupHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/backups/", nil)
@@ -222,9 +181,6 @@ func TestBackupHandler_DeleteBackup_EmptyFilename(t *testing.T) {
 }
 
 func TestBackupHandler_DeleteBackup_NotFound(t *testing.T) {
-	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
-		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
-
 	e, _, h, _ := setupBackupHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/backups/sqlflow-nonexistent.db", nil)
@@ -243,9 +199,6 @@ func TestBackupHandler_DeleteBackup_NotFound(t *testing.T) {
 }
 
 func TestBackupHandler_DownloadBackup(t *testing.T) {
-	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
-		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
-
 	e, backupSvc, h, _ := setupBackupHandlerTest(t)
 
 	// Create a backup first
@@ -277,21 +230,15 @@ func TestBackupHandler_DownloadBackup(t *testing.T) {
 		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 
-	// Verify file content was sent
+	// The download must carry the dump itself, not an error page: a handler
+	// that streams the wrong file still returns 200 with a non-empty body.
 	body := rec.Body.String()
-	if len(body) == 0 {
-		t.Error("download response should not be empty")
-	}
-	// SQLite files start with "SQLite format 3"
-	if !strings.HasPrefix(body, "SQLite format 3") {
-		t.Errorf("expected SQLite file header, got: %s", body[:min(50, len(body))])
+	if !strings.Contains(body, "CREATE TABLE") || !strings.Contains(body, "audit_logs") {
+		t.Errorf("downloaded body is not a pg_dump of the platform: %.200s", body)
 	}
 }
 
 func TestBackupHandler_DownloadBackup_NotFound(t *testing.T) {
-	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
-		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
-
 	e, _, h, _ := setupBackupHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/backups/sqlflow-nonexistent.db/download", nil)
@@ -310,9 +257,6 @@ func TestBackupHandler_DownloadBackup_NotFound(t *testing.T) {
 }
 
 func TestBackupHandler_DownloadBackup_EmptyFilename(t *testing.T) {
-	t.Skip("待 P4：备份服务仍是 SQLite 的 wal_checkpoint + 文件拷贝，" +
-		"对 PostgreSQL 无意义，改用 pg_dump 后重写。见 ADR-0009「连带影响」。")
-
 	e, _, h, _ := setupBackupHandlerTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/backups//download", nil)

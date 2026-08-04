@@ -59,6 +59,18 @@ func TestDSN() string {
 // other's rows. The schema is dropped on cleanup.
 func NewDB(t *testing.T) *db.DB {
 	t.Helper()
+	database, _ := NewDBWithDSN(t)
+	return database
+}
+
+// NewDBWithDSN returns the same handle as NewDB alongside the connection string
+// that reaches its schema.
+//
+// Tests for anything that spawns a PostgreSQL client of its own — pg_dump, say
+// — need the DSN rather than the pool, and cannot reconstruct it: the schema
+// name is generated per test.
+func NewDBWithDSN(t *testing.T) (*db.DB, string) {
+	t.Helper()
 
 	schema := schemaName(t)
 
@@ -89,7 +101,8 @@ func NewDB(t *testing.T) *db.DB {
 	// per-session would only pin the first connection, and pinning the pool to
 	// one connection instead deadlocks the migration runner: golang-migrate
 	// holds an advisory lock on one connection while migrating on another.
-	conn, err := sql.Open("pgx", withSearchPath(TestDSN(), schema))
+	dsn := withSearchPath(TestDSN(), schema)
+	conn, err := sql.Open("pgx", dsn)
 	if err != nil {
 		t.Fatalf("testutil: open test schema: %v", err)
 	}
@@ -122,7 +135,7 @@ func NewDB(t *testing.T) *db.DB {
 	if err := db.ApplySchema(conn); err != nil {
 		t.Fatalf("testutil: apply schema %s: %v", schema, err)
 	}
-	return database
+	return database, dsn
 }
 
 // withSearchPath appends the schema to a DSN as a connection parameter.

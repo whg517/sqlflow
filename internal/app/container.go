@@ -150,7 +150,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	dashboardSvc := ops.NewDashboardService(database)
 
 	// Backup（需 Start）
-	backupSvc := ops.NewBackupService(database, cfg.DB.DataDir, cfg.Backup)
+	backupSvc := ops.NewBackupService(cfg.DB.DSN, cfg.Backup)
 
 	// AuditReport
 	reportSvc := audit.NewReportService(database)

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -14,8 +15,14 @@ import (
 	"time"
 
 	"github.com/whg517/sqlflow/config"
-	"github.com/whg517/sqlflow/internal/db"
 )
+
+// backupPrefix marks the files this service owns.
+//
+// Listing, rotation and deletion all filter on it, and deletion treats it as a
+// safety check, so the three must agree: a drifting literal here would let one
+// of them act on a file the others do not consider a backup.
+const backupPrefix = "sqlflow-"
 
 // BackupInfo represents a single backup file's metadata.
 type BackupInfo struct {
@@ -26,22 +33,25 @@ type BackupInfo struct {
 	Compressed bool      `json:"compressed"`
 }
 
-// BackupService handles SQLite database backups with rotation and optional compression.
+// BackupService dumps the platform database on a schedule, with rotation and
+// optional compression.
+//
+// It holds a DSN rather than a database handle: pg_dump opens its own
+// connection, and taking a *db.DB would suggest the dump goes through the pool
+// when it does not.
 type BackupService struct {
 	mu     sync.Mutex
-	db     *db.DB
-	dbPath string
+	dsn    string
 	cfg    config.BackupConfig
 	cancel context.CancelFunc
 	done   chan struct{}
 }
 
 // NewBackupService creates a new BackupService.
-func NewBackupService(db *db.DB, dbPath string, cfg config.BackupConfig) *BackupService {
+func NewBackupService(dsn string, cfg config.BackupConfig) *BackupService {
 	return &BackupService{
-		db:     db,
-		dbPath: dbPath,
-		cfg:    cfg,
+		dsn: dsn,
+		cfg: cfg,
 	}
 }
 
@@ -102,8 +112,6 @@ func (s *BackupService) Stop() {
 }
 
 // RunBackup performs a single backup operation.
-// It uses the SQLite backup API via SQL, then optionally compresses the file,
-// and finally rotates old backups.
 func (s *BackupService) RunBackup() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -112,32 +120,38 @@ func (s *BackupService) RunBackup() error {
 		return fmt.Errorf("create backup dir: %w", err)
 	}
 
-	ts := time.Now().UTC().Format("20060102-150405")
-	filename := fmt.Sprintf("sqlflow-%s.db", ts)
+	// Millisecond precision, not seconds: a manual trigger landing in the same
+	// second as the scheduled one produced the same name, and the second run
+	// silently overwrote the first backup.
+	ts := time.Now().UTC().Format("20060102-150405.000")
+	filename := backupPrefix + ts + ".sql"
+	if s.cfg.Compress {
+		filename += ".gz"
+	}
 	destPath := filepath.Join(s.cfg.Dir, filename)
 
-	// Use SQLite backup API: the sql.Backup function creates an online backup.
-	// modernc.org/sqlite supports this via the database/sql connection.
-	// We use the "backup to" pragma approach as a fallback-safe method.
-	if err := s.sqliteBackup(destPath); err != nil {
-		return fmt.Errorf("sqlite backup: %w", err)
+	// O_EXCL, so a name collision is an error rather than a destroyed backup.
+	// The file is created here rather than inside dump() so that the cleanup
+	// below can only ever remove a file this call made: a failure to create
+	// means one already existed, and deleting that would be the very loss the
+	// exclusive open exists to prevent.
+	destFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
+	if err != nil {
+		return fmt.Errorf("create backup file: %w", err)
 	}
 
-	// Optionally compress the backup
-	if s.cfg.Compress {
-		gzPath := destPath + ".gz"
-		if err := s.compressFile(destPath, gzPath); err != nil {
-			// Remove the uncompressed file on compression failure
-			_ = os.Remove(destPath)
-			return fmt.Errorf("compress backup: %w", err)
-		}
-		// Remove the uncompressed backup
-		if err := os.Remove(destPath); err != nil {
-			log.Printf("[WARN] failed to remove uncompressed backup %s: %v", destPath, err)
-		}
+	if err := s.dump(destFile, destPath); err != nil {
+		_ = destFile.Close()
+		// A partial dump is worse than none: it looks like a backup and would
+		// restore into a truncated database.
+		_ = os.Remove(destPath)
+		return fmt.Errorf("pg_dump: %w", err)
+	}
+	if err := destFile.Close(); err != nil {
+		_ = os.Remove(destPath)
+		return fmt.Errorf("close backup file: %w", err)
 	}
 
-	// Rotate old backups
 	if err := s.rotate(); err != nil {
 		log.Printf("[WARN] backup rotation failed: %v", err)
 	}
@@ -146,77 +160,77 @@ func (s *BackupService) RunBackup() error {
 	return nil
 }
 
-// sqliteBackup creates a backup using the SQLite backup API.
-// It connects to the source database and uses "backup to" SQL command
-// which is supported by modernc.org/sqlite.
-func (s *BackupService) sqliteBackup(destPath string) error {
-	// Acquire a dedicated connection to perform the backup.
-	// We use the VACUUM INTO approach which is safe for online backups
-	// with modernc.org/sqlite, or fall back to file copy with WAL checkpoint.
-	//
-	// Strategy: Checkpoint WAL first, then copy the database file + WAL + SHM files.
-	// This is the safest approach for modernc.org/sqlite which may not fully
-	// support the backup API.
-
-	// Checkpoint the WAL to flush all writes to the main database file
-	_, err := s.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
-	if err != nil {
-		log.Printf("[WARN] WAL checkpoint failed (non-fatal): %v", err)
-	}
-
-	// Copy the main database file
-	srcPath := s.dbPath
-	srcFile, err := os.Open(srcPath)
-	if err != nil {
-		return fmt.Errorf("open source db: %w", err)
-	}
-	defer func() { _ = srcFile.Close() }()
-
-	srcInfo, err := srcFile.Stat()
-	if err != nil {
-		return fmt.Errorf("stat source db: %w", err)
-	}
-
-	destFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return fmt.Errorf("create backup file: %w", err)
-	}
-	defer func() { _ = destFile.Close() }()
-
-	written, err := io.Copy(destFile, srcFile)
-	if err != nil {
-		return fmt.Errorf("copy db file: %w", err)
-	}
-	if written != srcInfo.Size() {
-		return fmt.Errorf("copy incomplete: expected %d bytes, wrote %d", srcInfo.Size(), written)
-	}
-
-	return nil
-}
-
-// compressFile creates a gzipped copy of the source file.
-func (s *BackupService) compressFile(src, dst string) error {
-	srcFile, err := os.Open(src)
+// dump streams pg_dump's output into destPath, gzipping it on the way when
+// compression is enabled.
+//
+// Streaming rather than dumping to a file and compressing it afterwards: the
+// platform database is the one an operator restores from after losing a disk,
+// and the two-step form needs room for the uncompressed copy at the moment
+// disk space is most likely to be the problem.
+func (s *BackupService) dump(destFile *os.File, destPath string) error {
+	conn, err := parsePostgresDSN(s.dsn)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = srcFile.Close() }()
 
-	dstFile, err := os.Create(dst)
+	args := []string{
+		"--host=" + conn.host,
+		"--port=" + conn.port,
+		"--username=" + conn.user,
+		"--dbname=" + conn.database,
+		"--format=plain",
+		// Without this a dump taken while a query is running can capture a
+		// state no single transaction ever saw.
+		"--serializable-deferrable",
+	}
+	for _, schema := range conn.schemas {
+		// The platform can be deployed into a named schema; dumping the whole
+		// database would then also carry whatever else shares it.
+		args = append(args, "--schema="+schema)
+	}
+
+	cmd := exec.Command("pg_dump", args...)
+	// The password goes in the environment, never in the argument list: argv is
+	// readable by every user on the host through ps, while a process's
+	// environment is not.
+	cmd.Env = append(os.Environ(), "PGPASSWORD="+conn.password)
+	if conn.sslMode != "" {
+		cmd.Env = append(cmd.Env, "PGSSLMODE="+conn.sslMode)
+	}
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return fmt.Errorf("open stdout: %w", err)
 	}
-	defer func() { _ = dstFile.Close() }()
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
 
-	gzWriter := gzip.NewWriter(dstFile)
-	gzWriter.Name = filepath.Base(src)
-	defer func() { _ = gzWriter.Close() }()
-
-	if _, err := io.Copy(gzWriter, srcFile); err != nil {
-		return err
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start pg_dump: %w", err)
 	}
 
-	return gzWriter.Close()
+	var writeErr error
+	if s.cfg.Compress {
+		gz := gzip.NewWriter(destFile)
+		gz.Name = filepath.Base(strings.TrimSuffix(destPath, ".gz"))
+		_, writeErr = io.Copy(gz, stdout)
+		if closeErr := gz.Close(); writeErr == nil {
+			writeErr = closeErr
+		}
+	} else {
+		_, writeErr = io.Copy(destFile, stdout)
+	}
+
+	// Wait runs regardless: skipping it on a write error would leave the child
+	// as a zombie and hide the reason pg_dump gave up.
+	waitErr := cmd.Wait()
+	if waitErr != nil {
+		return fmt.Errorf("%w: %s", waitErr, strings.TrimSpace(stderr.String()))
+	}
+	if writeErr != nil {
+		return fmt.Errorf("write backup: %w", writeErr)
+	}
+	return destFile.Sync()
 }
 
 // rotate removes old backup files, keeping only the most recent N.
@@ -232,7 +246,7 @@ func (s *BackupService) rotate() error {
 			continue
 		}
 		name := entry.Name()
-		if !strings.HasPrefix(name, "sqlflow-") {
+		if !strings.HasPrefix(name, backupPrefix) {
 			continue
 		}
 		info, err := entry.Info()
@@ -287,7 +301,7 @@ func (s *BackupService) ListBackups() ([]BackupInfo, error) {
 			continue
 		}
 		name := entry.Name()
-		if !strings.HasPrefix(name, "sqlflow-") {
+		if !strings.HasPrefix(name, backupPrefix) {
 			continue
 		}
 		info, err := entry.Info()
@@ -317,7 +331,7 @@ func (s *BackupService) DeleteBackup(filename string) error {
 	defer s.mu.Unlock()
 
 	// Validate filename to prevent path traversal
-	if !strings.HasPrefix(filename, "sqlflow-") {
+	if !strings.HasPrefix(filename, backupPrefix) {
 		return fmt.Errorf("invalid backup filename")
 	}
 	if strings.Contains(filename, "..") || strings.Contains(filename, "/") || strings.Contains(filename, "\\") {
