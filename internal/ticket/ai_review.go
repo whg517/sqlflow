@@ -4,20 +4,22 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entmaskrule "github.com/whg517/sqlflow/internal/db/ent/maskrule"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
-	"github.com/whg517/sqlflow/internal/platform/sqlparser"
 )
 
 // AI review errors
@@ -86,14 +88,27 @@ type aiConfig struct {
 
 // AIReviewService handles AI review logic.
 type AIReviewService struct {
-	db     *sql.DB
-	config aiConfig
-	client *http.Client
-	mu     sync.RWMutex
+	// entClient reads the masking rules that decide whether a statement touches
+	// sensitive data; client is the HTTP client the model is called through.
+	entClient *ent.Client
+	config    aiConfig
+	client    *http.Client
+	mu        sync.RWMutex
+}
+
+// entClientOrNil unwraps the platform handle, tolerating a nil one.
+//
+// The settings endpoints report the AI configuration without touching the
+// database, and are tested with no handle at all.
+func entClientOrNil(database *db.DB) *ent.Client {
+	if database == nil {
+		return nil
+	}
+	return database.Client()
 }
 
 // NewAIReviewService creates a new AIReviewService.
-func NewAIReviewService(db *sql.DB, provider, model, apiKey, baseURL string, timeout time.Duration) *AIReviewService {
+func NewAIReviewService(database *db.DB, provider, model, apiKey, baseURL string, timeout time.Duration) *AIReviewService {
 	if timeout == 0 {
 		timeout = 10 * time.Second
 	}
@@ -109,7 +124,7 @@ func NewAIReviewService(db *sql.DB, provider, model, apiKey, baseURL string, tim
 	enabled := apiKey != ""
 
 	return &AIReviewService{
-		db: db,
+		entClient: entClientOrNil(database),
 		config: aiConfig{
 			Provider: provider,
 			Model:    model,
@@ -214,8 +229,11 @@ func (s *AIReviewService) applyStaticRules(ctx context.Context, req *AIReviewReq
 	result.Warnings = append(result.Warnings, pr.Warnings...)
 
 	// Check sensitive tables
-	sensitiveTables, err := sqlparser.CheckSensitiveTables(ctx, s.db, req.Tables, int(req.DatasourceID))
+	sensitiveTables, err := s.sensitiveTables(ctx, req.Tables, req.DatasourceID)
 	if err != nil {
+		// The risk grade falls back to "not sensitive" rather than failing the
+		// review; the ticket still goes through approval, which is where a
+		// wrong grade is caught.
 		log.Printf("check sensitive tables: %v", err)
 	}
 	isSensitive := len(sensitiveTables) > 0
@@ -831,4 +849,32 @@ func defaultBaseURLForProvider(provider string) string {
 	default:
 		return "https://api.openai.com/v1"
 	}
+}
+
+// sensitiveTables returns which of the given tables carry masking rules.
+//
+// The query used to live in internal/platform/sqlparser, which took a *sql.DB
+// to run it — the last reason a domain still held one. A parser that reads the
+// platform's own tables is not a parser; the lookup belongs to the domain that
+// asks the question.
+func (s *AIReviewService) sensitiveTables(ctx context.Context, tables []string, datasourceID int64) ([]string, error) {
+	if len(tables) == 0 || s.entClient == nil {
+		return nil, nil
+	}
+	names, err := s.entClient.MaskRule.Query().
+		Where(
+			entmaskrule.TableNameIn(tables...),
+			entmaskrule.DatasourceIDEQ(datasourceID),
+		).
+		Unique(true).
+		Select(entmaskrule.FieldTableName).
+		Strings(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("query sensitive tables: %w", err)
+	}
+	// Ordered because the result reaches the user as a warning list, and an
+	// unordered DISTINCT renders the same query's tables differently between
+	// calls.
+	sort.Strings(names)
+	return names, nil
 }

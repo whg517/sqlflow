@@ -33,7 +33,7 @@ func setupAIReviewTest(t *testing.T) (*echo.Echo, *AIReviewService, *datasource.
 	encKey := "0123456789abcdef0123456789abcdef"
 	connMgr := connpool.NewManager()
 	dsSvc := datasource.NewService(database, encKey, connMgr, nil)
-	aiReviewSvc := NewAIReviewService(database.DB, "openai", "test-model", "", "https://api.example.com/v1", 5*time.Second)
+	aiReviewSvc := NewAIReviewService(database, "openai", "test-model", "", "https://api.example.com/v1", 5*time.Second)
 	handler := NewAIReviewHandler(aiReviewSvc, dsSvc)
 
 	e := echo.New()
@@ -51,7 +51,7 @@ func setupAIReviewTestWithMockLLM(t *testing.T, handler http.HandlerFunc) (*echo
 	dsSvc := datasource.NewService(database, encKey, connMgr, nil)
 
 	// Create AI service with API key and mock server
-	aiReviewSvc := NewAIReviewService(database.DB, "openai", "test-model", "test-api-key", "https://api.example.com/v1", 5*time.Second)
+	aiReviewSvc := NewAIReviewService(database, "openai", "test-model", "test-api-key", "https://api.example.com/v1", 5*time.Second)
 	if handler != nil {
 		server := httptest.NewServer(handler)
 		t.Cleanup(server.Close)
@@ -601,7 +601,7 @@ func TestAIReviewHandler_ReviewStream_LLMNetworkError(t *testing.T) {
 	encKey := "0123456789abcdef0123456789abcdef"
 	connMgr := connpool.NewManager()
 	dsSvc := datasource.NewService(database, encKey, connMgr, nil)
-	aiSvc := NewAIReviewService(database.DB, "openai", "test-model", "test-key", server.URL, 2*time.Second)
+	aiSvc := NewAIReviewService(database, "openai", "test-model", "test-key", server.URL, 2*time.Second)
 	h := NewAIReviewHandler(aiSvc, dsSvc)
 
 	e := echo.New()

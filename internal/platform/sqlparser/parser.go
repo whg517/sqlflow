@@ -1,13 +1,9 @@
 package sqlparser
 
 import (
-	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
-
-	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 )
 
 // OperationType represents the type of SQL operation.
@@ -391,47 +387,6 @@ func (r *SQLParseResult) applyMongoRules(mr *MongoParseResult) {
 	default:
 		r.RiskLevel = RiskLow
 	}
-}
-
-// CheckSensitiveTables checks which of the given tables are marked as sensitive.
-// It queries the mask_rules table via the provided database connection.
-func CheckSensitiveTables(ctx context.Context, db *sql.DB, tables []string, datasourceID int) ([]string, error) {
-	if len(tables) == 0 || db == nil {
-		return nil, nil
-	}
-
-	// Build query with placeholders
-	placeholders := make([]string, len(tables))
-	args := make([]interface{}, 0, len(tables)+1)
-	for i, t := range tables {
-		placeholders[i] = "?"
-		args = append(args, t)
-	}
-	args = append(args, datasourceID)
-
-	query := sqlutil.NumberPlaceholders(fmt.Sprintf(
-		// Ordered because the result reaches the user as a warning list, and an
-		// unordered DISTINCT lets the same query render its tables differently
-		// from one call to the next.
-		"SELECT DISTINCT table_name FROM mask_rules WHERE table_name IN (%s) AND datasource_id = ? ORDER BY table_name",
-		strings.Join(placeholders, ","),
-	))
-
-	rows, err := db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("query sensitive tables: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var sensitive []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("scan sensitive table: %w", err)
-		}
-		sensitive = append(sensitive, name)
-	}
-	return sensitive, rows.Err()
 }
 
 // ---------------------------------------------------------------------------

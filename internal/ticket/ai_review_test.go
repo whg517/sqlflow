@@ -30,12 +30,12 @@ func newTestDB(t *testing.T) *sql.DB {
 
 func newTestService(t *testing.T, db *sql.DB) *AIReviewService {
 	t.Helper()
-	return NewAIReviewService(db, "openai", "test-model", "", "https://api.example.com/v1", 5*time.Second)
+	return NewAIReviewService(testutil.WrapSQL(t, db), "openai", "test-model", "", "https://api.example.com/v1", 5*time.Second)
 }
 
 func newTestServiceWithAI(t *testing.T, db *sql.DB, handler http.HandlerFunc) *AIReviewService {
 	t.Helper()
-	svc := NewAIReviewService(db, "openai", "test-model", "test-api-key", "https://api.example.com/v1", 5*time.Second)
+	svc := NewAIReviewService(testutil.WrapSQL(t, db), "openai", "test-model", "test-api-key", "https://api.example.com/v1", 5*time.Second)
 	if handler != nil {
 		server := httptest.NewServer(handler)
 		t.Cleanup(server.Close)
@@ -1079,7 +1079,7 @@ func TestUpdateConfig(t *testing.T) {
 func TestGetConfig_MaskedAPIKey(t *testing.T) {
 	db := newTestDB(t)
 	defer db.Close()
-	svc := NewAIReviewService(db, "openai", "gpt-4", "sk-test-long-api-key-12345678", "", 10*time.Second)
+	svc := NewAIReviewService(testutil.WrapSQL(t, db), "openai", "gpt-4", "sk-test-long-api-key-12345678", "", 10*time.Second)
 
 	cfg := svc.GetConfig()
 	key, ok := cfg["api_key"].(string)
@@ -1094,7 +1094,7 @@ func TestGetConfig_MaskedAPIKey(t *testing.T) {
 func TestGetConfig_ShortAPIKey(t *testing.T) {
 	db := newTestDB(t)
 	defer db.Close()
-	svc := NewAIReviewService(db, "openai", "gpt-4", "short", "", 10*time.Second)
+	svc := NewAIReviewService(testutil.WrapSQL(t, db), "openai", "gpt-4", "short", "", 10*time.Second)
 
 	cfg := svc.GetConfig()
 	key := cfg["api_key"].(string)
@@ -1107,7 +1107,7 @@ func TestNewAIReviewService_Defaults(t *testing.T) {
 	db := newTestDB(t)
 	defer db.Close()
 
-	svc := NewAIReviewService(db, "", "", "", "", 0)
+	svc := NewAIReviewService(testutil.WrapSQL(t, db), "", "", "", "", 0)
 
 	if svc.config.Provider != "openai" {
 		t.Errorf("default provider = %v, want openai", svc.config.Provider)

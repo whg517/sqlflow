@@ -4,6 +4,8 @@
 package arch_test
 
 import (
+	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
@@ -203,6 +205,70 @@ func TestAppIsTheOnlyCompositionRoot(t *testing.T) {
 			t.Errorf("%s 依赖了 %d 个领域包 %v：组合根应当只有 internal/app",
 				pkg, len(seen), sortedKeys(seen))
 		}
+	}
+}
+
+// TestDomainsDoNotQueryThroughDatabaseSQL is ADR-0010's exit condition, made
+// executable.
+//
+// Ent is the only way domain code reaches the platform store. The rule is not
+// about taste: the two-track period cost a batch of defects that a typed query
+// layer makes impossible to write — placeholders numbered by hand, ON CONFLICT
+// and INSERT OR IGNORE spelled for the wrong dialect, booleans written as 0/1,
+// ids read with LastInsertId. Each of those was a valid Go program that failed
+// at runtime, and several failed silently.
+//
+// The check looks for calls to database/sql's query methods on anything other
+// than a transaction handle, since ent's own Tx exposes the same names. It is
+// deliberately syntactic — a domain that wants raw SQL badly enough can defeat
+// it — so its job is to make the decision visible, not to be airtight.
+func TestDomainsDoNotQueryThroughDatabaseSQL(t *testing.T) {
+	// Method names database/sql exposes for running statements. ent's builders
+	// use Exec, Query and QueryRow too, but only ever on a client or a builder
+	// value — never on a *sql.DB the domain is holding.
+	sqlMethods := map[string]bool{
+		"QueryContext": true, "QueryRowContext": true, "ExecContext": true,
+	}
+
+	root := repoRoot(t)
+	fset := token.NewFileSet()
+	var offenders []string
+
+	for domain := range domains {
+		dir := filepath.Join(root, "internal", domain)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatalf("read %s: %v", dir, err)
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
+				continue
+			}
+			path := filepath.Join(dir, e.Name())
+			file, err := parser.ParseFile(fset, path, nil, 0)
+			if err != nil {
+				t.Fatalf("parse %s: %v", path, err)
+			}
+			ast.Inspect(file, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || !sqlMethods[sel.Sel.Name] {
+					return true
+				}
+				offenders = append(offenders, fmt.Sprintf("internal/%s/%s:%d: %s",
+					domain, e.Name(), fset.Position(call.Pos()).Line, sel.Sel.Name))
+				return true
+			})
+		}
+	}
+
+	sort.Strings(offenders)
+	if len(offenders) > 0 {
+		t.Errorf("领域包不得直接用 database/sql 查询平台库（见 ADR-0010），发现 %d 处：\n  %s",
+			len(offenders), strings.Join(offenders, "\n  "))
 	}
 }
 

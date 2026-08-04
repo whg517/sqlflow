@@ -146,7 +146,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	permReqSvc := security.NewRequestService(database, permSvc, auditSvc)
 
 	// AI / Dashboard
-	aiReviewSvc := ticket.NewAIReviewService(database.DB, cfg.AI.Provider, cfg.AI.Model, cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Timeout)
+	aiReviewSvc := ticket.NewAIReviewService(database, cfg.AI.Provider, cfg.AI.Model, cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Timeout)
 	dashboardSvc := ops.NewDashboardService(database)
 
 	// Backup（需 Start）

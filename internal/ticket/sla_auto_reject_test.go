@@ -6,14 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/notify"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
-func setupSLATestDB(t *testing.T) *sql.DB {
+func setupSLATestDB(t *testing.T) *db.DB {
 	t.Helper()
-	return testutil.NewDB(t).DB
+	return testutil.NewDB(t)
 }
 
 func createTestUserForSLA(t *testing.T, ctx context.Context, d *sql.DB, username string) int64 {
@@ -54,10 +55,10 @@ func TestSLAService_AutoReject_Breached(t *testing.T) {
 	ctx := context.Background()
 	d := setupSLATestDB(t)
 	notifySvc := notify.NewService(notify.Deps{DB: d})
-	slaSvc := NewSLAService(testutil.WrapSQL(t, d), notifySvc)
+	slaSvc := NewSLAService(d, notifySvc)
 
-	submitterID := createTestUserForSLA(t, ctx, d, "submitter1")
-	dsID := createTestDatasourceForSLA(t, ctx, d)
+	submitterID := createTestUserForSLA(t, ctx, d.DB, "submitter1")
+	dsID := createTestDatasourceForSLA(t, ctx, d.DB)
 
 	// Create SLA config with auto_reject_enabled = true, timeout = 60 minutes
 	_, err := d.ExecContext(ctx,
@@ -71,7 +72,7 @@ func TestSLAService_AutoReject_Breached(t *testing.T) {
 	// Create a PENDING_APPROVAL ticket created 70 minutes ago (past deadline)
 	createdAt := time.Now().Add(-70 * time.Minute)
 	deadline := createdAt.Add(60 * time.Minute)
-	ticketID := createTestTicketForSLA(t, ctx, d, submitterID, dsID, string(model.TicketStatusPendingApproval), createdAt, &deadline)
+	ticketID := createTestTicketForSLA(t, ctx, d.DB, submitterID, dsID, string(model.TicketStatusPendingApproval), createdAt, &deadline)
 
 	// Run SLA check
 	if err := slaSvc.CheckSLA(ctx); err != nil {
@@ -122,10 +123,10 @@ func TestSLAService_AutoReject_Breached(t *testing.T) {
 func TestSLAService_AutoReject_Idempotent(t *testing.T) {
 	ctx := context.Background()
 	d := setupSLATestDB(t)
-	slaSvc := NewSLAService(testutil.WrapSQL(t, d), nil)
+	slaSvc := NewSLAService(d, nil)
 
-	submitterID := createTestUserForSLA(t, ctx, d, "submitter2")
-	dsID := createTestDatasourceForSLA(t, ctx, d)
+	submitterID := createTestUserForSLA(t, ctx, d.DB, "submitter2")
+	dsID := createTestDatasourceForSLA(t, ctx, d.DB)
 
 	_, err := d.ExecContext(ctx,
 		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, auto_reject_enabled, enabled, created_at, updated_at)
@@ -137,7 +138,7 @@ func TestSLAService_AutoReject_Idempotent(t *testing.T) {
 
 	createdAt := time.Now().Add(-70 * time.Minute)
 	deadline := createdAt.Add(60 * time.Minute)
-	ticketID := createTestTicketForSLA(t, ctx, d, submitterID, dsID, string(model.TicketStatusPendingApproval), createdAt, &deadline)
+	ticketID := createTestTicketForSLA(t, ctx, d.DB, submitterID, dsID, string(model.TicketStatusPendingApproval), createdAt, &deadline)
 
 	// Run CheckSLA twice — should be idempotent
 	if err := slaSvc.CheckSLA(ctx); err != nil {
@@ -161,10 +162,10 @@ func TestSLAService_AutoReject_Idempotent(t *testing.T) {
 func TestSLAService_NoAutoReject_WhenDisabled(t *testing.T) {
 	ctx := context.Background()
 	d := setupSLATestDB(t)
-	slaSvc := NewSLAService(testutil.WrapSQL(t, d), nil)
+	slaSvc := NewSLAService(d, nil)
 
-	submitterID := createTestUserForSLA(t, ctx, d, "submitter3")
-	dsID := createTestDatasourceForSLA(t, ctx, d)
+	submitterID := createTestUserForSLA(t, ctx, d.DB, "submitter3")
+	dsID := createTestDatasourceForSLA(t, ctx, d.DB)
 
 	// auto_reject_enabled = false (default)
 	_, err := d.ExecContext(ctx,
@@ -177,7 +178,7 @@ func TestSLAService_NoAutoReject_WhenDisabled(t *testing.T) {
 
 	createdAt := time.Now().Add(-70 * time.Minute)
 	deadline := createdAt.Add(60 * time.Minute)
-	ticketID := createTestTicketForSLA(t, ctx, d, submitterID, dsID, string(model.TicketStatusPendingApproval), createdAt, &deadline)
+	ticketID := createTestTicketForSLA(t, ctx, d.DB, submitterID, dsID, string(model.TicketStatusPendingApproval), createdAt, &deadline)
 
 	if err := slaSvc.CheckSLA(ctx); err != nil {
 		t.Fatalf("CheckSLA: %v", err)
@@ -207,10 +208,10 @@ func TestSLAService_NoAutoReject_WhenDisabled(t *testing.T) {
 func TestSLAService_NoAutoReject_WhenNotBreached(t *testing.T) {
 	ctx := context.Background()
 	d := setupSLATestDB(t)
-	slaSvc := NewSLAService(testutil.WrapSQL(t, d), nil)
+	slaSvc := NewSLAService(d, nil)
 
-	submitterID := createTestUserForSLA(t, ctx, d, "submitter4")
-	dsID := createTestDatasourceForSLA(t, ctx, d)
+	submitterID := createTestUserForSLA(t, ctx, d.DB, "submitter4")
+	dsID := createTestDatasourceForSLA(t, ctx, d.DB)
 
 	_, err := d.ExecContext(ctx,
 		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, auto_reject_enabled, enabled, created_at, updated_at)
@@ -223,7 +224,7 @@ func TestSLAService_NoAutoReject_WhenNotBreached(t *testing.T) {
 	// Ticket created 30 minutes ago (not yet breached, 60min timeout)
 	createdAt := time.Now().Add(-30 * time.Minute)
 	deadline := createdAt.Add(60 * time.Minute)
-	ticketID := createTestTicketForSLA(t, ctx, d, submitterID, dsID, string(model.TicketStatusPendingApproval), createdAt, &deadline)
+	ticketID := createTestTicketForSLA(t, ctx, d.DB, submitterID, dsID, string(model.TicketStatusPendingApproval), createdAt, &deadline)
 
 	if err := slaSvc.CheckSLA(ctx); err != nil {
 		t.Fatalf("CheckSLA: %v", err)
@@ -253,7 +254,7 @@ func TestSLAService_NoAutoReject_WhenNotBreached(t *testing.T) {
 func TestSLAService_ConfigCRUD_WithAutoReject(t *testing.T) {
 	ctx := context.Background()
 	d := setupSLATestDB(t)
-	slaSvc := NewSLAService(testutil.WrapSQL(t, d), nil)
+	slaSvc := NewSLAService(d, nil)
 
 	// Create config with auto_reject_enabled
 	cfg := &model.SLAConfig{

@@ -292,7 +292,7 @@ func TestIntegration_PermissionChecks(t *testing.T) {
 
 func TestIntegration_SQLParsingToTicketCreation(t *testing.T) {
 	testDB := testutil.NewDB(t).DB
-	aiSvc := NewAIReviewService(testDB, "openai", "test-model", "", "", 5*time.Second)
+	aiSvc := NewAIReviewService(testutil.WrapSQL(t, testDB), "openai", "test-model", "", "", 5*time.Second)
 	ticketSvc := New(Deps{DB: testutil.WrapSQL(t, testDB)})
 
 	devID := testutil.SeedUser(t, testDB, "dev_sql", "developer")
@@ -568,7 +568,7 @@ func TestIntegration_SensitiveTableAffectsAIReview(t *testing.T) {
 		t.Fatalf("insert mask rule: %v", err)
 	}
 
-	aiSvc := NewAIReviewService(testDB, "openai", "test-model", "", "", 5*time.Second)
+	aiSvc := NewAIReviewService(testutil.WrapSQL(t, testDB), "openai", "test-model", "", "", 5*time.Second)
 
 	t.Run("select_on_sensitive_table_upgraded_risk", func(t *testing.T) {
 		req := &AIReviewRequest{
@@ -847,7 +847,7 @@ func TestIntegration_AIReviewWithMockLLMToDecision(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(handler))
 			defer server.Close()
 
-			svc := NewAIReviewService(testDB, "openai", "test-model", "test-api-key", server.URL, 5*time.Second)
+			svc := NewAIReviewService(testutil.WrapSQL(t, testDB), "openai", "test-model", "test-api-key", server.URL, 5*time.Second)
 			svc.client = server.Client()
 			svc.client.Timeout = 5 * time.Second
 

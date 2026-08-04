@@ -111,7 +111,7 @@
 | DEBT-05 领域错误映射不统一 | 阶段 1.8 |
 | DEBT-06 超时/行数上限三处硬编码 | 阶段 1.5 |
 | DEBT-07 工单 SELECT 列清单多处重复 | 阶段 1.3 — **已完成** |
-| DEBT-03 原始 SQL 与 Ent 双轨 | 阶段 3 — 退出条件见 [ADR-0010](adr/0010-ent-as-the-single-data-access-path.md) |
+| DEBT-03 原始 SQL 与 Ent 双轨 | **已完成**（2026-08-04）：141 处改写完毕，守卫见 `internal/arch` |
 | DEBT-04 超大 Service 文件与扁平包结构 | 阶段 3 — **已完成**（`internal/service` 已拆为八个领域包） |
 
 ## 工作项完成定义

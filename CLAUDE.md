@@ -130,13 +130,14 @@ docs/                需求、架构、ADR、评审、路线图
   改表结构要同时评估 migration、ent schema 和测试夹具。
 - **`internal/connpool` 只剩一处用途**：ES 索引与字段浏览需要原生客户端。
   不要扩大它；其余路径一律走 `internal/driver.PoolManager`。
-- **动态拼接的 SQL 一律用 `?` 写片段，组装完成后调 `sqlutil.NumberPlaceholders`
-  统一编号。** PostgreSQL 的 `$N` 是位置量，手工数占位符出过一批缺陷——最严重的
-  一处让 `WHERE id = $1 AND user_id = $1` 拿模板 id 去比对用户 id，私有模板的
-  归属校验形同虚设。片段自己不知道前面有几个占位符，只有组装点知道。
-- **`LastInsertId` 在 PostgreSQL 上返回 0 且不报错。** 写入后取 id 一律用
-  `RETURNING id` + `QueryRow`。这是迁移期最危险的一类：不报错，外键指向不存在
-  的行，症状在很远的地方才浮现。
+- **领域包访问平台库只能通过 ent**（[ADR-0010](docs/adr/0010-ent-as-the-single-data-access-path.md)），
+  由 `internal/arch` 的 `TestDomainsDoNotQueryThroughDatabaseSQL` 强制。双轨期
+  暴露了 8 个缺陷，5 个是静默的：占位符复用让私有模板的归属校验失效、
+  `INSERT OR IGNORE` 让通知去重从未生效、布尔写成 0/1 让 webhook 无法禁用。
+  这些都是合法的 Go 程序，类型化查询让它们写不出来。
+- **需要 ent 表达不了的 SQL 时用 `Modify` 逃生口，并写明为什么。** 全文检索的
+  `@@`、聚合上的 `ORDER BY`、`GROUP BY` 后取 top-N 都属于这一类。逃生口本身不
+  违反 ADR-0010，无理由地使用才违反。
 - 浏览器级端到端验证目前缺失（Playwright 套件已移除）。
 - **前端单测套件对负载敏感**，`findByText` / `waitFor` 在并行压力下会超时，同一份
   代码连跑三次可能 0、2、48 个失败。这是既有问题（在重组前的树上同样复现），

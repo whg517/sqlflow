@@ -1,18 +1,21 @@
-// Package sqlutil builds the pagination and WHERE fragments shared by every
-// domain's list query.
+// Package sqlutil holds what is left of the hand-written SQL layer.
 //
-// It is deliberately domain-free: it knows about SQL shape, never about
-// tickets, datasources or audit records. Keeping it here is what lets the
-// domain packages stay independent of one another.
+// It used to assemble WHERE clauses, count queries and paginated selects for
+// every domain's list endpoint. Those callers moved to ent (ADR-0010), which
+// builds the same statements with the column names checked at compile time, so
+// the assembly helpers went with them.
+//
+// What remains is not about building statements:
+//
+//   - ParsePagination normalizes a page and size from a request, which is a
+//     transport concern rather than a SQL one.
+//   - EscapeLike and NumberPlaceholders serve the few expressions ent has no
+//     builder for — full-text operators and the mask-rule lookup.
 package sqlutil
 
 import (
-	"errors"
-	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Pagination holds normalized pagination parameters.
@@ -39,48 +42,6 @@ func ParsePagination(page, pageSize int) Pagination {
 		PageSize: pageSize,
 		Offset:   (page - 1) * pageSize,
 	}
-}
-
-// FilterClause represents a single SQL WHERE condition with its arguments.
-type FilterClause struct {
-	Condition string
-	Args      []interface{}
-}
-
-// BuildWhereClause constructs a WHERE clause from a slice of FilterClauses.
-// Returns the WHERE clause (including "WHERE" prefix if any filters exist) and the combined args.
-func BuildWhereClause(filters []FilterClause) (string, []interface{}) {
-	if len(filters) == 0 {
-		return "", nil
-	}
-	conds := make([]string, 0, len(filters))
-	args := make([]interface{}, 0)
-	for _, f := range filters {
-		conds = append(conds, f.Condition)
-		args = append(args, f.Args...)
-	}
-	return "WHERE " + strings.Join(conds, " AND "), args
-}
-
-// PaginatedCountSQL returns a COUNT query for the given table with the WHERE clause.
-func PaginatedCountSQL(table, whereClause string) string {
-	return NumberPlaceholders(fmt.Sprintf("SELECT COUNT(*) FROM %s %s", table, whereClause))
-}
-
-// PaginatedQuerySQL returns a SELECT query with ORDER BY, LIMIT and OFFSET.
-// The whole statement is numbered here rather than by the caller: the LIMIT and
-// OFFSET placeholders come after however many the WHERE clause contributed, and
-// only the assembled statement knows that count.
-func PaginatedQuerySQL(selectCols, table, whereClause, orderBy string, p Pagination) string {
-	return NumberPlaceholders(fmt.Sprintf(
-		"%s FROM %s %s ORDER BY %s LIMIT ? OFFSET ?",
-		selectCols, table, whereClause, orderBy,
-	))
-}
-
-// AppendLimitArgs appends pageSize and offset to the args slice and returns it.
-func AppendLimitArgs(args []interface{}, p Pagination) []interface{} {
-	return append(args, p.PageSize, p.Offset)
 }
 
 // EscapeLike escapes the LIKE wildcards (%, _) and the escape character itself,
@@ -125,19 +86,4 @@ func NumberPlaceholders(query string) string {
 		}
 	}
 	return b.String()
-}
-
-// IsUniqueViolation reports whether err is a PostgreSQL unique-constraint
-// violation.
-//
-// It matches on SQLSTATE 23505 rather than the message text. The previous check
-// looked for SQLite's "UNIQUE constraint failed", which PostgreSQL never emits —
-// a duplicate name stopped being reported as a conflict and surfaced as an
-// opaque 500 instead.
-func IsUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		return pgErr.Code == "23505"
-	}
-	return false
 }
