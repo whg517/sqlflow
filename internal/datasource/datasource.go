@@ -17,7 +17,15 @@ import (
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
+	"github.com/whg517/sqlflow/internal/db/ent/auditlog"
+	"github.com/whg517/sqlflow/internal/db/ent/casbinrule"
 	"github.com/whg517/sqlflow/internal/db/ent/datasource"
+	"github.com/whg517/sqlflow/internal/db/ent/maskrule"
+	"github.com/whg517/sqlflow/internal/db/ent/permissionrequest"
+	"github.com/whg517/sqlflow/internal/db/ent/queryhistory"
+	"github.com/whg517/sqlflow/internal/db/ent/sensitivetable"
+	"github.com/whg517/sqlflow/internal/db/ent/temppolicy"
+	"github.com/whg517/sqlflow/internal/db/ent/ticket"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/crypto"
@@ -518,31 +526,52 @@ func (s *Service) DeleteDataSource(ctx context.Context, id int64) error {
 
 func (s *Service) datasourceDependencies(ctx context.Context, id int64) ([]DatasourceDependency, error) {
 	domain := authz.DatasourceDomain(id)
+
+	// Each entry counts the rows that would be orphaned by deleting the
+	// datasource. The label is what the user is shown, so the order here is the
+	// order the refusal lists them in.
 	checks := []struct {
 		label string
-		query string
-		args  []interface{}
+		count func(context.Context) (int, error)
 	}{
-		{"工单", `SELECT COUNT(*) FROM tickets WHERE datasource_id = $1`, []interface{}{id}},
-		{"查询历史", `SELECT COUNT(*) FROM query_history WHERE datasource_id = $1`, []interface{}{id}},
-		{"审计日志", `SELECT COUNT(*) FROM audit_logs WHERE datasource_id = $1`, []interface{}{id}},
-		{"脱敏规则", `SELECT COUNT(*) FROM mask_rules WHERE datasource_id = $1`, []interface{}{id}},
-		{"敏感表", `SELECT COUNT(*) FROM sensitive_tables WHERE datasource_id = $1`, []interface{}{id}},
-		{"临时权限申请", `SELECT COUNT(*) FROM permission_requests WHERE datasource_id = $1`, []interface{}{id}},
-		{"权限策略", `SELECT COUNT(*) FROM casbin_rule WHERE v1 = $1 OR v2 = $2`, []interface{}{domain, domain}},
-		{"临时授权", `SELECT COUNT(*) FROM temp_policies WHERE dom = $1`, []interface{}{domain}},
+		{"工单", func(ctx context.Context) (int, error) {
+			return s.client.Ticket.Query().Where(ticket.DatasourceID(id)).Count(ctx)
+		}},
+		{"查询历史", func(ctx context.Context) (int, error) {
+			return s.client.QueryHistory.Query().Where(queryhistory.DatasourceID(id)).Count(ctx)
+		}},
+		{"审计日志", func(ctx context.Context) (int, error) {
+			return s.client.AuditLog.Query().Where(auditlog.DatasourceID(id)).Count(ctx)
+		}},
+		{"脱敏规则", func(ctx context.Context) (int, error) {
+			return s.client.MaskRule.Query().Where(maskrule.DatasourceID(id)).Count(ctx)
+		}},
+		{"敏感表", func(ctx context.Context) (int, error) {
+			return s.client.SensitiveTable.Query().Where(sensitivetable.DatasourceID(id)).Count(ctx)
+		}},
+		{"临时权限申请", func(ctx context.Context) (int, error) {
+			return s.client.PermissionRequest.Query().Where(permissionrequest.DatasourceID(id)).Count(ctx)
+		}},
+		{"权限策略", func(ctx context.Context) (int, error) {
+			return s.client.CasbinRule.Query().Where(
+				casbinrule.Or(casbinrule.V1(domain), casbinrule.V2(domain)),
+			).Count(ctx)
+		}},
+		{"临时授权", func(ctx context.Context) (int, error) {
+			return s.client.TempPolicy.Query().Where(temppolicy.Dom(domain)).Count(ctx)
+		}},
 	}
 
 	dependencies := make([]DatasourceDependency, 0)
 	for _, check := range checks {
-		var count int64
-		if err := s.database.DB.QueryRowContext(ctx, check.query, check.args...).Scan(&count); err != nil {
+		count, err := check.count(ctx)
+		if err != nil {
 			return nil, fmt.Errorf("check datasource dependency %s: %w", check.label, err)
 		}
 		if count > 0 {
 			dependencies = append(dependencies, DatasourceDependency{
 				Label: check.label,
-				Count: count,
+				Count: int64(count),
 			})
 		}
 	}

@@ -201,6 +201,11 @@ type auditLogRow struct {
 	TicketID        int64     `json:"ticket_id"`
 	CreatedAt       time.Time `json:"created_at"`
 	Username        string    `json:"username"`
+	// Rank is populated only by Search. ent's scanner matches columns to fields
+	// by name and ignores fields no column filled, so carrying it here costs the
+	// list query nothing — and beats repeating the other seventeen fields in a
+	// second struct that would then have to be kept in step with this one.
+	Rank float64 `json:"rank"`
 }
 
 func (r auditLogRow) toModel() model.AuditLog {
@@ -261,7 +266,13 @@ type SearchResult struct {
 // order, or PostgreSQL cannot use the index and falls back to a sequential scan
 // over every audit record — which is precisely the table that grows without
 // bound. The definition lives in the migration; this constant is its caller.
-const auditSearchHaystack = `audit_search_text(a.sql_content, a.sql_summary, a.action, a.error_message, a.database)`
+//
+// It takes the table alias because ent names the audit table differently
+// depending on whether the query joined anything.
+func auditSearchHaystack(t string) string {
+	return "audit_search_text(" + t + ".sql_content, " + t + ".sql_summary, " +
+		t + ".action, " + t + ".error_message, " + t + ".database)"
+}
 
 // auditSearchMatch matches a keyword against a record two ways.
 //
@@ -269,12 +280,40 @@ const auditSearchHaystack = `audit_search_text(a.sql_content, a.sql_summary, a.a
 // what the tokenizer cannot: it has no notion of a word, so it finds 订单
 // inside 订单状态, which to_tsvector reports as a single unsplittable token.
 // Neither alone covers the corpus, so a record matching either is a hit.
-const auditSearchMatch = `(to_tsvector('simple', ` + auditSearchHaystack +
-	`) @@ plainto_tsquery('simple', ?) OR ` + auditSearchHaystack + ` ILIKE ? ESCAPE '\')`
+//
+// This is the one predicate in the domain written as an expression rather than
+// through a typed builder: ent has no operator for @@ or for a trigram ILIKE
+// against a function result. It still goes through ent's builder, so the
+// arguments are bound and numbered by the same code as every other query —
+// which is what ADR-0010 is actually protecting.
+func auditSearchMatch(keyword string) predicate.AuditLog {
+	like := "%" + sqlutil.EscapeLike(keyword) + "%"
+	return func(sel *entsql.Selector) {
+		haystack := auditSearchHaystack(sel.TableName())
+		sel.Where(entsql.P(func(b *entsql.Builder) {
+			b.WriteString("(to_tsvector('simple', " + haystack + ") @@ plainto_tsquery('simple', ").
+				Arg(keyword).
+				WriteString(") OR " + haystack + " ILIKE ").
+				Arg(like).
+				WriteString(" ESCAPE '\\')")
+		}))
+	}
+}
+
+// searchRankColumn scores a match so the most relevant records come first.
+//
+// ts_rank only sees the word-matching side; a record found through trigram
+// alone scores zero and sorts by id. Ordering those below exact word matches is
+// the behavior we want anyway.
+func searchRankColumn(table, keyword string) entsql.Querier {
+	return entsql.ExprFunc(func(b *entsql.Builder) {
+		b.WriteString("ts_rank(to_tsvector('simple', " + auditSearchHaystack(table) + "), plainto_tsquery('simple', ").
+			Arg(keyword).
+			WriteString("))")
+	})
+}
 
 // Search performs full-text search on audit logs.
-//
-// RAW_SQL: full-text and trigram operators have no ent equivalent.
 func (s *Service) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	keyword := strings.TrimSpace(params.Keyword)
 	if keyword == "" {
@@ -282,83 +321,58 @@ func (s *Service) Search(ctx context.Context, params SearchParams) (*SearchResul
 	}
 
 	p := sqlutil.ParsePagination(params.Page, params.PageSize)
-	like := "%" + sqlutil.EscapeLike(keyword) + "%"
 
-	filters := []sqlutil.FilterClause{
-		{Condition: auditSearchMatch, Args: []interface{}{keyword, like}},
-	}
-	if params.UserID != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "a.user_id = ?", Args: []interface{}{params.UserID}})
+	q := s.client.AuditLog.Query().Where(auditSearchMatch(keyword))
+	if id, err := strconv.ParseInt(params.UserID, 10, 64); err == nil && params.UserID != "" {
+		q = q.Where(entauditlog.UserIDEQ(id))
 	}
 	if params.Action != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "a.action = ?", Args: []interface{}{params.Action}})
+		q = q.Where(entauditlog.ActionEQ(params.Action))
 	}
-	if params.Start != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "a.created_at >= ?", Args: []interface{}{params.Start}})
+	if t, ok := parseFilterTime(params.Start); ok {
+		q = q.Where(entauditlog.CreatedAtGTE(t))
 	}
-	if params.End != "" {
-		// The caller passes a date; without a time the comparison would exclude
+	if t, ok := parseFilterTime(params.End); ok {
+		// A date with no time resolves to midnight, which would exclude
 		// everything recorded on the end date itself.
-		filters = append(filters, sqlutil.FilterClause{Condition: "a.created_at < (?::date + 1)", Args: []interface{}{params.End}})
+		q = q.Where(entauditlog.CreatedAtLT(t.AddDate(0, 0, 1)))
 	}
-	whereClause, args := sqlutil.BuildWhereClause(filters)
 
-	var total int64
-	countSQL := sqlutil.NumberPlaceholders("SELECT COUNT(*) FROM audit_logs a " + whereClause)
-	if err := s.database.DB.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("search count: %w", err)
 	}
 	if total == 0 {
 		return &SearchResult{Logs: []model.AuditLogSearch{}, Total: 0}, nil
 	}
 
-	// The rank placeholder sits in the SELECT list, ahead of every WHERE
-	// placeholder, so its argument has to lead the slice: NumberPlaceholders
-	// assigns numbers left to right across the finished statement.
-	querySQL := sqlutil.NumberPlaceholders(fmt.Sprintf(
-		`SELECT a.id, a.user_id, a.action, a.datasource_id, a.database, a.sql_content, a.sql_summary,
-		        a.result_rows, a.affected_rows, a.execution_time_ms, a.error_message,
-		        a.desensitized_fields, a.ip_address, a.ai_review_result, a.ticket_id, a.created_at,
-		        COALESCE(u.username, '') AS username,
-		        ts_rank(to_tsvector('simple', %s), plainto_tsquery('simple', ?)) AS rank
-		 FROM audit_logs a
-		 LEFT JOIN users u ON a.user_id = u.id
-		 %s
-		 ORDER BY rank DESC, a.id DESC
-		 LIMIT ? OFFSET ?`,
-		auditSearchHaystack, whereClause,
-	))
-	queryArgs := make([]interface{}, 0, len(args)+3)
-	queryArgs = append(queryArgs, keyword)
-	queryArgs = append(queryArgs, args...)
-	queryArgs = append(queryArgs, p.PageSize, p.Offset)
-
-	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
+	var rows []auditLogRow
+	err = q.Modify(func(sel *entsql.Selector) {
+		u := joinAuditUser(sel)
+		selectAuditColumns(sel, u)
+		sel.AppendSelectExprAs(searchRankColumn(sel.TableName(), keyword), "rank")
+		// id breaks the tie: ts_rank scores identical records identically, and
+		// an undefined order lets one row appear on two pages while another
+		// appears on none.
+		sel.OrderExpr(entsql.Expr("rank DESC")).
+			OrderBy(entsql.Desc(sel.C(entauditlog.FieldID))).
+			Limit(p.PageSize).
+			Offset(p.Offset)
+	}).Scan(ctx, &rows)
 	if err != nil {
 		return nil, fmt.Errorf("search query: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
-	logs := make([]model.AuditLogSearch, 0)
-	for rows.Next() {
-		var a model.AuditLogSearch
-		if err := rows.Scan(
-			&a.ID, &a.UserID, &a.Action, &a.DatasourceID, &a.Database,
-			&a.SQLContent, &a.SQLSummary,
-			&a.ResultRows, &a.AffectedRows, &a.ExecutionTimeMs,
-			&a.ErrorMessage, &a.DesensitizedFields, &a.IPAddress,
-			&a.AIReviewResult, &a.TicketID, &a.CreatedAt,
-			&a.Username, &a.Rank,
-		); err != nil {
-			return nil, fmt.Errorf("scan search row: %w", err)
+	logs := make([]model.AuditLogSearch, 0, len(rows))
+	for _, r := range rows {
+		log := model.AuditLogSearch{
+			AuditLog:            r.toModel(),
+			Rank:                r.Rank,
+			HighlightSQLContent: highlight(r.SQLContent, keyword),
+			HighlightSQLSummary: highlight(r.SQLSummary, keyword),
 		}
-		a.HighlightSQLContent = highlight(a.SQLContent, keyword)
-		a.HighlightSQLSummary = highlight(a.SQLSummary, keyword)
-		logs = append(logs, a)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate search rows: %w", err)
+		logs = append(logs, log)
 	}
 
-	return &SearchResult{Logs: logs, Total: total}, nil
+	return &SearchResult{Logs: logs, Total: int64(total)}, nil
 }
