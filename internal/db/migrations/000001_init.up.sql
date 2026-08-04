@@ -383,7 +383,7 @@ CREATE TABLE IF NOT EXISTS sla_config (
     enabled                BOOLEAN NOT NULL DEFAULT TRUE,
     created_at             TIMESTAMPTZ NOT NULL DEFAULT (now()),
     updated_at             TIMESTAMPTZ NOT NULL DEFAULT (now()),
-    auto_reject_enabled    BIGINT NOT NULL DEFAULT 0
+    auto_reject_enabled    BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS sql_templates (

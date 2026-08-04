@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 )
 
 // OperationType represents the type of SQL operation.
@@ -407,10 +409,10 @@ func CheckSensitiveTables(ctx context.Context, db *sql.DB, tables []string, data
 	}
 	args = append(args, datasourceID)
 
-	query := fmt.Sprintf(
+	query := sqlutil.NumberPlaceholders(fmt.Sprintf(
 		"SELECT DISTINCT table_name FROM mask_rules WHERE table_name IN (%s) AND datasource_id = ?",
 		strings.Join(placeholders, ","),
-	)
+	))
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {

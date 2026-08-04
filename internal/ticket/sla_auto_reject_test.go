@@ -63,7 +63,7 @@ func TestSLAService_AutoReject_Breached(t *testing.T) {
 	_, err := d.ExecContext(ctx,
 		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, auto_reject_enabled, enabled, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		"medium", 60, 80, "admin", 1, 1, time.Now(), time.Now())
+		"medium", 60, 80, "admin", true, true, time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("create sla config: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestSLAService_AutoReject_Idempotent(t *testing.T) {
 	_, err := d.ExecContext(ctx,
 		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, auto_reject_enabled, enabled, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		"medium", 60, 80, "admin", 1, 1, time.Now(), time.Now())
+		"medium", 60, 80, "admin", true, true, time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("create sla config: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestSLAService_NoAutoReject_WhenDisabled(t *testing.T) {
 	_, err := d.ExecContext(ctx,
 		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, auto_reject_enabled, enabled, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		"medium", 60, 80, "admin", 0, 1, time.Now(), time.Now())
+		"medium", 60, 80, "admin", false, true, time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("create sla config: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestSLAService_NoAutoReject_WhenNotBreached(t *testing.T) {
 	_, err := d.ExecContext(ctx,
 		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, auto_reject_enabled, enabled, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		"medium", 60, 80, "admin", 1, 1, time.Now(), time.Now())
+		"medium", 60, 80, "admin", true, true, time.Now(), time.Now())
 	if err != nil {
 		t.Fatalf("create sla config: %v", err)
 	}

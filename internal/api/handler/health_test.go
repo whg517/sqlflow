@@ -9,21 +9,12 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/connpool"
-	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/platform/metrics"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 func TestHealthHandler_Health(t *testing.T) {
-	tmpDir := t.TempDir()
-	database, err := db.Open(tmpDir + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	h := NewHealthHandler(database.DB)
 	e := echo.New()
@@ -61,11 +52,7 @@ func TestHealthHandler_Health(t *testing.T) {
 
 func TestHealthHandler_Health_DBError(t *testing.T) {
 	// Close the DB to simulate a connection failure
-	tmpDir := t.TempDir()
-	database, err := db.Open(tmpDir + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
+	database := testutil.NewDB(t)
 	if err := database.Migrate(); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -100,16 +87,7 @@ func TestHealthHandler_Health_DBError(t *testing.T) {
 }
 
 func TestHealthHandler_Metrics(t *testing.T) {
-	tmpDir := t.TempDir()
-	database, err := db.Open(tmpDir + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	h := NewHealthHandler(database.DB)
 	e := echo.New()
@@ -138,11 +116,7 @@ func TestHealthHandler_Metrics(t *testing.T) {
 }
 
 func TestHealthHandler_NewHealthHandler(t *testing.T) {
-	tmpDir := t.TempDir()
-	database, err := db.Open(tmpDir + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
+	database := testutil.NewDB(t)
 	t.Cleanup(func() { database.Close() })
 
 	h := NewHealthHandler(database.DB)
@@ -165,11 +139,7 @@ func TestHealthHandler_NewHealthHandler(t *testing.T) {
 var _ = metrics.PromhttpHandler
 
 func TestHealthHandler_Healthz(t *testing.T) {
-	tmpDir := t.TempDir()
-	database, err := db.Open(tmpDir + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
+	database := testutil.NewDB(t)
 	t.Cleanup(func() { database.Close() })
 
 	h := NewHealthHandler(database.DB)
@@ -203,11 +173,7 @@ func TestHealthHandler_Healthz(t *testing.T) {
 
 func TestHealthHandler_Healthz_DBError(t *testing.T) {
 	// Even with a closed DB, healthz should return 200 (liveness only)
-	tmpDir := t.TempDir()
-	database, err := db.Open(tmpDir + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
+	database := testutil.NewDB(t)
 	database.Close()
 
 	h := NewHealthHandler(database.DB)
@@ -227,16 +193,7 @@ func TestHealthHandler_Healthz_DBError(t *testing.T) {
 }
 
 func TestHealthHandler_Readyz_AllOK(t *testing.T) {
-	tmpDir := t.TempDir()
-	database, err := db.Open(tmpDir + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	h := NewHealthHandler(database.DB)
 	e := echo.New()
@@ -267,11 +224,7 @@ func TestHealthHandler_Readyz_AllOK(t *testing.T) {
 }
 
 func TestHealthHandler_Readyz_DBError(t *testing.T) {
-	tmpDir := t.TempDir()
-	database, err := db.Open(tmpDir + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
+	database := testutil.NewDB(t)
 	database.Close()
 
 	h := NewHealthHandler(database.DB)
@@ -303,16 +256,7 @@ func TestHealthHandler_Readyz_DBError(t *testing.T) {
 }
 
 func TestHealthHandler_Readyz_WithConnPoolManager(t *testing.T) {
-	tmpDir := t.TempDir()
-	database, err := db.Open(tmpDir + "/test.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	database := testutil.NewDB(t)
 
 	h := NewHealthHandler(database.DB)
 

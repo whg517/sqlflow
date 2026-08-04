@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,9 +13,9 @@ import (
 	"github.com/casbin/casbin/v2/model"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/iam"
 	"github.com/whg517/sqlflow/internal/platform/httpx"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // setupEnforcer creates a Casbin enforcer with a proper RBAC model and test policies.
@@ -412,16 +411,7 @@ func TestBodyField(t *testing.T) {
 // newTestAuthSvc creates a real AuthService backed by a temp SQLite DB.
 func newTestAuthSvc(t *testing.T) *iam.Service {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("open test db: %v", err)
-	}
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("migrate test db: %v", err)
-	}
-	return iam.NewService(database, "test-secret-key", 1*time.Hour)
+	return iam.NewService(testutil.NewDB(t), "test-secret-key", 1*time.Hour)
 }
 
 // generateToken creates a signed JWT with the given claims and secret.

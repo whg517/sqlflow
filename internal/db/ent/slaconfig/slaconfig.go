@@ -23,6 +23,8 @@ const (
 	FieldEscalateToRole = "escalate_to_role"
 	// FieldEscalateToUser holds the string denoting the escalate_to_user field in the database.
 	FieldEscalateToUser = "escalate_to_user"
+	// FieldAutoRejectEnabled holds the string denoting the auto_reject_enabled field in the database.
+	FieldAutoRejectEnabled = "auto_reject_enabled"
 	// FieldEnabled holds the string denoting the enabled field in the database.
 	FieldEnabled = "enabled"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -41,6 +43,7 @@ var Columns = []string{
 	FieldReminderPercent,
 	FieldEscalateToRole,
 	FieldEscalateToUser,
+	FieldAutoRejectEnabled,
 	FieldEnabled,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -65,6 +68,8 @@ var (
 	DefaultEscalateToRole string
 	// DefaultEscalateToUser holds the default value on creation for the "escalate_to_user" field.
 	DefaultEscalateToUser string
+	// DefaultAutoRejectEnabled holds the default value on creation for the "auto_reject_enabled" field.
+	DefaultAutoRejectEnabled bool
 	// DefaultEnabled holds the default value on creation for the "enabled" field.
 	DefaultEnabled bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -106,6 +111,11 @@ func ByEscalateToRole(opts ...sql.OrderTermOption) OrderOption {
 // ByEscalateToUser orders the results by the escalate_to_user field.
 func ByEscalateToUser(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEscalateToUser, opts...).ToFunc()
+}
+
+// ByAutoRejectEnabled orders the results by the auto_reject_enabled field.
+func ByAutoRejectEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutoRejectEnabled, opts...).ToFunc()
 }
 
 // ByEnabled orders the results by the enabled field.

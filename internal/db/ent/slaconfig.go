@@ -27,6 +27,8 @@ type SLAConfig struct {
 	EscalateToRole string `json:"escalate_to_role,omitempty"`
 	// EscalateToUser holds the value of the "escalate_to_user" field.
 	EscalateToUser string `json:"escalate_to_user,omitempty"`
+	// AutoRejectEnabled holds the value of the "auto_reject_enabled" field.
+	AutoRejectEnabled bool `json:"auto_reject_enabled,omitempty"`
 	// Enabled holds the value of the "enabled" field.
 	Enabled bool `json:"enabled,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -41,7 +43,7 @@ func (*SLAConfig) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case slaconfig.FieldEnabled:
+		case slaconfig.FieldAutoRejectEnabled, slaconfig.FieldEnabled:
 			values[i] = new(sql.NullBool)
 		case slaconfig.FieldID, slaconfig.FieldTimeoutMinutes, slaconfig.FieldReminderPercent:
 			values[i] = new(sql.NullInt64)
@@ -99,6 +101,12 @@ func (_m *SLAConfig) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field escalate_to_user", values[i])
 			} else if value.Valid {
 				_m.EscalateToUser = value.String
+			}
+		case slaconfig.FieldAutoRejectEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field auto_reject_enabled", values[i])
+			} else if value.Valid {
+				_m.AutoRejectEnabled = value.Bool
 			}
 		case slaconfig.FieldEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -168,6 +176,9 @@ func (_m *SLAConfig) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("escalate_to_user=")
 	builder.WriteString(_m.EscalateToUser)
+	builder.WriteString(", ")
+	builder.WriteString("auto_reject_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AutoRejectEnabled))
 	builder.WriteString(", ")
 	builder.WriteString("enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Enabled))

@@ -31,6 +31,11 @@ func (SLAConfig) Fields() []ent.Field {
 			Default("admin"),
 		field.String("escalate_to_user").
 			Default(""),
+		// Auto-reject was added by a later migration and never made it into this
+		// schema, so nothing kept its type honest: the column is BIGINT while Go
+		// has always treated it as a bool.
+		field.Bool("auto_reject_enabled").
+			Default(false).Annotations(entsql.DefaultExpr("FALSE")),
 		field.Bool("enabled").
 			Default(true),
 		field.Time("created_at").

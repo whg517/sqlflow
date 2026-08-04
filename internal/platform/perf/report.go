@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"os"
+
 	"github.com/whg517/sqlflow/internal/db"
 )
 
@@ -383,7 +385,7 @@ func runDBBenchmarks(report *Report) {
 	// 1. Single INSERT benchmark
 	insertResult := benchmarkDBOperation("DB Insert (single row)", 200, func(ctx context.Context, db *sql.DB) error {
 		_, err := db.ExecContext(ctx,
-			`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, desensitized_fields, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, desensitized_fields, ip_address) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 			1, "SELECT", 1, "testdb", "SELECT * FROM users", "查询用户", 10, 0, 5, "", "", "127.0.0.1",
 		)
 		return err
@@ -425,18 +427,41 @@ func runDBBenchmarks(report *Report) {
 	report.DBResults = append(report.DBResults, paginatedResult)
 	log.Printf("  Paginated Select: avg=%v, P99=%v\n", paginatedResult.AvgDuration, paginatedResult.P99Duration)
 
-	// 5. Concurrent write benchmark (simulates SQLite single-writer contention)
-	log.Println("  [测试] SQLite 并发写入竞争...")
+	// 5. Concurrent write benchmark.
+	//
+	// This measured SQLite's single-writer contention. PostgreSQL has no such
+	// restriction, so the number now describes ordinary write throughput rather
+	// than a serialization bottleneck — worth keeping, but do not read the old
+	// baseline into it.
+	log.Println("  [测试] 并发写入...")
 	concWriteResult := benchmarkConcurrentWrites(50, 5)
 	report.DBResults = append(report.DBResults, concWriteResult)
 	log.Printf("  Concurrent Write: avg=%v, P99=%v (%d goroutines)\n", concWriteResult.AvgDuration, concWriteResult.P99Duration, 5)
 }
 
-// setupTestDB creates a temporary SQLite database with full schema for benchmarking.
+// BenchmarkDSNEnv names the connection string the database benchmarks run
+// against.
+const BenchmarkDSNEnv = "SQLFLOW_BENCHMARK_DSN"
+
+// setupTestDB opens the database the benchmarks measure.
+//
+// It used to open SQLite at ":memory:". That is not a connection string any
+// other engine understands, and the numbers it produced described a store this
+// platform no longer uses.
 func setupTestDB() *sql.DB {
-	database, err := db.Open(":memory:")
+	// SQLFLOW_TEST_DSN is accepted as a fallback so the package's own tests,
+	// which call these functions directly, run against the same instance as the
+	// rest of the suite without a second variable to set.
+	dsn := os.Getenv(BenchmarkDSNEnv)
+	if dsn == "" {
+		dsn = os.Getenv("SQLFLOW_TEST_DSN")
+	}
+	if dsn == "" {
+		log.Fatalf("database benchmarks need a PostgreSQL instance: set %s", BenchmarkDSNEnv)
+	}
+	database, err := db.Open(dsn)
 	if err != nil {
-		log.Fatalf("failed to create benchmark database: %v", err)
+		log.Fatalf("failed to open benchmark database: %v", err)
 	}
 	if err := database.Migrate(); err != nil {
 		log.Fatalf("failed to migrate benchmark database: %v", err)
@@ -451,7 +476,7 @@ func seedDB(ctx context.Context, d *sql.DB) {
 
 	// Insert seed audit log entries for query tests
 	stmt, err := d.PrepareContext(ctx,
-		`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, desensitized_fields, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, desensitized_fields, ip_address) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`)
 	if err != nil {
 		log.Fatalf("prepare seed: %v", err)
 	}
@@ -521,7 +546,7 @@ func benchmarkConcurrentWrites(reqsPerGoroutine, goroutines int) DBQueryResult {
 			for i := 0; i < reqsPerGoroutine; i++ {
 				start := time.Now()
 				_, _ = testDB.ExecContext(ctx,
-					`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, desensitized_fields, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, desensitized_fields, ip_address) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 					1, "INSERT", 1, "bench", "INSERT INTO t VALUES (1)", "bench", 0, 1, 1, "", "", "127.0.0.1")
 				dur := time.Since(start)
 				mu.Lock()

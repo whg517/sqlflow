@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -124,8 +125,11 @@ func TestCreateTicket(t *testing.T) {
 			name:         "success - long SQL truncated in summary",
 			submitterID:  userID,
 			datasourceID: dsID,
-			sqlContent:   string(make([]byte, 200)), // will be all zeros, but non-empty
-			wantErr:      nil,
+			// Real characters rather than 200 NUL bytes: PostgreSQL rejects NUL
+			// in a text column, and the point of the case is the summary being
+			// truncated, which needs content the truncation can act on.
+			sqlContent: "SELECT " + strings.Repeat("a", 200) + " FROM users",
+			wantErr:    nil,
 		},
 	}
 

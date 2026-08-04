@@ -611,6 +611,7 @@ var (
 		{Name: "reminder_percent", Type: field.TypeInt, Default: 80},
 		{Name: "escalate_to_role", Type: field.TypeString, Default: "admin"},
 		{Name: "escalate_to_user", Type: field.TypeString, Default: ""},
+		{Name: "auto_reject_enabled", Type: field.TypeBool, Default: schema.Expr("FALSE")},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
 		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},

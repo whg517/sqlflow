@@ -7,9 +7,12 @@
 package sqlutil
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Pagination holds normalized pagination parameters.
@@ -122,4 +125,19 @@ func NumberPlaceholders(query string) string {
 		}
 	}
 	return b.String()
+}
+
+// IsUniqueViolation reports whether err is a PostgreSQL unique-constraint
+// violation.
+//
+// It matches on SQLSTATE 23505 rather than the message text. The previous check
+// looked for SQLite's "UNIQUE constraint failed", which PostgreSQL never emits —
+// a duplicate name stopped being reported as a conflict and surfaced as an
+// opaque 500 instead.
+func IsUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505"
+	}
+	return false
 }

@@ -298,10 +298,10 @@ func (s *SLAService) GetTicketSLAStatuses(ctx context.Context, ticketIDs []int64
 		placeholders[i] = "?"
 		args[i] = id
 	}
-	query := fmt.Sprintf(
+	query := sqlutil.NumberPlaceholders(fmt.Sprintf(
 		`SELECT id, sla_deadline, sla_status FROM tickets WHERE id IN (%s)`,
 		strings.Join(placeholders, ","),
-	)
+	))
 
 	rows, err := s.database.QueryContext(ctx, query, args...)
 	if err != nil {

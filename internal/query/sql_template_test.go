@@ -27,7 +27,9 @@ func TestTemplateServiceRenderParameterizedSQL(t *testing.T) {
 			dbType:     "mysql",
 			sql:        "SELECT * FROM users WHERE id = {{ id }} AND status = {{status: active}}",
 			params:     map[string]string{"id": "42"},
-			wantSQL:    "SELECT * FROM users WHERE id = $1 AND status = $2",
+			// MySQL binds positionally: the placeholder style is the target
+			// datasource's, not the platform store's.
+			wantSQL:    "SELECT * FROM users WHERE id = ? AND status = ?",
 			wantParams: []interface{}{"42", "active"},
 		},
 		{
@@ -45,7 +47,7 @@ func TestTemplateServiceRenderParameterizedSQL(t *testing.T) {
 			dbType:     "sqlite",
 			sql:        "SELECT * FROM users WHERE id = {{id}}",
 			params:     map[string]string{"id": "9"},
-			wantSQL:    "SELECT * FROM users WHERE id = $1",
+			wantSQL:    "SELECT * FROM users WHERE id = ?",
 			wantParams: []interface{}{"9"},
 		},
 		{

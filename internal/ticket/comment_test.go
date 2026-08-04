@@ -3,10 +3,8 @@ package ticket
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"testing"
 
-	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
@@ -14,33 +12,10 @@ import (
 // setupCommentTest creates a test DB with a user and a ticket for comment tests.
 func setupCommentTest(t *testing.T) (*sql.DB, int64, int64) {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
+	database := testutil.NewDB(t)
 
-	database, err := db.Open(dbPath)
-	if err != nil {
-		t.Fatalf("failed to open test database: %v", err)
-	}
-	t.Cleanup(func() { database.Close() })
-
-	if err := database.Migrate(); err != nil {
-		t.Fatalf("failed to migrate: %v", err)
-	}
-
-	// Insert a test user
-	userRes, err := database.Exec("INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)", "commenter", "hash", "developer")
-	if err != nil {
-		t.Fatalf("insert user: %v", err)
-	}
-	userID, _ := userRes.LastInsertId()
-
-	// Insert a test datasource
-	dsRes, err := database.Exec("INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-		"test-ds", "mysql", "10.0.0.1", 3306, "root", "enc", "active")
-	if err != nil {
-		t.Fatalf("insert datasource: %v", err)
-	}
-	dsID, _ := dsRes.LastInsertId()
+	userID := testutil.SeedUser(t, database.DB, "commenter", "developer")
+	dsID := testutil.SeedDatasource(t, database.DB, "test-ds")
 
 	// Insert a test ticket
 	var ticketID int64

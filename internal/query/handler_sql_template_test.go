@@ -204,7 +204,7 @@ func TestSQLTemplateHandler_RenderTemplate_Success(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response.Data.RenderedSQL != "SELECT * FROM t WHERE id = $1" {
+	if response.Data.RenderedSQL != "SELECT * FROM t WHERE id = ?" { // the template targets MySQL
 		t.Fatalf("rendered SQL = %q", response.Data.RenderedSQL)
 	}
 	if len(response.Data.ParamValues) != 1 || response.Data.ParamValues[0] != "42" {

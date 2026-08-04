@@ -767,16 +767,20 @@ func init() {
 	slaconfigDescEscalateToUser := slaconfigFields[4].Descriptor()
 	// slaconfig.DefaultEscalateToUser holds the default value on creation for the escalate_to_user field.
 	slaconfig.DefaultEscalateToUser = slaconfigDescEscalateToUser.Default.(string)
+	// slaconfigDescAutoRejectEnabled is the schema descriptor for auto_reject_enabled field.
+	slaconfigDescAutoRejectEnabled := slaconfigFields[5].Descriptor()
+	// slaconfig.DefaultAutoRejectEnabled holds the default value on creation for the auto_reject_enabled field.
+	slaconfig.DefaultAutoRejectEnabled = slaconfigDescAutoRejectEnabled.Default.(bool)
 	// slaconfigDescEnabled is the schema descriptor for enabled field.
-	slaconfigDescEnabled := slaconfigFields[5].Descriptor()
+	slaconfigDescEnabled := slaconfigFields[6].Descriptor()
 	// slaconfig.DefaultEnabled holds the default value on creation for the enabled field.
 	slaconfig.DefaultEnabled = slaconfigDescEnabled.Default.(bool)
 	// slaconfigDescCreatedAt is the schema descriptor for created_at field.
-	slaconfigDescCreatedAt := slaconfigFields[6].Descriptor()
+	slaconfigDescCreatedAt := slaconfigFields[7].Descriptor()
 	// slaconfig.DefaultCreatedAt holds the default value on creation for the created_at field.
 	slaconfig.DefaultCreatedAt = slaconfigDescCreatedAt.Default.(func() time.Time)
 	// slaconfigDescUpdatedAt is the schema descriptor for updated_at field.
-	slaconfigDescUpdatedAt := slaconfigFields[7].Descriptor()
+	slaconfigDescUpdatedAt := slaconfigFields[8].Descriptor()
 	// slaconfig.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	slaconfig.DefaultUpdatedAt = slaconfigDescUpdatedAt.Default.(func() time.Time)
 	// slaconfig.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

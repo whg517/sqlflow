@@ -74,6 +74,20 @@ func (_c *SLAConfigCreate) SetNillableEscalateToUser(v *string) *SLAConfigCreate
 	return _c
 }
 
+// SetAutoRejectEnabled sets the "auto_reject_enabled" field.
+func (_c *SLAConfigCreate) SetAutoRejectEnabled(v bool) *SLAConfigCreate {
+	_c.mutation.SetAutoRejectEnabled(v)
+	return _c
+}
+
+// SetNillableAutoRejectEnabled sets the "auto_reject_enabled" field if the given value is not nil.
+func (_c *SLAConfigCreate) SetNillableAutoRejectEnabled(v *bool) *SLAConfigCreate {
+	if v != nil {
+		_c.SetAutoRejectEnabled(*v)
+	}
+	return _c
+}
+
 // SetEnabled sets the "enabled" field.
 func (_c *SLAConfigCreate) SetEnabled(v bool) *SLAConfigCreate {
 	_c.mutation.SetEnabled(v)
@@ -163,6 +177,10 @@ func (_c *SLAConfigCreate) defaults() {
 		v := slaconfig.DefaultEscalateToUser
 		_c.mutation.SetEscalateToUser(v)
 	}
+	if _, ok := _c.mutation.AutoRejectEnabled(); !ok {
+		v := slaconfig.DefaultAutoRejectEnabled
+		_c.mutation.SetAutoRejectEnabled(v)
+	}
 	if _, ok := _c.mutation.Enabled(); !ok {
 		v := slaconfig.DefaultEnabled
 		_c.mutation.SetEnabled(v)
@@ -247,6 +265,10 @@ func (_c *SLAConfigCreate) createSpec() (*SLAConfig, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.EscalateToUser(); ok {
 		_spec.SetField(slaconfig.FieldEscalateToUser, field.TypeString, value)
 		_node.EscalateToUser = value
+	}
+	if value, ok := _c.mutation.AutoRejectEnabled(); ok {
+		_spec.SetField(slaconfig.FieldAutoRejectEnabled, field.TypeBool, value)
+		_node.AutoRejectEnabled = value
 	}
 	if value, ok := _c.mutation.Enabled(); ok {
 		_spec.SetField(slaconfig.FieldEnabled, field.TypeBool, value)

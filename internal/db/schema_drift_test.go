@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"slices"
+
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
@@ -70,6 +72,27 @@ func TestEntSchemaMatchesMigrations(t *testing.T) {
 		t.Errorf("ent declares %d column(s) the migration does not create:\n  %s",
 			len(missing), strings.Join(missing, "\n  "))
 	}
+
+	// The other direction matters just as much, and was the gap that let
+	// sla_config.auto_reject_enabled sit as BIGINT for as long as it did: the
+	// column existed and Go treated it as a bool, but no ent field described it,
+	// so nothing compared the two.
+	var unmodelled []string
+	for key := range actual {
+		table := strings.SplitN(key, ".", 2)[0]
+		columns, known := entTables[table]
+		if !known {
+			continue // a table with no entity at all is a separate decision
+		}
+		if !slices.Contains(columns, strings.SplitN(key, ".", 2)[1]) {
+			unmodelled = append(unmodelled, key)
+		}
+	}
+	sort.Strings(unmodelled)
+	if len(unmodelled) > 0 {
+		t.Errorf("the migration creates %d column(s) no ent field describes:\n  %s",
+			len(unmodelled), strings.Join(unmodelled, "\n  "))
+	}
 }
 
 // TestBooleanColumnsAreBoolean checks the drift that costs the most to find
@@ -95,6 +118,7 @@ func TestBooleanColumnsAreBoolean(t *testing.T) {
 		"refresh_tokens.revoked",
 		"roles.is_builtin",
 		"shared_results.revoked",
+		"sla_config.auto_reject_enabled",
 		"sla_config.enabled",
 		"sql_templates.is_public",
 		"tickets.auto_approved",

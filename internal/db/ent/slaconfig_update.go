@@ -113,6 +113,20 @@ func (_u *SLAConfigUpdate) SetNillableEscalateToUser(v *string) *SLAConfigUpdate
 	return _u
 }
 
+// SetAutoRejectEnabled sets the "auto_reject_enabled" field.
+func (_u *SLAConfigUpdate) SetAutoRejectEnabled(v bool) *SLAConfigUpdate {
+	_u.mutation.SetAutoRejectEnabled(v)
+	return _u
+}
+
+// SetNillableAutoRejectEnabled sets the "auto_reject_enabled" field if the given value is not nil.
+func (_u *SLAConfigUpdate) SetNillableAutoRejectEnabled(v *bool) *SLAConfigUpdate {
+	if v != nil {
+		_u.SetAutoRejectEnabled(*v)
+	}
+	return _u
+}
+
 // SetEnabled sets the "enabled" field.
 func (_u *SLAConfigUpdate) SetEnabled(v bool) *SLAConfigUpdate {
 	_u.mutation.SetEnabled(v)
@@ -237,6 +251,9 @@ func (_u *SLAConfigUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.EscalateToUser(); ok {
 		_spec.SetField(slaconfig.FieldEscalateToUser, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.AutoRejectEnabled(); ok {
+		_spec.SetField(slaconfig.FieldAutoRejectEnabled, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(slaconfig.FieldEnabled, field.TypeBool, value)
 	}
@@ -348,6 +365,20 @@ func (_u *SLAConfigUpdateOne) SetEscalateToUser(v string) *SLAConfigUpdateOne {
 func (_u *SLAConfigUpdateOne) SetNillableEscalateToUser(v *string) *SLAConfigUpdateOne {
 	if v != nil {
 		_u.SetEscalateToUser(*v)
+	}
+	return _u
+}
+
+// SetAutoRejectEnabled sets the "auto_reject_enabled" field.
+func (_u *SLAConfigUpdateOne) SetAutoRejectEnabled(v bool) *SLAConfigUpdateOne {
+	_u.mutation.SetAutoRejectEnabled(v)
+	return _u
+}
+
+// SetNillableAutoRejectEnabled sets the "auto_reject_enabled" field if the given value is not nil.
+func (_u *SLAConfigUpdateOne) SetNillableAutoRejectEnabled(v *bool) *SLAConfigUpdateOne {
+	if v != nil {
+		_u.SetAutoRejectEnabled(*v)
 	}
 	return _u
 }
@@ -505,6 +536,9 @@ func (_u *SLAConfigUpdateOne) sqlSave(ctx context.Context) (_node *SLAConfig, er
 	}
 	if value, ok := _u.mutation.EscalateToUser(); ok {
 		_spec.SetField(slaconfig.FieldEscalateToUser, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.AutoRejectEnabled(); ok {
+		_spec.SetField(slaconfig.FieldAutoRejectEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(slaconfig.FieldEnabled, field.TypeBool, value)

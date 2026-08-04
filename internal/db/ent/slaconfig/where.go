@@ -79,6 +79,11 @@ func EscalateToUser(v string) predicate.SLAConfig {
 	return predicate.SLAConfig(sql.FieldEQ(FieldEscalateToUser, v))
 }
 
+// AutoRejectEnabled applies equality check predicate on the "auto_reject_enabled" field. It's identical to AutoRejectEnabledEQ.
+func AutoRejectEnabled(v bool) predicate.SLAConfig {
+	return predicate.SLAConfig(sql.FieldEQ(FieldAutoRejectEnabled, v))
+}
+
 // Enabled applies equality check predicate on the "enabled" field. It's identical to EnabledEQ.
 func Enabled(v bool) predicate.SLAConfig {
 	return predicate.SLAConfig(sql.FieldEQ(FieldEnabled, v))
@@ -367,6 +372,16 @@ func EscalateToUserEqualFold(v string) predicate.SLAConfig {
 // EscalateToUserContainsFold applies the ContainsFold predicate on the "escalate_to_user" field.
 func EscalateToUserContainsFold(v string) predicate.SLAConfig {
 	return predicate.SLAConfig(sql.FieldContainsFold(FieldEscalateToUser, v))
+}
+
+// AutoRejectEnabledEQ applies the EQ predicate on the "auto_reject_enabled" field.
+func AutoRejectEnabledEQ(v bool) predicate.SLAConfig {
+	return predicate.SLAConfig(sql.FieldEQ(FieldAutoRejectEnabled, v))
+}
+
+// AutoRejectEnabledNEQ applies the NEQ predicate on the "auto_reject_enabled" field.
+func AutoRejectEnabledNEQ(v bool) predicate.SLAConfig {
+	return predicate.SLAConfig(sql.FieldNEQ(FieldAutoRejectEnabled, v))
 }
 
 // EnabledEQ applies the EQ predicate on the "enabled" field.

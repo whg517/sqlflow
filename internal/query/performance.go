@@ -87,7 +87,7 @@ func (s *HistoryService) ListSlowQueries(ctx context.Context, params SlowQueryPa
 	whereClause, args := sqlutil.BuildWhereClause(filters)
 
 	var total int
-	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM query_history qh %s", whereClause)
+	countSQL := sqlutil.NumberPlaceholders(fmt.Sprintf("SELECT COUNT(*) FROM query_history qh %s", whereClause))
 	if err := s.database.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count slow queries: %w", err)
 	}
@@ -148,11 +148,11 @@ func (s *HistoryService) GetPerformanceStats(ctx context.Context, days int) (*Pe
 
 	// Daily trend
 	rows, err := s.database.QueryContext(ctx,
-		`SELECT COALESCE(DATE(created_at), '') as date, COUNT(*) as count,
+		`SELECT to_char(created_at, 'YYYY-MM-DD') as date, COUNT(*) as count,
 		        CAST(COALESCE(AVG(execution_time), 0) AS INTEGER) as avg_time,
 		        SUM(CASE WHEN execution_time >= 1000 THEN 1 ELSE 0 END) as slow_count
 		 FROM query_history WHERE created_at >= $1
-		 GROUP BY COALESCE(DATE(created_at), '') ORDER BY date`, startDate)
+		 GROUP BY to_char(created_at, 'YYYY-MM-DD') ORDER BY date`, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("get daily trend: %w", err)
 	}

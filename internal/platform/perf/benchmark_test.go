@@ -3,11 +3,13 @@ package perf
 import (
 	"context"
 	"database/sql"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/whg517/sqlflow/internal/db"
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // TestBenchmarkSort verifies the sort utility works correctly.
@@ -170,7 +172,7 @@ func TestGenerateSummary(t *testing.T) {
 
 // TestDBBenchmarkOperation verifies database benchmark execution.
 func TestDBBenchmarkOperation(t *testing.T) {
-	database, err := db.Open(":memory:")
+	database, err := db.Open(benchDSN(t))
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
@@ -526,9 +528,13 @@ func TestResultJSONSerialization(t *testing.T) {
 }
 
 // TestSeedDB verifies database seeding.
+// These tests use testutil's per-schema isolation rather than perf's own
+// setupTestDB. The latter opens one shared database, which was harmless when it
+// meant a private ":memory:" SQLite and is not once every test lands in the
+// same PostgreSQL schema — the row counts they assert on accumulate across
+// tests.
 func TestSeedDB(t *testing.T) {
-	testDB := setupTestDB()
-	defer testDB.Close()
+	testDB := testutil.NewDB(t).DB
 
 	ctx := context.Background()
 	seedDB(ctx, testDB)
@@ -567,13 +573,12 @@ func BenchmarkSortDurations(b *testing.B) {
 // BenchmarkDBInsert benchmarks single-row inserts.
 func BenchmarkDBInsert(b *testing.B) {
 	testDB := setupTestDB()
-	defer testDB.Close()
 	ctx := context.Background()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		testDB.ExecContext(ctx,
-			`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, desensitized_fields, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO audit_logs (user_id, action, datasource_id, database, sql_content, sql_summary, result_rows, affected_rows, execution_time_ms, error_message, desensitized_fields, ip_address) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 			1, "SELECT", 1, "bench", "SELECT 1", "bench", 1, 0, 1, "", "", "127.0.0.1")
 	}
 }
@@ -581,7 +586,6 @@ func BenchmarkDBInsert(b *testing.B) {
 // BenchmarkDBSelectCount benchmarks COUNT queries.
 func BenchmarkDBSelectCount(b *testing.B) {
 	testDB := setupTestDB()
-	defer testDB.Close()
 	ctx := context.Background()
 	seedDB(ctx, testDB)
 
@@ -595,7 +599,6 @@ func BenchmarkDBSelectCount(b *testing.B) {
 // BenchmarkDBIndexedSelect benchmarks indexed SELECT queries.
 func BenchmarkDBIndexedSelect(b *testing.B) {
 	testDB := setupTestDB()
-	defer testDB.Close()
 	ctx := context.Background()
 	seedDB(ctx, testDB)
 
@@ -609,7 +612,6 @@ func BenchmarkDBIndexedSelect(b *testing.B) {
 // BenchmarkDBPaginatedSelect benchmarks paginated SELECT queries.
 func BenchmarkDBPaginatedSelect(b *testing.B) {
 	testDB := setupTestDB()
-	defer testDB.Close()
 	ctx := context.Background()
 	seedDB(ctx, testDB)
 
@@ -628,4 +630,16 @@ func BenchmarkDBPaginatedSelect(b *testing.B) {
 		}
 		rows.Close()
 	}
+}
+
+// benchDSN skips the database benchmarks when no PostgreSQL instance is
+// configured, rather than failing: they measure a real server, and a developer
+// without one running should not see a red suite for it.
+func benchDSN(t *testing.T) string {
+	t.Helper()
+	dsn := os.Getenv(testutil.TestDSNEnv)
+	if dsn == "" {
+		t.Skip("set " + testutil.TestDSNEnv + " to run the database benchmarks")
+	}
+	return dsn
 }

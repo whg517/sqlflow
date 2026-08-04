@@ -117,7 +117,9 @@ func TestPaginatedCountSQL(t *testing.T) {
 		want  string
 	}{
 		{"no_where", "query_history", "", "SELECT COUNT(*) FROM query_history "},
-		{"with_where", "query_history", "WHERE user_id = ?", "SELECT COUNT(*) FROM query_history WHERE user_id = ?"},
+		// The builder numbers the assembled statement: fragments write ?, and
+		// the caller must not have to know how many precede it.
+		{"with_where", "query_history", "WHERE user_id = ?", "SELECT COUNT(*) FROM query_history WHERE user_id = $1"},
 	}
 
 	for _, tt := range tests {
@@ -136,7 +138,7 @@ func TestPaginatedQuerySQL(t *testing.T) {
 	got := PaginatedQuerySQL(
 		"SELECT id, name", "users", "WHERE active = 1", "id DESC", p,
 	)
-	want := "SELECT id, name FROM users WHERE active = 1 ORDER BY id DESC LIMIT ? OFFSET ?"
+	want := "SELECT id, name FROM users WHERE active = 1 ORDER BY id DESC LIMIT $1 OFFSET $2"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

@@ -63,24 +63,20 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, userID int64, name
 	}
 
 	now := time.Now()
-	pub := 0
-	if isPublic {
-		pub = 1
-	}
 
-	result, err := s.database.ExecContext(ctx,
+	var id int64
+	err = s.database.QueryRowContext(ctx,
 		`INSERT INTO sql_templates (user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-		userID, name, description, sqlContent, dbType, category, paramsJSON, pub, now, now,
-	)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+		userID, name, description, sqlContent, dbType, category, paramsJSON, isPublic, now, now,
+	).Scan(&id)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if sqlutil.IsUniqueViolation(err) {
 			return nil, ErrTemplateNameExists
 		}
 		return nil, fmt.Errorf("insert template: %w", err)
 	}
 
-	id, _ := result.LastInsertId()
 	return &model.SQLTemplate{
 		ID:          id,
 		UserID:      userID,
@@ -109,13 +105,17 @@ func (s *TemplateService) GetTemplateForUser(ctx context.Context, id, userID int
 func (s *TemplateService) getTemplate(ctx context.Context, id, userID int64, enforceAccess bool) (*model.SQLTemplate, error) {
 	t := &model.SQLTemplate{}
 	var pub bool
+	// Placeholders are written as ? and numbered once the clause is final: the
+	// owner check used to hard-code $1, which is the template id, so it compared
+	// user_id against the id and let any user read another's private template.
 	query := `SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at
-		 FROM sql_templates WHERE id = $1`
+		 FROM sql_templates WHERE id = ?`
 	args := []interface{}{id}
 	if enforceAccess {
-		query += " AND (user_id = $1 OR is_public = TRUE)"
+		query += " AND (user_id = ? OR is_public = TRUE)"
 		args = append(args, userID)
 	}
+	query = sqlutil.NumberPlaceholders(query)
 	err := s.database.QueryRowContext(ctx,
 		query, args...,
 	).Scan(&t.ID, &t.UserID, &t.Name, &t.Description, &t.SQLContent, &t.DBType, &t.Category, &t.ParamsJSON, &pub, &t.CreatedAt, &t.UpdatedAt)
@@ -217,18 +217,13 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id, userID int64, 
 		return fmt.Errorf("extract params: %w", err)
 	}
 
-	pub := 0
-	if isPublic {
-		pub = 1
-	}
-
 	result, err := s.database.ExecContext(ctx,
 		`UPDATE sql_templates SET name=$1, description=$2, sql_content=$3, db_type=$4, category=$5, params_json=$6, is_public=$7, updated_at=$8
 		 WHERE id = $9 AND user_id = $10`,
-		name, description, sqlContent, dbType, category, paramsJSON, pub, time.Now(), id, userID,
+		name, description, sqlContent, dbType, category, paramsJSON, isPublic, time.Now(), id, userID,
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if sqlutil.IsUniqueViolation(err) {
 			return ErrTemplateNameExists
 		}
 		return fmt.Errorf("update template: %w", err)

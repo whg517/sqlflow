@@ -18427,6 +18427,7 @@ type SLAConfigMutation struct {
 	addreminder_percent *int
 	escalate_to_role    *string
 	escalate_to_user    *string
+	auto_reject_enabled *bool
 	enabled             *bool
 	created_at          *time.Time
 	updated_at          *time.Time
@@ -18754,6 +18755,42 @@ func (m *SLAConfigMutation) ResetEscalateToUser() {
 	m.escalate_to_user = nil
 }
 
+// SetAutoRejectEnabled sets the "auto_reject_enabled" field.
+func (m *SLAConfigMutation) SetAutoRejectEnabled(b bool) {
+	m.auto_reject_enabled = &b
+}
+
+// AutoRejectEnabled returns the value of the "auto_reject_enabled" field in the mutation.
+func (m *SLAConfigMutation) AutoRejectEnabled() (r bool, exists bool) {
+	v := m.auto_reject_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAutoRejectEnabled returns the old "auto_reject_enabled" field's value of the SLAConfig entity.
+// If the SLAConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SLAConfigMutation) OldAutoRejectEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAutoRejectEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAutoRejectEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAutoRejectEnabled: %w", err)
+	}
+	return oldValue.AutoRejectEnabled, nil
+}
+
+// ResetAutoRejectEnabled resets all changes to the "auto_reject_enabled" field.
+func (m *SLAConfigMutation) ResetAutoRejectEnabled() {
+	m.auto_reject_enabled = nil
+}
+
 // SetEnabled sets the "enabled" field.
 func (m *SLAConfigMutation) SetEnabled(b bool) {
 	m.enabled = &b
@@ -18896,7 +18933,7 @@ func (m *SLAConfigMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SLAConfigMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.priority != nil {
 		fields = append(fields, slaconfig.FieldPriority)
 	}
@@ -18911,6 +18948,9 @@ func (m *SLAConfigMutation) Fields() []string {
 	}
 	if m.escalate_to_user != nil {
 		fields = append(fields, slaconfig.FieldEscalateToUser)
+	}
+	if m.auto_reject_enabled != nil {
+		fields = append(fields, slaconfig.FieldAutoRejectEnabled)
 	}
 	if m.enabled != nil {
 		fields = append(fields, slaconfig.FieldEnabled)
@@ -18939,6 +18979,8 @@ func (m *SLAConfigMutation) Field(name string) (ent.Value, bool) {
 		return m.EscalateToRole()
 	case slaconfig.FieldEscalateToUser:
 		return m.EscalateToUser()
+	case slaconfig.FieldAutoRejectEnabled:
+		return m.AutoRejectEnabled()
 	case slaconfig.FieldEnabled:
 		return m.Enabled()
 	case slaconfig.FieldCreatedAt:
@@ -18964,6 +19006,8 @@ func (m *SLAConfigMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldEscalateToRole(ctx)
 	case slaconfig.FieldEscalateToUser:
 		return m.OldEscalateToUser(ctx)
+	case slaconfig.FieldAutoRejectEnabled:
+		return m.OldAutoRejectEnabled(ctx)
 	case slaconfig.FieldEnabled:
 		return m.OldEnabled(ctx)
 	case slaconfig.FieldCreatedAt:
@@ -19013,6 +19057,13 @@ func (m *SLAConfigMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEscalateToUser(v)
+		return nil
+	case slaconfig.FieldAutoRejectEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAutoRejectEnabled(v)
 		return nil
 	case slaconfig.FieldEnabled:
 		v, ok := value.(bool)
@@ -19125,6 +19176,9 @@ func (m *SLAConfigMutation) ResetField(name string) error {
 		return nil
 	case slaconfig.FieldEscalateToUser:
 		m.ResetEscalateToUser()
+		return nil
+	case slaconfig.FieldAutoRejectEnabled:
+		m.ResetAutoRejectEnabled()
 		return nil
 	case slaconfig.FieldEnabled:
 		m.ResetEnabled()

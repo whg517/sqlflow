@@ -178,7 +178,10 @@ func (s *HistoryService) GetFrequentQueries(ctx context.Context, userID int64) (
 	rows, err := s.database.DB.QueryContext(ctx,
 		`SELECT
 			sql_hash,
-			sql_content,
+			-- Grouped by hash, so every row in a group has the same SQL; MIN
+			-- picks one. PostgreSQL requires the choice to be explicit, where
+			-- SQLite silently returned an arbitrary row's value.
+			MIN(sql_content) as sql_content,
 			COUNT(*) as execution_count,
 			MAX(created_at) as last_executed_at
 		FROM query_history

@@ -157,16 +157,16 @@ func (s *ExportService) StreamExportAuditLogs(ctx context.Context, w io.Writer, 
 		"错误信息", "脱敏字段", "IP地址", "AI评审", "工单ID",
 	})
 
-	querySQL := fmt.Sprintf(
+	querySQL := sqlutil.NumberPlaceholders(fmt.Sprintf(
 		`SELECT a.id, a.user_id, a.action, a.datasource_id, a.database, a.sql_content, a.sql_summary,
 		        a.result_rows, a.affected_rows, a.execution_time_ms, a.error_message,
 		        a.desensitized_fields, a.ip_address, a.ai_review_result, a.ticket_id, a.created_at,
 		        COALESCE(u.username, '') AS username
 		 FROM audit_logs a
 		 LEFT JOIN users u ON a.user_id = u.id
-		 %s ORDER BY a.created_at DESC LIMIT $1`,
+		 %s ORDER BY a.created_at DESC LIMIT ?`,
 		whereClause,
-	)
+	))
 	queryArgs := append(args, ExportMaxRows)
 
 	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
@@ -248,7 +248,7 @@ func (s *ExportService) StreamExportTickets(ctx context.Context, w io.Writer, us
 		"定时执行时间", "实际执行时间", "创建时间", "更新时间",
 	})
 
-	querySQL := fmt.Sprintf(
+	querySQL := sqlutil.NumberPlaceholders(fmt.Sprintf(
 		`SELECT t.id, t.submitter_id, COALESCE(su.username, '') AS submitter_name,
 		        t.datasource_id, t.database, t.sql_content, t.sql_summary,
 		        t.db_type, t.change_reason, t.status, t.risk_level,
@@ -258,9 +258,9 @@ func (s *ExportService) StreamExportTickets(ctx context.Context, w io.Writer, us
 		 FROM tickets t
 		 LEFT JOIN users su ON t.submitter_id = su.id
 		 LEFT JOIN users rev ON t.reviewer_id = rev.id
-		 %s ORDER BY t.created_at DESC LIMIT $1`,
+		 %s ORDER BY t.created_at DESC LIMIT ?`,
 		whereClause,
-	)
+	))
 	queryArgs := append(args, ExportMaxRows)
 
 	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
