@@ -2,11 +2,11 @@ package ticket
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +14,7 @@ import (
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
+	"github.com/whg517/sqlflow/internal/db/ent/predicate"
 	entTicket "github.com/whg517/sqlflow/internal/db/ent/ticket"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
@@ -156,40 +157,36 @@ func New(deps Deps) *Service {
 // the drift that previously broke the scheduler (a stale 17-column SELECT fed
 // into a 20-destination scan) and silently disabled the post-approval SQL
 // integrity check (sql_hash written but never selected back).
-const ticketColumns = `id, submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, ` +
-	`status, risk_level, ai_review_result, sql_type, affected_tables, reviewer_id, review_comment, sql_hash, ` +
-	`scheduled_at, executed_at, revision, created_at, updated_at`
-
-// scanTicket scans a single ticket row from a sql.Rows or sql.Row.
-// The query must select exactly ticketColumns, in that order.
-func scanTicket(scanner interface {
-	Scan(dest ...interface{}) error
-}) (*model.Ticket, error) {
-	t := &model.Ticket{}
-	var scheduledAt, executedAt sql.NullTime
-
-	err := scanner.Scan(
-		&t.ID, &t.SubmitterID, &t.DatasourceID, &t.Database,
-		&t.SQLContent, &t.SQLSummary, &t.DBType, &t.ChangeReason,
-		&t.Status, &t.RiskLevel, &t.AIReviewResult,
-		&t.SQLType, &t.AffectedTables,
-		&t.ReviewerID, &t.ReviewComment, &t.SQLHash,
-		&scheduledAt, &executedAt,
-		&t.Revision,
-		&t.CreatedAt, &t.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
+// entTicketToModel converts a generated ticket to the API shape.
+//
+// It replaces a hand-kept column list and a positional scanner that had to stay
+// in the same order: the list was maintained in four places before it was
+// consolidated, and a mismatch between the two showed up as a scan error at
+// runtime rather than a compile error.
+func entTicketToModel(t *ent.Ticket) *model.Ticket {
+	return &model.Ticket{
+		ID:             int64(t.ID),
+		SubmitterID:    t.SubmitterID,
+		DatasourceID:   t.DatasourceID,
+		Database:       t.Database,
+		SQLContent:     t.SQLContent,
+		SQLSummary:     t.SQLSummary,
+		DBType:         t.DbType,
+		ChangeReason:   t.ChangeReason,
+		Status:         model.TicketStatus(t.Status),
+		RiskLevel:      t.RiskLevel,
+		AIReviewResult: t.AiReviewResult,
+		SQLType:        t.SQLType,
+		AffectedTables: t.AffectedTables,
+		ReviewerID:     t.ReviewerID,
+		ReviewComment:  t.ReviewComment,
+		SQLHash:        t.SQLHash,
+		ScheduledAt:    t.ScheduledAt,
+		ExecutedAt:     t.ExecutedAt,
+		Revision:       t.Revision,
+		CreatedAt:      t.CreatedAt,
+		UpdatedAt:      t.UpdatedAt,
 	}
-
-	if scheduledAt.Valid {
-		t.ScheduledAt = &scheduledAt.Time
-	}
-	if executedAt.Valid {
-		t.ExecutedAt = &executedAt.Time
-	}
-
-	return t, nil
 }
 
 // casTicketStatus atomically moves a ticket from `from` to `to` and reports
@@ -209,8 +206,26 @@ func casTicketStatus(
 	now time.Time,
 	extra func(*ent.TicketUpdate) *ent.TicketUpdate,
 ) (bool, error) {
+	return casTicketStatusFrom(ctx, tickets, ticketID, []model.TicketStatus{from}, to, now, extra)
+}
+
+// casTicketStatusFrom is casTicketStatus for transitions with more than one
+// acceptable starting state — execution accepts both APPROVED and SCHEDULED.
+func casTicketStatusFrom(
+	ctx context.Context,
+	tickets *ent.TicketClient,
+	ticketID int64,
+	from []model.TicketStatus,
+	to model.TicketStatus,
+	now time.Time,
+	extra func(*ent.TicketUpdate) *ent.TicketUpdate,
+) (bool, error) {
+	statuses := make([]string, len(from))
+	for i, st := range from {
+		statuses[i] = string(st)
+	}
 	upd := tickets.Update().
-		Where(entTicket.IDEQ(int(ticketID)), entTicket.StatusEQ(string(from))).
+		Where(entTicket.IDEQ(int(ticketID)), entTicket.StatusIn(statuses...)).
 		SetStatus(string(to)).
 		SetUpdatedAt(now)
 	if extra != nil {
@@ -366,15 +381,14 @@ func (s *Service) applyApprovalPolicy(ctx context.Context, t *model.Ticket) {
 
 // GetTicket retrieves a ticket by ID with populated user names.
 func (s *Service) GetTicket(ctx context.Context, id int64) (*model.Ticket, error) {
-	t, err := scanTicket(s.database.DB.QueryRowContext(ctx,
-		fmt.Sprintf(`SELECT %s FROM tickets WHERE id = $1`, ticketColumns), id,
-	))
+	row, err := s.client.Ticket.Get(ctx, int(id))
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if ent.IsNotFound(err) {
 			return nil, ErrTicketNotFound
 		}
 		return nil, fmt.Errorf("获取工单失败: %w", err)
 	}
+	t := entTicketToModel(row)
 
 	s.populateTicketNames(ctx, t)
 	if s.gitSvc != nil {
@@ -400,78 +414,75 @@ func (s *Service) GetTicketForActor(ctx context.Context, id, userID int64, role 
 func (s *Service) ListTickets(ctx context.Context, page, pageSize int, status, datasourceIDStr, submitterIDStr, riskLevel, keyword, scope string, currentUserID int64, currentRole string) ([]model.Ticket, int64, error) {
 	p := sqlutil.ParsePagination(page, pageSize)
 
-	var filters []sqlutil.FilterClause
+	var preds []predicate.Ticket
 	if currentRole != "admin" && currentRole != "dba" {
-		// Non-governance roles can never widen this boundary with query params.
-		filters = append(filters, sqlutil.FilterClause{Condition: "submitter_id = ?", Args: []interface{}{currentUserID}})
+		// Non-governance roles can never widen this boundary with query params:
+		// the submitter filter is appended here and the caller's value is
+		// discarded, so a crafted submitter_id cannot reach another user's
+		// tickets.
+		preds = append(preds, entTicket.SubmitterIDEQ(currentUserID))
 		submitterIDStr = ""
 	}
 	if status != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "status = ?", Args: []interface{}{status}})
+		preds = append(preds, entTicket.StatusEQ(status))
 	}
 	if datasourceIDStr != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "datasource_id = ?", Args: []interface{}{datasourceIDStr}})
+		id, err := strconv.ParseInt(datasourceIDStr, 10, 64)
+		if err != nil {
+			return nil, 0, fmt.Errorf("无效的数据源ID: %s", datasourceIDStr)
+		}
+		preds = append(preds, entTicket.DatasourceIDEQ(id))
 	}
 	if submitterIDStr != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "submitter_id = ?", Args: []interface{}{submitterIDStr}})
+		id, err := strconv.ParseInt(submitterIDStr, 10, 64)
+		if err != nil {
+			return nil, 0, fmt.Errorf("无效的提交人ID: %s", submitterIDStr)
+		}
+		preds = append(preds, entTicket.SubmitterIDEQ(id))
 	}
 	if riskLevel != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "risk_level = ?", Args: []interface{}{riskLevel}})
+		preds = append(preds, entTicket.RiskLevelEQ(riskLevel))
 	}
 	if keyword != "" {
-		like := "%" + keyword + "%"
-		filters = append(filters, sqlutil.FilterClause{Condition: "(sql_content LIKE ? OR change_reason LIKE ?)", Args: []interface{}{like, like}})
+		// ContainsFold renders as ILIKE and escapes the pattern itself, so a
+		// keyword of "%" no longer matches every ticket.
+		preds = append(preds, entTicket.Or(
+			entTicket.SQLContentContainsFold(keyword),
+			entTicket.ChangeReasonContainsFold(keyword),
+		))
 	}
 	if scope == "mine" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "submitter_id = ?", Args: []interface{}{currentUserID}})
+		preds = append(preds, entTicket.SubmitterIDEQ(currentUserID))
 	}
 	if scope == "pending" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "status IN (?, ?, ?)", Args: []interface{}{model.TicketStatusSubmitted, model.TicketStatusAIReviewed, model.TicketStatusPendingApproval}})
+		preds = append(preds, entTicket.StatusIn(
+			string(model.TicketStatusSubmitted),
+			string(model.TicketStatusAIReviewed),
+			string(model.TicketStatusPendingApproval),
+		))
 	}
 
-	whereClause, args := sqlutil.BuildWhereClause(filters)
+	q := s.client.Ticket.Query().Where(preds...)
 
-	// Count total
-	var total int64
-	countSQL := sqlutil.PaginatedCountSQL("tickets", whereClause)
-	if err := s.database.DB.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
 		return nil, 0, fmt.Errorf("统计工单失败: %w", err)
 	}
 
-	// Query page
-	// Numbered after assembly: LIMIT and OFFSET follow however many placeholders
-	// the WHERE clause contributed, so writing $1/$2 here collides with it.
-	querySQL := sqlutil.NumberPlaceholders(fmt.Sprintf(
-		`SELECT %s FROM tickets %s ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-		ticketColumns, whereClause,
-	))
-	queryArgs := sqlutil.AppendLimitArgs(args, p)
-
-	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
+	rows, err := q.
+		Order(ent.Desc(entTicket.FieldCreatedAt)).
+		Limit(p.PageSize).
+		Offset(p.Offset).
+		All(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("查询工单列表失败: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
-	// Read all rows first before populating names, since MaxOpenConns(1)
-	// means the rows cursor holds the only connection.
-	tickets := make([]model.Ticket, 0)
-	for rows.Next() {
-		t, err := scanTicket(rows)
-		if err != nil {
-			// A scan failure here means schema drift or corruption, not a
-			// per-row data issue. Dropping the row silently is how the
-			// scheduler's column mismatch stayed hidden — make it visible.
-			log.Printf("ticket: scan ticket row failed: %v", err)
-			continue
-		}
-		tickets = append(tickets, *t)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, 0, fmt.Errorf("遍历工单失败: %w", err)
+	tickets := make([]model.Ticket, 0, len(rows))
+	for _, r := range rows {
+		tickets = append(tickets, *entTicketToModel(r))
 	}
 
-	// Now populate user names (requires additional queries)
 	for i := range tickets {
 		s.populateTicketNames(ctx, &tickets[i])
 	}
@@ -481,7 +492,7 @@ func (s *Service) ListTickets(ctx context.Context, page, pageSize int, status, d
 		s.gitSvc.BatchPopulateGitLinks(ctx, tickets)
 	}
 
-	return tickets, total, nil
+	return tickets, int64(total), nil
 }
 
 // ApproveTicket approves a ticket. Only dba/admin can approve.
@@ -687,19 +698,17 @@ func (s *Service) executeTicket(ctx context.Context, t *model.Ticket, operatorID
 		return nil, ErrTicketExecUnavailable
 	}
 
-	// Idempotent: APPROVED/SCHEDULED → EXECUTING
-	// RAW_SQL: atomic CAS (Compare-And-Swap) with WHERE status IN — ent UpdateOneID does not
-	// support conditional WHERE on current row values. Keep raw SQL for atomicity.
+	// Idempotent: APPROVED/SCHEDULED → EXECUTING, by compare-and-swap. Two
+	// schedulers reaching the same due ticket both arrive here; the predicate is
+	// what makes exactly one of them execute it.
 	now := time.Now()
-	result, err := s.database.DB.ExecContext(ctx,
-		`UPDATE tickets SET status = $1, updated_at = $2 WHERE id = $3 AND status IN ($4, $5)`,
-		model.TicketStatusExecuting, now, t.ID, model.TicketStatusApproved, model.TicketStatusScheduled,
-	)
+	applied, err := casTicketStatusFrom(ctx, s.client.Ticket, t.ID,
+		[]model.TicketStatus{model.TicketStatusApproved, model.TicketStatusScheduled},
+		model.TicketStatusExecuting, now, nil)
 	if err != nil {
 		return nil, fmt.Errorf("状态更新失败: %w", err)
 	}
-	raffected, _ := result.RowsAffected()
-	if raffected == 0 {
+	if !applied {
 		return nil, ErrTicketNotExecutable // already executing or state changed
 	}
 	t.Status = model.TicketStatusExecuting

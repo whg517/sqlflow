@@ -2,7 +2,6 @@ package ticket
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -326,7 +325,7 @@ func (e *ApprovalEngine) ApplyPolicy(ctx context.Context, ticketID int64, policy
 
 	// Notify approvers about pending approval
 	if e.notifySvc != nil {
-		t, _ := getTicketForNotify(ctx, e.database.DB, ticketID)
+		t, _ := getTicketForNotify(ctx, e.client, ticketID)
 		if t != nil {
 			e.notifySvc.NotifyTicketPendingApproval(ctx, t)
 		}
@@ -457,7 +456,7 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 	if action == "rejected" {
 		// Notify submitter about rejection
 		if e.notifySvc != nil {
-			t, _ := getTicketForNotify(ctx, e.database.DB, ticketID)
+			t, _ := getTicketForNotify(ctx, e.client, ticketID)
 			if t != nil {
 				t.ReviewerID = approverID
 				t.ReviewComment = comment
@@ -467,7 +466,7 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 	} else {
 		// Notify when all stages approved
 		if nextStage > totalStages && e.notifySvc != nil {
-			t, _ := getTicketForNotify(ctx, e.database.DB, ticketID)
+			t, _ := getTicketForNotify(ctx, e.client, ticketID)
 			if t != nil {
 				t.ReviewerID = approverID
 				t.ReviewComment = comment
@@ -570,18 +569,13 @@ func entApprovalPolicyToModel(p *ent.ApprovalPolicy) *model.ApprovalPolicy {
 	}
 }
 
-// getTicketForNotify fetches minimal ticket fields needed for notification.
-// RAW_SQL: helper for notifications, only needs a few fields — not worth ent query.
-func getTicketForNotify(ctx context.Context, db *sql.DB, ticketID int64) (*model.Ticket, error) {
-	t := &model.Ticket{ID: ticketID}
-	err := db.QueryRowContext(ctx,
-		`SELECT submitter_id, datasource_id, database, sql_summary, risk_level, status, created_at, updated_at
-			 FROM tickets WHERE id = $1`, ticketID,
-	).Scan(&t.SubmitterID, &t.DatasourceID, &t.Database, &t.SQLSummary, &t.RiskLevel, &t.Status, &t.CreatedAt, &t.UpdatedAt)
+// getTicketForNotify fetches the ticket a notification describes.
+func getTicketForNotify(ctx context.Context, client *ent.Client, ticketID int64) (*model.Ticket, error) {
+	t, err := client.Ticket.Get(ctx, int(ticketID))
 	if err != nil {
 		return nil, err
 	}
-	return t, nil
+	return entTicketToModel(t), nil
 }
 
 // strPtrValue dereferences a string pointer, returning "" for nil.

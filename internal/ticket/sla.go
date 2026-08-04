@@ -3,6 +3,7 @@ package ticket
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -10,6 +11,10 @@ import (
 
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
+	entslaactionlog "github.com/whg517/sqlflow/internal/db/ent/slaactionlog"
+	entslaconfig "github.com/whg517/sqlflow/internal/db/ent/slaconfig"
+	entticket "github.com/whg517/sqlflow/internal/db/ent/ticket"
+	entuser "github.com/whg517/sqlflow/internal/db/ent/user"
 	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 
 	"github.com/whg517/sqlflow/internal/model"
@@ -60,79 +65,88 @@ func NewSLAService(database *db.DB, notifySvc *notify.Service) *SLAService {
 // SLA Config CRUD
 // ---------------------------------------------------------------------------
 
+// entSLAConfigToModel converts a generated SLA config to the API shape.
+func entSLAConfigToModel(c *ent.SLAConfig) *model.SLAConfig {
+	return &model.SLAConfig{
+		ID:                int64(c.ID),
+		Priority:          c.Priority,
+		TimeoutMinutes:    c.TimeoutMinutes,
+		ReminderPercent:   c.ReminderPercent,
+		EscalateToRole:    c.EscalateToRole,
+		EscalateToUser:    c.EscalateToUser,
+		AutoRejectEnabled: c.AutoRejectEnabled,
+		Enabled:           c.Enabled,
+		CreatedAt:         c.CreatedAt,
+		UpdatedAt:         c.UpdatedAt,
+	}
+}
+
 // ListConfigs returns all SLA configurations.
 func (s *SLAService) ListConfigs(ctx context.Context) ([]*model.SLAConfig, error) {
-	rows, err := s.database.QueryContext(ctx,
-		`SELECT id, priority, timeout_minutes, reminder_percent, escalate_to_role, escalate_to_user, auto_reject_enabled, enabled, created_at, updated_at
-		 FROM sla_config ORDER BY timeout_minutes ASC`)
+	rows, err := s.client.SLAConfig.Query().
+		Order(ent.Asc(entslaconfig.FieldTimeoutMinutes)).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list sla configs: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	var configs []*model.SLAConfig
-	for rows.Next() {
-		c := &model.SLAConfig{}
-		var enabled, autoReject bool
-		if err := rows.Scan(&c.ID, &c.Priority, &c.TimeoutMinutes, &c.ReminderPercent,
-			&c.EscalateToRole, &c.EscalateToUser, &autoReject, &enabled, &c.CreatedAt, &c.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan sla config: %w", err)
-		}
-		c.Enabled = enabled
-		c.AutoRejectEnabled = autoReject
-		configs = append(configs, c)
+	configs := make([]*model.SLAConfig, 0, len(rows))
+	for _, c := range rows {
+		configs = append(configs, entSLAConfigToModel(c))
 	}
-	return configs, rows.Err()
+	return configs, nil
 }
 
-// GetConfig returns the SLA config for a given priority.
+// GetConfig returns the SLA config for a given priority, or nil when none is
+// configured for it.
+//
+// A missing config is not an error: most priorities have no SLA, and the
+// callers treat "no config" as "no deadline to enforce".
 func (s *SLAService) GetConfig(ctx context.Context, priority string) (*model.SLAConfig, error) {
-	c := &model.SLAConfig{}
-	var enabled, autoReject bool
-	err := s.database.QueryRowContext(ctx,
-		`SELECT id, priority, timeout_minutes, reminder_percent, escalate_to_role, escalate_to_user, auto_reject_enabled, enabled, created_at, updated_at
-		 FROM sla_config WHERE priority = $1`, priority).Scan(
-		&c.ID, &c.Priority, &c.TimeoutMinutes, &c.ReminderPercent,
-		&c.EscalateToRole, &c.EscalateToUser, &autoReject, &enabled, &c.CreatedAt, &c.UpdatedAt)
+	c, err := s.client.SLAConfig.Query().
+		Where(entslaconfig.PriorityEQ(priority)).
+		Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, nil
+	}
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
 		return nil, fmt.Errorf("get sla config: %w", err)
 	}
-	c.Enabled = enabled
-	c.AutoRejectEnabled = autoReject
-	return c, nil
+	return entSLAConfigToModel(c), nil
 }
 
 // CreateConfig creates a new SLA configuration.
 func (s *SLAService) CreateConfig(ctx context.Context, cfg *model.SLAConfig) (*model.SLAConfig, error) {
-	// The booleans go through as booleans. Converting them to 0/1 was only ever
-	// needed because SQLite had no boolean type.
 	now := time.Now()
-	var id int64
-	if err := s.database.QueryRowContext(ctx,
-		`INSERT INTO sla_config (priority, timeout_minutes, reminder_percent, escalate_to_role, escalate_to_user, auto_reject_enabled, enabled, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-		cfg.Priority, cfg.TimeoutMinutes, cfg.ReminderPercent, cfg.EscalateToRole, cfg.EscalateToUser,
-		cfg.AutoRejectEnabled, cfg.Enabled, now, now,
-	).Scan(&id); err != nil {
+	created, err := s.client.SLAConfig.Create().
+		SetPriority(cfg.Priority).
+		SetTimeoutMinutes(cfg.TimeoutMinutes).
+		SetReminderPercent(cfg.ReminderPercent).
+		SetEscalateToRole(cfg.EscalateToRole).
+		SetEscalateToUser(cfg.EscalateToUser).
+		SetAutoRejectEnabled(cfg.AutoRejectEnabled).
+		SetEnabled(cfg.Enabled).
+		SetCreatedAt(now).
+		SetUpdatedAt(now).
+		Save(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("create sla config: %w", err)
 	}
-	cfg.ID = id
-	cfg.CreatedAt = now
-	cfg.UpdatedAt = now
-	return cfg, nil
+	return entSLAConfigToModel(created), nil
 }
 
 // UpdateConfig updates an existing SLA configuration.
 func (s *SLAService) UpdateConfig(ctx context.Context, id int64, cfg *model.SLAConfig) error {
-	now := time.Now()
-	_, err := s.database.ExecContext(ctx,
-		`UPDATE sla_config SET priority = $1, timeout_minutes = $2, reminder_percent = $3, escalate_to_role = $4, escalate_to_user = $5, auto_reject_enabled = $6, enabled = $7, updated_at = $8
-		 WHERE id = $9`,
-		cfg.Priority, cfg.TimeoutMinutes, cfg.ReminderPercent, cfg.EscalateToRole, cfg.EscalateToUser, cfg.AutoRejectEnabled, cfg.Enabled, now, id)
-	if err != nil {
+	err := s.client.SLAConfig.UpdateOneID(int(id)).
+		SetPriority(cfg.Priority).
+		SetTimeoutMinutes(cfg.TimeoutMinutes).
+		SetReminderPercent(cfg.ReminderPercent).
+		SetEscalateToRole(cfg.EscalateToRole).
+		SetEscalateToUser(cfg.EscalateToUser).
+		SetAutoRejectEnabled(cfg.AutoRejectEnabled).
+		SetEnabled(cfg.Enabled).
+		SetUpdatedAt(time.Now()).
+		Exec(ctx)
+	if err != nil && !ent.IsNotFound(err) {
 		return fmt.Errorf("update sla config: %w", err)
 	}
 	return nil
@@ -140,8 +154,8 @@ func (s *SLAService) UpdateConfig(ctx context.Context, id int64, cfg *model.SLAC
 
 // DeleteConfig deletes an SLA configuration.
 func (s *SLAService) DeleteConfig(ctx context.Context, id int64) error {
-	_, err := s.database.ExecContext(ctx, `DELETE FROM sla_config WHERE id = $1`, id)
-	if err != nil {
+	err := s.client.SLAConfig.DeleteOneID(int(id)).Exec(ctx)
+	if err != nil && !ent.IsNotFound(err) {
 		return fmt.Errorf("delete sla config: %w", err)
 	}
 	return nil
@@ -155,12 +169,11 @@ func (s *SLAService) DeleteConfig(ctx context.Context, id int64) error {
 // If the deadline is already set, it is not changed.
 func (s *SLAService) SetSLADeadline(ctx context.Context, ticketID int64, riskLevel string) error {
 	// Check current deadline
-	var deadline sql.NullTime
-	err := s.database.QueryRowContext(ctx, `SELECT sla_deadline FROM tickets WHERE id = $1`, ticketID).Scan(&deadline)
+	t, err := s.client.Ticket.Get(ctx, int(ticketID))
 	if err != nil {
 		return fmt.Errorf("check sla deadline: %w", err)
 	}
-	if deadline.Valid {
+	if t.SLADeadline != nil {
 		return nil // already set
 	}
 
@@ -179,9 +192,11 @@ func (s *SLAService) SetSLADeadline(ctx context.Context, ticketID int64, riskLev
 	}
 
 	dl := time.Now().Add(time.Duration(cfg.TimeoutMinutes) * time.Minute)
-	_, err = s.database.ExecContext(ctx,
-		`UPDATE tickets SET sla_deadline = $1, sla_status = 'normal', updated_at = $2 WHERE id = $3`,
-		dl, time.Now(), ticketID)
+	err = s.client.Ticket.UpdateOneID(int(ticketID)).
+		SetSLADeadline(dl).
+		SetSLAStatus("normal").
+		SetUpdatedAt(time.Now()).
+		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("set sla deadline: %w", err)
 	}
@@ -204,20 +219,28 @@ func (s *SLAService) CheckSLA(ctx context.Context) error {
 	// Query only the minimal fields needed for SLA checking.
 	// This is intentionally separate from Service.scanTicket —
 	// SLAService owns its own query to maintain clear responsibility boundaries.
-	rows, err := s.database.QueryContext(ctx,
-		`SELECT id, submitter_id, risk_level, reviewer_id, sql_summary, created_at, sla_deadline, sla_status
-		 FROM tickets
-		 WHERE status = $1 AND sla_deadline IS NOT NULL`,
-		model.TicketStatusPendingApproval,
-	)
+	rows, err := s.client.Ticket.Query().
+		Where(
+			entticket.StatusEQ(string(model.TicketStatusPendingApproval)),
+			entticket.SLADeadlineNotNil(),
+		).
+		All(ctx)
 	if err != nil {
 		return fmt.Errorf("sla check query: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	tickets, err := s.scanActiveTicketRows(rows)
-	if err != nil {
-		return fmt.Errorf("sla scan tickets: %w", err)
+	tickets := make([]slaTicketRow, 0, len(rows))
+	for _, t := range rows {
+		row := slaTicketRow{
+			ID:          int64(t.ID),
+			SubmitterID: t.SubmitterID,
+			RiskLevel:   t.RiskLevel,
+			ReviewerID:  t.ReviewerID,
+			SQLSummary:  t.SQLSummary,
+			CreatedAt:   t.CreatedAt,
+			SLAStatus:   t.SLAStatus,
+		}
+		row.SLADeadline = t.SLADeadline
+		tickets = append(tickets, row)
 	}
 
 	for _, t := range tickets {
@@ -263,7 +286,7 @@ func (s *SLAService) CheckSLA(ctx context.Context) error {
 			}
 			// Update status to breached
 			if t.SLAStatus != "breached" {
-				_, _ = s.database.ExecContext(ctx, `UPDATE tickets SET sla_status = 'breached', updated_at = $1 WHERE id = $2`, now, t.ID)
+				_ = s.setSLAStatus(ctx, t.ID, "breached", now)
 			}
 
 		case percent >= float64(cfg.ReminderPercent):
@@ -274,7 +297,7 @@ func (s *SLAService) CheckSLA(ctx context.Context) error {
 			}
 			// Update status to warning
 			if t.SLAStatus != "warning" && t.SLAStatus != "breached" {
-				_, _ = s.database.ExecContext(ctx, `UPDATE tickets SET sla_status = 'warning', updated_at = $1 WHERE id = $2`, now, t.ID)
+				_ = s.setSLAStatus(ctx, t.ID, "warning", now)
 			}
 		}
 	}
@@ -292,40 +315,55 @@ func (s *SLAService) GetTicketSLAStatuses(ctx context.Context, ticketIDs []int64
 		return map[int64]*SLATicketStatus{}, nil
 	}
 
-	placeholders := make([]string, len(ticketIDs))
-	args := make([]interface{}, len(ticketIDs))
-	for i, id := range ticketIDs {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-	query := sqlutil.NumberPlaceholders(fmt.Sprintf(
-		`SELECT id, sla_deadline, sla_status FROM tickets WHERE id IN (%s)`,
-		strings.Join(placeholders, ","),
-	))
-
-	rows, err := s.database.QueryContext(ctx, query, args...)
+	rows, err := s.client.Ticket.Query().
+		Where(entticket.IDIn(toEntIDs(ticketIDs)...)).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("batch sla status query: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
 	result := make(map[int64]*SLATicketStatus, len(ticketIDs))
 	now := time.Now()
-	for rows.Next() {
-		var id int64
-		var deadline sql.NullTime
-		var status string
-		if err := rows.Scan(&id, &deadline, &status); err != nil {
-			return nil, fmt.Errorf("scan batch sla status: %w", err)
+	for _, t := range rows {
+		st := &SLATicketStatus{TicketID: int64(t.ID), SLAStatus: t.SLAStatus}
+		if t.SLADeadline != nil {
+			st.SLADeadline = t.SLADeadline
+			st.TimeRemainingSeconds = t.SLADeadline.Sub(now).Seconds()
 		}
-		st := &SLATicketStatus{TicketID: id, SLAStatus: status}
-		if deadline.Valid {
-			st.SLADeadline = &deadline.Time
-			st.TimeRemainingSeconds = deadline.Time.Sub(now).Seconds()
-		}
-		result[id] = st
+		result[int64(t.ID)] = st
 	}
-	return result, rows.Err()
+	return result, nil
+}
+
+// derefInt64 reads through a nullable column, treating NULL as zero.
+func derefInt64(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+// toEntIDs narrows the domain's int64 ids to the int ent generates for the
+// primary key.
+func toEntIDs(ids []int64) []int {
+	out := make([]int, len(ids))
+	for i, id := range ids {
+		out[i] = int(id)
+	}
+	return out
+}
+
+// setSLAStatus records the ticket's SLA state after a check.
+//
+// Not compare-and-swap: this is an advisory field the scheduler recomputes on
+// every pass, not a state machine transition. Losing a race here means the next
+// pass sets it, sixty seconds later.
+func (s *SLAService) setSLAStatus(ctx context.Context, ticketID int64, status string, at time.Time) error {
+	return s.client.Ticket.UpdateOneID(int(ticketID)).
+		SetSLAStatus(status).
+		SetUpdatedAt(at).
+		Exec(ctx)
+
 }
 
 // ---------------------------------------------------------------------------
@@ -336,30 +374,33 @@ func (s *SLAService) GetTicketSLAStatuses(ctx context.Context, ticketIDs []int64
 func (s *SLAService) ListNotifications(ctx context.Context, page, pageSize int) ([]*model.SLANotification, int64, error) {
 	p := sqlutil.ParsePagination(page, pageSize)
 
-	var total int64
-	if err := s.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM sla_action_log`).Scan(&total); err != nil {
+	total, err := s.client.SLAActionLog.Query().Count(ctx)
+	if err != nil {
 		return nil, 0, fmt.Errorf("count sla action log: %w", err)
 	}
 
-	rows, err := s.database.QueryContext(ctx,
-		`SELECT id, ticket_id, action_type, dedup_key, notified_user, created_at, sla_config_id
-		 FROM sla_action_log ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-		p.PageSize, p.Offset,
-	)
+	rows, err := s.client.SLAActionLog.Query().
+		Order(ent.Desc(entslaactionlog.FieldCreatedAt)).
+		Limit(p.PageSize).
+		Offset(p.Offset).
+		All(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list sla action log: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
-	var notifications []*model.SLANotification
-	for rows.Next() {
-		n := &model.SLANotification{}
-		if err := rows.Scan(&n.ID, &n.TicketID, &n.NotificationType, &n.Stage, &n.NotifiedUser, &n.NotifiedAt, &n.SLAConfigID); err != nil {
-			return nil, 0, fmt.Errorf("scan sla action log: %w", err)
-		}
-		notifications = append(notifications, n)
+	notifications := make([]*model.SLANotification, 0, len(rows))
+	for _, r := range rows {
+		notifications = append(notifications, &model.SLANotification{
+			ID:               int64(r.ID),
+			TicketID:         r.TicketID,
+			NotificationType: r.ActionType,
+			Stage:            r.DedupKey,
+			NotifiedUser:     r.NotifiedUser,
+			NotifiedAt:       r.CreatedAt,
+			SLAConfigID:      derefInt64(r.SLAConfigID),
+		})
 	}
-	return notifications, total, rows.Err()
+	return notifications, int64(total), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -368,10 +409,12 @@ func (s *SLAService) ListNotifications(ctx context.Context, page, pageSize int) 
 
 // ClearTicketSLA clears the SLA deadline and status for a ticket.
 func (s *SLAService) ClearTicketSLA(ctx context.Context, ticketID int64) error {
-	_, err := s.database.ExecContext(ctx,
-		`UPDATE tickets SET sla_deadline = NULL, sla_status = 'normal', updated_at = $1 WHERE id = $2`,
-		time.Now(), ticketID)
-	if err != nil {
+	err := s.client.Ticket.UpdateOneID(int(ticketID)).
+		ClearSLADeadline().
+		SetSLAStatus("normal").
+		SetUpdatedAt(time.Now()).
+		Exec(ctx)
+	if err != nil && !ent.IsNotFound(err) {
 		return fmt.Errorf("clear ticket sla: %w", err)
 	}
 	return nil
@@ -381,36 +424,17 @@ func (s *SLAService) ClearTicketSLA(ctx context.Context, ticketID int64) error {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-// scanActiveTicketRows scans minimal ticket fields from SLA's own query.
-// This is intentionally separate from Service.scanTicket —
-// SLAService owns only what it needs.
-func (s *SLAService) scanActiveTicketRows(rows *sql.Rows) ([]slaTicketRow, error) {
-	var tickets []slaTicketRow
-	for rows.Next() {
-		var t slaTicketRow
-		var deadline sql.NullTime
-		var sqlSummary sql.NullString
-		err := rows.Scan(&t.ID, &t.SubmitterID, &t.RiskLevel, &t.ReviewerID, &sqlSummary, &t.CreatedAt, &deadline, &t.SLAStatus)
-		if err != nil {
-			return nil, err
-		}
-		if deadline.Valid {
-			t.SLADeadline = &deadline.Time
-		}
-		if sqlSummary.Valid {
-			t.SQLSummary = sqlSummary.String
-		}
-		tickets = append(tickets, t)
-	}
-	return tickets, rows.Err()
-}
-
 func (s *SLAService) lookupUsername(ctx context.Context, userID int64) string {
 	if userID == 0 {
 		return ""
 	}
-	var username string
-	if err := s.database.QueryRowContext(ctx, `SELECT username FROM users WHERE id = $1`, userID).Scan(&username); err != nil {
+	username, err := s.client.User.Query().
+		Where(entuser.IDEQ(int(userID))).
+		Select(entuser.FieldUsername).
+		String(ctx)
+	if err != nil {
+		// The name only decorates a notification; a lookup failure must not stop
+		// the SLA action it belongs to.
 		return ""
 	}
 	return username
@@ -421,18 +445,27 @@ func (s *SLAService) lookupUsername(ctx context.Context, userID int64) string {
 // This provides scheduling idempotency — the same action on the same ticket
 // within the same dedup window will not be recorded twice.
 func (s *SLAService) tryRecordAction(ctx context.Context, ticketID int64, actionType, dedupKey, notifiedUser string, configID int64) (bool, error) {
-	result, err := s.database.ExecContext(ctx,
-		`INSERT INTO sla_action_log (ticket_id, action_type, dedup_key, notified_user, created_at, sla_config_id)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 ON CONFLICT(dedup_key) DO NOTHING`,
-		ticketID, actionType, dedupKey, notifiedUser, time.Now(), configID,
-	)
-	if err != nil {
+	// The unique constraint on dedup_key is what makes this idempotent, and the
+	// insert is what tests it: two schedulers racing on the same ticket both
+	// reach here, and exactly one insert lands. Checking for an existing row
+	// first would let both pass the check before either wrote.
+	affected, err := s.client.SLAActionLog.Create().
+		SetTicketID(ticketID).
+		SetActionType(actionType).
+		SetDedupKey(dedupKey).
+		SetNotifiedUser(notifiedUser).
+		SetCreatedAt(time.Now()).
+		SetSLAConfigID(configID).
+		OnConflictColumns(entslaactionlog.FieldDedupKey).
+		DoNothing().
+		ID(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		log.Printf("sla: record action failed: %v", err)
 		return false, err
 	}
-	affected, _ := result.RowsAffected()
-	return affected > 0, nil
+	// DO NOTHING returns no row when the key already existed, which ent surfaces
+	// as ErrNoRows — that is the duplicate, not a failure.
+	return err == nil && affected > 0, nil
 }
 
 func (s *SLAService) sendReminder(ctx context.Context, t slaTicketRow, cfg *model.SLAConfig, percent float64, approverName string) {
@@ -459,18 +492,21 @@ func (s *SLAService) sendEscalation(ctx context.Context, t slaTicketRow, cfg *mo
 func (s *SLAService) autoRejectTicket(ctx context.Context, t slaTicketRow, cfg *model.SLAConfig) {
 	now := time.Now()
 
-	// Atomically reject: PENDING_APPROVAL → REJECTED
-	result, err := s.database.ExecContext(ctx,
-		`UPDATE tickets SET status = $1, reviewer_id = 0, review_comment = $2, updated_at = $3 WHERE id = $4 AND status = $5`,
-		model.TicketStatusRejected, "审批超时自动拒绝 (SLA: "+cfg.Priority+", 超时 "+fmt.Sprintf("%d", cfg.TimeoutMinutes)+" 分钟)", now, t.ID, model.TicketStatusPendingApproval,
-	)
+	// The same compare-and-swap the approval paths use. The dedup key stops the
+	// scheduler running this twice, but it does not stop a human approving the
+	// ticket in the same moment — only the status predicate does.
+	comment := fmt.Sprintf("审批超时自动拒绝 (SLA: %s, 超时 %d 分钟)", cfg.Priority, cfg.TimeoutMinutes)
+	applied, err := casTicketStatus(ctx, s.client.Ticket, t.ID,
+		model.TicketStatusPendingApproval, model.TicketStatusRejected, now,
+		func(u *ent.TicketUpdate) *ent.TicketUpdate {
+			return u.SetReviewerID(0).SetReviewComment(comment)
+		})
 	if err != nil {
 		log.Printf("sla: auto-reject ticket #%d failed: %v", t.ID, err)
 		return
 	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		return // already processed by someone else
+	if !applied {
+		return // already decided by someone else
 	}
 
 	log.Printf("sla: ticket #%d auto-rejected (SLA breach, priority=%s, timeout=%dm)", t.ID, cfg.Priority, cfg.TimeoutMinutes)

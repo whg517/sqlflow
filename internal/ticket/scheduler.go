@@ -3,11 +3,12 @@ package ticket
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"sync"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/db/ent"
+	entTicket "github.com/whg517/sqlflow/internal/db/ent/ticket"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -90,32 +91,27 @@ func (s *Scheduler) executeDueTickets(ctx context.Context) error {
 
 // dueTicketIDs returns the IDs of SCHEDULED tickets whose scheduled_at has passed.
 //
-// Only IDs are selected, and the cursor is fully drained and closed before the
-// caller performs any write. db.Open caps the platform SQLite pool at a single
-// connection, so a write issued while this cursor is still open would wait for
-// a connection that only closing the cursor can release — the write would block
-// until the context deadline instead of failing fast.
+// Only IDs are read. The executor re-reads each ticket under a compare-and-swap
+// before running it, so carrying full rows here would only widen the window in
+// which they go stale.
 func (s *Scheduler) dueTicketIDs(ctx context.Context, now time.Time) ([]int64, error) {
-	rows, err := s.ticketSvc.database.DB.QueryContext(ctx,
-		`SELECT id FROM tickets
-		 WHERE status = $1 AND scheduled_at IS NOT NULL AND scheduled_at <= $2
-		 ORDER BY scheduled_at ASC`,
-		model.TicketStatusScheduled, now,
-	)
+	rows, err := s.ticketSvc.client.Ticket.Query().
+		Where(
+			entTicket.StatusEQ(string(model.TicketStatusScheduled)),
+			entTicket.ScheduledAtNotNil(),
+			entTicket.ScheduledAtLTE(now),
+		).
+		Order(ent.Asc(entTicket.FieldScheduledAt)).
+		IDs(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
 
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan due ticket id: %w", err)
-		}
-		ids = append(ids, id)
+	ids := make([]int64, 0, len(rows))
+	for _, id := range rows {
+		ids = append(ids, int64(id))
 	}
-	return ids, rows.Err()
+	return ids, nil
 }
 
 // executeScheduledTicket executes one due ticket as the system operator.

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/whg517/sqlflow/internal/db/ent"
+	entticketrevision "github.com/whg517/sqlflow/internal/db/ent/ticketrevision"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
 )
@@ -141,33 +142,30 @@ func rollbackOn(tx *ent.Tx, cause error) error {
 
 // ListRevisions returns the revision history for a ticket.
 func (s *Service) ListRevisions(ctx context.Context, ticketID int64) ([]model.TicketRevision, error) {
-	rows, err := s.database.DB.QueryContext(ctx,
-		`SELECT id, ticket_id, revision, sql_content, sql_summary, change_reason, risk_level, ai_review_result, reviewer_id, review_comment, status, created_at
-		 FROM ticket_revisions WHERE ticket_id = $1 ORDER BY revision ASC`,
-		ticketID,
-	)
+	rows, err := s.client.TicketRevision.Query().
+		Where(entticketrevision.TicketIDEQ(ticketID)).
+		Order(ent.Asc(entticketrevision.FieldRevision)).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("查询历史版本失败: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 
-	// Read all rows first before populating names, since MaxOpenConns(1)
-	// means the rows cursor holds the only connection.
-	revisions := make([]model.TicketRevision, 0)
-	for rows.Next() {
-		var rev model.TicketRevision
-		if err := rows.Scan(
-			&rev.ID, &rev.TicketID, &rev.Revision, &rev.SQLContent,
-			&rev.SQLSummary, &rev.ChangeReason, &rev.RiskLevel,
-			&rev.AIReviewResult, &rev.ReviewerID, &rev.ReviewComment,
-			&rev.Status, &rev.CreatedAt,
-		); err != nil {
-			continue
-		}
-		revisions = append(revisions, rev)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("遍历历史版本失败: %w", err)
+	revisions := make([]model.TicketRevision, 0, len(rows))
+	for _, r := range rows {
+		revisions = append(revisions, model.TicketRevision{
+			ID:             int64(r.ID),
+			TicketID:       r.TicketID,
+			Revision:       r.Revision,
+			SQLContent:     r.SQLContent,
+			SQLSummary:     r.SQLSummary,
+			ChangeReason:   r.ChangeReason,
+			RiskLevel:      r.RiskLevel,
+			AIReviewResult: r.AiReviewResult,
+			ReviewerID:     r.ReviewerID,
+			ReviewComment:  r.ReviewComment,
+			Status:         model.TicketStatus(r.Status),
+			CreatedAt:      r.CreatedAt,
+		})
 	}
 
 	// Now populate user names (requires additional queries)

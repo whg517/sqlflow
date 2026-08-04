@@ -5,6 +5,9 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	entTicket "github.com/whg517/sqlflow/internal/db/ent/ticket"
+	"github.com/whg517/sqlflow/internal/model"
 )
 
 // SLAScheduler periodically checks tickets for SLA violations and sends alerts.
@@ -80,23 +83,21 @@ func (s *SLAScheduler) loop() {
 
 // setMissingDeadlines sets SLA deadlines for PENDING_APPROVAL tickets that don't have one.
 func (s *SLAScheduler) setMissingDeadlines(ctx context.Context) error {
-	rows, err := s.slaSvc.database.QueryContext(ctx,
-		`SELECT id, risk_level FROM tickets WHERE status = 'PENDING_APPROVAL' AND sla_deadline IS NULL`)
+	rows, err := s.slaSvc.client.Ticket.Query().
+		Where(
+			entTicket.StatusEQ(string(model.TicketStatusPendingApproval)),
+			entTicket.SLADeadlineIsNil(),
+		).
+		All(ctx)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = rows.Close() }()
 
-	for rows.Next() {
-		var id int64
-		var riskLevel string
-		if err := rows.Scan(&id, &riskLevel); err != nil {
-			log.Printf("sla: scan missing deadline ticket: %v", err)
-			continue
-		}
-		if err := s.slaSvc.SetSLADeadline(ctx, id, riskLevel); err != nil {
-			log.Printf("sla: set deadline for ticket #%d: %v", id, err)
+	for _, t := range rows {
+		if err := s.slaSvc.SetSLADeadline(ctx, int64(t.ID), t.RiskLevel); err != nil {
+			log.Printf("sla: set deadline for ticket #%d: %v", t.ID, err)
 		}
 	}
-	return rows.Err()
+
+	return nil
 }
