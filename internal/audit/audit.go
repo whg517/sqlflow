@@ -249,62 +249,44 @@ type SearchParams struct {
 	End      string // time range end (inclusive)
 }
 
-// SearchResult wraps the FTS5 search results with pagination.
+// SearchResult wraps the search results with pagination.
 type SearchResult struct {
 	Logs  []model.AuditLogSearch
 	Total int64
 }
 
-// RebuildFTS rebuilds the FTS5 index by clearing and re-populating from audit_logs.
-// RAW_SQL: FTS5 virtual table operations (DELETE + INSERT INTO ... SELECT) — not expressible via ent.
-func (s *Service) RebuildFTS(ctx context.Context) error {
-	// Clear existing FTS data.
-	_, err := s.database.DB.ExecContext(ctx, `DELETE FROM audit_logs_fts`)
-	if err != nil {
-		return fmt.Errorf("clear FTS index: %w", err)
-	}
+// auditSearchHaystack is the expression the search indexes are built on.
+//
+// The query has to spell it exactly as the index does, down to the argument
+// order, or PostgreSQL cannot use the index and falls back to a sequential scan
+// over every audit record — which is precisely the table that grows without
+// bound. The definition lives in the migration; this constant is its caller.
+const auditSearchHaystack = `audit_search_text(a.sql_content, a.sql_summary, a.action, a.error_message, a.database)`
 
-	// Re-populate from audit_logs.
-	_, err = s.database.DB.ExecContext(ctx,
-		`INSERT INTO audit_logs_fts(audit_id, sql_content, sql_summary, action, error_message, database)
-		 SELECT id, sql_content, sql_summary, action, error_message, database FROM audit_logs`,
-	)
-	if err != nil {
-		return fmt.Errorf("populate FTS index: %w", err)
-	}
-	return nil
-}
+// auditSearchMatch matches a keyword against a record two ways.
+//
+// Word matching handles SQL identifiers and English. Trigram matching covers
+// what the tokenizer cannot: it has no notion of a word, so it finds 订单
+// inside 订单状态, which to_tsvector reports as a single unsplittable token.
+// Neither alone covers the corpus, so a record matching either is a hit.
+const auditSearchMatch = `(to_tsvector('simple', ` + auditSearchHaystack +
+	`) @@ plainto_tsquery('simple', ?) OR ` + auditSearchHaystack + ` ILIKE ? ESCAPE '\')`
 
-// buildFTSSearchWhere constructs the WHERE clause for FTS5 search queries.
-// The MATCH condition always comes first, followed by any filter conditions.
-func buildFTSSearchWhere(matchQuery string, filterClauses []sqlutil.FilterClause) (string, []interface{}) {
-	// Start with the MATCH condition.
-	conds := []string{"audit_logs_fts MATCH ?"}
-	args := []interface{}{matchQuery}
-
-	// Append filter conditions.
-	for _, f := range filterClauses {
-		conds = append(conds, f.Condition)
-		args = append(args, f.Args...)
-	}
-
-	return "WHERE " + strings.Join(conds, " AND "), args
-}
-
-// Search performs full-text search on audit logs using FTS5.
-// RAW_SQL: FTS5 MATCH + JOIN + snippet highlighting — SQLite FTS5 specific, not expressible via ent.
+// Search performs full-text search on audit logs.
+//
+// RAW_SQL: full-text and trigram operators have no ent equivalent.
 func (s *Service) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
-	if strings.TrimSpace(params.Keyword) == "" {
+	keyword := strings.TrimSpace(params.Keyword)
+	if keyword == "" {
 		return &SearchResult{Logs: []model.AuditLogSearch{}, Total: 0}, nil
 	}
 
 	p := sqlutil.ParsePagination(params.Page, params.PageSize)
+	like := "%" + sqlutil.EscapeLike(keyword) + "%"
 
-	// Escape the keyword as a phrase for FTS5.
-	ftsQuery := escapeFTS5(params.Keyword)
-
-	// Build filter clauses on the content table.
-	var filters []sqlutil.FilterClause
+	filters := []sqlutil.FilterClause{
+		{Condition: auditSearchMatch, Args: []interface{}{keyword, like}},
+	}
 	if params.UserID != "" {
 		filters = append(filters, sqlutil.FilterClause{Condition: "a.user_id = ?", Args: []interface{}{params.UserID}})
 	}
@@ -315,43 +297,45 @@ func (s *Service) Search(ctx context.Context, params SearchParams) (*SearchResul
 		filters = append(filters, sqlutil.FilterClause{Condition: "a.created_at >= ?", Args: []interface{}{params.Start}})
 	}
 	if params.End != "" {
-		filters = append(filters, sqlutil.FilterClause{Condition: "a.created_at <= ?", Args: []interface{}{params.End}})
+		// The caller passes a date; without a time the comparison would exclude
+		// everything recorded on the end date itself.
+		filters = append(filters, sqlutil.FilterClause{Condition: "a.created_at < (?::date + 1)", Args: []interface{}{params.End}})
 	}
+	whereClause, args := sqlutil.BuildWhereClause(filters)
 
-	whereClause, allArgs := buildFTSSearchWhere(ftsQuery, filters)
-
-	// Count total matches.
-	countSQL := fmt.Sprintf(
-		`SELECT COUNT(*) FROM audit_logs_fts JOIN audit_logs a ON audit_logs_fts.audit_id = a.id %s`,
-		whereClause,
-	)
 	var total int64
-	if err := s.database.DB.QueryRowContext(ctx, countSQL, allArgs...).Scan(&total); err != nil {
-		return nil, fmt.Errorf("FTS search count: %w", err)
+	countSQL := sqlutil.NumberPlaceholders("SELECT COUNT(*) FROM audit_logs a " + whereClause)
+	if err := s.database.DB.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("search count: %w", err)
+	}
+	if total == 0 {
+		return &SearchResult{Logs: []model.AuditLogSearch{}, Total: 0}, nil
 	}
 
-	// Search with snippet highlighting and ranking.
-	querySQL := fmt.Sprintf(
+	// The rank placeholder sits in the SELECT list, ahead of every WHERE
+	// placeholder, so its argument has to lead the slice: NumberPlaceholders
+	// assigns numbers left to right across the finished statement.
+	querySQL := sqlutil.NumberPlaceholders(fmt.Sprintf(
 		`SELECT a.id, a.user_id, a.action, a.datasource_id, a.database, a.sql_content, a.sql_summary,
 		        a.result_rows, a.affected_rows, a.execution_time_ms, a.error_message,
 		        a.desensitized_fields, a.ip_address, a.ai_review_result, a.ticket_id, a.created_at,
 		        COALESCE(u.username, '') AS username,
-		        snippet(audit_logs_fts, 1, '<mark>', '</mark>', '...', 32) AS hl_sql_content,
-		        snippet(audit_logs_fts, 2, '<mark>', '</mark>', '...', 32) AS hl_sql_summary,
-		        rank
-		 FROM audit_logs_fts
-		 JOIN audit_logs a ON audit_logs_fts.audit_id = a.id
+		        ts_rank(to_tsvector('simple', %s), plainto_tsquery('simple', ?)) AS rank
+		 FROM audit_logs a
 		 LEFT JOIN users u ON a.user_id = u.id
 		 %s
-		 ORDER BY rank
-		 LIMIT $1 OFFSET $2`,
-		whereClause,
-	)
-	queryArgs := append(allArgs, p.PageSize, p.Offset)
+		 ORDER BY rank DESC, a.id DESC
+		 LIMIT ? OFFSET ?`,
+		auditSearchHaystack, whereClause,
+	))
+	queryArgs := make([]interface{}, 0, len(args)+3)
+	queryArgs = append(queryArgs, keyword)
+	queryArgs = append(queryArgs, args...)
+	queryArgs = append(queryArgs, p.PageSize, p.Offset)
 
 	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("FTS search query: %w", err)
+		return nil, fmt.Errorf("search query: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -364,23 +348,17 @@ func (s *Service) Search(ctx context.Context, params SearchParams) (*SearchResul
 			&a.ResultRows, &a.AffectedRows, &a.ExecutionTimeMs,
 			&a.ErrorMessage, &a.DesensitizedFields, &a.IPAddress,
 			&a.AIReviewResult, &a.TicketID, &a.CreatedAt,
-			&a.Username,
-			&a.HighlightSQLContent, &a.HighlightSQLSummary, &a.Rank,
+			&a.Username, &a.Rank,
 		); err != nil {
-			continue
+			return nil, fmt.Errorf("scan search row: %w", err)
 		}
+		a.HighlightSQLContent = highlight(a.SQLContent, keyword)
+		a.HighlightSQLSummary = highlight(a.SQLSummary, keyword)
 		logs = append(logs, a)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("FTS search rows: %w", err)
+		return nil, fmt.Errorf("iterate search rows: %w", err)
 	}
 
 	return &SearchResult{Logs: logs, Total: total}, nil
-}
-
-// escapeFTS5 wraps the search string in double-quotes to treat it as a phrase,
-// and escapes any embedded double-quotes.
-func escapeFTS5(s string) string {
-	s = strings.ReplaceAll(s, `"`, `""`)
-	return `"` + s + `"`
 }

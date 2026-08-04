@@ -526,3 +526,50 @@ CREATE INDEX IF NOT EXISTS idx_users_oidc_subject ON users(oidc_subject, oidc_pr
 CREATE INDEX IF NOT EXISTS idx_web_vitals_created ON web_vitals(created_at);
 CREATE INDEX IF NOT EXISTS idx_web_vitals_metric ON web_vitals(metric_name);
 CREATE INDEX IF NOT EXISTS idx_webhook_subs_enabled ON webhook_subscriptions(enabled);
+
+-- 审计全文检索：两条访问路径，缺一不可。
+--
+-- to_tsvector 按空白与标点切词，能覆盖 SQL 和英文，但把一段连续中文当成
+-- 单个词元——搜「订单」永远匹配不上「订单状态」。三元组匹配没有词的概念，
+-- 正好补上这一类，代价是短关键词上区分度差。查询把两者 OR 起来。
+--
+-- 用表达式索引而不是新增 tsvector 列：列会同时进入 ent schema 与漂移检查，
+-- 而检索并不需要一个可写字段。函数收敛了拼接表达式的唯一定义——查询必须
+-- 用完全相同的表达式，否则规划器不会命中索引。
+CREATE OR REPLACE FUNCTION audit_search_text(
+    p_sql_content text,
+    p_sql_summary text,
+    p_action text,
+    p_error_message text,
+    p_database text
+) RETURNS text
+LANGUAGE sql IMMUTABLE PARALLEL SAFE
+AS $$
+    SELECT coalesce(p_sql_content, '') || ' ' || coalesce(p_sql_summary, '') || ' ' ||
+           coalesce(p_action, '') || ' ' || coalesce(p_error_message, '') || ' ' ||
+           coalesce(p_database, '')
+$$;
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_search_tsv ON audit_logs
+    USING GIN (to_tsvector('simple',
+        audit_search_text(sql_content, sql_summary, action, error_message, database)));
+
+-- gin_trgm_ops 按 pg_trgm 实际所在的 schema 限定，而不是写死 public。
+-- 扩展是数据库级对象，装在哪个 schema 是部署方的选择：托管实例常把扩展
+-- 收进独立 schema。写死 public 会在那类环境上建索引失败，而在每个测试
+-- 独占 schema 的场景下，search_path 里根本没有 public。
+DO $$
+DECLARE
+    ext_schema text;
+BEGIN
+    SELECT n.nspname INTO ext_schema
+      FROM pg_extension e JOIN pg_namespace n ON e.extnamespace = n.oid
+     WHERE e.extname = 'pg_trgm';
+    IF ext_schema IS NULL THEN
+        RAISE EXCEPTION 'pg_trgm 未安装：审计检索的中文兜底依赖它';
+    END IF;
+    EXECUTE format(
+        'CREATE INDEX IF NOT EXISTS idx_audit_logs_search_trgm ON audit_logs '
+        'USING GIN (audit_search_text(sql_content, sql_summary, action, error_message, database) %I.gin_trgm_ops)',
+        ext_schema);
+END $$;

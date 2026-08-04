@@ -11,24 +11,13 @@ import (
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
-// newAuditFTSHandlerTest creates a fully initialized test setup with FTS5 support.
+// newAuditFTSHandlerTest creates a fully initialized search test setup.
 func newAuditFTSHandlerTest(t *testing.T) (*echo.Echo, *Service, *Handler) {
-	t.Skip("待 P4：全文检索从 SQLite FTS5 改为 tsvector + pg_trgm 后重写。" +
-		"Search 目前查询的 audit_logs_fts 虚拟表在 PostgreSQL 上不存在。")
-
 	t.Helper()
 
 	database := testutil.NewDB(t)
-
-	// Insert a user for the JOIN.
-	_, err := database.Exec("INSERT INTO users (username, password_hash, role) VALUES ('alice', 'hash', 'developer')")
-	if err != nil {
-		t.Fatalf("insert user: %v", err)
-	}
-	_, err = database.Exec("INSERT INTO users (username, password_hash, role) VALUES ('bob', 'hash', 'admin')")
-	if err != nil {
-		t.Fatalf("insert user: %v", err)
-	}
+	testutil.SeedUser(t, database.DB, "alice", "developer")
+	testutil.SeedUser(t, database.DB, "bob", "admin")
 
 	auditSvc := NewService(database, 0, 0)
 	handler := NewHandler(auditSvc)
