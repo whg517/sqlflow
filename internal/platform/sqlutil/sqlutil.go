@@ -61,15 +61,18 @@ func BuildWhereClause(filters []FilterClause) (string, []interface{}) {
 
 // PaginatedCountSQL returns a COUNT query for the given table with the WHERE clause.
 func PaginatedCountSQL(table, whereClause string) string {
-	return fmt.Sprintf("SELECT COUNT(*) FROM %s %s", table, whereClause)
+	return NumberPlaceholders(fmt.Sprintf("SELECT COUNT(*) FROM %s %s", table, whereClause))
 }
 
 // PaginatedQuerySQL returns a SELECT query with ORDER BY, LIMIT and OFFSET.
+// The whole statement is numbered here rather than by the caller: the LIMIT and
+// OFFSET placeholders come after however many the WHERE clause contributed, and
+// only the assembled statement knows that count.
 func PaginatedQuerySQL(selectCols, table, whereClause, orderBy string, p Pagination) string {
-	return fmt.Sprintf(
+	return NumberPlaceholders(fmt.Sprintf(
 		"%s FROM %s %s ORDER BY %s LIMIT ? OFFSET ?",
 		selectCols, table, whereClause, orderBy,
-	)
+	))
 }
 
 // AppendLimitArgs appends pageSize and offset to the args slice and returns it.

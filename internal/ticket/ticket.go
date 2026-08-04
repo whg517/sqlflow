@@ -439,10 +439,12 @@ func (s *Service) ListTickets(ctx context.Context, page, pageSize int, status, d
 	}
 
 	// Query page
-	querySQL := fmt.Sprintf(
-		`SELECT %s FROM tickets %s ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+	// Numbered after assembly: LIMIT and OFFSET follow however many placeholders
+	// the WHERE clause contributed, so writing $1/$2 here collides with it.
+	querySQL := sqlutil.NumberPlaceholders(fmt.Sprintf(
+		`SELECT %s FROM tickets %s ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		ticketColumns, whereClause,
-	)
+	))
 	queryArgs := sqlutil.AppendLimitArgs(args, p)
 
 	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)

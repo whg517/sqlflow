@@ -466,10 +466,12 @@ func (s *Service) GetPolicies(ctx context.Context, page, pageSize int64, ptype, 
 		return nil, 0, err
 	}
 
-	querySQL := fmt.Sprintf(
-		`SELECT id, ptype, v0, v1, v2, v3 FROM casbin_rule %s ORDER BY id LIMIT $1 OFFSET $2`,
+	// Numbered after assembly: LIMIT and OFFSET follow however many placeholders
+	// the WHERE clause contributed, so writing $1/$2 here collides with it.
+	querySQL := sqlutil.NumberPlaceholders(fmt.Sprintf(
+		`SELECT id, ptype, v0, v1, v2, v3 FROM casbin_rule %s ORDER BY id LIMIT ? OFFSET ?`,
 		whereClause,
-	)
+	))
 	queryArgs := sqlutil.AppendLimitArgs(args, p)
 	rows, err := s.database.DB.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {

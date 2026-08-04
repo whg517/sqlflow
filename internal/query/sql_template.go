@@ -16,6 +16,7 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/platform/sqlutil"
 )
 
 var (
@@ -148,38 +149,38 @@ func (s *TemplateService) ListTemplates(ctx context.Context, userID int64, categ
 		args := []interface{}{}
 		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE is_public = TRUE"
 		if category != "" {
-			countQuery += " AND category = $1"
-			listQuery += " AND category = $1"
+			countQuery += " AND category = ?"
+			listQuery += " AND category = ?"
 			args = append(args, category)
 		}
 		listQuery += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
 
-		err = s.database.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+		err = s.database.QueryRowContext(ctx, sqlutil.NumberPlaceholders(countQuery), args...).Scan(&total)
 		if err != nil {
 			return nil, 0, fmt.Errorf("count templates: %w", err)
 		}
 
 		listArgs := append(args, pageSize, offset)
-		rows, err = s.database.QueryContext(ctx, listQuery, listArgs...)
+		rows, err = s.database.QueryContext(ctx, sqlutil.NumberPlaceholders(listQuery), listArgs...)
 	} else {
 		// User's own + all public
-		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE (user_id = $1 OR is_public = TRUE)"
+		countQuery := "SELECT COUNT(*) FROM sql_templates WHERE (user_id = ? OR is_public = TRUE)"
 		args := []interface{}{userID}
-		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE (user_id = $1 OR is_public = TRUE)"
+		listQuery := "SELECT id, user_id, name, description, sql_content, db_type, category, params_json, is_public, created_at, updated_at FROM sql_templates WHERE (user_id = ? OR is_public = TRUE)"
 		if category != "" {
-			countQuery += " AND category = $1"
-			listQuery += " AND category = $1"
+			countQuery += " AND category = ?"
+			listQuery += " AND category = ?"
 			args = append(args, category)
 		}
 		listQuery += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
 
-		err = s.database.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+		err = s.database.QueryRowContext(ctx, sqlutil.NumberPlaceholders(countQuery), args...).Scan(&total)
 		if err != nil {
 			return nil, 0, fmt.Errorf("count templates: %w", err)
 		}
 
 		listArgs := append(args, pageSize, offset)
-		rows, err = s.database.QueryContext(ctx, listQuery, listArgs...)
+		rows, err = s.database.QueryContext(ctx, sqlutil.NumberPlaceholders(listQuery), listArgs...)
 	}
 
 	if err != nil {

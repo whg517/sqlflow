@@ -92,10 +92,12 @@ func (s *HistoryService) ListSlowQueries(ctx context.Context, params SlowQueryPa
 		return nil, 0, fmt.Errorf("count slow queries: %w", err)
 	}
 
-	querySQL := fmt.Sprintf(
-		"SELECT qh.id, qh.user_id, qh.datasource_id, qh.database, qh.sql_content, qh.sql_summary, qh.db_type, qh.execution_time, qh.result_rows, qh.affected_rows, qh.created_at FROM query_history qh %s ORDER BY qh.execution_time DESC LIMIT $1 OFFSET $2",
+	// Numbered after assembly: LIMIT and OFFSET follow however many placeholders
+	// the WHERE clause contributed, so writing $1/$2 here collides with it.
+	querySQL := sqlutil.NumberPlaceholders(fmt.Sprintf(
+		"SELECT qh.id, qh.user_id, qh.datasource_id, qh.database, qh.sql_content, qh.sql_summary, qh.db_type, qh.execution_time, qh.result_rows, qh.affected_rows, qh.created_at FROM query_history qh %s ORDER BY qh.execution_time DESC LIMIT ? OFFSET ?",
 		whereClause,
-	)
+	))
 	queryArgs := sqlutil.AppendLimitArgs(args, p)
 
 	rows, err := s.database.QueryContext(ctx, querySQL, queryArgs...)
