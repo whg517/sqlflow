@@ -2,14 +2,18 @@
 
 | 属性 | 值 |
 |---|---|
-| 架构风格 | 模块化单体、分层架构、单一部署单元 |
-| 基线日期 | 2026-07-14 |
-| 状态 | Reviewed as-is baseline with known blockers |
+| 架构风格 | 模块化单体、按 feature 垂直切分、单一部署单元 |
+| 基线日期 | 2026-08-06 |
+| 状态 | 发布等级 L0，存在未关闭的发布阻断项 |
 | 对应需求 | [REQUIREMENTS.md](REQUIREMENTS.md) |
 | 决策记录 | [adr/README.md](adr/README.md) |
-| 实现评审 | [2026-07-26 跨角色评审](reviews/2026-07-26-cross-functional-review.md) |
+| 实现评审 | [2026-07-26 跨角色评审](reviews/2026-07-26-cross-functional-review.md)、[2026-07-31 复核](reviews/2026-07-31-implementation-verification.md) |
 
-> 本文描述目标架构约束和当前组件形态，不表示所有约束已被实现。已确认的授权、状态机、分享、恢复和运行偏差见[评审报告](reviews/2026-07-26-cross-functional-review.md)，整改顺序见[路线图](ROADMAP.md)。
+> 本文描述目标架构约束和当前组件形态，**不表示所有约束已被实现**。已确认的偏差集中在
+> [§12.1](#121-已确认的实现偏差)，整改顺序见[路线图](ROADMAP.md)。
+>
+> 规模参考：后端 Go 生产代码 4.1 万行、测试 4.5 万行（不含 `internal/db/ent` 的
+> 14 万行生成代码）；前端 TS/TSX 4.4 万行。
 
 ## 1. 架构目标
 
@@ -19,7 +23,7 @@ SQLFlow 的架构优先保证数据库操作的安全门禁和可审计性，同
 2. **可审计性**：查询、审批、执行和关键管理行为可以关联用户、目标和结果。
 3. **可维护性**：业务规则集中在 Service，数据源差异由 Driver 能力抽象隔离。
 4. **可用性**：AI 和通知等外围集成失败时，核心治理流程仍能运行。
-5. **部署简洁性**：Go API、React SPA、调度器和 SQLite 元数据组成单一部署单元。
+5. **部署简洁性**：Go API、React SPA 与调度器组成单一进程，外加一个 PostgreSQL 实例。
 
 ## 2. 系统上下文
 
@@ -30,7 +34,7 @@ flowchart LR
     Operator["Platform Operator"] --> SQLFlow
     APIClient["API Client"] --> SQLFlow
 
-    SQLFlow --> Targets["MySQL / PostgreSQL / MongoDB / Elasticsearch"]
+    SQLFlow --> Targets["MySQL / PostgreSQL / SQLite / MongoDB / Elasticsearch"]
     SQLFlow --> AI["AI Provider"]
     SQLFlow --> IdP["OIDC Identity Provider"]
     SQLFlow --> Notify["DingTalk / Feishu / Generic Webhook"]
@@ -42,7 +46,8 @@ flowchart LR
 - 浏览器和 API Client 均不可信，必须经过服务端认证、授权和输入校验。
 - 目标数据源属于外部资源边界；连接只通过受管凭据和驱动建立。
 - AI、OIDC 与通知端点属于第三方边界；超时、失败和不可信响应必须被隔离。
-- 平台 SQLite 和备份包含敏感治理元数据，应由宿主机/Volume 权限保护。
+- 平台 PostgreSQL 和 `pg_dump` 备份包含敏感治理元数据（含加密后的数据源凭据），
+  应由网络隔离、数据库账号权限和卷权限共同保护。
 
 ## 3. 容器与部署视图
 
@@ -68,7 +73,7 @@ flowchart TB
     Echo --> Handlers
     Handlers --> Services
     Schedulers --> Services
-    Services --> Meta["SQLite metadata"]
+    Services --> Meta[("PostgreSQL<br/>平台元数据")]
     Services --> Drivers
     Drivers --> Targets["Governed datasources"]
     Services --> External["AI / OIDC / Notifications"]
@@ -76,20 +81,29 @@ flowchart TB
 
 生产镜像使用多阶段构建：Node 构建 SPA，Go 构建后端，Alpine 运行时以 `sqlflow` 非 root 用户启动。React 构建产物位于 `web/dist`，由同一个 Echo 进程提供静态资源和 SPA fallback。
 
+部署单元是「一个进程 + 一个 PostgreSQL」。进程内含调度器且**没有分布式租约**，因此
+当前只支持单副本；这是部署拓扑上的硬约束，不是调优项（见 [§12](#12-架构风险与演进方向)）。
+
 ## 4. 代码模块与依赖规则
 
 | 模块 | 职责 | 允许依赖 |
 |---|---|---|
 | `cmd/server` | 读取配置、打开数据库、迁移、装配容器、启动/关闭 HTTP 服务 | `config`、`internal/app`、`internal/api`、`internal/db` |
 | `config` | YAML/环境变量绑定、默认值和启动期校验 | 通用安全工具 |
-| `internal/app` | 构造 Service、连接池、调度器及其生命周期 | Service、DB、Driver、Config |
-| `internal/api` | Echo 路由、中间件、跨域聚合端点（health/settings）、OpenAPI 注解、SPA 托管 | `internal/app`、各领域包 |
-| 领域包（`audit`/`datasource`/`iam`/`security`/`query`/`ticket`/`notify`/`ops`） | 各自的用例编排、授权、状态机、审计与 HTTP handler | DB/Ent、Driver、`internal/model`、`internal/platform`，以及 `allowedDomainEdges` 中登记的跨领域依赖 |
-| `internal/arch` | 分包依赖方向的可执行约束（仅测试） | 标准库 |
-| `internal/driver` | 数据源统一接口、能力声明、注册表和驱动连接池 | 数据库客户端库，不依赖 API |
-| `internal/db` | SQLite 打开、migration、Ent Client 与 Schema | SQLite、Ent、golang-migrate |
-| `internal/model` | 跨层使用的领域数据结构与状态枚举 | 标准库 |
-| `internal/platform` | auditlog、httpx、SQL parser、加密、脱敏、指标等领域无关能力 | 不依赖任何领域包 |
+| `internal/app` | 构造 Service、连接池、调度器及其生命周期；唯一认识全部具体实现的地方 | Service、DB、Driver、Config |
+| `internal/api` | Echo 路由与分组、SPA 托管 | `internal/app`、各领域包 |
+| `internal/api/middleware` | Recovery、Logger、CORS、Auth、RequireScope、Admin、SystemPermission | `iam`、`security`、`platform/httpx` |
+| `internal/api/handler` | 跨领域聚合端点（health、settings） | 多个领域包 |
+| `internal/api/openapi` | 由 `make docs` 从 Handler 注解生成，不手工维护 | — |
+| 领域包（`audit`/`datasource`/`iam`/`security`/`query`/`ticket`/`notify`/`ops`） | 各自的用例编排、授权、状态机、审计与 HTTP handler | Ent、Driver、`internal/model`、`internal/platform`，以及 `allowedDomainEdges` 中登记的跨领域依赖 |
+| `internal/arch` | 分包依赖方向与数据访问路径的可执行约束（无代码，只有测试） | 标准库 |
+| `internal/driver` | 数据源统一端口、能力声明、注册表和驱动连接池 | 数据库客户端库，不依赖 API |
+| `internal/db` | PostgreSQL 连接、golang-migrate、Ent Client 与 Schema | pgx、Ent、golang-migrate |
+| `internal/model` | 跨领域的持久化模型与状态枚举 | 标准库 |
+| `internal/authz` | Casbin 元组的唯一构造点 | 标准库 |
+| `internal/platform/*` | 领域无关能力：`auditlog`、`crypto`、`httpx`、`mask`、`metrics`、`perf`、`sqlparser`、`sqlutil` | 不依赖任何领域包 |
+| `internal/resp` | 统一响应信封（`SuccessResponse` / `ErrorResponse`） | Echo |
+| `internal/connpool` | **仅存 ES 索引/字段浏览一处用途**，不得扩大 | ES 原生客户端 |
 | `internal/testutil` | 跨包共享的测试夹具与驱动注册 | DB、driver（仅测试期）|
 | `web/src` | SPA 页面、状态、API Client 和 UI 组件 | `/api` HTTP 契约 |
 
@@ -119,19 +133,34 @@ flowchart TB
     Query -.登记的跨领域边.-> DS & Sec
 
     Domains --> Platform["internal/platform：auditlog、httpx、crypto、mask、sqlparser…"]
-    Domains --> Ports["internal/db · internal/driver · internal/model"]
-    Ports --> Infrastructure["SQLite / 目标库 / 第三方 API"]
+    Domains --> Ports["internal/db（Ent） · internal/driver · internal/model"]
+    Ports --> Infrastructure["PostgreSQL / 目标库 / 第三方 API"]
 
     App["internal/app：组合根"] -.构造.-> Domains
 ```
 
-关键约束（前四条由 `internal/arch` 的测试强制，违反即 CI 失败）：
+**当前登记在册的跨领域边只有 6 条**，全部集中在两个领域：
+
+| 从 | 到 | 理由 |
+|---|---|---|
+| `query` | `datasource` | 查询要解析数据源配置并取连接 |
+| `query` | `security` | 查询前检查表级权限并应用脱敏规则 |
+| `ticket` | `datasource` | 工单执行变更需要目标数据源 |
+| `ticket` | `notify` | 工单状态流转发送通知 |
+| `ticket` | `ops` | 工单关联 Git 提交 |
+| `ticket` | `security` | MongoDB 工单做集合级权限检查 |
+
+另有 3 条**仅测试**的边（`query`/`ticket`/`security` → `audit`），用于断言审计行确实落库。
+它们与生产边分开登记：测试边一旦出现在生产代码里，`internal/arch` 会指出耦合已经溜进来。
+
+关键约束（前五条由 `internal/arch` 的测试强制，违反即 CI 失败）：
 
 - `internal/platform/*` 不得依赖任何领域包——它是基础设施，不能认识业务。
 - 领域包不得依赖 `internal/api`：领域自带 handler，但不反向依赖传输层。
 - 跨领域依赖必须在 `allowedDomainEdges` 显式登记并写明理由；条目失效同样报错，
   避免过期条目成为默许耦合的许可。
 - 只有 `internal/app` 认识全部领域实现；其余包最多依赖两个领域。
+- 领域包不得直接用 `database/sql` 查询平台库（ADR-0010，见 [§7.2](#72-数据访问路径)）。
 - 只用到对方一两个方法时，**在消费侧声明接口**而不是新增一条边。已有三例：
   `datasource.ObjectViewChecker`、`iam.PlatformPermissionLister`、`auditlog.Writer`。
 - Handler 只做协议适配、身份上下文提取和响应映射，不承载核心授权与状态迁移。
@@ -141,15 +170,42 @@ flowchart TB
   各 service 构造完成后即不可变（无 Set* 注入方法）。
 - 不得扩大 `internal/connpool`：它只保留 Elasticsearch 元数据浏览一处用途，所有连接均由 `internal/driver.PoolManager` 管理。
 
+### 4.1 复杂度分布
+
+各领域包的生产代码与测试代码行数（用于判断复杂度集中在哪里，不是质量指标）：
+
+| 领域 | 生产 | 测试 | 测试比 | 备注 |
+|---|---:|---:|---:|---|
+| `ticket` | 6378 | 9779 | 1.53 | 状态机 + 审批引擎 + SLA + AI 评审 + 调度，最重 |
+| `query` | 5317 | 6597 | 1.24 | 执行 + 历史 + 导出 + 分享 + 模板 |
+| `notify` | 2976 | 2349 | 0.79 | 测试比最低 |
+| `security` | 2808 | 4305 | 1.53 | |
+| `iam` | 2422 | 3073 | 1.27 | |
+| `datasource` | 2081 | 3413 | 1.64 | |
+| `audit` | 1824 | 2371 | 1.30 | |
+| `ops` | 1650 | 2024 | 1.23 | |
+
+`ticket` 与 `query` 合计占领域代码的 45%，与它们承担的治理职责相称。**但包内仍有
+大文件**（`datasource.go` 1122 行、`ticket.go` 1062 行、`notify.go` 1001 行），
+按职责继续切分的收益高于跨包重组——包边界本身是健康的，边只有 6 条。
+
 ## 5. 后端运行时架构
 
 ### 5.1 请求入口
 
 全局中间件按 Recovery、Logger、CORS 和可选 Metrics 的顺序安装。路由分为：
 
-- 公共路由：登录/刷新、OIDC、健康检查、分享链接和 Web Vitals 采集。
-- 已认证路由：同时接受 JWT 与 API Token，覆盖查询、工单、个人 Token 和个人权限申请。
-- 平台管理路由：在认证后继续执行 `system` 域的 Casbin 权限校验；用户、RBAC、数据源、安全、审计和设置能力可独立委派。
+| 分组 | 中间件链 | 覆盖 |
+|---|---|---|
+| 公共 | — | 登录/刷新、OIDC、健康检查、分享链接、Web Vitals 采集 |
+| 已认证 | `Auth` | 查询、工单、个人 Token、个人权限申请 |
+| 平台管理 | `Auth` → `RequireScope("admin")` → `Admin()` 或 `SystemPermission(域, 动作)` | 用户、RBAC、数据源、安全、审计、设置 |
+
+平台管理能力按域**独立委派**，而不是一个 admin 开关：`users:manage`、`rbac:manage`、
+`datasources:manage`、`security:manage`、`audit:view`、`settings:manage` 各自成组。
+
+`RequireScope` 只对 API Token 生效，JWT 会话直接放行——**会话的权限边界由角色和
+Casbin 裁决，Scope 是 Token 特有的收缩机制**，二者语义不同不应混用。
 
 API 契约由 Handler 注解生成至 `internal/api/openapi`，运行时通过 `/swagger/` 提供 Swagger UI。
 
@@ -216,12 +272,18 @@ sequenceDiagram
 
 ### 5.4 后台任务
 
-- Ticket Scheduler：扫描到期的 `SCHEDULED` 工单并尝试执行。
-- SLA Scheduler：处理审批提醒、升级和可选自动拒绝。
-- Backup Scheduler：按配置备份平台 SQLite 并执行保留策略。
-- Export Async Service：生成大结果导出文件并维护任务状态。
+| 组件 | 周期 | 幂等机制 |
+|---|---|---|
+| Ticket Scheduler | 1 分钟 | 先读尽到期工单 ID 再执行；`SCHEDULED → EXECUTING` 由 CAS 单点持有 |
+| SLA Scheduler | 10 分钟 | `sla_action_logs.dedup_key` 唯一约束 |
+| Backup Scheduler | 按配置 | 按份数保留，`pg_dump` 全量 |
+| Export Async Service | 事件驱动 | 任务状态机 |
 
-这些组件运行在应用进程内，由 `app.Container` 启动并在 `Close()` 中停止。因此当前架构不适合多个副本无协调地同时调度。
+这些组件运行在应用进程内，由 `app.Container` 启动并在 `Close()` 中停止。
+
+幂等由**数据库约束**承担而非调度器自律——这是刻意的：调度器重启、时钟漂移和并发
+副本都不会改变唯一约束的语义。但幂等不等于互斥，进程在 `EXECUTING` 期间崩溃会让
+工单卡住，因为**没有执行租约**。多副本部署在此之前是不成立的。
 
 ## 6. 数据源驱动架构
 
@@ -249,7 +311,30 @@ sequenceDiagram
 
 能力位与查询形态是正交的：Elasticsearch 与 MySQL 都声明 `CapQuery`，但前者是 `dsl` 形态，编辑器、请求载荷和结果渲染全不相同。
 
-结构性能力用可选接口而非能力位表达，由类型系统检查：`ParameterizedQueryExecutor`（参数绑定）、`QueryExplainer`（查询计划）。`driver.Describe` 把三者合成 `Descriptor`。
+结构性能力用**可选接口**而非能力位表达，由类型系统检查而非运行时查表：
+`ParameterizedQueryExecutor`（参数化执行）、`ParameterBinder`（占位符方言）、
+`QueryExplainer`（查询计划）、`ConfigValidator`（配置校验）。`driver.Describe` 把三者合成 `Descriptor`。
+
+**每个驱动必须写编译期断言**：
+
+```go
+var (
+	_ driver.Driver         = (*MySQLDriver)(nil)
+	_ driver.QueryExplainer = (*MySQLDriver)(nil)
+)
+```
+
+可选接口是结构化满足的——曾经有一次重构把两个 `ExplainQuery` 方法整个漏掉，
+`go build` 照样通过，症状只是所有数据源静默上报 `explain=false`。断言把这类问题
+变成编译失败。当前 5 个驱动的断言分布：
+
+| 驱动 | Driver | ParameterizedQueryExecutor | ParameterBinder | QueryExplainer | ConfigValidator |
+|---|:-:|:-:|:-:|:-:|:-:|
+| MySQL | ✓ | ✓ | ✓ | ✓ | |
+| PostgreSQL | ✓ | ✓ | ✓ | ✓ | |
+| SQLite | ✓ | ✓ | ✓ | | ✓ |
+| MongoDB | ✓ | | | | |
+| Elasticsearch | ✓ | | | | ✓ |
 
 ### 6.2 契约
 
@@ -271,7 +356,12 @@ sequenceDiagram
 
 ### 7.1 平台元数据
 
-平台使用 SQLite，启动参数包括 WAL、外键约束和 5 秒 busy timeout，并将最大打开连接数限制为 1 以减少锁冲突。`golang-migrate` 负责执行嵌入二进制的 SQL migration；Ent Client 与原始 `database/sql` 共享连接。
+平台元数据库是 PostgreSQL（[ADR-0009](adr/0009-postgresql-platform-metadata.md)），
+**不保留 SQLite 兼容路径**。`golang-migrate` 执行嵌入二进制的 SQL migration，
+Ent Client 在同一连接池上工作。当前有 2 个 migration、32 个 Ent Schema。
+
+测试用真实 PostgreSQL：每个用例独占一个 schema，跑完即删。没有它，DB 相关测试
+直接 fail 而不是跳过——一个静默跳过的数据库测试套件比没有测试更危险。
 
 主要数据域：
 
@@ -284,23 +374,33 @@ sequenceDiagram
 | SLA 与通知 | SLAConfig、SLAActionLog、通知偏好、Webhook 配置/订阅 |
 | 审计与观测 | AuditLog、WebVital |
 
-### 7.2 数据访问迁移状态
+### 7.2 数据访问路径
 
-平台元数据库是 PostgreSQL（[ADR-0009](adr/0009-postgresql-platform-metadata.md)），不保留 SQLite 兼容路径。
+**Ent 是领域包访问平台库的唯一方式**（[ADR-0010](adr/0010-ent-as-the-single-data-access-path.md)，
+已于 2026-08-04 关闭），由 `internal/arch` 的 `TestDomainsDoNotQueryThroughDatabaseSQL`
+强制：它 AST 扫描 8 个领域包，发现 `QueryContext` / `QueryRowContext` / `ExecContext`
+即失败。
 
-- SQL migration 是 DDL 的唯一运行时事实来源。
-- Ent Schema 提供类型化模型，但 Ent 自动迁移未启用。
-- Ent 是访问平台元数据的唯一方式（[ADR-0010](adr/0010-ent-as-the-single-data-access-path.md)）。
-  存量原始 SQL 正在逐域清零，退出条件与例外见该 ADR。
+- SQL migration 是 DDL 的唯一运行时事实来源；Ent 自动迁移**未启用**。
+- `internal/db/ent/` 是生成代码，改 `internal/db/ent/schema/` 后跑 `go generate`。
+- 表结构变更要同时评估 migration、Ent Schema 和测试夹具三处。
 
-在退出条件达成前，任何表结构变更必须同时评估 SQL migration、Ent Schema、残留原始 SQL 和测试 fixture 的一致性。
+这条规则不是口味问题。双轨期的 141 处改写暴露了 8 个缺陷，其中 5 个是静默的：
+占位符复用让私有模板的归属校验失效、`INSERT OR IGNORE` 让通知去重从未生效、
+布尔写成 0/1 让 webhook 无法禁用。每一个都是合法的 Go 程序，类型化查询让它们**写不出来**。
+
+**逃生口**：Ent 表达不了的 SQL 用 `Modify(func(*entsql.Selector))`，并在注释里写明
+为什么。全文检索的 `@@`、聚合上的 `ORDER BY`、`GROUP BY` 后取 top-N 都属于这一类。
+用逃生口本身不违反 ADR-0010，**无理由地用**才违反。
 
 ### 7.3 数据保留与备份
 
-- 平台支持 SQLite 文件备份、可选 gzip 和按份数保留。
-- Query History 按用户受 `query_history_max` 配置约束。
-- Share 和 Token 由到期时间与撤销状态控制逻辑有效性。
-- 导出文件和审计日志的长期保留策略目前不是统一可配置能力，应由部署环境补充磁盘和合规策略。
+- 平台备份走 `pg_dump`（`--serializable-deferrable`、指定 `--schema`），可选 gzip、按份数保留。
+  密码经 `PGPASSWORD` 环境变量传递而非 argv，避免出现在进程列表里。
+- 恢复能力由 `TestBackupRestoreRoundTrip` 在每次 CI 验证：把备份还原进独立库并核对
+  行数、内置角色、检索函数与序列。**备份不等于可恢复，只有演练过的备份才算数。**
+- Query History 按用户受 `query_history_max` 约束；Share 与 Token 由到期时间和撤销状态控制。
+- 导出文件与审计日志的长期保留仍不是统一可配置能力，需由部署环境补充磁盘与合规策略。
 
 ## 8. 安全架构
 
@@ -368,34 +468,78 @@ Casbin 使用 [ADR-0006](adr/0006-canonical-casbin-tuples.md) 定义的唯一元
 
 ## 11. 测试与交付架构
 
-- Go 测试覆盖 Service、Handler、Driver、DB、权限、解析和性能辅助包。
+- Go 测试覆盖 Service、Handler、Driver、DB、权限、解析和性能辅助包；测试代码略多于
+  生产代码（4.5 万行 : 4.1 万行）。
+- **DB 测试需要真实 PostgreSQL**，每个用例独占一个 schema。`make dev-db` 起测试库。
+- `internal/arch` 是可执行的架构约束（无生产代码，只有测试），`make arch` 秒级反馈。
 - Vitest 覆盖页面、组件、状态和 API 行为。
 - CI 分为 Lint 与 Test/Build；发布 Tag 触发多架构镜像、Trivy 扫描和 GitHub Release。
 - 浏览器级端到端验证当前缺失：Playwright 套件已于 2026-07-31 移除，尚无替代方案。
 - OpenAPI 由 `make docs` 从 Handler 注解生成，禁止手工维护重复端点表。
 
+反馈回路的成本是有形的：`go test ./internal/...` 全量各包合计约 13 分钟，`internal/query`
+单包 3.5 分钟、`internal/ticket` 2 分钟。**改动集中时只跑相关包**，不要把全量当默认回路。
+
+测试质量标准：「调用不 panic」不算覆盖。修 bug 先写会失败的用例，并撤销修复确认它
+真的会失败——曾经有个只在空库上跑的调度器测试，让三个致命缺陷长期不被发现。
+
 ## 12. 架构风险与演进方向
 
-| 风险/债务 | 影响 | 建议演进 |
-|---|---|---|
-| 调度器缺分布式租约 | 多副本会重复执行工单与 SLA 动作，故障接管缺失 | 换用 PostgreSQL 已解除存储层障碍，剩下的是调度器租约——在此之前仍只能单副本部署 |
-| 原始 SQL / Ent 双轨 | 模型漂移和换库成本 | 分域迁移到 Ent，退出条件见 ADR-0010；达成后由 `internal/arch` 守卫 |
-| `connpool` 残留于 ES 元数据浏览 | 该路径的连接生命周期不受 `PoolManager` 管理 | 为 `Driver` 增加索引/字段浏览能力后移除 |
-| 路由层 Admin 分组覆盖 DBA 可见性 | 角色语义与注释可能不完全一致 | 为审计/报表定义明确的策略中间件，而不是复用 Admin 中间件 |
-| 外部集成在进程内调用 | 慢调用和失败可能影响延迟 | 强化超时、重试、幂等与 outbox/队列边界 |
+| 风险/债务 | 影响 | 建议演进 | 状态 |
+|---|---|---|---|
+| **同一段 SQL 有三套互不相同的理解**（见 [§12.2](#122-三套-sql-理解)） | 工单风险与审批路径由只看首关键字的正则分析器决定，而执行由裸分号切分驱动：`SELECT 1; DROP TABLE users` 被判为 low/score 0，却会执行 DROP | 收敛为单一分词器 + 单一分析器；拒绝多语句或逐条门禁 | **未开始**（REV-P0-004） |
+| **工单执行缺租约** | 进程在 `EXECUTING` 期间崩溃会使工单永久卡住；多副本会重复执行 | 引入执行租约与崩溃恢复；这是解除单副本限制的前置条件 | 未开始（阶段 1.2） |
+| 查询超时/行数上限硬编码 | `queryTimeout = 30s`、`ExportMaxRows = 10000` 等常量散落在 `query` 包，运维无法按环境调整 | 提为配置并在 Service 层统一施加 | 未开始（DEBT-06） |
+| `connpool` 残留于 ES 元数据浏览 | 该路径的连接生命周期不受 `PoolManager` 管理 | 为 `Driver` 增加索引/字段浏览能力后移除 | 仅剩 1 处用途 |
+| 外部集成在进程内调用 | AI、通知的慢调用和失败会影响请求延迟 | 强化超时、重试、幂等与 outbox/队列边界 | 部分完成 |
+| 浏览器级端到端验证缺失 | Playwright 套件已于 2026-07-31 移除，无替代方案 | 确定替代验证方式 | 未开始 |
+| 原始 SQL / Ent 双轨 | 模型漂移和换库成本 | — | **已关闭**（2026-08-04，由 `internal/arch` 守卫） |
 
 ### 12.1 已确认的实现偏差
 
-2026-07-26 评审确认以下架构不变量当前未成立：
+以下架构不变量的当前成立状态。「已成立」的项有对应的回归测试，撤销修复即可复现缺陷。
 
-| 不变量 | 当前偏差 | 必要动作 |
+| 不变量 | 当前状态 | 剩余动作 |
 |---|---|---|
-| 授权输入在所有路径保持一致 | Casbin 元组已统一；API Token Scope 与角色/个人授权的组合规则仍未完成 | 阶段 1 建立统一授权决策入口并执行 Token Scope |
-| 被分析对象等于被执行对象 | SQL parser 可能只分析首条语句，Driver 接收原始完整输入 | 拒绝多语句或对规范化语句集合逐条门禁 |
-| 状态迁移只有一个事务化写入口 | Scheduler 与工单执行函数对 `EXECUTING` 前置状态理解冲突 | 统一 CAS 状态机并设计租约/恢复 |
-| 资源所有权由服务端裁决 | 私有模板读取/渲染已按所有者或公开状态门禁；工单和部分结果资源仍有仅要求认证的路径 | 继续为工单和结果建立统一资源授权策略和负向测试 |
-| 备份必须可验证恢复 | 当前主要是文件复制，缺少完整性、异地副本和恢复演练 | 建立备份—校验—恢复—演练闭环 |
+| 客户端不得影响风险等级或审批路径 | **已成立** — `risk_level` / `ai_review_result` 已从创建请求移除，风险由服务端 `RiskEvaluator` 无条件派生 | — |
+| 状态迁移只能用 CAS | **已成立** — 审批/驳回/重提/多阶段全部走谓词式 `Update()` 并检查影响行数 | 审批记录与状态迁移纳入同一事务（1.4b） |
+| 备份必须可验证恢复 | **已成立** — `pg_dump` + 每次 CI 的还原演练 | 加密、异地副本、季度演练（阶段 2） |
+| 资源所有权由服务端裁决 | **基本成立** — 临时权限、私有模板、工单可见性已统一 | 结果类资源的负向越权测试 |
+| 授权输入在所有路径保持一致 | **部分成立** — Casbin 元组已由 `internal/authz` 单点构造；`RequireScope` 已覆盖 35 处路由 | 补齐剩余路由的 Token Scope；工单创建的数据源级门禁 |
+| **被分析对象等于被执行对象** | **未成立** — 见上表第一行 | 统一语句分词器 |
+| **执行有且仅有一个持有者** | **未成立** — 无租约，崩溃即卡住 | 租约 + 崩溃恢复 |
 
-这些偏差是现有实现需要在模块化单体内部修复的问题，不构成立即拆分微服务的理由。
+这些偏差是现有实现需要在模块化单体内部修复的问题，不构成拆分微服务的理由。
+
+### 12.2 三套 SQL 理解
+
+同一段 SQL 文本在系统里被**三处独立实现**分别解读，彼此不共享代码也不互相校验：
+
+| 实现 | 位置 | 方式 | 服务于 |
+|---|---|---|---|
+| AST 解析器 | `internal/platform/sqlparser` | TiDB parser / pg_query_go，**在第一个 `;` 字节处截断** | 查询路径的操作/风险/目标判定 |
+| 正则分析器 | `internal/ticket/sql_analyzer.go` | `^\s*(SELECT\|INSERT\|...)` 只取首关键字 | 工单的 `sql_type`、`affected_tables`、**风险等级** |
+| 分号切分 | `internal/ticket/ticket_executor.go` | `strings.Split(sql, ";")` | 工单**实际执行**的语句序列 |
+
+三者的分歧是可复现的：
+
+```
+DROP TABLE users              → type=DROP   risk=critical(95)  执行 1 条
+SELECT 1; DROP TABLE users    → type=SELECT risk=low(0)        执行 2 条（含 DROP）
+```
+
+风险等级和 `sql_type` 都是审批策略的匹配条件（`PolicyCondition.RiskLevels` /
+`SQLTypes`），策略还可以开启自动审批。因此**客户端通过在 SQL 前加一句 `SELECT 1;`
+就能改变自己工单的审批路径**——这正是「客户端不得影响风险等级或审批路径」要禁止的事。
+即使按默认策略仍需 DBA 审批，审批人看到的也是「低风险 SELECT，不影响任何表」。
+
+同一根因还有两个次生表现：
+
+- `WHERE name = 'a;b'` 这类合法查询在 MySQL 路径被解析器拒绝（截断后语法错误）。
+- PG 路径解析失败会降级为关键词检测，静态高危规则随之失效：
+  `DELETE FROM logs` 是 high/blocked，`DELETE FROM logs /* a;b */` 变成 medium/未阻断。
+
+修复方向不是给三处各打补丁，而是**收敛为一个语句分词器 + 一个分析器**，让「被分析的
+对象」和「被执行的对象」在类型上就是同一个值。
 
 任何改变部署拓扑、元数据库、消息可靠性或授权模型的演进，应先新增 ADR，再修改本文件。

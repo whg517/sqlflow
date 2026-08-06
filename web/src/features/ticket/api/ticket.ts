@@ -68,14 +68,17 @@ export interface TicketDetailResponse {
   data: Ticket;
 }
 
-// risk_level and ai_review_result are intentionally absent: the server derives
-// the risk level from the SQL because it selects the approval policy, and it
-// refuses client-supplied AI verdicts. Both are read back on the Ticket type.
+// risk_level, ai_review_result and db_type are intentionally absent: each one
+// selects which server-side check runs, so a client that supplies them picks
+// its own approval path. The server derives risk from the SQL because it
+// selects the approval policy, refuses client-supplied AI verdicts, and reads
+// the database type from the datasource row — sending "mysql" for a MongoDB
+// datasource used to skip the collection-level permission check. All three are
+// read back on the Ticket type.
 export interface CreateTicketRequest {
   datasource_id: number;
   database: string;
   sql: string;
-  db_type: string;
   change_reason: string;
 }
 

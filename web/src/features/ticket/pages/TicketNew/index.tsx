@@ -77,14 +77,12 @@ export default function TicketNewPage() {
   async function handleSubmit() {
     if (!validate()) return;
 
-    const ds = datasources.find((d) => d.id === Number(datasourceId));
     setSubmitting(true);
     try {
       const res = await createTicket({
         datasource_id: Number(datasourceId),
         database,
         sql: sql.trim(),
-        db_type: ds?.type === "mongodb" ? "mongodb" : "mysql",
         change_reason: changeReason.trim(),
       });
       toast.success("工单提交成功");

@@ -36,7 +36,7 @@ func TestCreateTicket_RiskIsServerDerived(t *testing.T) {
 	}
 
 	ticket, err := ticketSvc.CreateTicket(context.Background(), 1, "developer", 1,
-		ticketExecDatabase, destructive, "mysql", "cleanup")
+		ticketExecDatabase, destructive, "cleanup")
 	if err != nil {
 		t.Fatalf("CreateTicket: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestCreateTicket_DerivesSQLTypeAndTables(t *testing.T) {
 	_, ticketSvc, _ := setupTicketExecTest(t)
 
 	ticket, err := ticketSvc.CreateTicket(context.Background(), 1, "developer", 1,
-		ticketExecDatabase, "ALTER TABLE users ADD COLUMN phone VARCHAR(20)", "mysql", "add phone")
+		ticketExecDatabase, "ALTER TABLE users ADD COLUMN phone VARCHAR(20)", "add phone")
 	if err != nil {
 		t.Fatalf("CreateTicket: %v", err)
 	}

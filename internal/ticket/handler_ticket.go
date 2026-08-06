@@ -21,17 +21,19 @@ func NewHandler(ticketSvc *Service) *Handler {
 	return &Handler{ticketSvc: ticketSvc}
 }
 
-// createTicketRequest deliberately omits risk_level and ai_review_result.
-// Both are shown to approvers and risk_level additionally selects the approval
-// policy, so letting the submitter supply them would let a submitter choose
-// their own approval path and attach a fabricated AI verdict. The server
-// derives risk from the SQL; AI review, if attached, must be produced
-// server-side.
+// createTicketRequest deliberately omits risk_level, ai_review_result and
+// db_type.
+//
+// All three select which checks run, so accepting any of them from the
+// submitter lets the submitter choose their own approval path. risk_level
+// drives policy matching including auto-approval; ai_review_result is shown to
+// approvers; db_type selected the MongoDB collection-level permission check, so
+// claiming "mysql" for a MongoDB datasource skipped it entirely. The server
+// derives risk from the SQL and the type from the datasource row.
 type createTicketRequest struct {
 	DatasourceID int64  `json:"datasource_id"`
 	Database     string `json:"database"`
 	SQL          string `json:"sql"`
-	DBType       string `json:"db_type"`
 	ChangeReason string `json:"change_reason"`
 }
 
@@ -66,13 +68,15 @@ func (h *Handler) CreateTicket(c echo.Context) error {
 
 	ticket, err := h.ticketSvc.CreateTicket(
 		c.Request().Context(), userID, role, req.DatasourceID, req.Database, req.SQL,
-		req.DBType, req.ChangeReason,
+		req.ChangeReason,
 	)
 	if err != nil {
 		switch err {
 		case ErrTicketSQLRequired:
 			return resp.BadRequest(c, err.Error())
 		case ErrTicketDatasourceRequired:
+			return resp.BadRequest(c, err.Error())
+		case ErrTicketDatasourceNotFound:
 			return resp.BadRequest(c, err.Error())
 		default:
 			log.Printf("CreateTicket failed: %v", err)

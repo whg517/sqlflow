@@ -234,6 +234,60 @@ func TestExtractURI(t *testing.T) {
 	}
 }
 
+// TestExtractURIHostLengths pins the prefix check against host length.
+//
+// The check used to be `len(host) > 10 && (host[:10] == "mongodb://" ||
+// host[:12] == "mongodb+srv")`, which slices 12 bytes after only proving the
+// host has 11. Every host of exactly 11 characters — "192.168.1.1",
+// "example.com" — panicked, and extractURI runs first in Connect, so the panic
+// reached connection tests, metadata browsing, queries and ticket execution
+// alike.
+//
+// The same expression could never match an SRV URI either: 12 bytes are never
+// equal to the 11-byte literal "mongodb+srv".
+func TestExtractURIHostLengths(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *driver.Config
+		want   string
+	}{
+		{
+			name:   "11-char ipv4 host is built from components",
+			config: &driver.Config{Username: "u", Password: "p", Host: "192.168.1.1", Port: 27017},
+			want:   "mongodb://u:p@192.168.1.1:27017",
+		},
+		{
+			name:   "11-char domain host is built from components",
+			config: &driver.Config{Username: "u", Password: "p", Host: "example.com", Port: 27017, Database: "app"},
+			want:   "mongodb://u:p@example.com:27017/app",
+		},
+		{
+			name:   "srv uri in host is used directly",
+			config: &driver.Config{Host: "mongodb+srv://cluster0.abc.mongodb.net/app"},
+			want:   "mongodb+srv://cluster0.abc.mongodb.net/app",
+		},
+		{
+			name:   "host shorter than the prefix is built from components",
+			config: &driver.Config{Username: "u", Password: "p", Host: "db", Port: 27017},
+			want:   "mongodb://u:p@db:27017",
+		},
+		{
+			name:   "10-char host sits just below the old length guard",
+			config: &driver.Config{Username: "u", Password: "p", Host: "mongodb.io", Port: 27017},
+			want:   "mongodb://u:p@mongodb.io:27017",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractURI(tt.config)
+			if got != tt.want {
+				t.Errorf("extractURI() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsURI(t *testing.T) {
 	tests := []struct {
 		s    string

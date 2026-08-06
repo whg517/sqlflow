@@ -440,11 +440,12 @@ func (d *MongoDBDriver) Parse(query string) (*driver.ParseResult, error) {
 // ---------------------------------------------------------------------------
 
 func extractURI(cfg *driver.Config) string {
-	if cfg.Host != "" {
-		// If host looks like a URI, use it directly.
-		if len(cfg.Host) > 10 && (cfg.Host[:10] == "mongodb://" || cfg.Host[:12] == "mongodb+srv") {
-			return cfg.Host
-		}
+	// If host looks like a URI, use it directly. isURI is the single place that
+	// decides what "looks like a URI" means; hand-rolled prefix slicing here
+	// used to disagree with it in both directions — it panicked on any 11-byte
+	// host, and its 12-byte slice could never equal the 11-byte "mongodb+srv".
+	if isURI(cfg.Host) {
+		return cfg.Host
 	}
 	// Try Extra["uri"]
 	if cfg.Extra != nil {

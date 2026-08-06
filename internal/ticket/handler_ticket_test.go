@@ -1111,11 +1111,17 @@ func TestTicketHandler_ExecuteTicket_NotFound(t *testing.T) {
 
 // ─── CreateTicket Service Error Branches ─────────────────────────────────────
 
+// TestTicketHandler_CreateTicket_NonExistentDatasource pins the refusal.
+//
+// This used to assert the opposite — that any datasource_id was accepted and
+// the ticket created. Nothing verified the datasource existed, so a ticket
+// could name an integer and sit in the approval queue until execution failed.
+// Reading the type from the datasource row closed that as a side effect.
 func TestTicketHandler_CreateTicket_NonExistentDatasource(t *testing.T) {
 	e, h, database := setupTicketHandlerTest(t)
 	userID := seedTicketTestUser(t, database, "dev1", "developer")
 
-	body := `{"datasource_id":99999,"database":"mydb","sql":"ALTER TABLE t ADD c INT","db_type":"mysql","change_reason":"test","risk_level":"low"}`
+	body := `{"datasource_id":99999,"database":"mydb","sql":"ALTER TABLE t ADD c INT","change_reason":"test"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/tickets", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1126,18 +1132,8 @@ func TestTicketHandler_CreateTicket_NonExistentDatasource(t *testing.T) {
 		t.Fatalf("handler error: %v", err)
 	}
 
-	// Service accepts any datasource_id and creates the ticket
-	if rec.Code != http.StatusCreated {
-		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusCreated, rec.Body.String())
-	}
-
-	result := testutil.DecodeJSON(t, rec)
-	data, ok := result["data"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("data is not an object; body=%s", rec.Body.String())
-	}
-	if data["datasource_id"] != float64(99999) {
-		t.Errorf("datasource_id = %v, want 99999", data["datasource_id"])
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
+	entDataSource "github.com/whg517/sqlflow/internal/db/ent/datasource"
 	"github.com/whg517/sqlflow/internal/db/ent/predicate"
 	entTicket "github.com/whg517/sqlflow/internal/db/ent/ticket"
 	"github.com/whg517/sqlflow/internal/driver"
@@ -54,6 +55,11 @@ var (
 	ErrTicketSQLRequired = errors.New("SQL内容不能为空")
 	// ErrTicketDatasourceRequired indicates the datasource is required.
 	ErrTicketDatasourceRequired = errors.New("数据源不能为空")
+
+	// ErrTicketDatasourceNotFound is returned when the referenced datasource is
+	// gone. Reading the type made this reachable: nothing used to verify the
+	// datasource existed, so a ticket could be filed against any integer.
+	ErrTicketDatasourceNotFound = errors.New("数据源不存在")
 	// ErrScheduleTimeRequired indicates a schedule time is required.
 	ErrScheduleTimeRequired = errors.New("定时执行时间不能为空")
 	// ErrScheduleTimeInPast indicates the schedule time must be in the future.
@@ -258,11 +264,14 @@ func (s *Service) lookupUsername(ctx context.Context, userID int64) string {
 
 // CreateTicket creates a new ticket.
 //
-// The risk level is always derived server-side from the submitted SQL. It is
-// deliberately not a parameter: risk drives approval-policy matching, including
-// auto-approval, so accepting it from the submitter would let them pick their
-// own approval path.
-func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitterRole string, datasourceID int64, database, sqlContent, dbType, changeReason string) (*model.Ticket, error) {
+// Neither the risk level nor the database type is a parameter, and for the same
+// reason: both select which checks run. Risk drives approval-policy matching
+// including auto-approval, and the type selects the MongoDB collection-level
+// check — a submitter who claimed "mysql" for a MongoDB datasource, or who
+// simply omitted the field and took the old "mysql" default, skipped that check
+// and got the ticket into the approval queue. The server reads the type from
+// the datasource row, which is the only thing that actually knows it.
+func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitterRole string, datasourceID int64, database, sqlContent, changeReason string) (*model.Ticket, error) {
 	if strings.TrimSpace(sqlContent) == "" {
 		return nil, ErrTicketSQLRequired
 	}
@@ -270,10 +279,12 @@ func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitter
 		return nil, ErrTicketDatasourceRequired
 	}
 
-	summary := auditlog.Summarize(sqlContent)
-	if dbType == "" {
-		dbType = "mysql"
+	dbType, err := s.datasourceType(ctx, datasourceID)
+	if err != nil {
+		return nil, err
 	}
+
+	summary := auditlog.Summarize(sqlContent)
 
 	// MongoDB collection-level permission check
 	if dbType == "mongodb" && s.permSvc != nil {
@@ -1026,6 +1037,26 @@ func affectedTablesToJSON(tables []string) string {
 		return "[]"
 	}
 	return string(b)
+}
+
+// datasourceType reads the driver type recorded for a datasource.
+//
+// It reads the single column rather than going through datasource.Service so
+// that a ticket cannot be created against a datasource that no longer exists,
+// and so the check holds even in wiring where the service is absent — a check
+// that can be switched off by a missing collaborator is not a check.
+func (s *Service) datasourceType(ctx context.Context, datasourceID int64) (string, error) {
+	dsType, err := s.client.DataSource.Query().
+		Where(entDataSource.IDEQ(int(datasourceID))).
+		Select(entDataSource.FieldType).
+		String(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return "", ErrTicketDatasourceNotFound
+		}
+		return "", fmt.Errorf("读取数据源类型失败: %w", err)
+	}
+	return dsType, nil
 }
 
 // checkMongoPermission validates that the user has permission to perform the MongoDB operation.
