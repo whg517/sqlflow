@@ -859,7 +859,7 @@ func (h *Handler) GetESIndices(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("page_size"))
 
-	indices, _, err := h.dsSvc.GetESIndices(c.Request().Context(), id, query, page, pageSize)
+	indices, err := h.dsSvc.GetESIndices(c.Request().Context(), id, query)
 	if err != nil {
 		if err == ErrDatasourceNotFound {
 			return resp.NotFound(c, "数据源不存在")
@@ -871,6 +871,11 @@ func (h *Handler) GetESIndices(c echo.Context) error {
 		return resp.InternalError(c, "获取 ES 索引列表失败")
 	}
 
+	// Filter before paging. The service used to cut the page and this loop
+	// filtered what came back, so a caller permitted to see three indices out of
+	// two hundred got twenty rows with three filled and then nineteen empty
+	// pages — and the reported total was the length of that one page, so the UI
+	// drew a single page and the rest were unreachable.
 	visible := indices[:0]
 	for _, index := range indices {
 		allowed, authErr := h.canViewObject(c, id, index.Name)
@@ -881,10 +886,34 @@ func (h *Handler) GetESIndices(c echo.Context) error {
 			visible = append(visible, index)
 		}
 	}
+
 	return resp.OK(c, map[string]interface{}{
-		"items": visible,
+		"items": paginate(visible, page, pageSize),
 		"total": len(visible),
 	})
+}
+
+// esIndexPageSize bounds a page of indices; the default matches what the UI asks for.
+const (
+	esIndexDefaultPageSize = 20
+	esIndexMaxPageSize     = 100
+)
+
+// paginate returns one page of items, clamping the request to the slice.
+func paginate(items []ESIndexInfo, page, pageSize int) []ESIndexInfo {
+	if page < 1 {
+		page = 1
+	}
+	switch {
+	case pageSize < 1:
+		pageSize = esIndexDefaultPageSize
+	case pageSize > esIndexMaxPageSize:
+		pageSize = esIndexMaxPageSize
+	}
+
+	start := min((page-1)*pageSize, len(items))
+	end := min(start+pageSize, len(items))
+	return items[start:end]
 }
 
 // GetESIndexFields returns field mapping for a specific Elasticsearch index.

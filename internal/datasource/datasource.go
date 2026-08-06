@@ -858,12 +858,14 @@ func parseESUrls(raw string) []string {
 // PostgreSQL stores array types with a leading underscore (e.g. _int4, _text, _float8).
 // ESIndexInfo represents metadata for a single Elasticsearch index.
 type ESIndexInfo struct {
-	Name        string `json:"name"`
-	Health      string `json:"health"` // green, yellow, red
-	Status      string `json:"status"` // open, closed
-	DocCount    int64  `json:"doc_count"`
-	StoreSize   string `json:"store_size"`   // human-readable, e.g. "4.2mb"
-	StoreBytes  int64  `json:"store_bytes"`  // raw bytes
+	Name     string `json:"name"`
+	Health   string `json:"health"` // green, yellow, red
+	Status   string `json:"status"` // open, closed
+	DocCount int64  `json:"doc_count"`
+	// StoreSize is what _cat/indices reports, which is human readable — "4.2mb".
+	// A StoreBytes field sat beside it, parsed from the same string with
+	// ParseInt and a discarded error, so it was always 0. Nothing read it.
+	StoreSize   string `json:"store_size"`
 	CreatedTime string `json:"created_time"` // ISO 8601
 }
 
@@ -920,12 +922,19 @@ func (s *Service) getESClient(ctx context.Context, id int64) (*model.DataSource,
 	return ds, password, client, nil
 }
 
-// GetESIndices returns the list of indices in the Elasticsearch cluster.
-// Supports keyword filtering and pagination.
-func (s *Service) GetESIndices(ctx context.Context, id int64, query string, page, pageSize int) ([]ESIndexInfo, int, error) {
+// GetESIndices returns every index in the cluster that matches the keyword.
+//
+// It does not paginate. Pagination has to happen after the caller's object
+// permissions are applied, and those live above this layer — cutting a page
+// first and filtering it afterwards produced pages of unpredictable size and a
+// total that counted indices the caller could not see.
+//
+// _cat/indices returns the whole list in one response regardless, so there is
+// nothing to stream and no per-page request to save.
+func (s *Service) GetESIndices(ctx context.Context, id int64, query string) ([]ESIndexInfo, error) {
 	_, _, client, err := s.getESClient(ctx, id)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	// Use _cat/indices API with format=json
@@ -936,20 +945,20 @@ func (s *Service) GetESIndices(ctx context.Context, id int64, query string, page
 	resp, err := req.Do(ctx, client)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, 0, fmt.Errorf("查询 ES 索引超时")
+			return nil, fmt.Errorf("查询 ES 索引超时")
 		}
-		return nil, 0, fmt.Errorf("查询 ES 索引失败: %w", err)
+		return nil, fmt.Errorf("查询 ES 索引失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.IsError() {
-		return nil, 0, fmt.Errorf("ES _cat/indices 返回错误: %s", resp.Status())
+		return nil, fmt.Errorf("ES _cat/indices 返回错误: %s", resp.Status())
 	}
 
 	// Parse response
 	var rawIndices []map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&rawIndices); err != nil {
-		return nil, 0, fmt.Errorf("解析 ES 索引响应失败: %w", err)
+		return nil, fmt.Errorf("解析 ES 索引响应失败: %w", err)
 	}
 
 	// Map to ESIndexInfo and filter
@@ -975,34 +984,11 @@ func (s *Service) GetESIndices(ctx context.Context, id int64, query string, page
 			CreatedTime: getStrVal(raw, "creation.date.string"),
 		}
 		info.DocCount, _ = strconv.ParseInt(getStrVal(raw, "docs.count"), 10, 64)
-		info.StoreBytes, _ = strconv.ParseInt(getStrVal(raw, "store.size"), 10, 64)
 
 		all = append(all, info)
 	}
 
-	total := len(all)
-
-	// Paginate
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 {
-		pageSize = 20
-	}
-	if pageSize > 100 {
-		pageSize = 100
-	}
-
-	start := (page - 1) * pageSize
-	end := start + pageSize
-	if start > total {
-		start = total
-	}
-	if end > total {
-		end = total
-	}
-
-	return all[start:end], total, nil
+	return all, nil
 }
 
 // GetESIndexFields returns the field mapping for a specific Elasticsearch index.

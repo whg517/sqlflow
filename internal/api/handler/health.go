@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -12,6 +13,10 @@ import (
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/platform/metrics"
 )
+
+// datasourcePingTimeout bounds the whole datasource sweep. A readiness probe
+// that waits on an unresponsive target is itself a availability problem.
+const datasourcePingTimeout = 2 * time.Second
 
 // HealthHandler handles health check and metrics endpoints.
 type HealthHandler struct {
@@ -105,7 +110,7 @@ func (h *HealthHandler) Healthz(c echo.Context) error {
 
 // Readyz godoc
 // @Summary 就绪探针
-// @Description Readiness probe — checks SQLite, optional Redis, and external datasource connection pools
+// @Description Readiness probe — gates on the platform PostgreSQL; pooled datasource connections are reported but do not affect readiness
 // @Tags 健康
 // @Produce json
 // @Success 200 {object} HealthResponse "就绪"
@@ -117,35 +122,45 @@ func (h *HealthHandler) Readyz(c echo.Context) error {
 	checks := make(map[string]string)
 	allOK := true
 
-	// 1. SQLite check
+	// The platform store is the one hard dependency: without it this instance
+	// can serve nothing. The label used to read "sqlite", left over from before
+	// ADR-0009 moved the metadata to PostgreSQL.
 	if err := h.db.Ping(); err != nil {
-		checks["sqlite"] = "error: " + err.Error()
+		checks["platform_db"] = "error: " + err.Error()
 		allOK = false
 	} else {
-		checks["sqlite"] = "ok"
+		checks["platform_db"] = "ok"
 	}
 
-	// 2. Connection pool manager check (external datasources)
+	// Governed datasources are reported, not gated on.
+	//
+	// This used to call connpool.Manager.HealthCheck, which walks connection
+	// maps that no production code fills, and then counted driver-pool entries
+	// without touching any of them — so every governed database could be
+	// unreachable and the probe still answered "ok (3 connections)".
+	//
+	// The result stays out of allOK deliberately. A target database being down
+	// is not this instance being unready: it can still serve tickets, audit and
+	// administration, and failing readiness would pull the whole instance out of
+	// rotation over someone else's outage.
 	h.mu.RLock()
-	mgr := h.connMgr
 	pm := h.poolMgr
 	h.mu.RUnlock()
 
-	if mgr != nil {
-		if err := mgr.HealthCheck(); err != nil {
-			checks["datasources"] = "error: " + err.Error()
-			allOK = false
-		} else {
-			checks["datasources"] = "ok"
-		}
-	}
-
 	if pm != nil {
-		ids := pm.ManagedIDs()
-		if len(ids) > 0 {
-			checks["driver_pool"] = fmt.Sprintf("ok (%d connections)", len(ids))
-		} else {
-			checks["driver_pool"] = "ok (empty)"
+		pingCtx, cancel := context.WithTimeout(c.Request().Context(), datasourcePingTimeout)
+		defer cancel()
+		for _, id := range pm.ManagedIDs() {
+			d := pm.GetCached(id)
+			if d == nil {
+				continue
+			}
+			name := fmt.Sprintf("datasource_%d", id)
+			if err := d.Ping(pingCtx); err != nil {
+				checks[name] = "error: " + err.Error()
+			} else {
+				checks[name] = "ok"
+			}
 		}
 	}
 

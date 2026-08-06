@@ -79,7 +79,6 @@ export interface ESIndexInfo {
   status: string;
   doc_count: number;
   store_size: string;
-  store_bytes: number;
   created_time: string;
 }
 

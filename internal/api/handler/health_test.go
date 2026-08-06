@@ -218,8 +218,8 @@ func TestHealthHandler_Readyz_AllOK(t *testing.T) {
 	if resp.Status != "ok" {
 		t.Errorf("status = %q, want %q", resp.Status, "ok")
 	}
-	if resp.Checks["sqlite"] != "ok" {
-		t.Errorf("sqlite check = %q, want %q", resp.Checks["sqlite"], "ok")
+	if resp.Checks["platform_db"] != "ok" {
+		t.Errorf("platform_db check = %q, want %q", resp.Checks["platform_db"], "ok")
 	}
 }
 
@@ -250,8 +250,8 @@ func TestHealthHandler_Readyz_DBError(t *testing.T) {
 	if resp.Status != "degraded" {
 		t.Errorf("status = %q, want %q", resp.Status, "degraded")
 	}
-	if resp.Checks["sqlite"] == "" || resp.Checks["sqlite"] == "ok" {
-		t.Errorf("sqlite check should indicate error, got %q", resp.Checks["sqlite"])
+	if resp.Checks["platform_db"] == "" || resp.Checks["platform_db"] == "ok" {
+		t.Errorf("platform_db check should indicate error, got %q", resp.Checks["platform_db"])
 	}
 }
 
@@ -282,11 +282,14 @@ func TestHealthHandler_Readyz_WithConnPoolManager(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	// Should have both sqlite and datasources checks
-	if resp.Checks["sqlite"] != "ok" {
-		t.Errorf("sqlite = %q, want ok", resp.Checks["sqlite"])
+	if resp.Checks["platform_db"] != "ok" {
+		t.Errorf("platform_db = %q, want ok", resp.Checks["platform_db"])
 	}
-	if resp.Checks["datasources"] != "ok" {
-		t.Errorf("datasources = %q, want ok", resp.Checks["datasources"])
+	// The blanket "datasources" entry is gone. It came from walking connection
+	// maps that no production code fills, so it was permanently "ok" whatever
+	// the targets were doing; pooled connections are now reported one by one,
+	// and an empty pool reports none.
+	if _, ok := resp.Checks["datasources"]; ok {
+		t.Error("the unconditional datasources check is back")
 	}
 }
