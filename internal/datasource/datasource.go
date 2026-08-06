@@ -32,11 +32,15 @@ import (
 )
 
 var (
-	ErrDatasourceType        = errors.New("不支持的数据源类型")
-	ErrDatasourceNotFound    = errors.New("数据源不存在")
-	ErrDatasourceNameExists  = errors.New("数据源名称已存在")
-	ErrDatasourceDisabled    = errors.New("数据源已禁用")
-	ErrInvalidDatasourceType = errors.New("数据源类型必须是 mysql、postgresql、sqlite、mongodb 或 elasticsearch")
+	ErrDatasourceType       = errors.New("不支持的数据源类型")
+	ErrDatasourceNotFound   = errors.New("数据源不存在")
+	ErrDatasourceNameExists = errors.New("数据源名称已存在")
+	ErrDatasourceDisabled   = errors.New("数据源已禁用")
+	// ErrInvalidDatasourceType names the registered types rather than a
+	// hardcoded list. There used to be two copies of that sentence, so adding a
+	// driver meant remembering both — and forgetting left the user a list that
+	// omitted a type the server would accept.
+	ErrInvalidDatasourceType = fmt.Errorf("数据源类型必须是 %s 之一", strings.Join(driver.SupportedTypes(), "、"))
 	ErrSystemDatasource      = errors.New("系统数据源受保护，不能执行此操作")
 	ErrDatasourceMustDisable = errors.New("请先禁用数据源，再执行删除")
 	// ErrMetadataNotSupported is returned when a driver does not declare
@@ -44,7 +48,15 @@ var (
 	ErrMetadataNotSupported = errors.New("该数据源不支持元数据浏览")
 )
 
-var ValidDatasourceTypes = map[string]bool{"mysql": true, "postgresql": true, "sqlite": true, "mongodb": true, "elasticsearch": true}
+// IsValidDatasourceType reports whether a driver is registered for the type.
+//
+// It replaces a hand-written map that was consulted at five entry points while
+// SQL templates and connection testing asked the registry. A driver present in
+// one and missing from the other produced a datasource nobody could create and
+// a template anybody could, with nothing to report the disagreement.
+func IsValidDatasourceType(typeName string) bool {
+	return driver.IsRegistered(typeName)
+}
 
 const internalDatasourceExtraConfig = `{"system":true,"read_only":true}`
 
@@ -118,7 +130,7 @@ func (s *Service) validateDriverConfig(ds *model.DataSource) error {
 
 // CreateDataSource creates a new datasource with encrypted password.
 func (s *Service) CreateDataSource(ctx context.Context, ds *model.DataSource) error {
-	if !ValidDatasourceTypes[ds.Type] {
+	if !IsValidDatasourceType(ds.Type) {
 		return ErrInvalidDatasourceType
 	}
 
@@ -368,7 +380,7 @@ func (s *Service) GetDataSource(ctx context.Context, id int64) (*model.DataSourc
 
 // UpdateDataSource updates an existing datasource.
 func (s *Service) UpdateDataSource(ctx context.Context, id int64, ds *model.DataSource) error {
-	if !ValidDatasourceTypes[ds.Type] {
+	if !IsValidDatasourceType(ds.Type) {
 		return ErrInvalidDatasourceType
 	}
 
@@ -578,13 +590,24 @@ func (s *Service) datasourceDependencies(ctx context.Context, id int64) ([]Datas
 	return dependencies, nil
 }
 
-// removeDatasourcePool drops any cached connection for a datasource.
+// removeDatasourcePool drops every cached connection for a datasource.
 //
-// The pool is keyed by datasource ID, so this needs to know nothing about the
-// datasource's type or its connection fields.
+// Both caches are keyed by datasource ID, so this needs to know nothing about
+// the datasource's type or its connection fields — which is also why it has to
+// clear both. It used to clear only the driver pool; the Elasticsearch client
+// behind index and field browsing lives in connpool, and RemoveElasticsearch
+// had no caller outside its own test, so rotating an ES password left that
+// client authenticating with the old one until the process restarted.
+//
+// The ES cache key is datasource id plus URLs and deliberately holds no
+// credentials. Evicting on write is what keeps it correct; putting secrets into
+// map keys would not.
 func (s *Service) removeDatasourcePool(id int64) {
 	if s.poolMgr != nil {
 		s.poolMgr.Remove(id)
+	}
+	if s.connMgr != nil {
+		s.connMgr.RemoveElasticsearch(id)
 	}
 }
 

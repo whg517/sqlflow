@@ -156,3 +156,25 @@ func (m *Manager) InjectESForTest(dsID int64, urls []string, client *es.Client) 
 	key := esPoolKey(dsID, urls)
 	m.esPools.Store(key, client)
 }
+
+// CachedESIDs returns the datasource IDs that currently hold a cached client.
+//
+// It exists so that code which evicts connections can be checked from outside
+// this package. Without an observer the only way to ask "is this still cached"
+// was to call GetElasticsearch, which connects when the answer is no.
+func (m *Manager) CachedESIDs() []int64 {
+	seen := map[int64]struct{}{}
+	m.esPools.Range(func(key, _ interface{}) bool {
+		var id int64
+		if _, err := fmt.Sscanf(key.(string), "es:%d:", &id); err == nil {
+			seen[id] = struct{}{}
+		}
+		return true
+	})
+	ids := make([]int64, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}

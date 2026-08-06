@@ -223,8 +223,6 @@ func toDatasourceResponse(ds *model.DataSource) datasourceResponse {
 	}
 }
 
-var validDatasourceTypesMsg = "数据源类型必须是 mysql、postgresql、sqlite、mongodb 或 elasticsearch"
-
 // CreateDatasource handles POST /api/datasources (admin).
 //
 // @Summary 创建数据源
@@ -247,8 +245,8 @@ func (h *Handler) CreateDatasource(c echo.Context) error {
 	if req.Name == "" {
 		return resp.BadRequest(c, "数据源名称不能为空")
 	}
-	if !ValidDatasourceTypes[req.Type] {
-		return resp.BadRequest(c, validDatasourceTypesMsg)
+	if !IsValidDatasourceType(req.Type) {
+		return resp.BadRequest(c, ErrInvalidDatasourceType.Error())
 	}
 	if message := validateDatasourceConnectionRequest(req, false); message != "" {
 		return resp.BadRequest(c, message)
@@ -428,8 +426,8 @@ func (h *Handler) UpdateDatasource(c echo.Context) error {
 		return resp.BadRequest(c, "请求格式错误")
 	}
 
-	if !ValidDatasourceTypes[req.Type] {
-		return resp.BadRequest(c, validDatasourceTypesMsg)
+	if !IsValidDatasourceType(req.Type) {
+		return resp.BadRequest(c, ErrInvalidDatasourceType.Error())
 	}
 	connectionReq := createDatasourceRequest{
 		ID:             id,
@@ -679,8 +677,8 @@ func (h *Handler) TestConnectionConfig(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return resp.BadRequest(c, "请求格式错误")
 	}
-	if !ValidDatasourceTypes[req.Type] {
-		return resp.BadRequest(c, validDatasourceTypesMsg)
+	if !IsValidDatasourceType(req.Type) {
+		return resp.BadRequest(c, ErrInvalidDatasourceType.Error())
 	}
 	if message := validateDatasourceConnectionRequest(req, req.ID > 0); message != "" {
 		return resp.BadRequest(c, message)

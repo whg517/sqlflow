@@ -130,7 +130,9 @@ func TestDatasourceHandler_CreateDatasource(t *testing.T) {
 			"invalid_type",
 			`{"name":"bad-type","type":"postgres","host":"10.0.0.1","port":5432,"username":"root","password":"secret"}`,
 			http.StatusBadRequest,
-			"数据源类型必须是 mysql、postgresql、sqlite、mongodb 或 elasticsearch",
+			// Derived from the registry rather than restated here, so adding a
+			// driver cannot leave this message listing a stale set.
+			ErrInvalidDatasourceType.Error(),
 		},
 		{
 			"missing_host",
