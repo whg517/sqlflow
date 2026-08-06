@@ -294,7 +294,7 @@ func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitter
 	}
 
 	// Parse the SQL and derive the risk level. Both are server-side facts.
-	analysis := NewSQLAnalyzer().Analyze(sqlContent)
+	analysis := analyzeTicketSQL(dbType, sqlContent)
 	tablesJSON := affectedTablesToJSON(analysis.AffectedTables)
 	riskLevel := NewRiskEvaluator().Evaluate(analysis).Level
 

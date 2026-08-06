@@ -65,8 +65,12 @@ func (e *RiskEvaluator) Evaluate(analysis *SQLAnalysis) *RiskEvaluation {
 		score += 50
 		reasons = append(reasons, "权限变更语句")
 	default:
-		score += 15
-		reasons = append(reasons, "未知语句类型")
+		// "We could not work out what this does" is not "this is safe". At 15
+		// an unrecognized statement landed in the low band, which is the band a
+		// policy may auto-approve — so anything the server could not classify
+		// was the easiest thing to get executed. It now requires a human.
+		score += 35
+		reasons = append(reasons, "未知语句类型，无法确认影响范围")
 	}
 
 	// Rule 2: DDL gets higher base risk
@@ -104,13 +108,6 @@ func (e *RiskEvaluator) Evaluate(analysis *SQLAnalysis) *RiskEvaluation {
 		Reason: strings.Join(reasons, "; "),
 		Score:  score,
 	}
-}
-
-// EvaluateWithSQL evaluates risk directly from SQL string.
-func (e *RiskEvaluator) EvaluateWithSQL(sql string) *RiskEvaluation {
-	analyzer := NewSQLAnalyzer()
-	analysis := analyzer.Analyze(sql)
-	return e.Evaluate(analysis)
 }
 
 func scoreToLevel(score int) string {

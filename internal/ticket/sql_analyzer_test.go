@@ -313,12 +313,18 @@ func TestRiskEvaluator_Truncate(t *testing.T) {
 	}
 }
 
-func TestRiskEvaluator_EvaluateWithSQL(t *testing.T) {
-	e := NewRiskEvaluator()
-	eval := e.EvaluateWithSQL("DROP TABLE critical_data")
+// TestRiskEvaluatorScoresDropAsCritical goes through the same entry point the
+// ticket paths use.
+//
+// It used to call RiskEvaluator.EvaluateWithSQL, which no production code
+// called — the method survived only because this test referenced it, which is
+// how a helper that bypasses the query-form routing stays available to the next
+// person who needs "just the risk of this SQL".
+func TestRiskEvaluatorScoresDropAsCritical(t *testing.T) {
+	eval := NewRiskEvaluator().Evaluate(analyzeTicketSQL("mysql", "DROP TABLE critical_data"))
 
 	if eval.Level != RiskLevelCritical {
-		t.Errorf("EvaluateWithSQL DROP TABLE = %q (score=%d), want critical", eval.Level, eval.Score)
+		t.Errorf("DROP TABLE risk = %q (score=%d), want critical", eval.Level, eval.Score)
 	}
 }
 

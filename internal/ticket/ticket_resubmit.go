@@ -38,7 +38,11 @@ func (s *Service) ResubmitTicket(ctx context.Context, ticketID, submitterID int6
 	// rejected. Done before the transaction opens — these are pure functions,
 	// but the platform pool holds a single connection, so no query may run
 	// while the transaction is open.
-	analysis := NewSQLAnalyzer().Analyze(sqlContent)
+	dbType, err := s.datasourceType(ctx, t.DatasourceID)
+	if err != nil {
+		return nil, err
+	}
+	analysis := analyzeTicketSQL(dbType, sqlContent)
 	riskLevel := NewRiskEvaluator().Evaluate(analysis).Level
 	tablesJSON := affectedTablesToJSON(analysis.AffectedTables)
 
