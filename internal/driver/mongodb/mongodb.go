@@ -5,7 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -450,16 +453,25 @@ func extractURI(cfg *driver.Config) string {
 			return uri
 		}
 	}
-	// Build from components
-	if cfg.Host != "" && cfg.Port > 0 {
-		host := cfg.Host
-		if !isURI(host) {
-			uri := fmt.Sprintf("mongodb://%s:%s@%s:%d", cfg.Username, cfg.Password, host, cfg.Port)
-			if cfg.Database != "" {
-				uri += "/" + cfg.Database
-			}
-			return uri
+	// Build from components.
+	//
+	// url.URL does the percent-encoding. Concatenation with fmt.Sprintf did not,
+	// so a password containing any character a connection string gives meaning
+	// to — /, @, :, ? — produced a URI the driver refused with "error parsing
+	// uri", which reads like a configuration typo rather than a password
+	// character.
+	if cfg.Host != "" && cfg.Port > 0 && !isURI(cfg.Host) {
+		u := url.URL{
+			Scheme: "mongodb",
+			Host:   net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)),
 		}
+		if cfg.Username != "" {
+			u.User = url.UserPassword(cfg.Username, cfg.Password)
+		}
+		if cfg.Database != "" {
+			u.Path = "/" + cfg.Database
+		}
+		return u.String()
 	}
 	return ""
 }

@@ -5,10 +5,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	gomysql "github.com/go-sql-driver/mysql"
 
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/platform/sqlparser"
@@ -54,13 +56,10 @@ const explainRowLimit = 200
 
 // Connect establishes a connection pool to the MySQL server.
 func (d *MySQLDriver) Connect(ctx context.Context, cfg *driver.Config) error {
-	dbName := cfg.Database
-	if dbName == "" {
-		dbName = "information_schema"
+	dsn, err := buildDSN(cfg)
+	if err != nil {
+		return err
 	}
-
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=30s&parseTime=true",
-		cfg.Username, cfg.Password, cfg.Host, cfg.Port, dbName)
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -368,4 +367,57 @@ func (d *MySQLDriver) Parse(query string) (*driver.ParseResult, error) {
 	pr.RiskLevel = string(result.RiskLevel)
 
 	return pr, nil
+}
+
+// tlsParamForSSLMode maps the platform's sslmode vocabulary onto the MySQL
+// driver's tls parameter.
+//
+// The two use different words for the same three decisions: do not encrypt,
+// encrypt without checking who answered, encrypt and verify. An unrecognized
+// value is an error rather than a default, because every plausible default is
+// wrong — falling back to "off" downgrades a user who asked for TLS, and
+// falling back to "on" breaks a datasource that was working.
+func tlsParamForSSLMode(sslMode string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(sslMode)) {
+	case "", "disable":
+		return "false", nil
+	case "prefer":
+		return "preferred", nil
+	case "require":
+		return "skip-verify", nil
+	case "verify-ca", "verify-full":
+		return "true", nil
+	default:
+		return "", fmt.Errorf("mysql: 不支持的 sslmode: %s", sslMode)
+	}
+}
+
+// buildDSN assembles the connection string.
+//
+// It goes through the driver's own Config rather than fmt.Sprintf, which both
+// applies sslmode — previously accepted by the API, stored, and then ignored
+// here — and escapes the credentials. A password is arbitrary bytes, and the
+// DSN grammar gives meaning to @ : / and ?, so concatenation made the driver
+// read a different user, host or database than the one configured.
+func buildDSN(cfg *driver.Config) (string, error) {
+	dbName := cfg.Database
+	if dbName == "" {
+		dbName = "information_schema"
+	}
+
+	tlsParam, err := tlsParamForSSLMode(cfg.SSLMode)
+	if err != nil {
+		return "", err
+	}
+
+	c := gomysql.NewConfig()
+	c.User = cfg.Username
+	c.Passwd = cfg.Password
+	c.Net = "tcp"
+	c.Addr = net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
+	c.DBName = dbName
+	c.Timeout = 30 * time.Second
+	c.ParseTime = true
+	c.TLSConfig = tlsParam
+	return c.FormatDSN(), nil
 }

@@ -14,6 +14,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// queryTimeout bounds a single read, matching the other drivers.
+const queryTimeout = 30 * time.Second
+
 func init() {
 	driver.Register("sqlite", func() driver.Driver { return &Driver{} })
 }
@@ -193,9 +196,19 @@ func (d *Driver) executeQuery(ctx context.Context, query string, args []interfac
 		limit = 1000
 	}
 
+	// Every other driver caps a read at 30 seconds here, and this one capped
+	// nothing. The DSN's busy_timeout is lock contention, not query duration, so
+	// a full scan of a large table held the request goroutine until the caller
+	// gave up — which for a scheduled job is never.
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
+
 	start := time.Now()
 	rows, err := d.db.QueryContext(ctx, query, args...)
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("查询超时")
+		}
 		return nil, fmt.Errorf("执行 SQLite 查询失败: %w", err)
 	}
 	defer rows.Close()

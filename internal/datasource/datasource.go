@@ -838,16 +838,6 @@ func (s *Service) GetDataSourceSafe(ctx context.Context, id int64) (*model.DataS
 	return ds, nil
 }
 
-// buildMongoURI constructs a MongoDB connection URI.
-// Format: mongodb://user:password@host:port (with credentials) or mongodb://host:port (without)
-func buildMongoURI(host string, port int, user, password string) string {
-	if user != "" && password != "" {
-		return fmt.Sprintf("mongodb://%s:%s@%s:%d",
-			url.QueryEscape(user), url.QueryEscape(password), host, port)
-	}
-	return fmt.Sprintf("mongodb://%s:%d", host, port)
-}
-
 // parseESUrls 将逗号分隔的 ES URL 字符串解析为 []string。
 func parseESUrls(raw string) []string {
 	if raw == "" {

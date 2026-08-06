@@ -21,6 +21,10 @@ import (
 	"github.com/whg517/sqlflow/internal/platform/sqlparser"
 )
 
+// defaultRowLimit bounds a query whose caller passed no limit, matching the
+// other drivers rather than Elasticsearch's own default of 10.
+const defaultRowLimit = 1000
+
 func init() {
 	driver.Register("elasticsearch", func() driver.Driver { return &ESDriver{} })
 }
@@ -48,8 +52,11 @@ var (
 func (d *ESDriver) Type() string { return "elasticsearch" }
 
 // Capabilities declares Elasticsearch's capability set.
-// ES does not support CapTicketExec (no DML/DDL), CapSQLParse (no SQL syntax),
-// or CapTableLevelPermission (no row-level access control).
+//
+// It declares no CapTicketExec and means it: ExecuteStatement returns an
+// unsupported error. It used to also declare no CapSQLParse and no
+// CapTableLevelPermission — Parse works, and its indices were being
+// Casbin-checked like any other target, so both were wrong.
 func (d *ESDriver) Capabilities() driver.CapabilitySet {
 	return driver.CapabilitySet(driver.CapMetadata)
 }
@@ -401,15 +408,20 @@ func (d *ESDriver) ExecuteQuery(ctx context.Context, database string, query stri
 	// Inject timeout
 	bodyMap["timeout"] = "30s"
 
-	// Enforce size limit
-	const esMaxSize = 10000
-	const esDefaultSize = 100
-	if sizeVal, ok := bodyMap["size"]; ok {
-		if sizeNum, ok := toFloat64(sizeVal); ok && sizeNum > float64(esMaxSize) {
-			bodyMap["size"] = float64(esMaxSize)
-		}
+	// The caller's limit is the platform's row cap, so it bounds the request.
+	//
+	// This used to ignore limit entirely: a body without a size got 100 and one
+	// with a size got up to 10000, whatever the caller asked for. A query
+	// service asking for 1000 rows received 100, and a user who wrote
+	// "size": 10000 into the DSL received ten times what the platform allowed —
+	// the same server-side cap that every other driver truncates at.
+	if limit <= 0 {
+		limit = defaultRowLimit
+	}
+	if sizeNum, ok := toFloat64(bodyMap["size"]); ok && sizeNum < float64(limit) {
+		bodyMap["size"] = sizeNum
 	} else {
-		bodyMap["size"] = float64(esDefaultSize)
+		bodyMap["size"] = float64(limit)
 	}
 
 	bodyJSON, err := json.Marshal(bodyMap)
@@ -529,7 +541,16 @@ func (d *ESDriver) executeSearch(ctx context.Context, index string, bodyJSON []b
 	resultRows := make([]map[string]interface{}, 0, len(esResp.Hits.Hits))
 	columnSet := make(map[string]bool)
 
-	for _, hit := range esResp.Hits.Hits {
+	// The limit is what the platform promised its caller, so it is enforced on
+	// the way out too. Bounding the request is an optimisation; a proxy or an
+	// older cluster answering with more than it was asked for must not slip
+	// past the cap.
+	hits := esResp.Hits.Hits
+	if limit > 0 && len(hits) > limit {
+		hits = hits[:limit]
+	}
+
+	for _, hit := range hits {
 		row := make(map[string]interface{})
 		row["_id"] = hit.ID
 		row["_index"] = hit.Index
