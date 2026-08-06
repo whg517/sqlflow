@@ -45,18 +45,8 @@ type DataSource struct {
 	Sslmode string `json:"sslmode,omitempty"`
 	// SchemaName holds the value of the "schema_name" field.
 	SchemaName string `json:"schema_name,omitempty"`
-	// EsUrls holds the value of the "es_urls" field.
-	EsUrls string `json:"es_urls,omitempty"`
-	// EsVersion holds the value of the "es_version" field.
-	EsVersion string `json:"es_version,omitempty"`
-	// EsAuthType holds the value of the "es_auth_type" field.
-	EsAuthType string `json:"es_auth_type,omitempty"`
 	// EsAPIKey holds the value of the "es_api_key" field.
 	EsAPIKey string `json:"-"`
-	// EsIndexPattern holds the value of the "es_index_pattern" field.
-	EsIndexPattern string `json:"es_index_pattern,omitempty"`
-	// EsVerifyCerts holds the value of the "es_verify_certs" field.
-	EsVerifyCerts bool `json:"es_verify_certs,omitempty"`
 	// ExtraConfig holds the value of the "extra_config" field.
 	ExtraConfig string `json:"extra_config,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -71,11 +61,9 @@ func (*DataSource) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case datasource.FieldEsVerifyCerts:
-			values[i] = new(sql.NullBool)
 		case datasource.FieldID, datasource.FieldPort, datasource.FieldMaxOpen, datasource.FieldMaxIdle, datasource.FieldMaxLifetime, datasource.FieldMaxIdleTime:
 			values[i] = new(sql.NullInt64)
-		case datasource.FieldName, datasource.FieldType, datasource.FieldHost, datasource.FieldUsername, datasource.FieldPasswordEncrypted, datasource.FieldDatabase, datasource.FieldStatus, datasource.FieldSslmode, datasource.FieldSchemaName, datasource.FieldEsUrls, datasource.FieldEsVersion, datasource.FieldEsAuthType, datasource.FieldEsAPIKey, datasource.FieldEsIndexPattern, datasource.FieldExtraConfig:
+		case datasource.FieldName, datasource.FieldType, datasource.FieldHost, datasource.FieldUsername, datasource.FieldPasswordEncrypted, datasource.FieldDatabase, datasource.FieldStatus, datasource.FieldSslmode, datasource.FieldSchemaName, datasource.FieldEsAPIKey, datasource.FieldExtraConfig:
 			values[i] = new(sql.NullString)
 		case datasource.FieldCreatedAt, datasource.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -184,41 +172,11 @@ func (_m *DataSource) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SchemaName = value.String
 			}
-		case datasource.FieldEsUrls:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field es_urls", values[i])
-			} else if value.Valid {
-				_m.EsUrls = value.String
-			}
-		case datasource.FieldEsVersion:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field es_version", values[i])
-			} else if value.Valid {
-				_m.EsVersion = value.String
-			}
-		case datasource.FieldEsAuthType:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field es_auth_type", values[i])
-			} else if value.Valid {
-				_m.EsAuthType = value.String
-			}
 		case datasource.FieldEsAPIKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field es_api_key", values[i])
 			} else if value.Valid {
 				_m.EsAPIKey = value.String
-			}
-		case datasource.FieldEsIndexPattern:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field es_index_pattern", values[i])
-			} else if value.Valid {
-				_m.EsIndexPattern = value.String
-			}
-		case datasource.FieldEsVerifyCerts:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field es_verify_certs", values[i])
-			} else if value.Valid {
-				_m.EsVerifyCerts = value.Bool
 			}
 		case datasource.FieldExtraConfig:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -316,23 +274,8 @@ func (_m *DataSource) String() string {
 	builder.WriteString("schema_name=")
 	builder.WriteString(_m.SchemaName)
 	builder.WriteString(", ")
-	builder.WriteString("es_urls=")
-	builder.WriteString(_m.EsUrls)
-	builder.WriteString(", ")
-	builder.WriteString("es_version=")
-	builder.WriteString(_m.EsVersion)
-	builder.WriteString(", ")
-	builder.WriteString("es_auth_type=")
-	builder.WriteString(_m.EsAuthType)
-	builder.WriteString(", ")
 	builder.WriteString("es_api_key=")
 	builder.WriteString(_m.EsAPIKey)
-	builder.WriteString(", ")
-	builder.WriteString("es_index_pattern=")
-	builder.WriteString(_m.EsIndexPattern)
-	builder.WriteString(", ")
-	builder.WriteString("es_verify_certs=")
-	builder.WriteString(fmt.Sprintf("%v", _m.EsVerifyCerts))
 	builder.WriteString(", ")
 	builder.WriteString("extra_config=")
 	builder.WriteString(_m.ExtraConfig)

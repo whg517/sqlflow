@@ -305,40 +305,20 @@ func init() {
 	datasourceDescSchemaName := datasourceFields[13].Descriptor()
 	// datasource.DefaultSchemaName holds the default value on creation for the schema_name field.
 	datasource.DefaultSchemaName = datasourceDescSchemaName.Default.(string)
-	// datasourceDescEsUrls is the schema descriptor for es_urls field.
-	datasourceDescEsUrls := datasourceFields[14].Descriptor()
-	// datasource.DefaultEsUrls holds the default value on creation for the es_urls field.
-	datasource.DefaultEsUrls = datasourceDescEsUrls.Default.(string)
-	// datasourceDescEsVersion is the schema descriptor for es_version field.
-	datasourceDescEsVersion := datasourceFields[15].Descriptor()
-	// datasource.DefaultEsVersion holds the default value on creation for the es_version field.
-	datasource.DefaultEsVersion = datasourceDescEsVersion.Default.(string)
-	// datasourceDescEsAuthType is the schema descriptor for es_auth_type field.
-	datasourceDescEsAuthType := datasourceFields[16].Descriptor()
-	// datasource.DefaultEsAuthType holds the default value on creation for the es_auth_type field.
-	datasource.DefaultEsAuthType = datasourceDescEsAuthType.Default.(string)
 	// datasourceDescEsAPIKey is the schema descriptor for es_api_key field.
-	datasourceDescEsAPIKey := datasourceFields[17].Descriptor()
+	datasourceDescEsAPIKey := datasourceFields[14].Descriptor()
 	// datasource.DefaultEsAPIKey holds the default value on creation for the es_api_key field.
 	datasource.DefaultEsAPIKey = datasourceDescEsAPIKey.Default.(string)
-	// datasourceDescEsIndexPattern is the schema descriptor for es_index_pattern field.
-	datasourceDescEsIndexPattern := datasourceFields[18].Descriptor()
-	// datasource.DefaultEsIndexPattern holds the default value on creation for the es_index_pattern field.
-	datasource.DefaultEsIndexPattern = datasourceDescEsIndexPattern.Default.(string)
-	// datasourceDescEsVerifyCerts is the schema descriptor for es_verify_certs field.
-	datasourceDescEsVerifyCerts := datasourceFields[19].Descriptor()
-	// datasource.DefaultEsVerifyCerts holds the default value on creation for the es_verify_certs field.
-	datasource.DefaultEsVerifyCerts = datasourceDescEsVerifyCerts.Default.(bool)
 	// datasourceDescExtraConfig is the schema descriptor for extra_config field.
-	datasourceDescExtraConfig := datasourceFields[20].Descriptor()
+	datasourceDescExtraConfig := datasourceFields[15].Descriptor()
 	// datasource.DefaultExtraConfig holds the default value on creation for the extra_config field.
 	datasource.DefaultExtraConfig = datasourceDescExtraConfig.Default.(string)
 	// datasourceDescCreatedAt is the schema descriptor for created_at field.
-	datasourceDescCreatedAt := datasourceFields[21].Descriptor()
+	datasourceDescCreatedAt := datasourceFields[16].Descriptor()
 	// datasource.DefaultCreatedAt holds the default value on creation for the created_at field.
 	datasource.DefaultCreatedAt = datasourceDescCreatedAt.Default.(func() time.Time)
 	// datasourceDescUpdatedAt is the schema descriptor for updated_at field.
-	datasourceDescUpdatedAt := datasourceFields[22].Descriptor()
+	datasourceDescUpdatedAt := datasourceFields[17].Descriptor()
 	// datasource.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	datasource.DefaultUpdatedAt = datasourceDescUpdatedAt.Default.(func() time.Time)
 	// datasource.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

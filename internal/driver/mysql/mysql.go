@@ -32,6 +32,7 @@ type MySQLDriver struct {
 // silently reports false. These assertions turn that into a build failure.
 var (
 	_ driver.Driver                     = (*MySQLDriver)(nil)
+	_ driver.ConfigValidator            = (*MySQLDriver)(nil)
 	_ driver.MetadataBrowser            = (*MySQLDriver)(nil)
 	_ driver.StatementExecutor          = (*MySQLDriver)(nil)
 	_ driver.ParameterizedQueryExecutor = (*MySQLDriver)(nil)
@@ -41,6 +42,23 @@ var (
 
 // Type returns "mysql".
 func (d *MySQLDriver) Type() string { return "mysql" }
+
+// ValidateConfig checks the shape of a saved configuration.
+//
+// It never connects: a datasource can be saved before the target is reachable,
+// so this covers only what is decidable from the form. It deliberately says
+// nothing about credentials — a password is either accepted or not, and only
+// the target knows which, so demanding one here would reject the setups that
+// legitimately have none.
+func (d *MySQLDriver) ValidateConfig(cfg *driver.Config) error {
+	if cfg.Host == "" {
+		return fmt.Errorf("mysql: 主机地址不能为空")
+	}
+	if cfg.Port == 0 {
+		return fmt.Errorf("mysql: 端口不能为空")
+	}
+	return nil
+}
 
 // QueryForm declares how read queries are composed for this data source.
 func (d *MySQLDriver) QueryForm() driver.QueryForm { return driver.QueryFormSQL }

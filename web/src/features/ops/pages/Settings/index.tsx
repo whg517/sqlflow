@@ -75,10 +75,24 @@ interface DataSourceItem {
   status: string;
   system?: boolean;
   created_at: string;
-  es_urls?: string;
-  es_auth_type?: string;
-  es_index_pattern?: string;
-  es_verify_certs?: boolean;
+  // Driver-specific settings arrive as one object. They used to be named
+  // fields — es_urls, es_auth_type, es_index_pattern, es_verify_certs — which
+  // meant this type, the request structs, the model and five database columns
+  // all had to learn a setting before any driver could use it.
+  extra_config?: Record<string, unknown>;
+}
+
+// esConfig reads Elasticsearch's keys out of the generic object.
+function esConfig(ds: DataSourceItem) {
+  const extra = ds.extra_config ?? {};
+  const urls = extra.urls;
+  return {
+    urls: Array.isArray(urls) ? urls.join(", ") : typeof urls === "string" ? urls : "",
+    authType: typeof extra.auth_type === "string" ? extra.auth_type : "basic",
+    indexPattern:
+      typeof extra.index_pattern === "string" ? extra.index_pattern : "",
+    verifyCerts: extra.verify_certs !== false,
+  };
 }
 
 interface DataSourceListResponse {
@@ -156,7 +170,7 @@ function validatePort(v: string): string | null {
 
 function datasourceAddress(ds: DataSourceItem): string {
   if (ds.type === "sqlite") return ds.database || "—";
-  if (ds.type === "elasticsearch") return ds.es_urls || "—";
+  if (ds.type === "elasticsearch") return esConfig(ds).urls || "—";
   return `${ds.host}:${ds.port}`;
 }
 
@@ -166,7 +180,7 @@ function datasourceDatabase(ds: DataSourceItem): string {
     return parts.at(-1) || ds.database || "—";
   }
   if (ds.type === "elasticsearch") {
-    return ds.es_index_pattern || "全部索引";
+    return esConfig(ds).indexPattern || "全部索引";
   }
   return ds.database || "—";
 }
@@ -312,11 +326,11 @@ function DataSourceTab() {
       sslmode: ds.sslmode || "prefer",
       schema_name: ds.schema_name || "public",
       max_open: String(ds.max_open || 10),
-      es_urls: ds.es_urls || "",
-      es_auth_type: ds.es_auth_type || "basic",
+      es_urls: esConfig(ds).urls,
+      es_auth_type: esConfig(ds).authType,
       es_api_key: "",
-      es_index_pattern: ds.es_index_pattern || "",
-      es_verify_certs: ds.es_verify_certs ?? true,
+      es_index_pattern: esConfig(ds).indexPattern,
+      es_verify_certs: esConfig(ds).verifyCerts,
     });
     setErrors({});
     setConnectionTest({ status: "idle", message: "", fingerprint: "" });
@@ -412,8 +426,20 @@ function DataSourceTab() {
       body.database = form.database.trim();
       body.max_open = 1;
     } else if (form.type === "elasticsearch") {
-      body.es_urls = form.es_urls.trim();
-      body.es_auth_type = form.es_auth_type;
+      // Settings go into extra_config; the API key does not. It is a credential,
+      // stored encrypted, and extra_config holds what was written verbatim.
+      const extra: Record<string, unknown> = {
+        urls: form.es_urls
+          .split(",")
+          .map((u) => u.trim())
+          .filter(Boolean),
+        auth_type: form.es_auth_type,
+        verify_certs: form.es_verify_certs,
+      };
+      if (form.es_index_pattern) {
+        extra.index_pattern = form.es_index_pattern.trim();
+      }
+      body.extra_config = extra;
       body.username =
         form.es_auth_type === "basic" ? form.username.trim() : "";
       if (form.es_auth_type === "basic" && form.password) {
@@ -422,10 +448,6 @@ function DataSourceTab() {
       if (form.es_auth_type === "api_key" && form.es_api_key) {
         body.es_api_key = form.es_api_key;
       }
-      if (form.es_index_pattern) {
-        body.es_index_pattern = form.es_index_pattern.trim();
-      }
-      body.es_verify_certs = form.es_verify_certs;
     } else {
       body.host = form.host.trim();
       body.port = Number(form.port);

@@ -186,48 +186,6 @@ func (_c *DataSourceCreate) SetNillableSchemaName(v *string) *DataSourceCreate {
 	return _c
 }
 
-// SetEsUrls sets the "es_urls" field.
-func (_c *DataSourceCreate) SetEsUrls(v string) *DataSourceCreate {
-	_c.mutation.SetEsUrls(v)
-	return _c
-}
-
-// SetNillableEsUrls sets the "es_urls" field if the given value is not nil.
-func (_c *DataSourceCreate) SetNillableEsUrls(v *string) *DataSourceCreate {
-	if v != nil {
-		_c.SetEsUrls(*v)
-	}
-	return _c
-}
-
-// SetEsVersion sets the "es_version" field.
-func (_c *DataSourceCreate) SetEsVersion(v string) *DataSourceCreate {
-	_c.mutation.SetEsVersion(v)
-	return _c
-}
-
-// SetNillableEsVersion sets the "es_version" field if the given value is not nil.
-func (_c *DataSourceCreate) SetNillableEsVersion(v *string) *DataSourceCreate {
-	if v != nil {
-		_c.SetEsVersion(*v)
-	}
-	return _c
-}
-
-// SetEsAuthType sets the "es_auth_type" field.
-func (_c *DataSourceCreate) SetEsAuthType(v string) *DataSourceCreate {
-	_c.mutation.SetEsAuthType(v)
-	return _c
-}
-
-// SetNillableEsAuthType sets the "es_auth_type" field if the given value is not nil.
-func (_c *DataSourceCreate) SetNillableEsAuthType(v *string) *DataSourceCreate {
-	if v != nil {
-		_c.SetEsAuthType(*v)
-	}
-	return _c
-}
-
 // SetEsAPIKey sets the "es_api_key" field.
 func (_c *DataSourceCreate) SetEsAPIKey(v string) *DataSourceCreate {
 	_c.mutation.SetEsAPIKey(v)
@@ -238,34 +196,6 @@ func (_c *DataSourceCreate) SetEsAPIKey(v string) *DataSourceCreate {
 func (_c *DataSourceCreate) SetNillableEsAPIKey(v *string) *DataSourceCreate {
 	if v != nil {
 		_c.SetEsAPIKey(*v)
-	}
-	return _c
-}
-
-// SetEsIndexPattern sets the "es_index_pattern" field.
-func (_c *DataSourceCreate) SetEsIndexPattern(v string) *DataSourceCreate {
-	_c.mutation.SetEsIndexPattern(v)
-	return _c
-}
-
-// SetNillableEsIndexPattern sets the "es_index_pattern" field if the given value is not nil.
-func (_c *DataSourceCreate) SetNillableEsIndexPattern(v *string) *DataSourceCreate {
-	if v != nil {
-		_c.SetEsIndexPattern(*v)
-	}
-	return _c
-}
-
-// SetEsVerifyCerts sets the "es_verify_certs" field.
-func (_c *DataSourceCreate) SetEsVerifyCerts(v bool) *DataSourceCreate {
-	_c.mutation.SetEsVerifyCerts(v)
-	return _c
-}
-
-// SetNillableEsVerifyCerts sets the "es_verify_certs" field if the given value is not nil.
-func (_c *DataSourceCreate) SetNillableEsVerifyCerts(v *bool) *DataSourceCreate {
-	if v != nil {
-		_c.SetEsVerifyCerts(*v)
 	}
 	return _c
 }
@@ -387,29 +317,9 @@ func (_c *DataSourceCreate) defaults() {
 		v := datasource.DefaultSchemaName
 		_c.mutation.SetSchemaName(v)
 	}
-	if _, ok := _c.mutation.EsUrls(); !ok {
-		v := datasource.DefaultEsUrls
-		_c.mutation.SetEsUrls(v)
-	}
-	if _, ok := _c.mutation.EsVersion(); !ok {
-		v := datasource.DefaultEsVersion
-		_c.mutation.SetEsVersion(v)
-	}
-	if _, ok := _c.mutation.EsAuthType(); !ok {
-		v := datasource.DefaultEsAuthType
-		_c.mutation.SetEsAuthType(v)
-	}
 	if _, ok := _c.mutation.EsAPIKey(); !ok {
 		v := datasource.DefaultEsAPIKey
 		_c.mutation.SetEsAPIKey(v)
-	}
-	if _, ok := _c.mutation.EsIndexPattern(); !ok {
-		v := datasource.DefaultEsIndexPattern
-		_c.mutation.SetEsIndexPattern(v)
-	}
-	if _, ok := _c.mutation.EsVerifyCerts(); !ok {
-		v := datasource.DefaultEsVerifyCerts
-		_c.mutation.SetEsVerifyCerts(v)
 	}
 	if _, ok := _c.mutation.ExtraConfig(); !ok {
 		v := datasource.DefaultExtraConfig
@@ -484,23 +394,8 @@ func (_c *DataSourceCreate) check() error {
 	if _, ok := _c.mutation.SchemaName(); !ok {
 		return &ValidationError{Name: "schema_name", err: errors.New(`ent: missing required field "DataSource.schema_name"`)}
 	}
-	if _, ok := _c.mutation.EsUrls(); !ok {
-		return &ValidationError{Name: "es_urls", err: errors.New(`ent: missing required field "DataSource.es_urls"`)}
-	}
-	if _, ok := _c.mutation.EsVersion(); !ok {
-		return &ValidationError{Name: "es_version", err: errors.New(`ent: missing required field "DataSource.es_version"`)}
-	}
-	if _, ok := _c.mutation.EsAuthType(); !ok {
-		return &ValidationError{Name: "es_auth_type", err: errors.New(`ent: missing required field "DataSource.es_auth_type"`)}
-	}
 	if _, ok := _c.mutation.EsAPIKey(); !ok {
 		return &ValidationError{Name: "es_api_key", err: errors.New(`ent: missing required field "DataSource.es_api_key"`)}
-	}
-	if _, ok := _c.mutation.EsIndexPattern(); !ok {
-		return &ValidationError{Name: "es_index_pattern", err: errors.New(`ent: missing required field "DataSource.es_index_pattern"`)}
-	}
-	if _, ok := _c.mutation.EsVerifyCerts(); !ok {
-		return &ValidationError{Name: "es_verify_certs", err: errors.New(`ent: missing required field "DataSource.es_verify_certs"`)}
 	}
 	return nil
 }
@@ -585,29 +480,9 @@ func (_c *DataSourceCreate) createSpec() (*DataSource, *sqlgraph.CreateSpec) {
 		_spec.SetField(datasource.FieldSchemaName, field.TypeString, value)
 		_node.SchemaName = value
 	}
-	if value, ok := _c.mutation.EsUrls(); ok {
-		_spec.SetField(datasource.FieldEsUrls, field.TypeString, value)
-		_node.EsUrls = value
-	}
-	if value, ok := _c.mutation.EsVersion(); ok {
-		_spec.SetField(datasource.FieldEsVersion, field.TypeString, value)
-		_node.EsVersion = value
-	}
-	if value, ok := _c.mutation.EsAuthType(); ok {
-		_spec.SetField(datasource.FieldEsAuthType, field.TypeString, value)
-		_node.EsAuthType = value
-	}
 	if value, ok := _c.mutation.EsAPIKey(); ok {
 		_spec.SetField(datasource.FieldEsAPIKey, field.TypeString, value)
 		_node.EsAPIKey = value
-	}
-	if value, ok := _c.mutation.EsIndexPattern(); ok {
-		_spec.SetField(datasource.FieldEsIndexPattern, field.TypeString, value)
-		_node.EsIndexPattern = value
-	}
-	if value, ok := _c.mutation.EsVerifyCerts(); ok {
-		_spec.SetField(datasource.FieldEsVerifyCerts, field.TypeBool, value)
-		_node.EsVerifyCerts = value
 	}
 	if value, ok := _c.mutation.ExtraConfig(); ok {
 		_spec.SetField(datasource.FieldExtraConfig, field.TypeString, value)
@@ -871,42 +746,6 @@ func (u *DataSourceUpsert) UpdateSchemaName() *DataSourceUpsert {
 	return u
 }
 
-// SetEsUrls sets the "es_urls" field.
-func (u *DataSourceUpsert) SetEsUrls(v string) *DataSourceUpsert {
-	u.Set(datasource.FieldEsUrls, v)
-	return u
-}
-
-// UpdateEsUrls sets the "es_urls" field to the value that was provided on create.
-func (u *DataSourceUpsert) UpdateEsUrls() *DataSourceUpsert {
-	u.SetExcluded(datasource.FieldEsUrls)
-	return u
-}
-
-// SetEsVersion sets the "es_version" field.
-func (u *DataSourceUpsert) SetEsVersion(v string) *DataSourceUpsert {
-	u.Set(datasource.FieldEsVersion, v)
-	return u
-}
-
-// UpdateEsVersion sets the "es_version" field to the value that was provided on create.
-func (u *DataSourceUpsert) UpdateEsVersion() *DataSourceUpsert {
-	u.SetExcluded(datasource.FieldEsVersion)
-	return u
-}
-
-// SetEsAuthType sets the "es_auth_type" field.
-func (u *DataSourceUpsert) SetEsAuthType(v string) *DataSourceUpsert {
-	u.Set(datasource.FieldEsAuthType, v)
-	return u
-}
-
-// UpdateEsAuthType sets the "es_auth_type" field to the value that was provided on create.
-func (u *DataSourceUpsert) UpdateEsAuthType() *DataSourceUpsert {
-	u.SetExcluded(datasource.FieldEsAuthType)
-	return u
-}
-
 // SetEsAPIKey sets the "es_api_key" field.
 func (u *DataSourceUpsert) SetEsAPIKey(v string) *DataSourceUpsert {
 	u.Set(datasource.FieldEsAPIKey, v)
@@ -916,30 +755,6 @@ func (u *DataSourceUpsert) SetEsAPIKey(v string) *DataSourceUpsert {
 // UpdateEsAPIKey sets the "es_api_key" field to the value that was provided on create.
 func (u *DataSourceUpsert) UpdateEsAPIKey() *DataSourceUpsert {
 	u.SetExcluded(datasource.FieldEsAPIKey)
-	return u
-}
-
-// SetEsIndexPattern sets the "es_index_pattern" field.
-func (u *DataSourceUpsert) SetEsIndexPattern(v string) *DataSourceUpsert {
-	u.Set(datasource.FieldEsIndexPattern, v)
-	return u
-}
-
-// UpdateEsIndexPattern sets the "es_index_pattern" field to the value that was provided on create.
-func (u *DataSourceUpsert) UpdateEsIndexPattern() *DataSourceUpsert {
-	u.SetExcluded(datasource.FieldEsIndexPattern)
-	return u
-}
-
-// SetEsVerifyCerts sets the "es_verify_certs" field.
-func (u *DataSourceUpsert) SetEsVerifyCerts(v bool) *DataSourceUpsert {
-	u.Set(datasource.FieldEsVerifyCerts, v)
-	return u
-}
-
-// UpdateEsVerifyCerts sets the "es_verify_certs" field to the value that was provided on create.
-func (u *DataSourceUpsert) UpdateEsVerifyCerts() *DataSourceUpsert {
-	u.SetExcluded(datasource.FieldEsVerifyCerts)
 	return u
 }
 
@@ -1256,48 +1071,6 @@ func (u *DataSourceUpsertOne) UpdateSchemaName() *DataSourceUpsertOne {
 	})
 }
 
-// SetEsUrls sets the "es_urls" field.
-func (u *DataSourceUpsertOne) SetEsUrls(v string) *DataSourceUpsertOne {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.SetEsUrls(v)
-	})
-}
-
-// UpdateEsUrls sets the "es_urls" field to the value that was provided on create.
-func (u *DataSourceUpsertOne) UpdateEsUrls() *DataSourceUpsertOne {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.UpdateEsUrls()
-	})
-}
-
-// SetEsVersion sets the "es_version" field.
-func (u *DataSourceUpsertOne) SetEsVersion(v string) *DataSourceUpsertOne {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.SetEsVersion(v)
-	})
-}
-
-// UpdateEsVersion sets the "es_version" field to the value that was provided on create.
-func (u *DataSourceUpsertOne) UpdateEsVersion() *DataSourceUpsertOne {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.UpdateEsVersion()
-	})
-}
-
-// SetEsAuthType sets the "es_auth_type" field.
-func (u *DataSourceUpsertOne) SetEsAuthType(v string) *DataSourceUpsertOne {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.SetEsAuthType(v)
-	})
-}
-
-// UpdateEsAuthType sets the "es_auth_type" field to the value that was provided on create.
-func (u *DataSourceUpsertOne) UpdateEsAuthType() *DataSourceUpsertOne {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.UpdateEsAuthType()
-	})
-}
-
 // SetEsAPIKey sets the "es_api_key" field.
 func (u *DataSourceUpsertOne) SetEsAPIKey(v string) *DataSourceUpsertOne {
 	return u.Update(func(s *DataSourceUpsert) {
@@ -1309,34 +1082,6 @@ func (u *DataSourceUpsertOne) SetEsAPIKey(v string) *DataSourceUpsertOne {
 func (u *DataSourceUpsertOne) UpdateEsAPIKey() *DataSourceUpsertOne {
 	return u.Update(func(s *DataSourceUpsert) {
 		s.UpdateEsAPIKey()
-	})
-}
-
-// SetEsIndexPattern sets the "es_index_pattern" field.
-func (u *DataSourceUpsertOne) SetEsIndexPattern(v string) *DataSourceUpsertOne {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.SetEsIndexPattern(v)
-	})
-}
-
-// UpdateEsIndexPattern sets the "es_index_pattern" field to the value that was provided on create.
-func (u *DataSourceUpsertOne) UpdateEsIndexPattern() *DataSourceUpsertOne {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.UpdateEsIndexPattern()
-	})
-}
-
-// SetEsVerifyCerts sets the "es_verify_certs" field.
-func (u *DataSourceUpsertOne) SetEsVerifyCerts(v bool) *DataSourceUpsertOne {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.SetEsVerifyCerts(v)
-	})
-}
-
-// UpdateEsVerifyCerts sets the "es_verify_certs" field to the value that was provided on create.
-func (u *DataSourceUpsertOne) UpdateEsVerifyCerts() *DataSourceUpsertOne {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.UpdateEsVerifyCerts()
 	})
 }
 
@@ -1824,48 +1569,6 @@ func (u *DataSourceUpsertBulk) UpdateSchemaName() *DataSourceUpsertBulk {
 	})
 }
 
-// SetEsUrls sets the "es_urls" field.
-func (u *DataSourceUpsertBulk) SetEsUrls(v string) *DataSourceUpsertBulk {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.SetEsUrls(v)
-	})
-}
-
-// UpdateEsUrls sets the "es_urls" field to the value that was provided on create.
-func (u *DataSourceUpsertBulk) UpdateEsUrls() *DataSourceUpsertBulk {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.UpdateEsUrls()
-	})
-}
-
-// SetEsVersion sets the "es_version" field.
-func (u *DataSourceUpsertBulk) SetEsVersion(v string) *DataSourceUpsertBulk {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.SetEsVersion(v)
-	})
-}
-
-// UpdateEsVersion sets the "es_version" field to the value that was provided on create.
-func (u *DataSourceUpsertBulk) UpdateEsVersion() *DataSourceUpsertBulk {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.UpdateEsVersion()
-	})
-}
-
-// SetEsAuthType sets the "es_auth_type" field.
-func (u *DataSourceUpsertBulk) SetEsAuthType(v string) *DataSourceUpsertBulk {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.SetEsAuthType(v)
-	})
-}
-
-// UpdateEsAuthType sets the "es_auth_type" field to the value that was provided on create.
-func (u *DataSourceUpsertBulk) UpdateEsAuthType() *DataSourceUpsertBulk {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.UpdateEsAuthType()
-	})
-}
-
 // SetEsAPIKey sets the "es_api_key" field.
 func (u *DataSourceUpsertBulk) SetEsAPIKey(v string) *DataSourceUpsertBulk {
 	return u.Update(func(s *DataSourceUpsert) {
@@ -1877,34 +1580,6 @@ func (u *DataSourceUpsertBulk) SetEsAPIKey(v string) *DataSourceUpsertBulk {
 func (u *DataSourceUpsertBulk) UpdateEsAPIKey() *DataSourceUpsertBulk {
 	return u.Update(func(s *DataSourceUpsert) {
 		s.UpdateEsAPIKey()
-	})
-}
-
-// SetEsIndexPattern sets the "es_index_pattern" field.
-func (u *DataSourceUpsertBulk) SetEsIndexPattern(v string) *DataSourceUpsertBulk {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.SetEsIndexPattern(v)
-	})
-}
-
-// UpdateEsIndexPattern sets the "es_index_pattern" field to the value that was provided on create.
-func (u *DataSourceUpsertBulk) UpdateEsIndexPattern() *DataSourceUpsertBulk {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.UpdateEsIndexPattern()
-	})
-}
-
-// SetEsVerifyCerts sets the "es_verify_certs" field.
-func (u *DataSourceUpsertBulk) SetEsVerifyCerts(v bool) *DataSourceUpsertBulk {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.SetEsVerifyCerts(v)
-	})
-}
-
-// UpdateEsVerifyCerts sets the "es_verify_certs" field to the value that was provided on create.
-func (u *DataSourceUpsertBulk) UpdateEsVerifyCerts() *DataSourceUpsertBulk {
-	return u.Update(func(s *DataSourceUpsert) {
-		s.UpdateEsVerifyCerts()
 	})
 }
 

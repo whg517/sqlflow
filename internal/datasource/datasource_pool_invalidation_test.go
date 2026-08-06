@@ -39,9 +39,8 @@ func seedInvalidationESDatasource(t *testing.T, svc *Service, connMgr *connpool.
 	ds := &model.DataSource{
 		Name: "logs-es", Type: "elasticsearch",
 		Host: "elasticsearch", Port: 9200,
-		ESUrls: "https://es.example.com:9200", ESAuthType: "basic",
-		Username: "elastic", PasswordEncrypted: "old-password",
-		ESVerifyCerts: true,
+		ExtraConfig: `{"urls":["https://es.example.com:9200"],"auth_type":"basic","verify_certs":true}`,
+		Username:    "elastic", PasswordEncrypted: "old-password",
 	}
 	if err := svc.CreateDataSource(t.Context(), ds); err != nil {
 		t.Fatalf("create datasource: %v", err)

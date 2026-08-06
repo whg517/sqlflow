@@ -41,18 +41,8 @@ const (
 	FieldSslmode = "sslmode"
 	// FieldSchemaName holds the string denoting the schema_name field in the database.
 	FieldSchemaName = "schema_name"
-	// FieldEsUrls holds the string denoting the es_urls field in the database.
-	FieldEsUrls = "es_urls"
-	// FieldEsVersion holds the string denoting the es_version field in the database.
-	FieldEsVersion = "es_version"
-	// FieldEsAuthType holds the string denoting the es_auth_type field in the database.
-	FieldEsAuthType = "es_auth_type"
 	// FieldEsAPIKey holds the string denoting the es_api_key field in the database.
 	FieldEsAPIKey = "es_api_key"
-	// FieldEsIndexPattern holds the string denoting the es_index_pattern field in the database.
-	FieldEsIndexPattern = "es_index_pattern"
-	// FieldEsVerifyCerts holds the string denoting the es_verify_certs field in the database.
-	FieldEsVerifyCerts = "es_verify_certs"
 	// FieldExtraConfig holds the string denoting the extra_config field in the database.
 	FieldExtraConfig = "extra_config"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -80,12 +70,7 @@ var Columns = []string{
 	FieldStatus,
 	FieldSslmode,
 	FieldSchemaName,
-	FieldEsUrls,
-	FieldEsVersion,
-	FieldEsAuthType,
 	FieldEsAPIKey,
-	FieldEsIndexPattern,
-	FieldEsVerifyCerts,
 	FieldExtraConfig,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -128,18 +113,8 @@ var (
 	DefaultSslmode string
 	// DefaultSchemaName holds the default value on creation for the "schema_name" field.
 	DefaultSchemaName string
-	// DefaultEsUrls holds the default value on creation for the "es_urls" field.
-	DefaultEsUrls string
-	// DefaultEsVersion holds the default value on creation for the "es_version" field.
-	DefaultEsVersion string
-	// DefaultEsAuthType holds the default value on creation for the "es_auth_type" field.
-	DefaultEsAuthType string
 	// DefaultEsAPIKey holds the default value on creation for the "es_api_key" field.
 	DefaultEsAPIKey string
-	// DefaultEsIndexPattern holds the default value on creation for the "es_index_pattern" field.
-	DefaultEsIndexPattern string
-	// DefaultEsVerifyCerts holds the default value on creation for the "es_verify_certs" field.
-	DefaultEsVerifyCerts bool
 	// DefaultExtraConfig holds the default value on creation for the "extra_config" field.
 	DefaultExtraConfig string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -228,34 +203,9 @@ func BySchemaName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSchemaName, opts...).ToFunc()
 }
 
-// ByEsUrls orders the results by the es_urls field.
-func ByEsUrls(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEsUrls, opts...).ToFunc()
-}
-
-// ByEsVersion orders the results by the es_version field.
-func ByEsVersion(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEsVersion, opts...).ToFunc()
-}
-
-// ByEsAuthType orders the results by the es_auth_type field.
-func ByEsAuthType(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEsAuthType, opts...).ToFunc()
-}
-
 // ByEsAPIKey orders the results by the es_api_key field.
 func ByEsAPIKey(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEsAPIKey, opts...).ToFunc()
-}
-
-// ByEsIndexPattern orders the results by the es_index_pattern field.
-func ByEsIndexPattern(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEsIndexPattern, opts...).ToFunc()
-}
-
-// ByEsVerifyCerts orders the results by the es_verify_certs field.
-func ByEsVerifyCerts(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEsVerifyCerts, opts...).ToFunc()
 }
 
 // ByExtraConfig orders the results by the extra_config field.

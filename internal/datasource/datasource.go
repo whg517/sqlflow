@@ -210,12 +210,7 @@ func (s *Service) CreateDataSource(ctx context.Context, ds *model.DataSource) er
 		SetMaxLifetime(ds.MaxLifetime).
 		SetMaxIdleTime(ds.MaxIdleTime).
 		SetStatus(ds.Status).
-		SetEsUrls(ds.ESUrls).
-		SetEsVersion(ds.ESVersion).
-		SetEsAuthType(ds.ESAuthType).
 		SetEsAPIKey(encryptedESApiKey).
-		SetEsIndexPattern(ds.ESIndexPattern).
-		SetEsVerifyCerts(ds.ESVerifyCerts).
 		SetExtraConfig(ds.ExtraConfig).
 		Save(ctx)
 	if err != nil {
@@ -461,12 +456,7 @@ func (s *Service) UpdateDataSource(ctx context.Context, id int64, ds *model.Data
 		SetMaxIdle(ds.MaxIdle).
 		SetMaxLifetime(ds.MaxLifetime).
 		SetMaxIdleTime(ds.MaxIdleTime).
-		SetEsUrls(ds.ESUrls).
-		SetEsVersion(ds.ESVersion).
-		SetEsAuthType(ds.ESAuthType).
 		SetEsAPIKey(encryptedESApiKey).
-		SetEsIndexPattern(ds.ESIndexPattern).
-		SetEsVerifyCerts(ds.ESVerifyCerts).
 		SetExtraConfig(ds.ExtraConfig).
 		Save(ctx)
 	if err != nil {
@@ -679,8 +669,11 @@ func (s *Service) testConnection(ctx context.Context, ds *model.DataSource) erro
 			}
 			password = decrypted
 		}
-		if ds.Type == "elasticsearch" && ds.ESAuthType == "api_key" &&
-			(esAPIKey == "" || esAPIKey == stored.ESApiKey) {
+		// Reuse the stored key whenever the caller supplied none. This used to
+		// additionally require Type == "elasticsearch" and auth_type ==
+		// "api_key"; auth_type is the driver's business now, and "no key was
+		// sent" is the only condition that matters here.
+		if stored.ESApiKey != "" && (esAPIKey == "" || esAPIKey == stored.ESApiKey) {
 			decrypted, err := crypto.Decrypt(stored.ESApiKey, s.encryptionKey)
 			if err != nil {
 				return fmt.Errorf("decrypt es_api_key: %w", err)
@@ -842,22 +835,6 @@ func (s *Service) GetDataSourceSafe(ctx context.Context, id int64) (*model.DataS
 	return ds, nil
 }
 
-// parseESUrls 将逗号分隔的 ES URL 字符串解析为 []string。
-func parseESUrls(raw string) []string {
-	if raw == "" {
-		return nil
-	}
-	parts := strings.Split(raw, ",")
-	urls := make([]string, 0, len(parts))
-	for _, p := range parts {
-		trimmed := strings.TrimSpace(p)
-		if trimmed != "" {
-			urls = append(urls, trimmed)
-		}
-	}
-	return urls
-}
-
 // mapArrayElementType converts PostgreSQL udt_name for arrays to a readable type.
 // PostgreSQL stores array types with a leading underscore (e.g. _int4, _text, _float8).
 // ESIndexInfo represents metadata for a single Elasticsearch index.
@@ -900,26 +877,31 @@ func (s *Service) getESClient(ctx context.Context, id int64) (*model.DataSource,
 		return nil, "", nil, fmt.Errorf("decrypt password: %w", err)
 	}
 
-	urls := parseESUrls(ds.ESUrls)
+	secrets, err := DecryptSecrets(ds, s.encryptionKey)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	// Settings come from the driver's own decoder rather than from columns this
+	// package would otherwise have to know the meaning of. parseESUrls used to
+	// live here and was the third implementation of the same split.
+	cfg, err := driver.BuildConfigFromDataSource(NewAdapter(ds), secrets)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	urls, _ := cfg.Extra["urls"].([]string)
 	if len(urls) == 0 {
 		return nil, "", nil, fmt.Errorf("Elasticsearch 数据源未配置连接地址")
 	}
-
-	esAPIKey := ""
-	if ds.ESApiKey != "" {
-		dec, err := crypto.Decrypt(ds.ESApiKey, s.encryptionKey)
-		if err != nil {
-			return nil, "", nil, fmt.Errorf("解密 ES API Key 失败: %w", err)
-		}
-		esAPIKey = dec
-	}
+	authType, _ := cfg.Extra["auth_type"].(string)
+	verifyCerts, _ := cfg.Extra["verify_certs"].(bool)
 
 	// The only remaining connpool user. Index and field browsing need the raw
 	// Elasticsearch client for paginated _cat/indices and mapping calls, which
 	// the Driver interface does not model — ListTables reports index names but
 	// not doc counts, sizes or pagination. Extending the driver contract is the
 	// prerequisite for removing connpool entirely.
-	client, err := s.connMgr.GetElasticsearch(ctx, id, urls, ds.ESAuthType, ds.Username, password, esAPIKey, ds.ESVerifyCerts)
+	client, err := s.connMgr.GetElasticsearch(ctx, id, urls, authType, ds.Username, secrets.Password, secrets.APIKey, verifyCerts)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("连接 Elasticsearch 失败: %w", err)
 	}
@@ -1148,27 +1130,22 @@ func getStrVal(m map[string]interface{}, key string) string {
 // Does NOT include sensitive fields (PasswordEncrypted, ESApiKey).
 func entDatasourceToModel(d *ent.DataSource) model.DataSource {
 	return model.DataSource{
-		ID:             int64(d.ID),
-		Name:           d.Name,
-		Type:           d.Type,
-		Host:           d.Host,
-		Port:           d.Port,
-		Username:       d.Username,
-		Database:       d.Database,
-		SSLMode:        d.Sslmode,
-		SchemaName:     d.SchemaName,
-		MaxOpen:        d.MaxOpen,
-		MaxIdle:        d.MaxIdle,
-		MaxLifetime:    d.MaxLifetime,
-		MaxIdleTime:    d.MaxIdleTime,
-		Status:         d.Status,
-		ESUrls:         d.EsUrls,
-		ESVersion:      d.EsVersion,
-		ESAuthType:     d.EsAuthType,
-		ESIndexPattern: d.EsIndexPattern,
-		ESVerifyCerts:  d.EsVerifyCerts,
-		ExtraConfig:    d.ExtraConfig,
-		CreatedAt:      d.CreatedAt,
-		UpdatedAt:      d.UpdatedAt,
+		ID:          int64(d.ID),
+		Name:        d.Name,
+		Type:        d.Type,
+		Host:        d.Host,
+		Port:        d.Port,
+		Username:    d.Username,
+		Database:    d.Database,
+		SSLMode:     d.Sslmode,
+		SchemaName:  d.SchemaName,
+		MaxOpen:     d.MaxOpen,
+		MaxIdle:     d.MaxIdle,
+		MaxLifetime: d.MaxLifetime,
+		MaxIdleTime: d.MaxIdleTime,
+		Status:      d.Status,
+		ExtraConfig: d.ExtraConfig,
+		CreatedAt:   d.CreatedAt,
+		UpdatedAt:   d.UpdatedAt,
 	}
 }

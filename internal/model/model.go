@@ -233,16 +233,15 @@ type DataSource struct {
 	MaxIdleTime       int    `json:"max_idle_time"`
 	Status            string `json:"status"`
 	// Elasticsearch 特有字段
-	// Deprecated: migrate to ExtraConfig JSON. These fields are preserved for backward compatibility.
-	ESUrls         string    `json:"es_urls,omitempty"`          // ES 节点地址，逗号分隔
-	ESVersion      string    `json:"es_version,omitempty"`       // ES 版本，如 "8.x"
-	ESAuthType     string    `json:"es_auth_type,omitempty"`     // 认证方式: basic/api_key/none
-	ESApiKey       string    `json:"-"`                          // API Key 加密存储
-	ESIndexPattern string    `json:"es_index_pattern,omitempty"` // 默认索引模式
-	ESVerifyCerts  bool      `json:"es_verify_certs,omitempty"`  // 是否验证证书
-	ExtraConfig    string    `json:"extra_config,omitempty"`     // JSON string for driver-specific config (future use)
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	// ESApiKey is a credential, not configuration: it is stored encrypted and
+	// decrypted on the way to the driver, the same axis as PasswordEncrypted.
+	// The five settings that used to sit beside it — urls, version, auth_type,
+	// index_pattern, verify_certs — are driver-specific configuration and now
+	// live in ExtraConfig, decoded by driver.ConfigDecoder.
+	ESApiKey    string    `json:"-"`
+	ExtraConfig string    `json:"extra_config,omitempty"` // driver-specific config, decoded by the driver
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // GitLinkType represents the type of a git link (commit or PR).

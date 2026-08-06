@@ -17,13 +17,11 @@ func seedESDatasource(t *testing.T, svc *Service) *model.DataSource {
 		Name: "logs-es",
 		Type: "elasticsearch",
 		// The handler fills these for ES because the columns are NOT NULL;
-		// connection details come from ESUrls.
-		Host:          "elasticsearch",
-		Port:          9200,
-		ESUrls:        "https://es.example.com:9200",
-		ESAuthType:    "api_key",
-		ESApiKey:      esPlaintextAPIKey,
-		ESVerifyCerts: true,
+		// connection details come from extra_config.
+		Host:        "elasticsearch",
+		Port:        9200,
+		ExtraConfig: `{"urls":["https://es.example.com:9200"],"auth_type":"api_key","verify_certs":true}`,
+		ESApiKey:    esPlaintextAPIKey,
 	}
 	if err := svc.CreateDataSource(t.Context(), ds); err != nil {
 		t.Fatalf("create es datasource: %v", err)

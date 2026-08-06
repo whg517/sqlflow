@@ -42,10 +42,44 @@ var (
 	_ driver.Driver            = (*MongoDBDriver)(nil)
 	_ driver.MetadataBrowser   = (*MongoDBDriver)(nil)
 	_ driver.StatementExecutor = (*MongoDBDriver)(nil)
+	_ driver.ConfigDecoder     = (*MongoDBDriver)(nil)
+	_ driver.ConfigValidator   = (*MongoDBDriver)(nil)
 )
 
 // Type returns "mongodb".
 func (d *MongoDBDriver) Type() string { return "mongodb" }
+
+// DecodeConfig reads MongoDB's connection URI out of extra_config.
+//
+// Unlike Elasticsearch this never got dedicated columns, so the adapter
+// answered GetExtra("mongo_uri") with an empty string and a TODO. The URI now
+// has one place to live, and it is the same place every other driver's settings
+// live.
+func (d *MongoDBDriver) DecodeConfig(cfg *driver.Config, extra map[string]interface{}) error {
+	if v, ok := extra["uri"].(string); ok && v != "" {
+		cfg.Extra["uri"] = v
+	}
+	return nil
+}
+
+// ValidateConfig checks the shape of a saved configuration.
+//
+// MongoDB accepts either a full connection URI or host/port plus credentials,
+// so it cannot reuse the plain host-and-port rule the SQL drivers use — which
+// is exactly why this decision belongs to the driver and not to a switch in the
+// HTTP handler.
+func (d *MongoDBDriver) ValidateConfig(cfg *driver.Config) error {
+	if uri, ok := cfg.Extra["uri"].(string); ok && uri != "" {
+		return nil
+	}
+	if cfg.Host == "" {
+		return fmt.Errorf("mongodb: 需要连接 URI 或主机地址")
+	}
+	if cfg.Port == 0 {
+		return fmt.Errorf("mongodb: 端口不能为空")
+	}
+	return nil
+}
 
 // QueryForm declares how read queries are composed for this data source.
 func (d *MongoDBDriver) QueryForm() driver.QueryForm { return driver.QueryFormDocument }

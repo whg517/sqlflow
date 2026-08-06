@@ -2,6 +2,7 @@ package datasource
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/authz"
+	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/httpx"
 	"github.com/whg517/sqlflow/internal/resp"
@@ -59,17 +61,19 @@ type createDatasourceRequest struct {
 	MaxIdle     int    `json:"max_idle"`
 	MaxLifetime int    `json:"max_lifetime"`
 	MaxIdleTime int    `json:"max_idle_time"`
-	// Elasticsearch 特有字段
-	ESUrls         string `json:"es_urls"`
-	ESVersion      string `json:"es_version"`
-	ESAuthType     string `json:"es_auth_type"`
-	ESApiKey       string `json:"es_api_key"`
-	ESIndexPattern string `json:"es_index_pattern"`
-	// ESVerifyCerts is a pointer so that omitting it is distinguishable from
-	// sending false. As a plain bool it bound to the zero value, and an omitted
-	// field silently disabled certificate verification — accepting any
-	// certificate and handing the credentials to whoever answered.
-	ESVerifyCerts *bool `json:"es_verify_certs"`
+	// ExtraConfig carries whatever the driver needs beyond the fields above.
+	//
+	// Five Elasticsearch fields used to sit here by name — es_urls, es_version,
+	// es_auth_type, es_index_pattern, es_verify_certs — which meant this
+	// transport struct, the model, the adapter and five database columns all had
+	// to learn a setting before any driver could use it. The driver decodes them
+	// now (driver.ConfigDecoder), so adding a type touches neither this file nor
+	// the schema.
+	ExtraConfig map[string]interface{} `json:"extra_config"`
+	// ESApiKey stays named because it is a credential, not configuration: it is
+	// encrypted at rest and never travels inside extra_config, which holds what
+	// was written verbatim.
+	ESApiKey string `json:"es_api_key"`
 }
 
 type updateDatasourceRequest struct {
@@ -86,17 +90,19 @@ type updateDatasourceRequest struct {
 	MaxIdle     int    `json:"max_idle"`
 	MaxLifetime int    `json:"max_lifetime"`
 	MaxIdleTime int    `json:"max_idle_time"`
-	// Elasticsearch 特有字段
-	ESUrls         string `json:"es_urls"`
-	ESVersion      string `json:"es_version"`
-	ESAuthType     string `json:"es_auth_type"`
-	ESApiKey       string `json:"es_api_key"`
-	ESIndexPattern string `json:"es_index_pattern"`
-	// ESVerifyCerts is a pointer so that omitting it is distinguishable from
-	// sending false. As a plain bool it bound to the zero value, and an omitted
-	// field silently disabled certificate verification — accepting any
-	// certificate and handing the credentials to whoever answered.
-	ESVerifyCerts *bool `json:"es_verify_certs"`
+	// ExtraConfig carries whatever the driver needs beyond the fields above.
+	//
+	// Five Elasticsearch fields used to sit here by name — es_urls, es_version,
+	// es_auth_type, es_index_pattern, es_verify_certs — which meant this
+	// transport struct, the model, the adapter and five database columns all had
+	// to learn a setting before any driver could use it. The driver decodes them
+	// now (driver.ConfigDecoder), so adding a type touches neither this file nor
+	// the schema.
+	ExtraConfig map[string]interface{} `json:"extra_config"`
+	// ESApiKey stays named because it is a credential, not configuration: it is
+	// encrypted at rest and never travels inside extra_config, which holds what
+	// was written verbatim.
+	ESApiKey string `json:"es_api_key"`
 }
 
 type datasourceResponse struct {
@@ -115,14 +121,11 @@ type datasourceResponse struct {
 	MaxIdleTime int    `json:"max_idle_time"`
 	Status      string `json:"status"`
 	System      bool   `json:"system"`
-	// Elasticsearch 特有字段
-	ESUrls         string `json:"es_urls,omitempty"`
-	ESVersion      string `json:"es_version,omitempty"`
-	ESAuthType     string `json:"es_auth_type,omitempty"`
-	ESIndexPattern string `json:"es_index_pattern,omitempty"`
-	ESVerifyCerts  bool   `json:"es_verify_certs"`
-	CreatedAt      string `json:"created_at"`
-	UpdatedAt      string `json:"updated_at"`
+	// ExtraConfig is echoed back as the driver stored it. It never contains
+	// credentials.
+	ExtraConfig map[string]interface{} `json:"extra_config,omitempty"`
+	CreatedAt   string                 `json:"created_at"`
+	UpdatedAt   string                 `json:"updated_at"`
 }
 
 type datasourceOptionResponse struct {
@@ -132,94 +135,124 @@ type datasourceOptionResponse struct {
 	Status string `json:"status"`
 }
 
-func validateDatasourceConnectionRequest(req createDatasourceRequest, allowStoredCredentials bool) string {
-	switch req.Type {
-	case "sqlite":
-		if req.Database == "" {
-			return "SQLite 文件路径不能为空"
-		}
-	case "elasticsearch":
-		if req.ESUrls == "" {
-			return "Elasticsearch 节点地址不能为空"
-		}
-		switch req.ESAuthType {
-		case "", "basic":
-			if req.Username == "" {
-				return "Elasticsearch 用户名不能为空"
-			}
-			if req.Password == "" && !allowStoredCredentials {
-				return "密码不能为空"
-			}
-		case "api_key":
-			if req.ESApiKey == "" && !allowStoredCredentials {
-				return "Elasticsearch API Key 不能为空"
-			}
-		case "none":
-			// No credentials required.
-		default:
-			return "Elasticsearch 认证方式无效"
-		}
-	default:
-		if req.Host == "" {
-			return "主机地址不能为空"
-		}
-		if req.Port == 0 {
-			return "端口不能为空"
-		}
-		if req.Password == "" && !allowStoredCredentials {
-			return "密码不能为空"
-		}
+// validateDatasourceConnectionRequest asks the driver whether the configuration
+// is well formed.
+//
+// It used to be a `switch req.Type` naming sqlite and elasticsearch, with a
+// default branch for everything else — so a new data source type had to be
+// added to this file before it could be created, and the Elasticsearch rules
+// were maintained here and in the driver's own ValidateConfig at the same time.
+//
+// allowStoredCredentials is accepted for the update path, where an omitted
+// password means "keep the one on file". Nothing here inspects credentials —
+// whether a secret is accepted is the target's answer, and reporting "密码不能
+// 为空" for a MySQL instance that has no password was this layer guessing.
+func validateDatasourceConnectionRequest(req createDatasourceRequest, _ bool) string {
+	cfg, err := driver.BuildConfigFromDataSource(
+		requestAdapter{req}, driver.Secrets{Password: req.Password, APIKey: req.ESApiKey},
+	)
+	if err != nil {
+		return err.Error()
+	}
+	if err := driver.ValidateConfigFor(req.Type, cfg); err != nil {
+		return err.Error()
 	}
 	return ""
 }
 
-// verifyCertsOrDefault resolves an omitted es_verify_certs to on.
-//
-// The default is deliberately the safe one: a caller that says nothing gets
-// certificate verification. Turning it off is a real need for self-signed
-// certificates in a lab, so it stays expressible — but only by saying so.
-func verifyCertsOrDefault(v *bool) bool {
-	if v == nil {
-		return true
+// encodeExtraConfig stores the driver's settings as they arrived. An empty map
+// is stored as empty rather than "{}", so "not configured" stays distinct from
+// "configured with nothing".
+func encodeExtraConfig(extra map[string]interface{}) string {
+	if len(extra) == 0 {
+		return ""
 	}
-	return *v
+	raw, err := json.Marshal(extra)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
 }
 
-func normalizeDatasourceStorageFields(req *createDatasourceRequest) {
-	// host is a legacy non-null storage column. SQLite and Elasticsearch use
-	// database/es_urls as their actual connection endpoint.
-	if req.Type == "sqlite" && req.Host == "" {
-		req.Host = "localhost"
+// decodeExtraConfig turns stored settings back into a JSON object for the API.
+// Malformed content is reported as absent: it is the driver's business to
+// complain about its own keys, and a list endpoint should not fail because one
+// row is bad.
+func decodeExtraConfig(raw string) map[string]interface{} {
+	if raw == "" {
+		return nil
 	}
-	if req.Type == "elasticsearch" && req.Host == "" {
-		req.Host = "elasticsearch"
+	var extra map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &extra); err != nil {
+		return nil
+	}
+	return extra
+}
+
+// requestAdapter presents an unsaved request as a DataSourceInfo so the same
+// decoding runs for validation as for connecting. Validating a hand-built
+// struct instead was how the handler and the driver came to disagree about
+// Elasticsearch.
+type requestAdapter struct{ req createDatasourceRequest }
+
+func (a requestAdapter) GetID() int64          { return a.req.ID }
+func (a requestAdapter) GetType() string       { return a.req.Type }
+func (a requestAdapter) GetHost() string       { return a.req.Host }
+func (a requestAdapter) GetPort() int          { return a.req.Port }
+func (a requestAdapter) GetUsername() string   { return a.req.Username }
+func (a requestAdapter) GetDatabase() string   { return a.req.Database }
+func (a requestAdapter) GetSSLMode() string    { return a.req.SSLMode }
+func (a requestAdapter) GetSchemaName() string { return a.req.SchemaName }
+func (a requestAdapter) GetMaxOpen() int       { return a.req.MaxOpen }
+func (a requestAdapter) GetMaxIdle() int       { return a.req.MaxIdle }
+func (a requestAdapter) GetMaxLifetime() int   { return a.req.MaxLifetime }
+func (a requestAdapter) GetMaxIdleTime() int   { return a.req.MaxIdleTime }
+
+func (a requestAdapter) GetExtraConfig() string {
+	if len(a.req.ExtraConfig) == 0 {
+		return ""
+	}
+	raw, err := json.Marshal(a.req.ExtraConfig)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+// normalizeDatasourceStorageFields fills the non-null host column for types
+// that connect by some other means.
+//
+// The column predates SQLite and Elasticsearch, both of which carry their real
+// endpoint elsewhere — a file path and a url list. The placeholder is storage
+// bookkeeping, not configuration, which is why it is confined to this function:
+// it once leaked into the connection path, where the literal "elasticsearch"
+// became a hostname the driver tried to resolve.
+func normalizeDatasourceStorageFields(req *createDatasourceRequest) {
+	if req.Host == "" {
+		req.Host = "-"
 	}
 }
 
 func toDatasourceResponse(ds *model.DataSource) datasourceResponse {
 	return datasourceResponse{
-		ID:             ds.ID,
-		Name:           ds.Name,
-		Type:           ds.Type,
-		Host:           ds.Host,
-		Port:           ds.Port,
-		Username:       ds.Username,
-		Database:       ds.Database,
-		SSLMode:        ds.SSLMode,
-		SchemaName:     ds.SchemaName,
-		MaxOpen:        ds.MaxOpen,
-		MaxIdle:        ds.MaxIdle,
-		MaxLifetime:    ds.MaxLifetime,
-		MaxIdleTime:    ds.MaxIdleTime,
-		Status:         ds.Status,
-		System:         IsInternal(ds),
-		ESUrls:         ds.ESUrls,
-		ESVersion:      ds.ESVersion,
-		ESAuthType:     ds.ESAuthType,
-		ESIndexPattern: ds.ESIndexPattern,
-		ESVerifyCerts:  ds.ESVerifyCerts,
-		CreatedAt:      ds.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:      ds.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:          ds.ID,
+		Name:        ds.Name,
+		Type:        ds.Type,
+		Host:        ds.Host,
+		Port:        ds.Port,
+		Username:    ds.Username,
+		Database:    ds.Database,
+		SSLMode:     ds.SSLMode,
+		SchemaName:  ds.SchemaName,
+		MaxOpen:     ds.MaxOpen,
+		MaxIdle:     ds.MaxIdle,
+		MaxLifetime: ds.MaxLifetime,
+		MaxIdleTime: ds.MaxIdleTime,
+		Status:      ds.Status,
+		System:      IsInternal(ds),
+		ExtraConfig: decodeExtraConfig(ds.ExtraConfig),
+		CreatedAt:   ds.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:   ds.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
@@ -268,12 +301,8 @@ func (h *Handler) CreateDatasource(c echo.Context) error {
 		MaxIdle:           req.MaxIdle,
 		MaxLifetime:       req.MaxLifetime,
 		MaxIdleTime:       req.MaxIdleTime,
-		ESUrls:            req.ESUrls,
-		ESVersion:         req.ESVersion,
-		ESAuthType:        req.ESAuthType,
+		ExtraConfig:       encodeExtraConfig(req.ExtraConfig),
 		ESApiKey:          req.ESApiKey,
-		ESIndexPattern:    req.ESIndexPattern,
-		ESVerifyCerts:     verifyCertsOrDefault(req.ESVerifyCerts),
 	}
 
 	if err := h.dsSvc.CreateDataSource(c.Request().Context(), ds); err != nil {
@@ -430,28 +459,22 @@ func (h *Handler) UpdateDatasource(c echo.Context) error {
 		return resp.BadRequest(c, ErrInvalidDatasourceType.Error())
 	}
 	connectionReq := createDatasourceRequest{
-		ID:             id,
-		Name:           req.Name,
-		Type:           req.Type,
-		Host:           req.Host,
-		Port:           req.Port,
-		Username:       req.Username,
-		Password:       req.Password,
-		Database:       req.Database,
-		SSLMode:        req.SSLMode,
-		SchemaName:     req.SchemaName,
-		MaxOpen:        req.MaxOpen,
-		MaxIdle:        req.MaxIdle,
-		MaxLifetime:    req.MaxLifetime,
-		MaxIdleTime:    req.MaxIdleTime,
-		ESUrls:         req.ESUrls,
-		ESVersion:      req.ESVersion,
-		ESAuthType:     req.ESAuthType,
-		ESApiKey:       req.ESApiKey,
-		ESIndexPattern: req.ESIndexPattern,
-		// Passed through as a pointer so the "omitted" signal survives the
-		// hop between the two request shapes.
-		ESVerifyCerts: req.ESVerifyCerts,
+		ID:          id,
+		Name:        req.Name,
+		Type:        req.Type,
+		Host:        req.Host,
+		Port:        req.Port,
+		Username:    req.Username,
+		Password:    req.Password,
+		Database:    req.Database,
+		SSLMode:     req.SSLMode,
+		SchemaName:  req.SchemaName,
+		MaxOpen:     req.MaxOpen,
+		MaxIdle:     req.MaxIdle,
+		MaxLifetime: req.MaxLifetime,
+		MaxIdleTime: req.MaxIdleTime,
+		ExtraConfig: req.ExtraConfig,
+		ESApiKey:    req.ESApiKey,
 	}
 	if message := validateDatasourceConnectionRequest(connectionReq, true); message != "" {
 		return resp.BadRequest(c, message)
@@ -473,12 +496,8 @@ func (h *Handler) UpdateDatasource(c echo.Context) error {
 		MaxIdle:           req.MaxIdle,
 		MaxLifetime:       req.MaxLifetime,
 		MaxIdleTime:       req.MaxIdleTime,
-		ESUrls:            req.ESUrls,
-		ESVersion:         req.ESVersion,
-		ESAuthType:        req.ESAuthType,
+		ExtraConfig:       encodeExtraConfig(req.ExtraConfig),
 		ESApiKey:          req.ESApiKey,
-		ESIndexPattern:    req.ESIndexPattern,
-		ESVerifyCerts:     verifyCertsOrDefault(req.ESVerifyCerts),
 	}
 
 	if err := h.dsSvc.UpdateDataSource(c.Request().Context(), id, ds); err != nil {
@@ -696,11 +715,8 @@ func (h *Handler) TestConnectionConfig(c echo.Context) error {
 		SSLMode:           req.SSLMode,
 		SchemaName:        req.SchemaName,
 		MaxOpen:           req.MaxOpen,
-		ESUrls:            req.ESUrls,
-		ESAuthType:        req.ESAuthType,
+		ExtraConfig:       encodeExtraConfig(req.ExtraConfig),
 		ESApiKey:          req.ESApiKey,
-		ESIndexPattern:    req.ESIndexPattern,
-		ESVerifyCerts:     verifyCertsOrDefault(req.ESVerifyCerts),
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 15*time.Second)

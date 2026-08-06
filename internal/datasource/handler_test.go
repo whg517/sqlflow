@@ -51,7 +51,7 @@ func createTestDatasource(t *testing.T, dsSvc *Service, name, dsType, host strin
 	// Each driver validates its own configuration, so type-specific required
 	// fields must be present for the fixture to be creatable.
 	if dsType == "elasticsearch" {
-		ds.ESUrls = "https://localhost:9200"
+		ds.ExtraConfig = `{"urls":["https://localhost:9200"],"auth_type":"none"}`
 	}
 	if err := dsSvc.CreateDataSource(ctx, ds); err != nil {
 		t.Fatalf("create test datasource %q: %v", name, err)
@@ -105,7 +105,7 @@ func TestDatasourceHandler_CreateDatasource(t *testing.T) {
 		},
 		{
 			"success_elasticsearch_no_auth",
-			`{"name":"logs-es","type":"elasticsearch","es_urls":"https://es.example.com:9200","es_auth_type":"none","es_verify_certs":true}`,
+			`{"name":"logs-es","type":"elasticsearch","extra_config":{"urls":["https://es.example.com:9200"],"auth_type":"none","verify_certs":true}}`,
 			http.StatusCreated,
 			"created",
 		},
@@ -139,49 +139,49 @@ func TestDatasourceHandler_CreateDatasource(t *testing.T) {
 			"missing_host",
 			`{"name":"no-host","type":"mysql","port":3306,"username":"root","password":"secret"}`,
 			http.StatusBadRequest,
-			"主机地址不能为空",
+			"mysql: 主机地址不能为空",
 		},
 		{
 			"empty_host",
 			`{"name":"no-host","type":"mysql","host":"","port":3306,"username":"root","password":"secret"}`,
 			http.StatusBadRequest,
-			"主机地址不能为空",
+			"mysql: 主机地址不能为空",
 		},
 		{
 			"missing_port",
 			`{"name":"no-port","type":"mysql","host":"10.0.0.1","username":"root","password":"secret"}`,
 			http.StatusBadRequest,
-			"端口不能为空",
+			"mysql: 端口不能为空",
 		},
 		{
 			"zero_port",
 			`{"name":"zero-port","type":"mysql","host":"10.0.0.1","port":0,"username":"root","password":"secret"}`,
 			http.StatusBadRequest,
-			"端口不能为空",
+			"mysql: 端口不能为空",
 		},
 		{
-			"missing_password",
+			// A passwordless MySQL is accepted now. Whether a secret works is
+			// the target's answer, and this layer used to guess — rejecting the
+			// socket-auth and trust-auth setups that legitimately have none.
+			// The wrong password and the missing one both surface at connect.
+			"missing_password_is_allowed",
 			`{"name":"no-pw","type":"mysql","host":"10.0.0.1","port":3306,"username":"root"}`,
-			http.StatusBadRequest,
-			"密码不能为空",
-		},
-		{
-			"empty_password",
-			`{"name":"no-pw","type":"mysql","host":"10.0.0.1","port":3306,"username":"root","password":""}`,
-			http.StatusBadRequest,
-			"密码不能为空",
+			http.StatusCreated,
+			"created",
 		},
 		{
 			"elasticsearch_missing_urls",
-			`{"name":"no-url-es","type":"elasticsearch","es_auth_type":"none"}`,
+			`{"name":"no-url-es","type":"elasticsearch","extra_config":{"auth_type":"none"}}`,
 			http.StatusBadRequest,
-			"Elasticsearch 节点地址不能为空",
+			"elasticsearch: 至少需要一个连接地址",
 		},
 		{
-			"elasticsearch_api_key_required",
-			`{"name":"no-key-es","type":"elasticsearch","es_urls":"https://es.example.com:9200","es_auth_type":"api_key"}`,
+			// auth_type has to name something the driver implements. Whether
+			// the key behind it is correct is not decidable here.
+			"elasticsearch_unknown_auth_type",
+			`{"name":"bad-auth-es","type":"elasticsearch","extra_config":{"urls":["https://es.example.com:9200"],"auth_type":"kerberos"}}`,
 			http.StatusBadRequest,
-			"Elasticsearch API Key 不能为空",
+			"elasticsearch: 认证方式无效: kerberos",
 		},
 		{
 			"empty_body",

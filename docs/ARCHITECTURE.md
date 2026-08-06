@@ -328,7 +328,8 @@ SQLite 与 Elasticsearch 只能提供恒返回「不支持」的实现——一�
 | `ParameterizedQueryExecutor` | 能否参数化执行 | MongoDB、Elasticsearch |
 | `ParameterBinder` | 占位符方言（`?` / `$N`） | MongoDB、Elasticsearch |
 | `QueryExplainer` | 能否给出查询计划 | SQLite、MongoDB、Elasticsearch |
-| `ConfigValidator` | 配置形态校验 | MySQL、PostgreSQL、MongoDB |
+| `ConfigValidator` | 配置形态校验（不碰凭据） | SQLite 外全部实现 |
+| `ConfigDecoder` | 解码 `extra_config` 里的专属配置 | MySQL、PostgreSQL、SQLite |
 
 `driver.Describe` 用类型断言把它们合成 `Descriptor`，所以 API 报告的能力**不可能**与驱动实际实现的方法不一致。
 

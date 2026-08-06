@@ -59,7 +59,7 @@ func setupESIndexHandler(t *testing.T, indexCount int, checker ObjectViewChecker
 	ds := &model.DataSource{
 		Name: "logs-es", Type: "elasticsearch",
 		Host: "elasticsearch", Port: 9200,
-		ESUrls: server.URL, ESAuthType: "none", ESVerifyCerts: true,
+		ExtraConfig: `{"urls":["` + server.URL + `"],"auth_type":"none","verify_certs":true}`,
 	}
 	if err := svc.CreateDataSource(t.Context(), ds); err != nil {
 		t.Fatalf("create datasource: %v", err)

@@ -5831,12 +5831,7 @@ type DataSourceMutation struct {
 	status             *string
 	sslmode            *string
 	schema_name        *string
-	es_urls            *string
-	es_version         *string
-	es_auth_type       *string
 	es_api_key         *string
-	es_index_pattern   *string
-	es_verify_certs    *bool
 	extra_config       *string
 	created_at         *time.Time
 	updated_at         *time.Time
@@ -6548,114 +6543,6 @@ func (m *DataSourceMutation) ResetSchemaName() {
 	m.schema_name = nil
 }
 
-// SetEsUrls sets the "es_urls" field.
-func (m *DataSourceMutation) SetEsUrls(s string) {
-	m.es_urls = &s
-}
-
-// EsUrls returns the value of the "es_urls" field in the mutation.
-func (m *DataSourceMutation) EsUrls() (r string, exists bool) {
-	v := m.es_urls
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldEsUrls returns the old "es_urls" field's value of the DataSource entity.
-// If the DataSource object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DataSourceMutation) OldEsUrls(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEsUrls is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEsUrls requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEsUrls: %w", err)
-	}
-	return oldValue.EsUrls, nil
-}
-
-// ResetEsUrls resets all changes to the "es_urls" field.
-func (m *DataSourceMutation) ResetEsUrls() {
-	m.es_urls = nil
-}
-
-// SetEsVersion sets the "es_version" field.
-func (m *DataSourceMutation) SetEsVersion(s string) {
-	m.es_version = &s
-}
-
-// EsVersion returns the value of the "es_version" field in the mutation.
-func (m *DataSourceMutation) EsVersion() (r string, exists bool) {
-	v := m.es_version
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldEsVersion returns the old "es_version" field's value of the DataSource entity.
-// If the DataSource object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DataSourceMutation) OldEsVersion(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEsVersion is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEsVersion requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEsVersion: %w", err)
-	}
-	return oldValue.EsVersion, nil
-}
-
-// ResetEsVersion resets all changes to the "es_version" field.
-func (m *DataSourceMutation) ResetEsVersion() {
-	m.es_version = nil
-}
-
-// SetEsAuthType sets the "es_auth_type" field.
-func (m *DataSourceMutation) SetEsAuthType(s string) {
-	m.es_auth_type = &s
-}
-
-// EsAuthType returns the value of the "es_auth_type" field in the mutation.
-func (m *DataSourceMutation) EsAuthType() (r string, exists bool) {
-	v := m.es_auth_type
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldEsAuthType returns the old "es_auth_type" field's value of the DataSource entity.
-// If the DataSource object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DataSourceMutation) OldEsAuthType(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEsAuthType is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEsAuthType requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEsAuthType: %w", err)
-	}
-	return oldValue.EsAuthType, nil
-}
-
-// ResetEsAuthType resets all changes to the "es_auth_type" field.
-func (m *DataSourceMutation) ResetEsAuthType() {
-	m.es_auth_type = nil
-}
-
 // SetEsAPIKey sets the "es_api_key" field.
 func (m *DataSourceMutation) SetEsAPIKey(s string) {
 	m.es_api_key = &s
@@ -6690,78 +6577,6 @@ func (m *DataSourceMutation) OldEsAPIKey(ctx context.Context) (v string, err err
 // ResetEsAPIKey resets all changes to the "es_api_key" field.
 func (m *DataSourceMutation) ResetEsAPIKey() {
 	m.es_api_key = nil
-}
-
-// SetEsIndexPattern sets the "es_index_pattern" field.
-func (m *DataSourceMutation) SetEsIndexPattern(s string) {
-	m.es_index_pattern = &s
-}
-
-// EsIndexPattern returns the value of the "es_index_pattern" field in the mutation.
-func (m *DataSourceMutation) EsIndexPattern() (r string, exists bool) {
-	v := m.es_index_pattern
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldEsIndexPattern returns the old "es_index_pattern" field's value of the DataSource entity.
-// If the DataSource object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DataSourceMutation) OldEsIndexPattern(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEsIndexPattern is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEsIndexPattern requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEsIndexPattern: %w", err)
-	}
-	return oldValue.EsIndexPattern, nil
-}
-
-// ResetEsIndexPattern resets all changes to the "es_index_pattern" field.
-func (m *DataSourceMutation) ResetEsIndexPattern() {
-	m.es_index_pattern = nil
-}
-
-// SetEsVerifyCerts sets the "es_verify_certs" field.
-func (m *DataSourceMutation) SetEsVerifyCerts(b bool) {
-	m.es_verify_certs = &b
-}
-
-// EsVerifyCerts returns the value of the "es_verify_certs" field in the mutation.
-func (m *DataSourceMutation) EsVerifyCerts() (r bool, exists bool) {
-	v := m.es_verify_certs
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldEsVerifyCerts returns the old "es_verify_certs" field's value of the DataSource entity.
-// If the DataSource object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DataSourceMutation) OldEsVerifyCerts(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEsVerifyCerts is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEsVerifyCerts requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEsVerifyCerts: %w", err)
-	}
-	return oldValue.EsVerifyCerts, nil
-}
-
-// ResetEsVerifyCerts resets all changes to the "es_verify_certs" field.
-func (m *DataSourceMutation) ResetEsVerifyCerts() {
-	m.es_verify_certs = nil
 }
 
 // SetExtraConfig sets the "extra_config" field.
@@ -6919,7 +6734,7 @@ func (m *DataSourceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DataSourceMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 18)
 	if m.name != nil {
 		fields = append(fields, datasource.FieldName)
 	}
@@ -6962,23 +6777,8 @@ func (m *DataSourceMutation) Fields() []string {
 	if m.schema_name != nil {
 		fields = append(fields, datasource.FieldSchemaName)
 	}
-	if m.es_urls != nil {
-		fields = append(fields, datasource.FieldEsUrls)
-	}
-	if m.es_version != nil {
-		fields = append(fields, datasource.FieldEsVersion)
-	}
-	if m.es_auth_type != nil {
-		fields = append(fields, datasource.FieldEsAuthType)
-	}
 	if m.es_api_key != nil {
 		fields = append(fields, datasource.FieldEsAPIKey)
-	}
-	if m.es_index_pattern != nil {
-		fields = append(fields, datasource.FieldEsIndexPattern)
-	}
-	if m.es_verify_certs != nil {
-		fields = append(fields, datasource.FieldEsVerifyCerts)
 	}
 	if m.extra_config != nil {
 		fields = append(fields, datasource.FieldExtraConfig)
@@ -7025,18 +6825,8 @@ func (m *DataSourceMutation) Field(name string) (ent.Value, bool) {
 		return m.Sslmode()
 	case datasource.FieldSchemaName:
 		return m.SchemaName()
-	case datasource.FieldEsUrls:
-		return m.EsUrls()
-	case datasource.FieldEsVersion:
-		return m.EsVersion()
-	case datasource.FieldEsAuthType:
-		return m.EsAuthType()
 	case datasource.FieldEsAPIKey:
 		return m.EsAPIKey()
-	case datasource.FieldEsIndexPattern:
-		return m.EsIndexPattern()
-	case datasource.FieldEsVerifyCerts:
-		return m.EsVerifyCerts()
 	case datasource.FieldExtraConfig:
 		return m.ExtraConfig()
 	case datasource.FieldCreatedAt:
@@ -7080,18 +6870,8 @@ func (m *DataSourceMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldSslmode(ctx)
 	case datasource.FieldSchemaName:
 		return m.OldSchemaName(ctx)
-	case datasource.FieldEsUrls:
-		return m.OldEsUrls(ctx)
-	case datasource.FieldEsVersion:
-		return m.OldEsVersion(ctx)
-	case datasource.FieldEsAuthType:
-		return m.OldEsAuthType(ctx)
 	case datasource.FieldEsAPIKey:
 		return m.OldEsAPIKey(ctx)
-	case datasource.FieldEsIndexPattern:
-		return m.OldEsIndexPattern(ctx)
-	case datasource.FieldEsVerifyCerts:
-		return m.OldEsVerifyCerts(ctx)
 	case datasource.FieldExtraConfig:
 		return m.OldExtraConfig(ctx)
 	case datasource.FieldCreatedAt:
@@ -7205,47 +6985,12 @@ func (m *DataSourceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSchemaName(v)
 		return nil
-	case datasource.FieldEsUrls:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEsUrls(v)
-		return nil
-	case datasource.FieldEsVersion:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEsVersion(v)
-		return nil
-	case datasource.FieldEsAuthType:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEsAuthType(v)
-		return nil
 	case datasource.FieldEsAPIKey:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEsAPIKey(v)
-		return nil
-	case datasource.FieldEsIndexPattern:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEsIndexPattern(v)
-		return nil
-	case datasource.FieldEsVerifyCerts:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEsVerifyCerts(v)
 		return nil
 	case datasource.FieldExtraConfig:
 		v, ok := value.(string)
@@ -7431,23 +7176,8 @@ func (m *DataSourceMutation) ResetField(name string) error {
 	case datasource.FieldSchemaName:
 		m.ResetSchemaName()
 		return nil
-	case datasource.FieldEsUrls:
-		m.ResetEsUrls()
-		return nil
-	case datasource.FieldEsVersion:
-		m.ResetEsVersion()
-		return nil
-	case datasource.FieldEsAuthType:
-		m.ResetEsAuthType()
-		return nil
 	case datasource.FieldEsAPIKey:
 		m.ResetEsAPIKey()
-		return nil
-	case datasource.FieldEsIndexPattern:
-		m.ResetEsIndexPattern()
-		return nil
-	case datasource.FieldEsVerifyCerts:
-		m.ResetEsVerifyCerts()
 		return nil
 	case datasource.FieldExtraConfig:
 		m.ResetExtraConfig()

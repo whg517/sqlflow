@@ -52,19 +52,9 @@ func (DataSource) Fields() []ent.Field {
 		field.String("schema_name").
 			Default(""),
 		// Elasticsearch specific
-		field.String("es_urls").
-			Default(""),
-		field.String("es_version").
-			Default(""),
-		field.String("es_auth_type").
-			Default(""),
 		field.String("es_api_key").
 			Default("").
 			StructTag(`json:"-"`),
-		field.String("es_index_pattern").
-			Default(""),
-		field.Bool("es_verify_certs").
-			Default(true),
 		field.String("extra_config").
 			Default("").
 			Optional(),

@@ -21,8 +21,6 @@ type mockDataSource struct {
 	maxIdle     int
 	maxLifetime int
 	maxIdleTime int
-	extras      map[string]string
-	extraBools  map[string]bool
 	extraConfig string
 }
 
@@ -39,20 +37,6 @@ func (m *mockDataSource) GetMaxIdle() int        { return m.maxIdle }
 func (m *mockDataSource) GetMaxLifetime() int    { return m.maxLifetime }
 func (m *mockDataSource) GetMaxIdleTime() int    { return m.maxIdleTime }
 func (m *mockDataSource) GetExtraConfig() string { return m.extraConfig }
-func (m *mockDataSource) GetExtra(key string) string {
-	if m.extras != nil {
-		return m.extras[key]
-	}
-	return ""
-}
-func (m *mockDataSource) GetExtraBool(key string, defaultVal bool) bool {
-	if m.extraBools != nil {
-		if v, ok := m.extraBools[key]; ok {
-			return v
-		}
-	}
-	return defaultVal
-}
 
 func TestBuildConfigFromDataSource_MySQL(t *testing.T) {
 	ds := &mockDataSource{
@@ -133,14 +117,8 @@ func TestBuildConfigFromDataSource_Elasticsearch(t *testing.T) {
 		dsType: "elasticsearch",
 		host:   "es-host",
 		port:   9200,
-		extras: map[string]string{
-			"es_urls":          "http://es1:9200,http://es2:9200",
-			"es_auth_type":     "api_key",
-			"es_index_pattern": "logs-*",
-		},
-		extraBools: map[string]bool{
-			"es_verify_certs": false,
-		},
+		extraConfig: `{"urls":["http://es1:9200","http://es2:9200"],` +
+			`"auth_type":"api_key","index_pattern":"logs-*","verify_certs":false}`,
 	}
 
 	cfg, err := driver.BuildConfigFromDataSource(ds, driver.Secrets{Password: "pass"})
@@ -162,11 +140,9 @@ func TestBuildConfigFromDataSource_Elasticsearch(t *testing.T) {
 
 func TestBuildConfigFromDataSource_MongoDB(t *testing.T) {
 	ds := &mockDataSource{
-		id:     4,
-		dsType: "mongodb",
-		extras: map[string]string{
-			"mongo_uri": "mongodb://user:pass@host:27017/db",
-		},
+		id:          4,
+		dsType:      "mongodb",
+		extraConfig: `{"uri":"mongodb://user:pass@host:27017/db"}`,
 	}
 
 	cfg, err := driver.BuildConfigFromDataSource(ds, driver.Secrets{})

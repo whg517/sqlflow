@@ -112,7 +112,6 @@ func TestBooleanColumnsAreBoolean(t *testing.T) {
 		"approval_policies.enabled",
 		"approval_policies.is_default",
 		"approval_records.auto_approved",
-		"datasources.es_verify_certs",
 		"feishu_webhooks.enabled",
 		"oidc_providers.enabled",
 		"refresh_tokens.revoked",

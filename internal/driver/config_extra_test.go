@@ -6,34 +6,31 @@ import (
 	"github.com/whg517/sqlflow/internal/driver"
 )
 
-// esDataSource is an Elasticsearch datasource with the legacy columns filled,
-// which is how every stored one looks.
+// esDataSource is an Elasticsearch datasource whose settings live where they
+// live now: in the extra_config object, decoded by the driver.
 func esDataSource(extraConfig string) *mockDataSource {
 	return &mockDataSource{
-		dsType: "elasticsearch",
-		host:   "elasticsearch", // the placeholder the handler writes for ES
-		port:   9200,
-		extras: map[string]string{
-			"es_urls":          "https://es1:9200,https://es2:9200",
-			"es_auth_type":     "basic",
-			"es_index_pattern": "logs-*",
-		},
-		extraBools:  map[string]bool{"es_verify_certs": true},
+		dsType:      "elasticsearch",
+		host:        "-", // the placeholder the handler writes for a non-null column
+		port:        9200,
 		extraConfig: extraConfig,
 	}
 }
 
-// TestExtraConfigOverridesFieldByField pins the fallback.
+// TestExtraConfigIsTheOnlySourceOfDriverSettings pins what replaced the
+// columns.
 //
-// The JSON branch and the column branch used to be exclusive, and extraMap is
-// non-nil for any valid JSON object — including {}. So writing an unrelated key
-// into extra_config silently dropped urls, auth_type and verify_certs
-// together. The driver then fell back to host and port, and host is the
-// literal "elasticsearch" the handler stores to satisfy a NOT NULL column, so
-// it went looking for http://elasticsearch:0 with no credentials.
+// Five Elasticsearch settings used to live in dedicated columns, read through a
+// key switch in the datasource adapter and merged with extra_config field by
+// field in a `switch dsType` here. The merge existed because the two sources
+// could disagree; with one source there is nothing to reconcile, and the
+// defaults for absent keys belong to the driver.
 //
-// The comment said extra_config "takes priority"; the code made it take over.
-func TestExtraConfigOverridesFieldByField(t *testing.T) {
+// The case that mattered is the last one: an unrelated key must not disturb the
+// rest. It used to, because the JSON and column branches were exclusive and any
+// valid object — including {} — selected the JSON branch, dropping urls,
+// auth_type and verify_certs together.
+func TestExtraConfigIsTheOnlySourceOfDriverSettings(t *testing.T) {
 	tests := []struct {
 		name        string
 		extraConfig string
@@ -42,45 +39,52 @@ func TestExtraConfigOverridesFieldByField(t *testing.T) {
 		wantVerify  bool
 	}{
 		{
-			name:        "absent leaves the columns in charge",
+			name:        "settings arrive as written",
+			extraConfig: `{"urls":["https://es1:9200","https://es2:9200"],"auth_type":"basic","verify_certs":true}`,
+			wantURLs:    []string{"https://es1:9200", "https://es2:9200"},
+			wantAuth:    "basic",
+			wantVerify:  true,
+		},
+		{
+			name:        "absent settings take the driver's defaults",
 			extraConfig: "",
-			wantURLs:    []string{"https://es1:9200", "https://es2:9200"},
-			wantAuth:    "basic",
+			wantURLs:    nil,
+			wantAuth:    "none",
 			wantVerify:  true,
 		},
 		{
-			name:        "empty object changes nothing",
+			name:        "an empty object is the same as none",
 			extraConfig: `{}`,
-			wantURLs:    []string{"https://es1:9200", "https://es2:9200"},
+			wantURLs:    nil,
+			wantAuth:    "none",
+			wantVerify:  true,
+		},
+		{
+			name:        "an unrelated key disturbs nothing",
+			extraConfig: `{"note":"prod","urls":["https://es1:9200"],"auth_type":"basic"}`,
+			wantURLs:    []string{"https://es1:9200"},
 			wantAuth:    "basic",
 			wantVerify:  true,
 		},
 		{
-			name:        "unrelated key changes nothing",
-			extraConfig: `{"note":"prod"}`,
-			wantURLs:    []string{"https://es1:9200", "https://es2:9200"},
-			wantAuth:    "basic",
-			wantVerify:  true,
-		},
-		{
-			name:        "one key overrides only itself",
-			extraConfig: `{"auth_type":"api_key"}`,
-			wantURLs:    []string{"https://es1:9200", "https://es2:9200"},
-			wantAuth:    "api_key",
-			wantVerify:  true,
-		},
-		{
-			name:        "every key overrides",
-			extraConfig: `{"urls":"https://es9:9200","auth_type":"none","verify_certs":false}`,
-			wantURLs:    []string{"https://es9:9200"},
+			name:        "verify_certs false is honored",
+			extraConfig: `{"urls":["https://es.lab:9200"],"auth_type":"none","verify_certs":false}`,
+			wantURLs:    []string{"https://es.lab:9200"},
 			wantAuth:    "none",
 			wantVerify:  false,
+		},
+		{
+			name:        "a legacy comma string still resolves",
+			extraConfig: `{"urls":"https://es1:9200,https://es2:9200","auth_type":"basic"}`,
+			wantURLs:    []string{"https://es1:9200", "https://es2:9200"},
+			wantAuth:    "basic",
+			wantVerify:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := driver.BuildConfigFromDataSource(esDataSource(tt.extraConfig), driver.Secrets{Password: "p"})
+			cfg, err := driver.BuildConfigFromDataSource(esDataSource(tt.extraConfig), driver.Secrets{})
 			if err != nil {
 				t.Fatalf("BuildConfigFromDataSource: %v", err)
 			}
@@ -89,13 +93,13 @@ func TestExtraConfigOverridesFieldByField(t *testing.T) {
 			if len(urls) != len(tt.wantURLs) {
 				t.Fatalf("urls = %v, want %v", urls, tt.wantURLs)
 			}
-			for i, want := range tt.wantURLs {
-				if urls[i] != want {
-					t.Errorf("urls[%d] = %q, want %q", i, urls[i], want)
+			for i := range urls {
+				if urls[i] != tt.wantURLs[i] {
+					t.Errorf("urls[%d] = %q, want %q", i, urls[i], tt.wantURLs[i])
 				}
 			}
 			if got := cfg.Extra["auth_type"]; got != tt.wantAuth {
-				t.Errorf("auth_type = %v, want %q", got, tt.wantAuth)
+				t.Errorf("auth_type = %v, want %v", got, tt.wantAuth)
 			}
 			if got := cfg.Extra["verify_certs"]; got != tt.wantVerify {
 				t.Errorf("verify_certs = %v, want %v", got, tt.wantVerify)
@@ -104,10 +108,20 @@ func TestExtraConfigOverridesFieldByField(t *testing.T) {
 	}
 }
 
-// TestExtraConfigRejectsMalformedJSON keeps a typo from being read as "no
-// extra config at all", which would silently connect on the column values.
-func TestExtractConfigRejectsMalformedJSON(t *testing.T) {
-	if _, err := driver.BuildConfigFromDataSource(esDataSource(`{"urls":`), driver.Secrets{}); err == nil {
-		t.Error("malformed extra_config was accepted")
+// TestAPIKeyNeverComesFromExtraConfig keeps the credential axis separate.
+//
+// extra_config holds what was written verbatim, and the stored copy of a secret
+// is encrypted — so a key read from there would reach the cluster as ciphertext,
+// which is exactly the failure that made connection tests pass while queries
+// returned 401.
+func TestAPIKeyNeverComesFromExtraConfig(t *testing.T) {
+	ds := esDataSource(`{"urls":["https://es:9200"],"auth_type":"api_key","api_key":"ciphertext"}`)
+
+	cfg, err := driver.BuildConfigFromDataSource(ds, driver.Secrets{APIKey: "plaintext"})
+	if err != nil {
+		t.Fatalf("BuildConfigFromDataSource: %v", err)
+	}
+	if got := cfg.Extra["api_key"]; got != "plaintext" {
+		t.Errorf("api_key = %v, want the decrypted value from Secrets", got)
 	}
 }

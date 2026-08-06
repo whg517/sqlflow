@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v4"
+
+	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 )
 
@@ -52,11 +54,29 @@ func TestCreateDatasourceVerifyCertsDefaultsOn(t *testing.T) {
 	e, svc, h := setupDatasourceTest(t)
 
 	stored := createDatasourceViaHandler(t, e, h, svc,
-		`{"name":"logs-es","type":"elasticsearch","es_urls":"https://es.example.com:9200","es_auth_type":"none"}`)
+		`{"name":"logs-es","type":"elasticsearch","extra_config":{"urls":["https://es.example.com:9200"],"auth_type":"none"}}`)
 
-	if !stored.ESVerifyCerts {
-		t.Error("es_verify_certs = false for a request that omitted it — certificate verification was silently disabled")
+	if !decodedVerifyCerts(t, stored) {
+		t.Error("verify_certs resolved to false for a request that omitted it — certificate verification was silently disabled")
 	}
+}
+
+// decodedVerifyCerts asks the driver what the stored configuration means.
+//
+// The default lives in the Elasticsearch driver's DecodeConfig rather than in a
+// storage column, so reading the row is not enough — the question is what the
+// connection will be built with.
+func decodedVerifyCerts(t *testing.T, ds *model.DataSource) bool {
+	t.Helper()
+	cfg, err := driver.BuildConfigFromDataSource(NewAdapter(ds), driver.Secrets{})
+	if err != nil {
+		t.Fatalf("build config: %v", err)
+	}
+	v, ok := cfg.Extra["verify_certs"].(bool)
+	if !ok {
+		t.Fatal("verify_certs is absent from the built config")
+	}
+	return v
 }
 
 // TestCreateDatasourceVerifyCertsCanBeDisabled checks the default is a default
@@ -66,24 +86,27 @@ func TestCreateDatasourceVerifyCertsCanBeDisabled(t *testing.T) {
 	e, svc, h := setupDatasourceTest(t)
 
 	stored := createDatasourceViaHandler(t, e, h, svc,
-		`{"name":"lab-es","type":"elasticsearch","es_urls":"https://es.lab:9200","es_auth_type":"none","es_verify_certs":false}`)
+		`{"name":"lab-es","type":"elasticsearch","extra_config":{"urls":["https://es.lab:9200"],"auth_type":"none","verify_certs":false}}`)
 
-	if stored.ESVerifyCerts {
-		t.Error("es_verify_certs = true although the request explicitly set false")
+	if decodedVerifyCerts(t, stored) {
+		t.Error("verify_certs resolved to true although the request explicitly set false")
 	}
 }
 
-// TestUpdateDatasourceVerifyCertsSurvivesOmission covers the quieter half.
+// TestUpdateDatasourceVerifyCertsFallsBackToOn covers the quieter half.
 //
-// An update that omitted the field turned verification off on a datasource
-// that had it on, with nothing in the request expressing that intent.
-func TestUpdateDatasourceVerifyCertsSurvivesOmission(t *testing.T) {
+// extra_config is replaced whole on update, so an update that does not mention
+// verify_certs leaves it unset and the driver's default applies. That default
+// is on, which is the direction this has to fail in: the old behavior turned
+// verification off on a datasource that had it on, with nothing in the request
+// expressing that intent.
+func TestUpdateDatasourceVerifyCertsFallsBackToOn(t *testing.T) {
 	e, svc, h := setupDatasourceTest(t)
 
 	stored := createDatasourceViaHandler(t, e, h, svc,
-		`{"name":"logs-es","type":"elasticsearch","es_urls":"https://es.example.com:9200","es_auth_type":"none","es_verify_certs":true}`)
+		`{"name":"logs-es","type":"elasticsearch","extra_config":{"urls":["https://es.example.com:9200"],"auth_type":"none","verify_certs":true}}`)
 
-	body := `{"name":"logs-es","type":"elasticsearch","es_urls":"https://es.example.com:9200","es_auth_type":"none"}`
+	body := `{"name":"logs-es","type":"elasticsearch","extra_config":{"urls":["https://es.example.com:9200"],"auth_type":"none"}}`
 	req := httptest.NewRequest(http.MethodPut, "/api/datasources/1", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -102,7 +125,7 @@ func TestUpdateDatasourceVerifyCertsSurvivesOmission(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read back: %v", err)
 	}
-	if !after.ESVerifyCerts {
-		t.Error("an update that never mentioned es_verify_certs turned verification off")
+	if !decodedVerifyCerts(t, after) {
+		t.Error("an update that never mentioned verify_certs turned verification off")
 	}
 }

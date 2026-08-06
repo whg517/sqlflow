@@ -260,48 +260,6 @@ func (_u *DataSourceUpdate) SetNillableSchemaName(v *string) *DataSourceUpdate {
 	return _u
 }
 
-// SetEsUrls sets the "es_urls" field.
-func (_u *DataSourceUpdate) SetEsUrls(v string) *DataSourceUpdate {
-	_u.mutation.SetEsUrls(v)
-	return _u
-}
-
-// SetNillableEsUrls sets the "es_urls" field if the given value is not nil.
-func (_u *DataSourceUpdate) SetNillableEsUrls(v *string) *DataSourceUpdate {
-	if v != nil {
-		_u.SetEsUrls(*v)
-	}
-	return _u
-}
-
-// SetEsVersion sets the "es_version" field.
-func (_u *DataSourceUpdate) SetEsVersion(v string) *DataSourceUpdate {
-	_u.mutation.SetEsVersion(v)
-	return _u
-}
-
-// SetNillableEsVersion sets the "es_version" field if the given value is not nil.
-func (_u *DataSourceUpdate) SetNillableEsVersion(v *string) *DataSourceUpdate {
-	if v != nil {
-		_u.SetEsVersion(*v)
-	}
-	return _u
-}
-
-// SetEsAuthType sets the "es_auth_type" field.
-func (_u *DataSourceUpdate) SetEsAuthType(v string) *DataSourceUpdate {
-	_u.mutation.SetEsAuthType(v)
-	return _u
-}
-
-// SetNillableEsAuthType sets the "es_auth_type" field if the given value is not nil.
-func (_u *DataSourceUpdate) SetNillableEsAuthType(v *string) *DataSourceUpdate {
-	if v != nil {
-		_u.SetEsAuthType(*v)
-	}
-	return _u
-}
-
 // SetEsAPIKey sets the "es_api_key" field.
 func (_u *DataSourceUpdate) SetEsAPIKey(v string) *DataSourceUpdate {
 	_u.mutation.SetEsAPIKey(v)
@@ -312,34 +270,6 @@ func (_u *DataSourceUpdate) SetEsAPIKey(v string) *DataSourceUpdate {
 func (_u *DataSourceUpdate) SetNillableEsAPIKey(v *string) *DataSourceUpdate {
 	if v != nil {
 		_u.SetEsAPIKey(*v)
-	}
-	return _u
-}
-
-// SetEsIndexPattern sets the "es_index_pattern" field.
-func (_u *DataSourceUpdate) SetEsIndexPattern(v string) *DataSourceUpdate {
-	_u.mutation.SetEsIndexPattern(v)
-	return _u
-}
-
-// SetNillableEsIndexPattern sets the "es_index_pattern" field if the given value is not nil.
-func (_u *DataSourceUpdate) SetNillableEsIndexPattern(v *string) *DataSourceUpdate {
-	if v != nil {
-		_u.SetEsIndexPattern(*v)
-	}
-	return _u
-}
-
-// SetEsVerifyCerts sets the "es_verify_certs" field.
-func (_u *DataSourceUpdate) SetEsVerifyCerts(v bool) *DataSourceUpdate {
-	_u.mutation.SetEsVerifyCerts(v)
-	return _u
-}
-
-// SetNillableEsVerifyCerts sets the "es_verify_certs" field if the given value is not nil.
-func (_u *DataSourceUpdate) SetNillableEsVerifyCerts(v *bool) *DataSourceUpdate {
-	if v != nil {
-		_u.SetEsVerifyCerts(*v)
 	}
 	return _u
 }
@@ -520,23 +450,8 @@ func (_u *DataSourceUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if value, ok := _u.mutation.SchemaName(); ok {
 		_spec.SetField(datasource.FieldSchemaName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.EsUrls(); ok {
-		_spec.SetField(datasource.FieldEsUrls, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.EsVersion(); ok {
-		_spec.SetField(datasource.FieldEsVersion, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.EsAuthType(); ok {
-		_spec.SetField(datasource.FieldEsAuthType, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.EsAPIKey(); ok {
 		_spec.SetField(datasource.FieldEsAPIKey, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.EsIndexPattern(); ok {
-		_spec.SetField(datasource.FieldEsIndexPattern, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.EsVerifyCerts(); ok {
-		_spec.SetField(datasource.FieldEsVerifyCerts, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.ExtraConfig(); ok {
 		_spec.SetField(datasource.FieldExtraConfig, field.TypeString, value)
@@ -803,48 +718,6 @@ func (_u *DataSourceUpdateOne) SetNillableSchemaName(v *string) *DataSourceUpdat
 	return _u
 }
 
-// SetEsUrls sets the "es_urls" field.
-func (_u *DataSourceUpdateOne) SetEsUrls(v string) *DataSourceUpdateOne {
-	_u.mutation.SetEsUrls(v)
-	return _u
-}
-
-// SetNillableEsUrls sets the "es_urls" field if the given value is not nil.
-func (_u *DataSourceUpdateOne) SetNillableEsUrls(v *string) *DataSourceUpdateOne {
-	if v != nil {
-		_u.SetEsUrls(*v)
-	}
-	return _u
-}
-
-// SetEsVersion sets the "es_version" field.
-func (_u *DataSourceUpdateOne) SetEsVersion(v string) *DataSourceUpdateOne {
-	_u.mutation.SetEsVersion(v)
-	return _u
-}
-
-// SetNillableEsVersion sets the "es_version" field if the given value is not nil.
-func (_u *DataSourceUpdateOne) SetNillableEsVersion(v *string) *DataSourceUpdateOne {
-	if v != nil {
-		_u.SetEsVersion(*v)
-	}
-	return _u
-}
-
-// SetEsAuthType sets the "es_auth_type" field.
-func (_u *DataSourceUpdateOne) SetEsAuthType(v string) *DataSourceUpdateOne {
-	_u.mutation.SetEsAuthType(v)
-	return _u
-}
-
-// SetNillableEsAuthType sets the "es_auth_type" field if the given value is not nil.
-func (_u *DataSourceUpdateOne) SetNillableEsAuthType(v *string) *DataSourceUpdateOne {
-	if v != nil {
-		_u.SetEsAuthType(*v)
-	}
-	return _u
-}
-
 // SetEsAPIKey sets the "es_api_key" field.
 func (_u *DataSourceUpdateOne) SetEsAPIKey(v string) *DataSourceUpdateOne {
 	_u.mutation.SetEsAPIKey(v)
@@ -855,34 +728,6 @@ func (_u *DataSourceUpdateOne) SetEsAPIKey(v string) *DataSourceUpdateOne {
 func (_u *DataSourceUpdateOne) SetNillableEsAPIKey(v *string) *DataSourceUpdateOne {
 	if v != nil {
 		_u.SetEsAPIKey(*v)
-	}
-	return _u
-}
-
-// SetEsIndexPattern sets the "es_index_pattern" field.
-func (_u *DataSourceUpdateOne) SetEsIndexPattern(v string) *DataSourceUpdateOne {
-	_u.mutation.SetEsIndexPattern(v)
-	return _u
-}
-
-// SetNillableEsIndexPattern sets the "es_index_pattern" field if the given value is not nil.
-func (_u *DataSourceUpdateOne) SetNillableEsIndexPattern(v *string) *DataSourceUpdateOne {
-	if v != nil {
-		_u.SetEsIndexPattern(*v)
-	}
-	return _u
-}
-
-// SetEsVerifyCerts sets the "es_verify_certs" field.
-func (_u *DataSourceUpdateOne) SetEsVerifyCerts(v bool) *DataSourceUpdateOne {
-	_u.mutation.SetEsVerifyCerts(v)
-	return _u
-}
-
-// SetNillableEsVerifyCerts sets the "es_verify_certs" field if the given value is not nil.
-func (_u *DataSourceUpdateOne) SetNillableEsVerifyCerts(v *bool) *DataSourceUpdateOne {
-	if v != nil {
-		_u.SetEsVerifyCerts(*v)
 	}
 	return _u
 }
@@ -1093,23 +938,8 @@ func (_u *DataSourceUpdateOne) sqlSave(ctx context.Context) (_node *DataSource, 
 	if value, ok := _u.mutation.SchemaName(); ok {
 		_spec.SetField(datasource.FieldSchemaName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.EsUrls(); ok {
-		_spec.SetField(datasource.FieldEsUrls, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.EsVersion(); ok {
-		_spec.SetField(datasource.FieldEsVersion, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.EsAuthType(); ok {
-		_spec.SetField(datasource.FieldEsAuthType, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.EsAPIKey(); ok {
 		_spec.SetField(datasource.FieldEsAPIKey, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.EsIndexPattern(); ok {
-		_spec.SetField(datasource.FieldEsIndexPattern, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.EsVerifyCerts(); ok {
-		_spec.SetField(datasource.FieldEsVerifyCerts, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.ExtraConfig(); ok {
 		_spec.SetField(datasource.FieldExtraConfig, field.TypeString, value)

@@ -54,8 +54,14 @@ cd web && npx tsc -b && npm run test
 | 结果形态 | `QueryResult.Shape` | 结果怎么读（`table`/`documents`/`aggregation`） |
 
 **能力全部由可选接口表达，没有能力位。** `MetadataBrowser`、`StatementExecutor`、
-`ParameterizedQueryExecutor`、`ParameterBinder`、`QueryExplainer`、`ConfigValidator`
-——方法在不在，类型系统说了算，`driver.Describe` 用类型断言合成 `Descriptor`。
+`ParameterizedQueryExecutor`、`ParameterBinder`、`QueryExplainer`、`ConfigValidator`、
+`ConfigDecoder`——方法在不在，类型系统说了算，`driver.Describe` 用类型断言合成 `Descriptor`。
+
+**驱动专属配置存在 `extra_config` JSON，由驱动自己解码**（`ConfigDecoder`，对称于
+`ConfigValidator`）。ES 曾有五个专属列，从 DDL 一路穿透到 ent schema、model、adapter
+的键名 switch、三个请求结构体和前端表单——六层，每层都不知道那些值是什么意思；而同样
+需要专属配置的 MongoDB 一列都没有。**不要再为某个驱动加列。** 凭据是例外，与
+`password_encrypted` 同轴（密文存储、`Secrets` 传递），不进 `extra_config`。
 
 曾经有七个手写的能力位，全部删除。**它们不是没被强制，而是本身就是错的**：
 `CapQuery`/`CapFieldMasking` 五个驱动全声明为真；`CapSQLParse`/`CapExport` 被

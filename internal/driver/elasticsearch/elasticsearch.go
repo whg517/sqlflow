@@ -46,10 +46,64 @@ type ESDriver struct {
 var (
 	_ driver.Driver          = (*ESDriver)(nil)
 	_ driver.ConfigValidator = (*ESDriver)(nil)
+	_ driver.ConfigDecoder   = (*ESDriver)(nil)
 )
 
 // Type returns "elasticsearch".
 func (d *ESDriver) Type() string { return "elasticsearch" }
+
+// DecodeConfig reads Elasticsearch's settings out of extra_config.
+//
+// These lived in six dedicated columns — es_urls, es_auth_type, es_api_key,
+// es_index_pattern, es_verify_certs, es_version — which reached the driver
+// through a `switch dsType` in the shared config builder, a hand-written key
+// switch in the datasource adapter, and a field on every request struct. None
+// of those layers knew what the values meant; this one does.
+//
+// verify_certs defaults to on. A caller that says nothing gets certificate
+// verification, and turning it off stays expressible — but only by saying so.
+func (d *ESDriver) DecodeConfig(cfg *driver.Config, extra map[string]interface{}) error {
+	cfg.Extra["urls"] = decodeURLs(extra["urls"])
+
+	if v, ok := extra["auth_type"].(string); ok {
+		cfg.Extra["auth_type"] = v
+	} else {
+		cfg.Extra["auth_type"] = "none"
+	}
+
+	verifyCerts := true
+	if v, ok := extra["verify_certs"].(bool); ok {
+		verifyCerts = v
+	}
+	cfg.Extra["verify_certs"] = verifyCerts
+
+	if v, ok := extra["index_pattern"].(string); ok && v != "" {
+		cfg.Extra["index_pattern"] = v
+	}
+	return nil
+}
+
+// decodeURLs accepts either a JSON array or the comma-separated string the
+// es_urls column held, so a datasource written before the migration and one
+// written after both resolve to the same list.
+func decodeURLs(v interface{}) []string {
+	switch value := v.(type) {
+	case []interface{}:
+		urls := make([]string, 0, len(value))
+		for _, item := range value {
+			if s, ok := item.(string); ok {
+				if s = strings.TrimSpace(s); s != "" {
+					urls = append(urls, s)
+				}
+			}
+		}
+		return urls
+	case string:
+		return trimNonEmpty(strings.Split(value, ","))
+	default:
+		return nil
+	}
+}
 
 // QueryForm declares how read queries are composed for this data source.
 func (d *ESDriver) QueryForm() driver.QueryForm { return driver.QueryFormDSL }
@@ -77,6 +131,16 @@ func (d *ESDriver) ValidateConfig(cfg *driver.Config) error {
 	if len(urls) == 0 {
 		return fmt.Errorf("elasticsearch: 至少需要一个连接地址")
 	}
+	// auth_type has to name something this driver implements. Whether the
+	// credentials behind it are correct is the cluster's answer, not this one —
+	// but an auth_type nobody can act on is a malformed configuration, and only
+	// this driver knows the set. The handler used to switch on it by name.
+	switch authType, _ := cfg.Extra["auth_type"].(string); authType {
+	case "", "basic", "api_key", "none":
+	default:
+		return fmt.Errorf("elasticsearch: 认证方式无效: %s", authType)
+	}
+
 	for _, raw := range urls {
 		parsed, err := url.Parse(raw)
 		if err != nil || parsed.Hostname() == "" {

@@ -3,7 +3,6 @@ package driver
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -36,7 +35,8 @@ type Secrets struct {
 // third parameter here was named encryptionKey and never used at all.
 func BuildConfigFromDataSource(ds DataSourceInfo, secrets Secrets) (*Config, error) {
 	dsType := ds.GetType()
-	if err := ValidateDriverType(dsType); err != nil {
+	d, err := NewDriver(dsType)
+	if err != nil {
 		return nil, err
 	}
 
@@ -72,68 +72,30 @@ func BuildConfigFromDataSource(ds DataSourceInfo, secrets Secrets) (*Config, err
 		cfg.MaxIdleTime = 600 * time.Second
 	}
 
-	// Populate Extra based on datasource type
-	// First try ExtraConfig JSON map, then fall back to legacy struct fields
-	var extraMap map[string]interface{}
-	if ds.GetExtraConfig() != "" {
-		if err := json.Unmarshal([]byte(ds.GetExtraConfig()), &extraMap); err != nil {
-			return nil, fmt.Errorf("invalid extra_config JSON: %w", err)
+	// Driver-specific settings are decoded by the driver.
+	//
+	// This was a `switch dsType` with a branch per driver, which made adding a
+	// data source type a change to this file — and Elasticsearch went further,
+	// into six dedicated columns, the model, the adapter, the request structs
+	// and the form. Only the driver knows what its own keys mean, which is the
+	// same argument ConfigValidator already makes for checking them.
+	if decoder, ok := d.(ConfigDecoder); ok {
+		var extra map[string]interface{}
+		if raw := ds.GetExtraConfig(); raw != "" {
+			if err := json.Unmarshal([]byte(raw), &extra); err != nil {
+				return nil, fmt.Errorf("invalid extra_config JSON: %w", err)
+			}
 		}
-	}
-
-	switch dsType {
-	case "elasticsearch":
-		// extra_config overrides field by field, not all-or-nothing.
-		//
-		// These were exclusive branches, and extraMap is non-nil for any valid
-		// JSON object — including {}. So writing one unrelated key into
-		// extra_config dropped urls, auth_type and verify_certs together. The
-		// driver then fell back to host and port, and host is the literal
-		// "elasticsearch" the handler stores to satisfy a NOT NULL column, so
-		// it went looking for http://elasticsearch:0 with no credentials at
-		// all. The comment said extra_config took priority; the code made it
-		// take over.
-		urls := ds.GetExtra("es_urls")
-		if v, ok := extraString(extraMap, "urls"); ok {
-			urls = v
+		if extra == nil {
+			extra = map[string]interface{}{}
 		}
-		cfg.Extra["urls"] = parseCSV(urls)
-
-		authType := ds.GetExtra("es_auth_type")
-		if v, ok := extraString(extraMap, "auth_type"); ok {
-			authType = v
-		}
-		cfg.Extra["auth_type"] = authType
-
-		verifyCerts := ds.GetExtraBool("es_verify_certs", true)
-		if v, ok := extraMap["verify_certs"].(bool); ok {
-			verifyCerts = v
-		}
-		cfg.Extra["verify_certs"] = verifyCerts
-
-		indexPattern := ds.GetExtra("es_index_pattern")
-		if v, ok := extraString(extraMap, "index_pattern"); ok {
-			indexPattern = v
-		}
-		if indexPattern != "" {
-			cfg.Extra["index_pattern"] = indexPattern
-		}
-		// The key comes from the caller in either branch: extra_config holds
-		// whatever was written into it, but the stored secret is encrypted and
-		// only the caller has the key to read it.
+		// Secrets never travel through extra_config: it holds what was stored,
+		// and the stored copy is encrypted. Only the caller can decrypt.
 		if secrets.APIKey != "" {
 			cfg.Extra["api_key"] = secrets.APIKey
 		}
-	case "mongodb":
-		if extraMap != nil {
-			if v, ok := extraMap["uri"].(string); ok {
-				cfg.Extra["uri"] = v
-			}
-		}
-		if cfg.Extra["uri"] == nil {
-			if uri := ds.GetExtra("mongo_uri"); uri != "" {
-				cfg.Extra["uri"] = uri
-			}
+		if err := decoder.DecodeConfig(cfg, extra); err != nil {
+			return nil, fmt.Errorf("%s config: %w", dsType, err)
 		}
 	}
 
@@ -156,24 +118,28 @@ type DataSourceInfo interface {
 	GetMaxIdle() int
 	GetMaxLifetime() int
 	GetMaxIdleTime() int
-	GetExtra(key string) string
-	GetExtraBool(key string, defaultVal bool) bool
+	// GetExtraConfig returns the raw extra_config JSON object. It is opaque
+	// here: GetExtra(key) and GetExtraBool(key, default) used to sit beside it,
+	// which forced every implementer to know each driver's key names — the
+	// adapter answered "es_urls" and "mongo_uri" by hand, and returned "" with
+	// a TODO for the keys nobody had wired yet.
 	GetExtraConfig() string
 }
 
-// parseCSV splits a comma-separated string into a trimmed, non-empty slice.
-func parseCSV(s string) []string {
-	if s == "" {
-		return nil
-	}
-	var result []string
-	for _, part := range strings.Split(s, ",") {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			result = append(result, part)
-		}
-	}
-	return result
+// ConfigDecoder is implemented by drivers that need settings beyond host,
+// port, credentials and database.
+//
+// It is the symmetric half of ConfigValidator: validation belongs to the driver
+// because only it knows what its fields mean, and decoding them is the same
+// argument. The map is the datasource's extra_config object, already parsed;
+// the driver takes what it recognizes and applies its own defaults for what is
+// missing.
+//
+// Errors are for malformed values, not absent ones. A datasource can be saved
+// before it is fully configured, and refusing to build a Config would turn that
+// into a failure at connect time with a message about JSON.
+type ConfigDecoder interface {
+	DecodeConfig(cfg *Config, extra map[string]interface{}) error
 }
 
 // ValidateDriverType checks whether the given type string corresponds to a registered driver.
@@ -185,18 +151,4 @@ func ValidateDriverType(typeName string) error {
 		return fmt.Errorf("unsupported datasource type: %s (supported: %v)", typeName, SupportedTypes())
 	}
 	return nil
-}
-
-// extraString reads a string field out of a decoded extra_config object.
-//
-// A missing key and a key holding the wrong type are both reported as absent,
-// so the caller falls back to the stored column rather than to a zero value —
-// an empty urls list is indistinguishable from "not configured" once it reaches
-// the driver.
-func extraString(extra map[string]interface{}, key string) (string, bool) {
-	if extra == nil {
-		return "", false
-	}
-	v, ok := extra[key].(string)
-	return v, ok
 }
