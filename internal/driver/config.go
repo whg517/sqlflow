@@ -7,13 +7,34 @@ import (
 	"time"
 )
 
+// Secrets are a datasource's credentials, in plaintext, ready to hand to a
+// driver.
+//
+// They travel as a struct rather than as loose string parameters so that
+// adding one is a compile error at every call site. Two loose strings would
+// have let the old `BuildConfigFromDataSource(adapter, password, "")` calls
+// keep compiling unchanged, which is exactly how the API key ended up reaching
+// Elasticsearch encrypted.
+type Secrets struct {
+	// Password is the decrypted password. Empty for datasources without one.
+	Password string
+	// APIKey is the decrypted Elasticsearch API key. Empty for every other type
+	// and for ES datasources that authenticate some other way.
+	APIKey string
+}
+
 // BuildConfigFromDataSource creates a driver.Config from a DataSource-like struct.
 // This function is the unified entry point for converting any datasource representation
 // to the driver.Config used by the Driver interface.
 //
 // The ds parameter must implement the DataSourceInfo interface.
 // Caller should ensure ds.GetType() returns a valid, registered driver type.
-func BuildConfigFromDataSource(ds DataSourceInfo, password string, encryptionKey string) (*Config, error) {
+//
+// Credentials come from secrets rather than off ds, because ds carries them as
+// stored — encrypted. The API key used to be read through
+// ds.GetExtra("es_api_key") and sent to Elasticsearch as ciphertext, while the
+// third parameter here was named encryptionKey and never used at all.
+func BuildConfigFromDataSource(ds DataSourceInfo, secrets Secrets) (*Config, error) {
 	dsType := ds.GetType()
 	if err := ValidateDriverType(dsType); err != nil {
 		return nil, err
@@ -24,7 +45,7 @@ func BuildConfigFromDataSource(ds DataSourceInfo, password string, encryptionKey
 		Host:        ds.GetHost(),
 		Port:        ds.GetPort(),
 		Username:    ds.GetUsername(),
-		Password:    password,
+		Password:    secrets.Password,
 		Database:    ds.GetDatabase(),
 		SSLMode:     ds.GetSSLMode(),
 		SchemaName:  ds.GetSchemaName(),
@@ -73,9 +94,6 @@ func BuildConfigFromDataSource(ds DataSourceInfo, password string, encryptionKey
 			if v, ok := extraMap["verify_certs"]; ok {
 				cfg.Extra["verify_certs"] = v
 			}
-			if v, ok := extraMap["api_key"].(string); ok {
-				cfg.Extra["api_key"] = v
-			}
 			if v, ok := extraMap["index_pattern"].(string); ok {
 				cfg.Extra["index_pattern"] = v
 			}
@@ -84,12 +102,15 @@ func BuildConfigFromDataSource(ds DataSourceInfo, password string, encryptionKey
 			cfg.Extra["urls"] = parseCSV(ds.GetExtra("es_urls"))
 			cfg.Extra["auth_type"] = ds.GetExtra("es_auth_type")
 			cfg.Extra["verify_certs"] = ds.GetExtraBool("es_verify_certs", true)
-			if apiKey := ds.GetExtra("es_api_key"); apiKey != "" {
-				cfg.Extra["api_key"] = apiKey
-			}
 			if indexPattern := ds.GetExtra("es_index_pattern"); indexPattern != "" {
 				cfg.Extra["index_pattern"] = indexPattern
 			}
+		}
+		// The key comes from the caller in either branch: extra_config holds
+		// whatever was written into it, but the stored secret is encrypted and
+		// only the caller has the key to read it.
+		if secrets.APIKey != "" {
+			cfg.Extra["api_key"] = secrets.APIKey
 		}
 	case "mongodb":
 		if extraMap != nil {

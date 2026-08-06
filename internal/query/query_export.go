@@ -10,7 +10,6 @@ import (
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
-	"github.com/whg517/sqlflow/internal/platform/crypto"
 )
 
 const exportRowLimit = 10000
@@ -40,10 +39,9 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 		dbType = ds.Type
 	}
 
-	// Decrypt password
-	password, err := crypto.Decrypt(ds.PasswordEncrypted, s.encryptionKey)
+	secrets, err := datasource.DecryptSecrets(ds, s.encryptionKey)
 	if err != nil {
-		return nil, fmt.Errorf("解密密码失败: %w", err)
+		return nil, fmt.Errorf("解密数据源凭据失败: %w", err)
 	}
 
 	// Parse SQL via unified parser
@@ -90,7 +88,7 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 		return nil, ErrQueryUnavailable
 	}
 	adapter := datasource.NewAdapter(ds)
-	cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+	cfg, err := driver.BuildConfigFromDataSource(adapter, secrets)
 	if err != nil {
 		return nil, err
 	}

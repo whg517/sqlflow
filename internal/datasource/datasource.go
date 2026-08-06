@@ -109,7 +109,7 @@ func (s *Service) PoolManager() *driver.PoolManager {
 // when the target may legitimately be unreachable. Credentials are not needed
 // either — the rules cover shape and transport, not authentication.
 func (s *Service) validateDriverConfig(ds *model.DataSource) error {
-	cfg, err := driver.BuildConfigFromDataSource(NewAdapter(ds), "", "")
+	cfg, err := driver.BuildConfigFromDataSource(NewAdapter(ds), driver.Secrets{})
 	if err != nil {
 		return err
 	}
@@ -588,6 +588,11 @@ func (s *Service) removeDatasourcePool(id int64) {
 	}
 }
 
+// datasourceSecrets decrypts the credentials stored for a datasource.
+func (s *Service) datasourceSecrets(ds *model.DataSource) (driver.Secrets, error) {
+	return DecryptSecrets(ds, s.encryptionKey)
+}
+
 // TestConnection attempts to connect to the datasource using the Driver abstraction.
 func (s *Service) TestConnection(ctx context.Context, ds *model.DataSource) error {
 	password := ds.PasswordEncrypted
@@ -628,10 +633,11 @@ func (s *Service) TestConnection(ctx context.Context, ds *model.DataSource) erro
 		return ErrInvalidDatasourceType
 	}
 
-	candidate := *ds
-	candidate.ESApiKey = esAPIKey
-	adapter := NewAdapter(&candidate)
-	cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+	// The candidate carries the edited configuration; the secrets resolved
+	// above are already plaintext, whether they came from the form or from the
+	// stored row.
+	adapter := NewAdapter(ds)
+	cfg, err := driver.BuildConfigFromDataSource(adapter, driver.Secrets{Password: password, APIKey: esAPIKey})
 	if err != nil {
 		return err
 	}
@@ -655,7 +661,7 @@ func (s *Service) TestConnection(ctx context.Context, ds *model.DataSource) erro
 // It reports ErrMetadataNotSupported for drivers that do not declare
 // CapMetadata, so an unsupported source gets an explicit answer instead of
 // being silently routed somewhere that happens to compile.
-func (s *Service) metadataDriver(ctx context.Context, ds *model.DataSource, password string) (driver.Driver, error) {
+func (s *Service) metadataDriver(ctx context.Context, ds *model.DataSource, secrets driver.Secrets) (driver.Driver, error) {
 	// An unregistered type is invalid regardless of how the service is wired,
 	// so it is reported before anything that depends on the pool.
 	if !driver.IsRegistered(ds.Type) {
@@ -665,7 +671,7 @@ func (s *Service) metadataDriver(ctx context.Context, ds *model.DataSource, pass
 		return nil, ErrMetadataNotSupported
 	}
 	adapter := NewAdapter(ds)
-	cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+	cfg, err := driver.BuildConfigFromDataSource(adapter, secrets)
 	if err != nil {
 		return nil, err
 	}
@@ -690,16 +696,16 @@ func (s *Service) GetTables(ctx context.Context, id int64) ([]string, error) {
 		return nil, ErrDatasourceDisabled
 	}
 
-	password, err := crypto.Decrypt(ds.PasswordEncrypted, s.encryptionKey)
+	secrets, err := s.datasourceSecrets(ds)
 	if err != nil {
-		return nil, fmt.Errorf("decrypt password: %w", err)
+		return nil, err
 	}
 
 	// Route by declared capability. A hand-kept type list here used to exclude
 	// MongoDB and Elasticsearch even though both declare CapMetadata, and it
 	// substituted a default database name that made MySQL list the server's own
 	// catalog. What an empty scope means belongs to the driver.
-	d, err := s.metadataDriver(ctx, ds, password)
+	d, err := s.metadataDriver(ctx, ds, secrets)
 	if err != nil {
 		return nil, err
 	}
@@ -732,12 +738,12 @@ func (s *Service) GetTableColumns(ctx context.Context, id int64, tableName strin
 		return nil, ErrDatasourceDisabled
 	}
 
-	password, err := crypto.Decrypt(ds.PasswordEncrypted, s.encryptionKey)
+	secrets, err := s.datasourceSecrets(ds)
 	if err != nil {
-		return nil, fmt.Errorf("decrypt password: %w", err)
+		return nil, err
 	}
 
-	d, err := s.metadataDriver(ctx, ds, password)
+	d, err := s.metadataDriver(ctx, ds, secrets)
 	if err != nil {
 		return nil, err
 	}

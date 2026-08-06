@@ -14,7 +14,6 @@ import (
 	executionresult "github.com/whg517/sqlflow/internal/db/ent/executionresult"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
-	"github.com/whg517/sqlflow/internal/platform/crypto"
 )
 
 // statementResult holds the outcome of executing a single SQL statement.
@@ -46,9 +45,9 @@ func convertDriverResults(drvResults []driver.StatementResult) []statementResult
 // For MySQL/PostgreSQL: splits multi-statement SQL and executes each statement individually.
 // For MongoDB: parses JSON command body and executes via mongo driver.
 func (s *Service) executeSQL(ctx context.Context, ds *model.DataSource, database, dbType, sqlContent string) ([]statementResult, error) {
-	password, err := crypto.Decrypt(ds.PasswordEncrypted, s.encryptionKey)
+	secrets, err := datasource.DecryptSecrets(ds, s.encryptionKey)
 	if err != nil {
-		return nil, fmt.Errorf("解密数据库密码失败: %w", err)
+		return nil, fmt.Errorf("解密数据源凭据失败: %w", err)
 	}
 
 	if s.poolMgr == nil {
@@ -56,7 +55,7 @@ func (s *Service) executeSQL(ctx context.Context, ds *model.DataSource, database
 	}
 
 	adapter := datasource.NewAdapter(ds)
-	cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+	cfg, err := driver.BuildConfigFromDataSource(adapter, secrets)
 	if err != nil {
 		return nil, fmt.Errorf("构建连接配置失败: %w", err)
 	}

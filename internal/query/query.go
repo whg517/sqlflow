@@ -20,7 +20,6 @@ import (
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
-	"github.com/whg517/sqlflow/internal/platform/crypto"
 	"github.com/whg517/sqlflow/internal/platform/mask"
 	pkgmetrics "github.com/whg517/sqlflow/internal/platform/metrics"
 	"github.com/whg517/sqlflow/internal/security"
@@ -138,10 +137,9 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 		dbType = ds.Type
 	}
 
-	// Decrypt password
-	password, err := crypto.Decrypt(ds.PasswordEncrypted, s.encryptionKey)
+	secrets, err := datasource.DecryptSecrets(ds, s.encryptionKey)
 	if err != nil {
-		return nil, fmt.Errorf("解密密码失败: %w", err)
+		return nil, fmt.Errorf("解密数据源凭据失败: %w", err)
 	}
 
 	// Ask the driver to interpret the query. Parsing needs no connection, and
@@ -184,7 +182,7 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 		return nil, ErrQueryUnavailable
 	}
 	adapter := datasource.NewAdapter(ds)
-	cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+	cfg, err := driver.BuildConfigFromDataSource(adapter, secrets)
 	if err != nil {
 		return nil, err
 	}
@@ -543,10 +541,9 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 		return nil, datasource.ErrDatasourceDisabled
 	}
 
-	// Decrypt password
-	password, err := crypto.Decrypt(ds.PasswordEncrypted, s.encryptionKey)
+	secrets, err := datasource.DecryptSecrets(ds, s.encryptionKey)
 	if err != nil {
-		return nil, fmt.Errorf("解密密码失败: %w", err)
+		return nil, fmt.Errorf("解密数据源凭据失败: %w", err)
 	}
 
 	// Parse for the table-level permission check. The datasource type is
@@ -579,7 +576,7 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 		return nil, ErrQueryUnavailable
 	}
 	adapter := datasource.NewAdapter(ds)
-	cfg, err := driver.BuildConfigFromDataSource(adapter, password, "")
+	cfg, err := driver.BuildConfigFromDataSource(adapter, secrets)
 	if err != nil {
 		return nil, err
 	}

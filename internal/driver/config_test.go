@@ -67,7 +67,7 @@ func TestBuildConfigFromDataSource_MySQL(t *testing.T) {
 		maxIdleTime: 300,
 	}
 
-	cfg, err := driver.BuildConfigFromDataSource(ds, "secret", "key")
+	cfg, err := driver.BuildConfigFromDataSource(ds, driver.Secrets{Password: "secret"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestBuildConfigFromDataSource_Defaults(t *testing.T) {
 		port:   5432,
 	}
 
-	cfg, err := driver.BuildConfigFromDataSource(ds, "", "")
+	cfg, err := driver.BuildConfigFromDataSource(ds, driver.Secrets{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestBuildConfigFromDataSource_Elasticsearch(t *testing.T) {
 		},
 	}
 
-	cfg, err := driver.BuildConfigFromDataSource(ds, "pass", "")
+	cfg, err := driver.BuildConfigFromDataSource(ds, driver.Secrets{Password: "pass"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestBuildConfigFromDataSource_MongoDB(t *testing.T) {
 		},
 	}
 
-	cfg, err := driver.BuildConfigFromDataSource(ds, "", "")
+	cfg, err := driver.BuildConfigFromDataSource(ds, driver.Secrets{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestBuildConfigFromDataSource_InvalidType(t *testing.T) {
 		dsType: "oracle",
 	}
 
-	_, err := driver.BuildConfigFromDataSource(ds, "", "")
+	_, err := driver.BuildConfigFromDataSource(ds, driver.Secrets{})
 	if err == nil {
 		t.Fatal("expected error for unregistered type, got nil")
 	}

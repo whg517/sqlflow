@@ -1,6 +1,39 @@
 package datasource
 
-import "github.com/whg517/sqlflow/internal/model"
+import (
+	"fmt"
+
+	"github.com/whg517/sqlflow/internal/driver"
+	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/platform/crypto"
+)
+
+// DecryptSecrets returns a stored datasource's credentials in plaintext.
+//
+// Both secrets are decrypted together on purpose. Callers used to decrypt the
+// password themselves and never think about the API key, which reached the
+// Elasticsearch driver still encrypted: the connection test passed (it had its
+// own decryption step) while every real query got a 401. Returning them as a
+// pair means adding a third secret later shows up as a compile error at every
+// call site instead of as another silent 401.
+func DecryptSecrets(ds *model.DataSource, encryptionKey string) (driver.Secrets, error) {
+	var secrets driver.Secrets
+	if ds.PasswordEncrypted != "" {
+		password, err := crypto.Decrypt(ds.PasswordEncrypted, encryptionKey)
+		if err != nil {
+			return driver.Secrets{}, fmt.Errorf("decrypt password: %w", err)
+		}
+		secrets.Password = password
+	}
+	if ds.ESApiKey != "" {
+		apiKey, err := crypto.Decrypt(ds.ESApiKey, encryptionKey)
+		if err != nil {
+			return driver.Secrets{}, fmt.Errorf("decrypt es_api_key: %w", err)
+		}
+		secrets.APIKey = apiKey
+	}
+	return secrets, nil
+}
 
 // Adapter adapts model.DataSource to implement driver.DataSourceInfo.
 type Adapter struct {
@@ -36,8 +69,6 @@ func (a *Adapter) GetExtra(key string) string {
 		return a.ds.ESVersion
 	case "es_auth_type":
 		return a.ds.ESAuthType
-	case "es_api_key":
-		return a.ds.ESApiKey
 	case "es_index_pattern":
 		return a.ds.ESIndexPattern
 	case "mongo_uri":
