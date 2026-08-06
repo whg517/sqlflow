@@ -5,7 +5,6 @@ package driver_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/whg517/sqlflow/internal/driver"
 	_ "github.com/whg517/sqlflow/internal/driver/elasticsearch"
@@ -137,19 +136,9 @@ func TestPoolManager_Basic(t *testing.T) {
 	pm := driver.NewPoolManager()
 	defer pm.Close()
 
-	cfg := &driver.Config{
-		ID:       1,
-		Host:     "localhost",
-		Port:     3306,
-		Username: "root",
-		Password: "test",
-		Database: "test",
-		Extra:    map[string]interface{}{"_type": "mock"},
-	}
-
 	// Inject a mock driver directly
 	mock := &mockDriver{typ: "mock"}
-	pm.InjectForTest(1, mock, cfg)
+	pm.InjectForTest(1, mock)
 
 	// GetCached should return the mock
 	d := pm.GetCached(1)
@@ -178,36 +167,54 @@ func TestPoolManager_Basic(t *testing.T) {
 	}
 }
 
-func TestPoolManager_Get_MySQL(t *testing.T) {
+// TestPoolManagerGetCachesTheConnection checks Get's actual contract: connect
+// once, then hand the same driver back.
+//
+// It replaces a test that called Get against a MySQL that was not running,
+// returned early if the call happened to succeed, and otherwise asserted only
+// that "mysql" was in the registry — so it passed on every outcome and verified
+// nothing about Get at all.
+func TestPoolManagerGetCachesTheConnection(t *testing.T) {
+	poolTestConnects.Store(0)
+	poolTestCloses.Store(0)
+
+	pm := driver.NewPoolManager()
+	defer pm.Close()
+	cfg := countingConfig(6)
+
+	first, err := pm.Get(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("first Get: %v", err)
+	}
+	second, err := pm.Get(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("second Get: %v", err)
+	}
+
+	if first != second {
+		t.Error("the second Get returned a different driver — the connection was not cached")
+	}
+	if got := poolTestConnects.Load(); got != 1 {
+		t.Errorf("Connect called %d times for two Gets, want 1", got)
+	}
+
+	pm.Remove(6)
+	if got := poolTestCloses.Load(); got != 1 {
+		t.Errorf("Close called %d times after Remove, want 1", got)
+	}
+	if pm.GetCached(6) != nil {
+		t.Error("the entry survived Remove")
+	}
+}
+
+// TestPoolManagerGetReportsUnregisteredType keeps the registry error distinct
+// from a connection failure — the two need different messages to the operator.
+func TestPoolManagerGetReportsUnregisteredType(t *testing.T) {
 	pm := driver.NewPoolManager()
 	defer pm.Close()
 
-	// This will fail because there's no MySQL server, but the driver creation should work
-	cfg := &driver.Config{
-		ID:       2,
-		Host:     "localhost",
-		Port:     3306,
-		Username: "root",
-		Password: "invalid_password_for_test",
-		Database: "test",
-		MaxOpen:  5,
-		MaxIdle:  2,
-		Extra:    map[string]interface{}{"_type": "mysql"},
-	}
-
-	// Use a short timeout to avoid waiting 30s on connection failure
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	_, err := pm.Get(ctx, cfg)
-	// Will fail to connect, but driver.NewDriver("mysql") should succeed
-	// The error should be about connection, not about unsupported type
+	_, err := pm.Get(t.Context(), &driver.Config{ID: 7, Extra: map[string]interface{}{"_type": "oracle"}})
 	if err == nil {
-		// If by chance MySQL is running, that's fine
-		return
-	}
-	// Just verify that mysql is registered (the error is about connection)
-	if !driver.IsRegistered("mysql") {
-		t.Error("mysql should be registered")
+		t.Fatal("an unregistered driver type was accepted")
 	}
 }

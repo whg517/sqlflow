@@ -301,7 +301,7 @@ func TestExportQuery_Success(t *testing.T) {
 
 	// Inject SQLite DB as the target MySQL pool
 	sqliteDB := setupExportTestDB(t)
-	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(sqliteDB), &driver.Config{ID: dsID, Database: "testdb"})
+	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(sqliteDB))
 
 	// Recreate Service with the shared connMgr
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
@@ -341,7 +341,7 @@ func TestExportQuery_SuccessWithDesensitization(t *testing.T) {
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	sqliteDB := setupExportTestDB(t)
-	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(sqliteDB), &driver.Config{ID: dsID, Database: "testdb"})
+	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(sqliteDB))
 
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	seedPolicy(t, testDB, permSvc, "developer", fmt.Sprintf("ds_%d", dsID), "*", "select")
@@ -384,7 +384,7 @@ func TestExportQuery_EmptyResult(t *testing.T) {
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	sqliteDB := setupExportTestDB(t)
-	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(sqliteDB), &driver.Config{ID: dsID, Database: "testdb"})
+	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(sqliteDB))
 
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "users", "select")
@@ -432,7 +432,7 @@ func TestExportQuery_RowLimitExceeded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sqlmock.New() error: %v", err)
 	}
-	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(mockDB), &driver.Config{ID: dsID, Database: "testdb"})
+	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(mockDB))
 
 	// Build 10001 rows to exceed the export limit
 	rows := sqlmock.NewRows([]string{"id"})
@@ -462,7 +462,7 @@ func TestExportQuery_AuditOnSuccess(t *testing.T) {
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	sqliteDB := setupExportTestDB(t)
-	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(sqliteDB), &driver.Config{ID: dsID, Database: "testdb"})
+	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(sqliteDB))
 
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "select")
@@ -544,7 +544,7 @@ func TestExportQuery_DefaultDBType(t *testing.T) {
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	sqliteDB := setupExportTestDB(t)
-	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(sqliteDB), &driver.Config{ID: dsID, Database: "testdb"})
+	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(sqliteDB))
 
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "select")

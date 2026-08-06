@@ -83,8 +83,7 @@ func TestExecuteSQL_DriverPath_MySQL(t *testing.T) {
 			{Statement: "INSERT INTO t1 VALUES (1)", Status: "success", RowsAffected: 1, DurationMs: 3},
 		},
 	}
-	cfg := &driver.Config{ID: 100, Host: "localhost", Port: 3306, Database: "testdb", Extra: map[string]interface{}{"_type": "mysql"}}
-	poolMgr.InjectForTest(100, mockDrv, cfg)
+	poolMgr.InjectForTest(100, mockDrv)
 
 	// 创建 MySQL 数据源
 	encPass, _ := crypto.Encrypt("test", encKey)
@@ -149,8 +148,7 @@ func TestExecuteSQL_DriverPath_PostgreSQLRollback(t *testing.T) {
 		},
 		mockErr: errors.New("statement failed: syntax error"),
 	}
-	cfg := &driver.Config{ID: 200, Host: "localhost", Port: 5432, Database: "testdb", SSLMode: "disable", Extra: map[string]interface{}{"_type": "postgresql"}}
-	poolMgr.InjectForTest(200, mockDrv, cfg)
+	poolMgr.InjectForTest(200, mockDrv)
 
 	encPass, _ := crypto.Encrypt("test", encKey)
 	_, err := d.DB.ExecContext(context.Background(),

@@ -3,8 +3,8 @@ package driver
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
-	"time"
 )
 
 // poolKey uniquely identifies a connection by datasource ID.
@@ -17,10 +17,15 @@ type PoolManager struct {
 	entries map[poolKey]*poolEntry
 }
 
+// poolEntry holds one datasource's connected driver.
+//
+// It carried a lastUse timestamp and a copy of the config. Neither was ever
+// read — there is no idle eviction — and lastUse was written from Get after the
+// read lock was released and from GetCached while only holding it, so two
+// concurrent lookups of the same datasource raced. Bookkeeping nothing consults
+// is not worth a race.
 type poolEntry struct {
-	driver  Driver
-	config  *Config
-	lastUse time.Time
+	driver Driver
 }
 
 // NewPoolManager creates a new PoolManager.
@@ -32,6 +37,18 @@ func NewPoolManager() *PoolManager {
 
 // Get returns a connected Driver for the given config.
 // If no cached Driver exists, it creates and connects a new one.
+//
+// Connecting happens outside the lock, so concurrent callers can race to
+// connect the same datasource; the write is guarded by a second lookup and the
+// loser is closed. Without that, N callers missing the cache together left N-1
+// connected drivers overwritten in the map — still holding sockets, no longer
+// reachable by Remove or Close, which can only walk entries that are present.
+// Saving a datasource evicts the entry, which is what produces the simultaneous
+// miss in the first place.
+//
+// Holding the write lock across Connect would make it exactly one connection,
+// but a slow or hanging target would then block every other datasource's
+// lookups.
 func (pm *PoolManager) Get(ctx context.Context, cfg *Config) (Driver, error) {
 	key := poolKey(cfg.ID)
 
@@ -40,12 +57,15 @@ func (pm *PoolManager) Get(ctx context.Context, cfg *Config) (Driver, error) {
 	pm.mu.RUnlock()
 
 	if ok {
-		entry.lastUse = time.Now()
 		return entry.driver, nil
 	}
 
-	// Create a new driver instance
-	d, err := NewDriver(cfg.Extra["_type"].(string))
+	dsType, ok := cfg.Extra["_type"].(string)
+	if !ok || dsType == "" {
+		return nil, fmt.Errorf("config for datasource %d carries no driver type", cfg.ID)
+	}
+
+	d, err := NewDriver(dsType)
 	if err != nil {
 		return nil, err
 	}
@@ -55,11 +75,14 @@ func (pm *PoolManager) Get(ctx context.Context, cfg *Config) (Driver, error) {
 	}
 
 	pm.mu.Lock()
-	pm.entries[key] = &poolEntry{
-		driver:  d,
-		config:  cfg,
-		lastUse: time.Now(),
+	if existing, raced := pm.entries[key]; raced {
+		pm.mu.Unlock()
+		if err := d.Close(); err != nil {
+			log.Printf("driver pool: close redundant %s connection for datasource %d: %v", dsType, cfg.ID, err)
+		}
+		return existing.driver, nil
 	}
+	pm.entries[key] = &poolEntry{driver: d}
 	pm.mu.Unlock()
 
 	return d, nil
@@ -71,7 +94,6 @@ func (pm *PoolManager) GetCached(dsID int64) Driver {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 	if entry, ok := pm.entries[poolKey(dsID)]; ok {
-		entry.lastUse = time.Now()
 		return entry.driver
 	}
 	return nil
@@ -87,7 +109,9 @@ func (pm *PoolManager) Remove(dsID int64) {
 	pm.mu.Unlock()
 
 	if entry != nil {
-		_ = entry.driver.Close()
+		if err := entry.driver.Close(); err != nil {
+			log.Printf("driver pool: close connection for datasource %d: %v", dsID, err)
+		}
 	}
 }
 
@@ -98,20 +122,21 @@ func (pm *PoolManager) Close() {
 	pm.entries = make(map[poolKey]*poolEntry)
 	pm.mu.Unlock()
 
-	for _, entry := range entries {
-		_ = entry.driver.Close()
+	for key, entry := range entries {
+		if err := entry.driver.Close(); err != nil {
+			log.Printf("driver pool: close connection for datasource %d: %v", int64(key), err)
+		}
 	}
 }
 
 // InjectForTest injects a pre-connected driver for testing.
-func (pm *PoolManager) InjectForTest(dsID int64, d Driver, cfg *Config) {
+//
+// It takes no Config: the manager keys on datasource ID alone and never reads
+// the config back, so accepting one only invited callers to believe it mattered.
+func (pm *PoolManager) InjectForTest(dsID int64, d Driver) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	pm.entries[poolKey(dsID)] = &poolEntry{
-		driver:  d,
-		config:  cfg,
-		lastUse: time.Now(),
-	}
+	pm.entries[poolKey(dsID)] = &poolEntry{driver: d}
 }
 
 // ManagedIDs returns all managed datasource IDs.

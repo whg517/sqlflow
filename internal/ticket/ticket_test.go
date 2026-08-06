@@ -656,7 +656,7 @@ func TestFullWorkflow(t *testing.T) {
 		t.Fatalf("sqlmock: %v", err)
 	}
 	defer mockDB.Close()
-	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(mockDB), &driver.Config{ID: dsID, Database: "mydb"})
+	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(mockDB))
 
 	// Step 1: Create ticket
 	ticket, err := svc.CreateTicket(context.Background(), devID, "developer", dsID, "mydb",

@@ -1093,7 +1093,7 @@ func TestGetTables_MySQLSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sqlmock.New() error: %v", err)
 	}
-	poolMgr.InjectForTest(ds.ID, mysqldriver.NewWithDB(mockDB), &driver.Config{ID: ds.ID, Database: "testdb"})
+	poolMgr.InjectForTest(ds.ID, mysqldriver.NewWithDB(mockDB))
 
 	mock.ExpectQuery("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES").WillReturnRows(
 		sqlmock.NewRows([]string{"TABLE_NAME"}).AddRow("users").AddRow("orders").AddRow("products"),
@@ -1133,7 +1133,7 @@ func TestGetTables_MySQLEmptyResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sqlmock.New() error: %v", err)
 	}
-	poolMgr.InjectForTest(ds.ID, mysqldriver.NewWithDB(mockDB), &driver.Config{ID: ds.ID, Database: "emptydb"})
+	poolMgr.InjectForTest(ds.ID, mysqldriver.NewWithDB(mockDB))
 
 	mock.ExpectQuery("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES").WillReturnRows(
 		sqlmock.NewRows([]string{"TABLE_NAME"}),
@@ -1216,7 +1216,7 @@ func TestGetTables_MySQLQueryError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sqlmock.New() error: %v", err)
 	}
-	poolMgr.InjectForTest(ds.ID, mysqldriver.NewWithDB(mockDB), &driver.Config{ID: ds.ID, Database: "testdb"})
+	poolMgr.InjectForTest(ds.ID, mysqldriver.NewWithDB(mockDB))
 
 	mock.ExpectQuery("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES").WillReturnError(sql.ErrTxDone)
 

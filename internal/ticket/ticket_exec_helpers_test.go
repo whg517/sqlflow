@@ -66,7 +66,7 @@ func setupTicketExecTest(t *testing.T) (platform *db.DB, ticketSvc *Service, tar
 	poolMgr := driver.NewPoolManager()
 	// Stand in for the governed target: execution runs through the driver, so
 	// the driver is what gets injected.
-	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(target.DB), &driver.Config{ID: dsID, Database: ticketExecDatabase})
+	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(target.DB))
 
 	dsSvc := datasource.NewService(platform, ticketExecTestKey, connMgr, poolMgr)
 	ticketSvc = New(Deps{

@@ -56,7 +56,7 @@ func TestExecuteSQL_PostgreSQLRoute(t *testing.T) {
 	}
 
 	// Inject the mock as a PG pool
-	poolMgr.InjectForTest(dsID, pgdriver.NewWithDB(mockDB), &driver.Config{ID: dsID, Database: "testdb"})
+	poolMgr.InjectForTest(dsID, pgdriver.NewWithDB(mockDB))
 
 	// Expect: BeginTx → Exec("CREATE TABLE") → Exec("INSERT") → Commit
 	mock.ExpectBegin()
@@ -120,7 +120,7 @@ func TestExecuteSQL_PostgreSQLRollback(t *testing.T) {
 		t.Fatalf("create datasource: %v", err)
 	}
 
-	poolMgr.InjectForTest(dsID, pgdriver.NewWithDB(mockDB), &driver.Config{ID: dsID, Database: "testdb"})
+	poolMgr.InjectForTest(dsID, pgdriver.NewWithDB(mockDB))
 
 	// Expect: BeginTx → Exec succeeds → Exec fails → Rollback
 	mock.ExpectBegin()
@@ -186,7 +186,7 @@ func TestExecuteSQL_MySQLNoTransaction(t *testing.T) {
 		t.Fatalf("create datasource: %v", err)
 	}
 
-	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(mockDB), &driver.Config{ID: dsID, Database: "testdb"})
+	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(mockDB))
 
 	// MySQL: expect direct ExecContext calls WITHOUT BeginTx/Commit/Rollback
 	mock.ExpectExec("SELECT 1").WillReturnResult(sqlmock.NewResult(0, 0))
