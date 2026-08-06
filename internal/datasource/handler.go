@@ -65,7 +65,11 @@ type createDatasourceRequest struct {
 	ESAuthType     string `json:"es_auth_type"`
 	ESApiKey       string `json:"es_api_key"`
 	ESIndexPattern string `json:"es_index_pattern"`
-	ESVerifyCerts  bool   `json:"es_verify_certs"`
+	// ESVerifyCerts is a pointer so that omitting it is distinguishable from
+	// sending false. As a plain bool it bound to the zero value, and an omitted
+	// field silently disabled certificate verification — accepting any
+	// certificate and handing the credentials to whoever answered.
+	ESVerifyCerts *bool `json:"es_verify_certs"`
 }
 
 type updateDatasourceRequest struct {
@@ -88,7 +92,11 @@ type updateDatasourceRequest struct {
 	ESAuthType     string `json:"es_auth_type"`
 	ESApiKey       string `json:"es_api_key"`
 	ESIndexPattern string `json:"es_index_pattern"`
-	ESVerifyCerts  bool   `json:"es_verify_certs"`
+	// ESVerifyCerts is a pointer so that omitting it is distinguishable from
+	// sending false. As a plain bool it bound to the zero value, and an omitted
+	// field silently disabled certificate verification — accepting any
+	// certificate and handing the credentials to whoever answered.
+	ESVerifyCerts *bool `json:"es_verify_certs"`
 }
 
 type datasourceResponse struct {
@@ -163,6 +171,18 @@ func validateDatasourceConnectionRequest(req createDatasourceRequest, allowStore
 		}
 	}
 	return ""
+}
+
+// verifyCertsOrDefault resolves an omitted es_verify_certs to on.
+//
+// The default is deliberately the safe one: a caller that says nothing gets
+// certificate verification. Turning it off is a real need for self-signed
+// certificates in a lab, so it stays expressible — but only by saying so.
+func verifyCertsOrDefault(v *bool) bool {
+	if v == nil {
+		return true
+	}
+	return *v
 }
 
 func normalizeDatasourceStorageFields(req *createDatasourceRequest) {
@@ -255,7 +275,7 @@ func (h *Handler) CreateDatasource(c echo.Context) error {
 		ESAuthType:        req.ESAuthType,
 		ESApiKey:          req.ESApiKey,
 		ESIndexPattern:    req.ESIndexPattern,
-		ESVerifyCerts:     req.ESVerifyCerts,
+		ESVerifyCerts:     verifyCertsOrDefault(req.ESVerifyCerts),
 	}
 
 	if err := h.dsSvc.CreateDataSource(c.Request().Context(), ds); err != nil {
@@ -431,7 +451,9 @@ func (h *Handler) UpdateDatasource(c echo.Context) error {
 		ESAuthType:     req.ESAuthType,
 		ESApiKey:       req.ESApiKey,
 		ESIndexPattern: req.ESIndexPattern,
-		ESVerifyCerts:  req.ESVerifyCerts,
+		// Passed through as a pointer so the "omitted" signal survives the
+		// hop between the two request shapes.
+		ESVerifyCerts: req.ESVerifyCerts,
 	}
 	if message := validateDatasourceConnectionRequest(connectionReq, true); message != "" {
 		return resp.BadRequest(c, message)
@@ -458,7 +480,7 @@ func (h *Handler) UpdateDatasource(c echo.Context) error {
 		ESAuthType:        req.ESAuthType,
 		ESApiKey:          req.ESApiKey,
 		ESIndexPattern:    req.ESIndexPattern,
-		ESVerifyCerts:     req.ESVerifyCerts,
+		ESVerifyCerts:     verifyCertsOrDefault(req.ESVerifyCerts),
 	}
 
 	if err := h.dsSvc.UpdateDataSource(c.Request().Context(), id, ds); err != nil {
@@ -680,7 +702,7 @@ func (h *Handler) TestConnectionConfig(c echo.Context) error {
 		ESAuthType:        req.ESAuthType,
 		ESApiKey:          req.ESApiKey,
 		ESIndexPattern:    req.ESIndexPattern,
-		ESVerifyCerts:     req.ESVerifyCerts,
+		ESVerifyCerts:     verifyCertsOrDefault(req.ESVerifyCerts),
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 15*time.Second)
