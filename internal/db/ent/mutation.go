@@ -9456,6 +9456,7 @@ type FeishuDeadLetterMutation struct {
 	webhook_id       *int64
 	addwebhook_id    *int64
 	payload          *string
+	payload_hash     *string
 	error_message    *string
 	attempt_count    *int64
 	addattempt_count *int64
@@ -9657,6 +9658,42 @@ func (m *FeishuDeadLetterMutation) ResetPayload() {
 	m.payload = nil
 }
 
+// SetPayloadHash sets the "payload_hash" field.
+func (m *FeishuDeadLetterMutation) SetPayloadHash(s string) {
+	m.payload_hash = &s
+}
+
+// PayloadHash returns the value of the "payload_hash" field in the mutation.
+func (m *FeishuDeadLetterMutation) PayloadHash() (r string, exists bool) {
+	v := m.payload_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPayloadHash returns the old "payload_hash" field's value of the FeishuDeadLetter entity.
+// If the FeishuDeadLetter object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FeishuDeadLetterMutation) OldPayloadHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPayloadHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPayloadHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPayloadHash: %w", err)
+	}
+	return oldValue.PayloadHash, nil
+}
+
+// ResetPayloadHash resets all changes to the "payload_hash" field.
+func (m *FeishuDeadLetterMutation) ResetPayloadHash() {
+	m.payload_hash = nil
+}
+
 // SetErrorMessage sets the "error_message" field.
 func (m *FeishuDeadLetterMutation) SetErrorMessage(s string) {
 	m.error_message = &s
@@ -9855,12 +9892,15 @@ func (m *FeishuDeadLetterMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *FeishuDeadLetterMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.webhook_id != nil {
 		fields = append(fields, feishudeadletter.FieldWebhookID)
 	}
 	if m.payload != nil {
 		fields = append(fields, feishudeadletter.FieldPayload)
+	}
+	if m.payload_hash != nil {
+		fields = append(fields, feishudeadletter.FieldPayloadHash)
 	}
 	if m.error_message != nil {
 		fields = append(fields, feishudeadletter.FieldErrorMessage)
@@ -9886,6 +9926,8 @@ func (m *FeishuDeadLetterMutation) Field(name string) (ent.Value, bool) {
 		return m.WebhookID()
 	case feishudeadletter.FieldPayload:
 		return m.Payload()
+	case feishudeadletter.FieldPayloadHash:
+		return m.PayloadHash()
 	case feishudeadletter.FieldErrorMessage:
 		return m.ErrorMessage()
 	case feishudeadletter.FieldAttemptCount:
@@ -9907,6 +9949,8 @@ func (m *FeishuDeadLetterMutation) OldField(ctx context.Context, name string) (e
 		return m.OldWebhookID(ctx)
 	case feishudeadletter.FieldPayload:
 		return m.OldPayload(ctx)
+	case feishudeadletter.FieldPayloadHash:
+		return m.OldPayloadHash(ctx)
 	case feishudeadletter.FieldErrorMessage:
 		return m.OldErrorMessage(ctx)
 	case feishudeadletter.FieldAttemptCount:
@@ -9937,6 +9981,13 @@ func (m *FeishuDeadLetterMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPayload(v)
+		return nil
+	case feishudeadletter.FieldPayloadHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPayloadHash(v)
 		return nil
 	case feishudeadletter.FieldErrorMessage:
 		v, ok := value.(string)
@@ -10047,6 +10098,9 @@ func (m *FeishuDeadLetterMutation) ResetField(name string) error {
 		return nil
 	case feishudeadletter.FieldPayload:
 		m.ResetPayload()
+		return nil
+	case feishudeadletter.FieldPayloadHash:
+		m.ResetPayloadHash()
 		return nil
 	case feishudeadletter.FieldErrorMessage:
 		m.ResetErrorMessage()

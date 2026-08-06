@@ -64,6 +64,11 @@ func Payload(v string) predicate.FeishuDeadLetter {
 	return predicate.FeishuDeadLetter(sql.FieldEQ(FieldPayload, v))
 }
 
+// PayloadHash applies equality check predicate on the "payload_hash" field. It's identical to PayloadHashEQ.
+func PayloadHash(v string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldEQ(FieldPayloadHash, v))
+}
+
 // ErrorMessage applies equality check predicate on the "error_message" field. It's identical to ErrorMessageEQ.
 func ErrorMessage(v string) predicate.FeishuDeadLetter {
 	return predicate.FeishuDeadLetter(sql.FieldEQ(FieldErrorMessage, v))
@@ -187,6 +192,71 @@ func PayloadEqualFold(v string) predicate.FeishuDeadLetter {
 // PayloadContainsFold applies the ContainsFold predicate on the "payload" field.
 func PayloadContainsFold(v string) predicate.FeishuDeadLetter {
 	return predicate.FeishuDeadLetter(sql.FieldContainsFold(FieldPayload, v))
+}
+
+// PayloadHashEQ applies the EQ predicate on the "payload_hash" field.
+func PayloadHashEQ(v string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldEQ(FieldPayloadHash, v))
+}
+
+// PayloadHashNEQ applies the NEQ predicate on the "payload_hash" field.
+func PayloadHashNEQ(v string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldNEQ(FieldPayloadHash, v))
+}
+
+// PayloadHashIn applies the In predicate on the "payload_hash" field.
+func PayloadHashIn(vs ...string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldIn(FieldPayloadHash, vs...))
+}
+
+// PayloadHashNotIn applies the NotIn predicate on the "payload_hash" field.
+func PayloadHashNotIn(vs ...string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldNotIn(FieldPayloadHash, vs...))
+}
+
+// PayloadHashGT applies the GT predicate on the "payload_hash" field.
+func PayloadHashGT(v string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldGT(FieldPayloadHash, v))
+}
+
+// PayloadHashGTE applies the GTE predicate on the "payload_hash" field.
+func PayloadHashGTE(v string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldGTE(FieldPayloadHash, v))
+}
+
+// PayloadHashLT applies the LT predicate on the "payload_hash" field.
+func PayloadHashLT(v string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldLT(FieldPayloadHash, v))
+}
+
+// PayloadHashLTE applies the LTE predicate on the "payload_hash" field.
+func PayloadHashLTE(v string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldLTE(FieldPayloadHash, v))
+}
+
+// PayloadHashContains applies the Contains predicate on the "payload_hash" field.
+func PayloadHashContains(v string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldContains(FieldPayloadHash, v))
+}
+
+// PayloadHashHasPrefix applies the HasPrefix predicate on the "payload_hash" field.
+func PayloadHashHasPrefix(v string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldHasPrefix(FieldPayloadHash, v))
+}
+
+// PayloadHashHasSuffix applies the HasSuffix predicate on the "payload_hash" field.
+func PayloadHashHasSuffix(v string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldHasSuffix(FieldPayloadHash, v))
+}
+
+// PayloadHashEqualFold applies the EqualFold predicate on the "payload_hash" field.
+func PayloadHashEqualFold(v string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldEqualFold(FieldPayloadHash, v))
+}
+
+// PayloadHashContainsFold applies the ContainsFold predicate on the "payload_hash" field.
+func PayloadHashContainsFold(v string) predicate.FeishuDeadLetter {
+	return predicate.FeishuDeadLetter(sql.FieldContainsFold(FieldPayloadHash, v))
 }
 
 // ErrorMessageEQ applies the EQ predicate on the "error_message" field.

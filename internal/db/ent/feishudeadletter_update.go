@@ -64,6 +64,20 @@ func (_u *FeishuDeadLetterUpdate) SetNillablePayload(v *string) *FeishuDeadLette
 	return _u
 }
 
+// SetPayloadHash sets the "payload_hash" field.
+func (_u *FeishuDeadLetterUpdate) SetPayloadHash(v string) *FeishuDeadLetterUpdate {
+	_u.mutation.SetPayloadHash(v)
+	return _u
+}
+
+// SetNillablePayloadHash sets the "payload_hash" field if the given value is not nil.
+func (_u *FeishuDeadLetterUpdate) SetNillablePayloadHash(v *string) *FeishuDeadLetterUpdate {
+	if v != nil {
+		_u.SetPayloadHash(*v)
+	}
+	return _u
+}
+
 // SetErrorMessage sets the "error_message" field.
 func (_u *FeishuDeadLetterUpdate) SetErrorMessage(v string) *FeishuDeadLetterUpdate {
 	_u.mutation.SetErrorMessage(v)
@@ -183,6 +197,9 @@ func (_u *FeishuDeadLetterUpdate) sqlSave(ctx context.Context) (_node int, err e
 	if value, ok := _u.mutation.Payload(); ok {
 		_spec.SetField(feishudeadletter.FieldPayload, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.PayloadHash(); ok {
+		_spec.SetField(feishudeadletter.FieldPayloadHash, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.ErrorMessage(); ok {
 		_spec.SetField(feishudeadletter.FieldErrorMessage, field.TypeString, value)
 	}
@@ -251,6 +268,20 @@ func (_u *FeishuDeadLetterUpdateOne) SetPayload(v string) *FeishuDeadLetterUpdat
 func (_u *FeishuDeadLetterUpdateOne) SetNillablePayload(v *string) *FeishuDeadLetterUpdateOne {
 	if v != nil {
 		_u.SetPayload(*v)
+	}
+	return _u
+}
+
+// SetPayloadHash sets the "payload_hash" field.
+func (_u *FeishuDeadLetterUpdateOne) SetPayloadHash(v string) *FeishuDeadLetterUpdateOne {
+	_u.mutation.SetPayloadHash(v)
+	return _u
+}
+
+// SetNillablePayloadHash sets the "payload_hash" field if the given value is not nil.
+func (_u *FeishuDeadLetterUpdateOne) SetNillablePayloadHash(v *string) *FeishuDeadLetterUpdateOne {
+	if v != nil {
+		_u.SetPayloadHash(*v)
 	}
 	return _u
 }
@@ -403,6 +434,9 @@ func (_u *FeishuDeadLetterUpdateOne) sqlSave(ctx context.Context) (_node *Feishu
 	}
 	if value, ok := _u.mutation.Payload(); ok {
 		_spec.SetField(feishudeadletter.FieldPayload, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PayloadHash(); ok {
+		_spec.SetField(feishudeadletter.FieldPayloadHash, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ErrorMessage(); ok {
 		_spec.SetField(feishudeadletter.FieldErrorMessage, field.TypeString, value)

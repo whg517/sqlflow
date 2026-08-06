@@ -167,6 +167,16 @@ func hashURL(rawURL string) string {
 	return hex.EncodeToString(h[:])
 }
 
+// hashPayload keys a dead letter by its content.
+//
+// The unique index is on this rather than on the payload column because
+// PostgreSQL caps a btree entry at roughly 2704 bytes, and a card carrying a
+// long SQL statement is bigger than that. Mirrors hashURL above.
+func hashPayload(payload string) string {
+	h := sha256.Sum256([]byte(payload))
+	return hex.EncodeToString(h[:])
+}
+
 // MaskURL masks the webhook URL for display (only show last 8 chars of token).
 func MaskURL(rawURL string) string {
 	if len(rawURL) <= len(AllowedFeishuURLPrefix)+8 {
@@ -446,35 +456,31 @@ func (s *FeishuService) CheckRateLimit(webhookID int64, rps float64) bool {
 
 // RecordDeadLetter stores a failed notification for later retry.
 func (s *FeishuService) RecordDeadLetter(ctx context.Context, webhookID int64, payload, errMsg string) error {
-	// Read then write, because (webhook_id, payload) carries no unique
-	// constraint. Two workers failing the same notification at once can
-	// therefore create two rows, which shows up as a duplicated retry. Closing
-	// that needs a schema change rather than a different query here.
-	existing, err := s.client.FeishuDeadLetter.Query().
-		Where(
-			entfeishudeadletter.WebhookIDEQ(webhookID),
-			entfeishudeadletter.PayloadEQ(payload),
-		).
-		First(ctx)
-	if ent.IsNotFound(err) {
-		return s.client.FeishuDeadLetter.Create().
-			SetWebhookID(webhookID).
-			SetPayload(payload).
-			SetErrorMessage(errMsg).
-			SetAttemptCount(1).
-			SetLastAttemptAt(time.Now()).
-			Exec(ctx)
-	}
-	if err != nil {
-		return err
-	}
-
-	// AddAttemptCount is an atomic increment, so two workers updating the same
-	// row do not lose a count between them.
-	return s.client.FeishuDeadLetter.UpdateOneID(existing.ID).
-		AddAttemptCount(1).
+	// Upsert on (webhook_id, payload_hash). Read-then-write left a window in
+	// which two workers failing the same notification both saw no row and both
+	// inserted, so the operator saw one failure twice and each copy retried on
+	// its own schedule.
+	//
+	// AddAttemptCount on conflict rather than a plain overwrite: the count is
+	// what decides when the dead letter is given up on, so a lost increment
+	// keeps a dead endpoint being retried past its limit.
+	now := time.Now()
+	return s.client.FeishuDeadLetter.Create().
+		SetWebhookID(webhookID).
+		SetPayload(payload).
+		SetPayloadHash(hashPayload(payload)).
 		SetErrorMessage(errMsg).
-		SetLastAttemptAt(time.Now()).
+		SetAttemptCount(1).
+		SetLastAttemptAt(now).
+		OnConflictColumns(
+			entfeishudeadletter.FieldWebhookID,
+			entfeishudeadletter.FieldPayloadHash,
+		).
+		Update(func(u *ent.FeishuDeadLetterUpsert) {
+			u.AddAttemptCount(1).
+				SetErrorMessage(errMsg).
+				SetLastAttemptAt(now)
+		}).
 		Exec(ctx)
 }
 

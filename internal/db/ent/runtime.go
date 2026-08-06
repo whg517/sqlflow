@@ -421,20 +421,24 @@ func init() {
 	exporttask.DefaultCreatedAt = exporttaskDescCreatedAt.Default.(func() time.Time)
 	feishudeadletterFields := schema.FeishuDeadLetter{}.Fields()
 	_ = feishudeadletterFields
+	// feishudeadletterDescPayloadHash is the schema descriptor for payload_hash field.
+	feishudeadletterDescPayloadHash := feishudeadletterFields[2].Descriptor()
+	// feishudeadletter.DefaultPayloadHash holds the default value on creation for the payload_hash field.
+	feishudeadletter.DefaultPayloadHash = feishudeadletterDescPayloadHash.Default.(string)
 	// feishudeadletterDescErrorMessage is the schema descriptor for error_message field.
-	feishudeadletterDescErrorMessage := feishudeadletterFields[2].Descriptor()
+	feishudeadletterDescErrorMessage := feishudeadletterFields[3].Descriptor()
 	// feishudeadletter.DefaultErrorMessage holds the default value on creation for the error_message field.
 	feishudeadletter.DefaultErrorMessage = feishudeadletterDescErrorMessage.Default.(string)
 	// feishudeadletterDescAttemptCount is the schema descriptor for attempt_count field.
-	feishudeadletterDescAttemptCount := feishudeadletterFields[3].Descriptor()
+	feishudeadletterDescAttemptCount := feishudeadletterFields[4].Descriptor()
 	// feishudeadletter.DefaultAttemptCount holds the default value on creation for the attempt_count field.
 	feishudeadletter.DefaultAttemptCount = feishudeadletterDescAttemptCount.Default.(int64)
 	// feishudeadletterDescLastAttemptAt is the schema descriptor for last_attempt_at field.
-	feishudeadletterDescLastAttemptAt := feishudeadletterFields[4].Descriptor()
+	feishudeadletterDescLastAttemptAt := feishudeadletterFields[5].Descriptor()
 	// feishudeadletter.DefaultLastAttemptAt holds the default value on creation for the last_attempt_at field.
 	feishudeadletter.DefaultLastAttemptAt = feishudeadletterDescLastAttemptAt.Default.(func() time.Time)
 	// feishudeadletterDescCreatedAt is the schema descriptor for created_at field.
-	feishudeadletterDescCreatedAt := feishudeadletterFields[5].Descriptor()
+	feishudeadletterDescCreatedAt := feishudeadletterFields[6].Descriptor()
 	// feishudeadletter.DefaultCreatedAt holds the default value on creation for the created_at field.
 	feishudeadletter.DefaultCreatedAt = feishudeadletterDescCreatedAt.Default.(func() time.Time)
 	feishuwebhookFields := schema.FeishuWebhook{}.Fields()

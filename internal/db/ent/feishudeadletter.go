@@ -21,6 +21,8 @@ type FeishuDeadLetter struct {
 	WebhookID int64 `json:"webhook_id,omitempty"`
 	// Payload holds the value of the "payload" field.
 	Payload string `json:"payload,omitempty"`
+	// PayloadHash holds the value of the "payload_hash" field.
+	PayloadHash string `json:"payload_hash,omitempty"`
 	// ErrorMessage holds the value of the "error_message" field.
 	ErrorMessage string `json:"error_message,omitempty"`
 	// AttemptCount holds the value of the "attempt_count" field.
@@ -39,7 +41,7 @@ func (*FeishuDeadLetter) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case feishudeadletter.FieldID, feishudeadletter.FieldWebhookID, feishudeadletter.FieldAttemptCount:
 			values[i] = new(sql.NullInt64)
-		case feishudeadletter.FieldPayload, feishudeadletter.FieldErrorMessage:
+		case feishudeadletter.FieldPayload, feishudeadletter.FieldPayloadHash, feishudeadletter.FieldErrorMessage:
 			values[i] = new(sql.NullString)
 		case feishudeadletter.FieldLastAttemptAt, feishudeadletter.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -75,6 +77,12 @@ func (_m *FeishuDeadLetter) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field payload", values[i])
 			} else if value.Valid {
 				_m.Payload = value.String
+			}
+		case feishudeadletter.FieldPayloadHash:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field payload_hash", values[i])
+			} else if value.Valid {
+				_m.PayloadHash = value.String
 			}
 		case feishudeadletter.FieldErrorMessage:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -141,6 +149,9 @@ func (_m *FeishuDeadLetter) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("payload=")
 	builder.WriteString(_m.Payload)
+	builder.WriteString(", ")
+	builder.WriteString("payload_hash=")
+	builder.WriteString(_m.PayloadHash)
 	builder.WriteString(", ")
 	builder.WriteString("error_message=")
 	builder.WriteString(_m.ErrorMessage)

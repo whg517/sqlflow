@@ -34,6 +34,20 @@ func (_c *FeishuDeadLetterCreate) SetPayload(v string) *FeishuDeadLetterCreate {
 	return _c
 }
 
+// SetPayloadHash sets the "payload_hash" field.
+func (_c *FeishuDeadLetterCreate) SetPayloadHash(v string) *FeishuDeadLetterCreate {
+	_c.mutation.SetPayloadHash(v)
+	return _c
+}
+
+// SetNillablePayloadHash sets the "payload_hash" field if the given value is not nil.
+func (_c *FeishuDeadLetterCreate) SetNillablePayloadHash(v *string) *FeishuDeadLetterCreate {
+	if v != nil {
+		_c.SetPayloadHash(*v)
+	}
+	return _c
+}
+
 // SetErrorMessage sets the "error_message" field.
 func (_c *FeishuDeadLetterCreate) SetErrorMessage(v string) *FeishuDeadLetterCreate {
 	_c.mutation.SetErrorMessage(v)
@@ -125,6 +139,10 @@ func (_c *FeishuDeadLetterCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *FeishuDeadLetterCreate) defaults() {
+	if _, ok := _c.mutation.PayloadHash(); !ok {
+		v := feishudeadletter.DefaultPayloadHash
+		_c.mutation.SetPayloadHash(v)
+	}
 	if _, ok := _c.mutation.ErrorMessage(); !ok {
 		v := feishudeadletter.DefaultErrorMessage
 		_c.mutation.SetErrorMessage(v)
@@ -150,6 +168,9 @@ func (_c *FeishuDeadLetterCreate) check() error {
 	}
 	if _, ok := _c.mutation.Payload(); !ok {
 		return &ValidationError{Name: "payload", err: errors.New(`ent: missing required field "FeishuDeadLetter.payload"`)}
+	}
+	if _, ok := _c.mutation.PayloadHash(); !ok {
+		return &ValidationError{Name: "payload_hash", err: errors.New(`ent: missing required field "FeishuDeadLetter.payload_hash"`)}
 	}
 	if _, ok := _c.mutation.ErrorMessage(); !ok {
 		return &ValidationError{Name: "error_message", err: errors.New(`ent: missing required field "FeishuDeadLetter.error_message"`)}
@@ -191,6 +212,10 @@ func (_c *FeishuDeadLetterCreate) createSpec() (*FeishuDeadLetter, *sqlgraph.Cre
 	if value, ok := _c.mutation.Payload(); ok {
 		_spec.SetField(feishudeadletter.FieldPayload, field.TypeString, value)
 		_node.Payload = value
+	}
+	if value, ok := _c.mutation.PayloadHash(); ok {
+		_spec.SetField(feishudeadletter.FieldPayloadHash, field.TypeString, value)
+		_node.PayloadHash = value
 	}
 	if value, ok := _c.mutation.ErrorMessage(); ok {
 		_spec.SetField(feishudeadletter.FieldErrorMessage, field.TypeString, value)
@@ -287,6 +312,18 @@ func (u *FeishuDeadLetterUpsert) SetPayload(v string) *FeishuDeadLetterUpsert {
 // UpdatePayload sets the "payload" field to the value that was provided on create.
 func (u *FeishuDeadLetterUpsert) UpdatePayload() *FeishuDeadLetterUpsert {
 	u.SetExcluded(feishudeadletter.FieldPayload)
+	return u
+}
+
+// SetPayloadHash sets the "payload_hash" field.
+func (u *FeishuDeadLetterUpsert) SetPayloadHash(v string) *FeishuDeadLetterUpsert {
+	u.Set(feishudeadletter.FieldPayloadHash, v)
+	return u
+}
+
+// UpdatePayloadHash sets the "payload_hash" field to the value that was provided on create.
+func (u *FeishuDeadLetterUpsert) UpdatePayloadHash() *FeishuDeadLetterUpsert {
+	u.SetExcluded(feishudeadletter.FieldPayloadHash)
 	return u
 }
 
@@ -416,6 +453,20 @@ func (u *FeishuDeadLetterUpsertOne) SetPayload(v string) *FeishuDeadLetterUpsert
 func (u *FeishuDeadLetterUpsertOne) UpdatePayload() *FeishuDeadLetterUpsertOne {
 	return u.Update(func(s *FeishuDeadLetterUpsert) {
 		s.UpdatePayload()
+	})
+}
+
+// SetPayloadHash sets the "payload_hash" field.
+func (u *FeishuDeadLetterUpsertOne) SetPayloadHash(v string) *FeishuDeadLetterUpsertOne {
+	return u.Update(func(s *FeishuDeadLetterUpsert) {
+		s.SetPayloadHash(v)
+	})
+}
+
+// UpdatePayloadHash sets the "payload_hash" field to the value that was provided on create.
+func (u *FeishuDeadLetterUpsertOne) UpdatePayloadHash() *FeishuDeadLetterUpsertOne {
+	return u.Update(func(s *FeishuDeadLetterUpsert) {
+		s.UpdatePayloadHash()
 	})
 }
 
@@ -718,6 +769,20 @@ func (u *FeishuDeadLetterUpsertBulk) SetPayload(v string) *FeishuDeadLetterUpser
 func (u *FeishuDeadLetterUpsertBulk) UpdatePayload() *FeishuDeadLetterUpsertBulk {
 	return u.Update(func(s *FeishuDeadLetterUpsert) {
 		s.UpdatePayload()
+	})
+}
+
+// SetPayloadHash sets the "payload_hash" field.
+func (u *FeishuDeadLetterUpsertBulk) SetPayloadHash(v string) *FeishuDeadLetterUpsertBulk {
+	return u.Update(func(s *FeishuDeadLetterUpsert) {
+		s.SetPayloadHash(v)
+	})
+}
+
+// UpdatePayloadHash sets the "payload_hash" field to the value that was provided on create.
+func (u *FeishuDeadLetterUpsertBulk) UpdatePayloadHash() *FeishuDeadLetterUpsertBulk {
+	return u.Update(func(s *FeishuDeadLetterUpsert) {
+		s.UpdatePayloadHash()
 	})
 }
 

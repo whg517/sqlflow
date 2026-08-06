@@ -129,9 +129,9 @@ func MigrateDB(conn *sql.DB) error {
 // acquisition and version bookkeeping that a brand-new schema has no use for.
 //
 // Production must keep using MigrateDB — this skips exactly the machinery that
-// makes migrating an existing database safe. It is only equivalent to MigrateDB
-// on an empty schema, and only while the migrations remain a single file;
-// SchemaFiles enforces the latter.
+// makes migrating an existing database safe. The equivalence it relies on is
+// that MigrateDB against an empty schema is just the up-migrations run in
+// order, which is what this does.
 func ApplySchema(conn *sql.DB) error {
 	names, err := SchemaFiles()
 	if err != nil {
@@ -149,12 +149,16 @@ func ApplySchema(conn *sql.DB) error {
 	return nil
 }
 
-// SchemaFiles lists the up-migrations in order.
+// SchemaFiles lists the up-migrations in version order.
 //
-// It returns an error when there is more than one, because ApplySchema executes
-// them without recording a version: with several files the shortcut would
-// silently diverge from MigrateDB the first time someone adds an incremental
-// migration.
+// The ordering is the whole contract: migrations are named NNNNNN_*.up.sql and
+// a later one may depend on an earlier one having run. Sorting by name gives
+// the same sequence golang-migrate would apply, which is what makes ApplySchema
+// equivalent to MigrateDB on an empty schema.
+//
+// An empty set is an error rather than a no-op: it means the embedded
+// filesystem did not pick the migrations up, and a caller would otherwise get a
+// schema-less database reported as ready.
 func SchemaFiles() ([]string, error) {
 	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
@@ -167,10 +171,8 @@ func SchemaFiles() ([]string, error) {
 		}
 	}
 	sort.Strings(ups)
-	if len(ups) != 1 {
-		return nil, fmt.Errorf(
-			"ApplySchema supports a single migration file, found %d — "+
-				"add version tracking or switch tests back to MigrateDB", len(ups))
+	if len(ups) == 0 {
+		return nil, fmt.Errorf("no up-migrations found in the embedded migrations directory")
 	}
 	return ups, nil
 }

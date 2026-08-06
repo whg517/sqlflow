@@ -306,6 +306,7 @@ var (
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "webhook_id", Type: field.TypeInt64},
 		{Name: "payload", Type: field.TypeString},
+		{Name: "payload_hash", Type: field.TypeString, Default: ""},
 		{Name: "error_message", Type: field.TypeString, Default: ""},
 		{Name: "attempt_count", Type: field.TypeInt64, Default: 0},
 		{Name: "last_attempt_at", Type: field.TypeTime, Default: schema.Expr("now()")},
@@ -316,6 +317,13 @@ var (
 		Name:       "feishu_dead_letters",
 		Columns:    FeishuDeadLettersColumns,
 		PrimaryKey: []*schema.Column{FeishuDeadLettersColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "feishudeadletter_webhook_id_payload_hash",
+				Unique:  true,
+				Columns: []*schema.Column{FeishuDeadLettersColumns[1], FeishuDeadLettersColumns[3]},
+			},
+		},
 	}
 	// FeishuWebhooksColumns holds the columns for the "feishu_webhooks" table.
 	FeishuWebhooksColumns = []*schema.Column{

@@ -17,6 +17,8 @@ const (
 	FieldWebhookID = "webhook_id"
 	// FieldPayload holds the string denoting the payload field in the database.
 	FieldPayload = "payload"
+	// FieldPayloadHash holds the string denoting the payload_hash field in the database.
+	FieldPayloadHash = "payload_hash"
 	// FieldErrorMessage holds the string denoting the error_message field in the database.
 	FieldErrorMessage = "error_message"
 	// FieldAttemptCount holds the string denoting the attempt_count field in the database.
@@ -34,6 +36,7 @@ var Columns = []string{
 	FieldID,
 	FieldWebhookID,
 	FieldPayload,
+	FieldPayloadHash,
 	FieldErrorMessage,
 	FieldAttemptCount,
 	FieldLastAttemptAt,
@@ -51,6 +54,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultPayloadHash holds the default value on creation for the "payload_hash" field.
+	DefaultPayloadHash string
 	// DefaultErrorMessage holds the default value on creation for the "error_message" field.
 	DefaultErrorMessage string
 	// DefaultAttemptCount holds the default value on creation for the "attempt_count" field.
@@ -77,6 +82,11 @@ func ByWebhookID(opts ...sql.OrderTermOption) OrderOption {
 // ByPayload orders the results by the payload field.
 func ByPayload(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPayload, opts...).ToFunc()
+}
+
+// ByPayloadHash orders the results by the payload_hash field.
+func ByPayloadHash(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPayloadHash, opts...).ToFunc()
 }
 
 // ByErrorMessage orders the results by the error_message field.
