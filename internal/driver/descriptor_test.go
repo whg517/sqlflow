@@ -39,12 +39,14 @@ func TestDescribeType_QueryForms(t *testing.T) {
 	}
 }
 
-// TestDescribeType_Capabilities checks the descriptor against the one bit that
-// still distinguishes drivers.
+// TestDescribeType_Capabilities checks the descriptor against what the drivers
+// implement.
 //
-// It used to assert seven; five of those were declared identically by every
-// driver or contradicted by the driver's own behavior, so asserting them only
-// restated the source file being tested.
+// It used to assert seven hand-declared bits. Five were declared identically by
+// every driver or contradicted by the driver's own behavior, so asserting them
+// only restated the source file being tested; the remaining two are now derived
+// from MetadataBrowser and StatementExecutor, so this asserts a fact the
+// compiler already maintains rather than a declaration someone could forget.
 func TestDescribeType_Capabilities(t *testing.T) {
 	es, err := driver.DescribeType("elasticsearch")
 	if err != nil {

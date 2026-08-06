@@ -49,19 +49,23 @@ cd web && npx tsc -b && npm run test
 
 | 轴 | 载体 | 回答 |
 |---|---|---|
-| 能力位 | `Capabilities() CapabilitySet` | 能不能做 |
+| 能做什么 | 可选接口（类型断言） | 能不能做 |
 | 查询形态 | `QueryForm() QueryForm` | 查询怎么写（`sql`/`document`/`dsl`） |
 | 结果形态 | `QueryResult.Shape` | 结果怎么读（`table`/`documents`/`aggregation`） |
 
-结构性能力用**可选接口**而非能力位，由类型系统检查：`ParameterizedQueryExecutor`、
-`ParameterBinder`、`QueryExplainer`、`ConfigValidator`。
+**能力全部由可选接口表达，没有能力位。** `MetadataBrowser`、`StatementExecutor`、
+`ParameterizedQueryExecutor`、`ParameterBinder`、`QueryExplainer`、`ConfigValidator`
+——方法在不在，类型系统说了算，`driver.Describe` 用类型断言合成 `Descriptor`。
 
-**一个能力位只有在「某个驱动的回答与其他不同」且「某个调用方会依据回答行事」时才成立。**
-曾经有七个位，五个两条都不满足，已删除——它们不是没被强制，而是**本身就是错的**：
+曾经有七个手写的能力位，全部删除。**它们不是没被强制，而是本身就是错的**：
 `CapQuery`/`CapFieldMasking` 五个驱动全声明为真；`CapSQLParse`/`CapExport` 被
-Mongo/ES 声明为假但两者都做得到；`CapTableLevelPermission` 被 ES 声明为假，而 ES 索引
-实际正被 Casbin 校验——照它执行会**删掉**一处访问检查。加新位前先跑
-`TestEveryCapabilityBitIsFalsifiable`。
+Mongo/ES 声明为假但两者都做得到——照 `CapExport` 执行会拒掉可用的 MongoDB 导出；
+`CapTableLevelPermission` 被 ES 声明为假，而 ES 索引实际正被 Casbin 校验——照它执行会
+**删掉**一处访问检查。剩下两个（`CapMetadata`/`CapTicketExec`）守的是 `Driver` 上的方法，
+是结构性的，已收进上述接口。
+
+**不要再引入运行时声明的能力位。** 如果新能力是「有没有这个方法」，用可选接口 +
+编译期断言；如果它是「平台对这个数据源的判断」，那它不属于驱动。
 
 **每个驱动必须写编译期断言**（`internal/driver/*/`）：
 

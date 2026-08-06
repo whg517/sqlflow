@@ -8,41 +8,11 @@ import (
 	"time"
 )
 
-// Capability represents a single data source capability.
-type Capability int
-
-// A bit only earns its place if some driver answers it differently from the
-// others, and if some caller acts on the answer. Five failed both tests and are
-// gone:
-//
-//   - CapQuery, CapFieldMasking: declared by every driver, so nothing could be
-//     rejected for lacking them.
-//   - CapSQLParse, CapExport: declared false by drivers that do both. Parse is
-//     an interface method every driver has, and the export path is
-//     driver-agnostic — honoring CapExport would have refused a working
-//     MongoDB export.
-//   - CapTableLevelPermission: declared false by Elasticsearch while its
-//     indices were Casbin-checked like any other target, so honoring it would
-//     have removed an access check. It also asked the wrong party: permissions
-//     are enforced over Parse's targets and masking over the result, and
-//     whether a result can be masked at all is ResultShape's question.
-const (
-	// CapTicketExec reports that the driver can run DML/DDL through the ticket
-	// workflow. SQLite and Elasticsearch answer no, and mean it: their
-	// ExecuteStatement returns an unsupported error.
-	CapTicketExec Capability = 1 << iota
-	// CapMetadata reports that databases, tables and columns can be listed.
-	// Every driver declares it today, which makes the check that reads it dead;
-	// it is structural — ListTables and GetColumns are methods — so it belongs
-	// in an optional interface alongside ExecuteStatement.
-	CapMetadata
-)
-
 // QueryForm describes how a read query is composed for a data source.
 //
-// It is a separate axis from Capabilities: Elasticsearch and MySQL both declare
-// CapQuery, but a user composes those queries in fundamentally different ways,
-// so the UI must pick a different editor and request payload for each.
+// It is a separate axis from what a driver can do: Elasticsearch and MySQL are
+// both queryable, but a user composes those queries in fundamentally different
+// ways, so the UI must pick a different editor and request payload for each.
 type QueryForm string
 
 const (
@@ -53,38 +23,6 @@ const (
 	// QueryFormDSL is an Elasticsearch index pattern + JSON query DSL body.
 	QueryFormDSL QueryForm = "dsl"
 )
-
-// CapabilitySet is a set of capabilities.
-type CapabilitySet Capability
-
-// Has checks whether a capability is present.
-func (c CapabilitySet) Has(cap Capability) bool {
-	return Capability(c)&cap != 0
-}
-
-// String returns a human-readable representation.
-func (c CapabilitySet) String() string {
-	// One table rather than a chain of ifs: the names were previously kept in
-	// three parallel places — here, in Describe, and in Descriptor's json tags —
-	// and drift between them is silent.
-	all := []struct {
-		cap  Capability
-		name string
-	}{
-		{CapTicketExec, "ticket_exec"},
-		{CapMetadata, "metadata"},
-	}
-	var names []string
-	for _, entry := range all {
-		if c.Has(entry.cap) {
-			names = append(names, entry.name)
-		}
-	}
-	if len(names) == 0 {
-		return "none"
-	}
-	return joinStrings(names, ",")
-}
 
 // ResultShape tells the caller how to interpret a QueryResult.
 //
@@ -179,9 +117,6 @@ type Driver interface {
 	// Type returns the data source type identifier, e.g. "mysql", "postgresql".
 	Type() string
 
-	// Capabilities declares which capabilities this driver supports.
-	Capabilities() CapabilitySet
-
 	// QueryForm declares how read queries are composed for this data source.
 	QueryForm() QueryForm
 
@@ -194,36 +129,54 @@ type Driver interface {
 	// Ping verifies the connection is alive.
 	Ping(ctx context.Context) error
 
-	// ListDatabases returns available databases (CapMetadata).
-	ListDatabases(ctx context.Context) ([]string, error)
-
-	// ListTables returns tables for the given database (CapMetadata).
-	// If the driver cannot provide column info, Columns will be empty.
-	ListTables(ctx context.Context, database string) ([]TableInfo, error)
-
-	// GetColumns returns column metadata for a specific table (CapMetadata).
-	GetColumns(ctx context.Context, database, table string) ([]ColumnInfo, error)
-
-	// ExecuteQuery executes a read-only query and returns results (CapQuery).
+	// ExecuteQuery executes a read-only query and returns results.
 	ExecuteQuery(ctx context.Context, database string, query string, limit int) (*QueryResult, error)
 
-	// ExecuteStatement executes a single DML/DDL statement (CapTicketExec).
+	// Parse analyzes a query string and returns operation metadata.
+	Parse(query string) (*ParseResult, error)
+}
+
+// MetadataBrowser is implemented by drivers that can enumerate their schema.
+//
+// It is an optional interface for the same reason as QueryExplainer: the
+// ability is structural, so the type system can check it. It was a CapMetadata
+// bit, which every driver declared — the check that read it could never fire,
+// so the guard existed but gated nothing.
+type MetadataBrowser interface {
+	// ListDatabases returns available databases.
+	ListDatabases(ctx context.Context) ([]string, error)
+
+	// ListTables returns tables for the given database. If the driver cannot
+	// provide column info, Columns will be empty.
+	ListTables(ctx context.Context, database string) ([]TableInfo, error)
+
+	// GetColumns returns column metadata for a specific table.
+	GetColumns(ctx context.Context, database, table string) ([]ColumnInfo, error)
+}
+
+// StatementExecutor is implemented by drivers that can run DML/DDL through the
+// ticket workflow.
+//
+// These were mandatory methods on Driver, which forced SQLite and Elasticsearch
+// to supply bodies that only ever return "not supported" — a value that cannot
+// honor part of the contract it satisfies is not a substitute for it, and only
+// a hand-written capability check stood between a caller and those stubs. As an
+// optional interface the compiler decides, and the stubs are gone.
+type StatementExecutor interface {
+	// ExecuteStatement executes a single DML/DDL statement.
 	ExecuteStatement(ctx context.Context, database string, stmt string) (*StatementResult, error)
 
-	// ExecuteStatements executes multiple DML/DDL statements in a batch (CapTicketExec).
+	// ExecuteStatements executes multiple DML/DDL statements in a batch.
 	//
 	// 事务语义因驱动而异：
 	//   - PostgreSQL: 所有语句包在单个事务中，任一语句失败立即停止并回滚已执行的语句
 	//     （成功执行的语句在结果中标记为 "rolled_back"）
 	//   - MySQL: 逐条 auto-commit 执行（DDL 无法回滚），任一语句失败后继续执行剩余语句
 	//     （收集所有语句的结果，首错通过 error 返回但不中断）
-	//   - MongoDB/Elasticsearch: 不支持批量（仅单条），实现可降级为循环调用 ExecuteStatement
+	//   - MongoDB: 不支持批量（仅单条），实现降级为循环调用 ExecuteStatement
 	//
 	// 工单执行路径完全依赖此方法：事务语义归驱动所有，Service 不再按类型区分。
 	ExecuteStatements(ctx context.Context, database string, statements []string) ([]StatementResult, error)
-
-	// Parse analyzes a query string and returns operation metadata (CapSQLParse).
-	Parse(query string) (*ParseResult, error)
 }
 
 // ParameterBinder is implemented by drivers that bind parameter values instead
@@ -338,16 +291,4 @@ type Config struct {
 
 	// Extra holds driver-specific parameters (ES urls, auth type, etc.)
 	Extra map[string]interface{}
-}
-
-// helper
-func joinStrings(ss []string, sep string) string {
-	if len(ss) == 0 {
-		return ""
-	}
-	result := ss[0]
-	for _, s := range ss[1:] {
-		result += sep + s
-	}
-	return result
 }

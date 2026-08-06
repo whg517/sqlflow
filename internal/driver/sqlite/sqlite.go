@@ -34,16 +34,13 @@ type Driver struct {
 // silently reports false. These assertions turn that into a build failure.
 var (
 	_ driver.Driver                     = (*Driver)(nil)
+	_ driver.MetadataBrowser            = (*Driver)(nil)
 	_ driver.ParameterizedQueryExecutor = (*Driver)(nil)
 	_ driver.ParameterBinder            = (*Driver)(nil)
 	_ driver.ConfigValidator            = (*Driver)(nil)
 )
 
 func (d *Driver) Type() string { return "sqlite" }
-
-func (d *Driver) Capabilities() driver.CapabilitySet {
-	return driver.CapabilitySet(driver.CapMetadata)
-}
 
 // QueryForm declares how read queries are composed for this data source.
 func (d *Driver) QueryForm() driver.QueryForm { return driver.QueryFormSQL }
@@ -248,13 +245,9 @@ func (d *Driver) executeQuery(ctx context.Context, query string, args []interfac
 	}, nil
 }
 
-func (d *Driver) ExecuteStatement(context.Context, string, string) (*driver.StatementResult, error) {
-	return nil, fmt.Errorf("SQLite 数据源仅支持只读查询")
-}
-
-func (d *Driver) ExecuteStatements(context.Context, string, []string) ([]driver.StatementResult, error) {
-	return nil, fmt.Errorf("SQLite 数据源仅支持只读查询")
-}
+// SQLite implements no StatementExecutor: it is read-only here, and the two
+// methods that used to sit in this spot existed only to return "仅支持只读查询"
+// because Driver demanded them. Callers now find out from the type.
 
 func (d *Driver) Parse(query string) (*driver.ParseResult, error) {
 	result, err := sqlparser.ParseSQL(query, "sqlite")

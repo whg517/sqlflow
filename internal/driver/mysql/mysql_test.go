@@ -16,19 +16,19 @@ func TestMySQLDriver_Type(t *testing.T) {
 	}
 }
 
-func TestMySQLDriver_Capabilities(t *testing.T) {
+// TestMySQLDriver_OptionalInterfaces states which contracts this driver signs.
+//
+// These were capability bits, declared by hand and checked at runtime. As
+// interfaces the compiler maintains them, and Describe derives what the API
+// reports from the same fact instead of from a parallel declaration.
+func TestMySQLDriver_OptionalInterfaces(t *testing.T) {
 	d := &MySQLDriver{}
-	caps := d.Capabilities()
 
-	expected := []driver.Capability{
-		driver.CapTicketExec,
-		driver.CapMetadata,
+	if _, ok := any(d).(driver.MetadataBrowser); !ok {
+		t.Error("does not satisfy MetadataBrowser, but metadata browsing is routed to it")
 	}
-
-	for _, cap := range expected {
-		if !caps.Has(cap) {
-			t.Errorf("Capabilities().Has(%v) = false, want true", cap)
-		}
+	if _, ok := any(d).(driver.StatementExecutor); !ok {
+		t.Error("does not satisfy StatementExecutor, but the ticket executor routes statements to it")
 	}
 }
 

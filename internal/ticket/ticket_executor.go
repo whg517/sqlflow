@@ -63,7 +63,12 @@ func (s *Service) executeSQL(ctx context.Context, ds *model.DataSource, database
 	if err != nil {
 		return nil, fmt.Errorf("连接数据源失败: %w", err)
 	}
-	if !d.Capabilities().Has(driver.CapTicketExec) {
+	// A read-only driver simply does not implement this. It used to be a
+	// CapTicketExec bit guarding methods that SQLite and Elasticsearch were
+	// obliged to declare and could only answer "not supported" to; the type now
+	// carries the fact, and this check cannot drift from what they implement.
+	executor, ok := d.(driver.StatementExecutor)
+	if !ok {
 		return nil, ErrTicketExecNotSupported
 	}
 
@@ -72,7 +77,7 @@ func (s *Service) executeSQL(ctx context.Context, ds *model.DataSource, database
 	// MongoDB applies commands one by one. ExecuteStatements documents that
 	// contract; this function must not re-implement it per type.
 	statements := splitStatements(sqlContent)
-	drvResults, err := d.ExecuteStatements(ctx, database, statements)
+	drvResults, err := executor.ExecuteStatements(ctx, database, statements)
 	// A failure still carries the results of whatever already ran, including
 	// any rolled_back markers, so they are returned either way.
 	return convertDriverResults(drvResults), err

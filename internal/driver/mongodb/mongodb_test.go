@@ -16,25 +16,19 @@ func TestMongoDBDriver_Type(t *testing.T) {
 	}
 }
 
-func TestMongoDBDriver_Capabilities(t *testing.T) {
+// TestMongoDBDriver_OptionalInterfaces states which contracts this driver signs.
+//
+// These were capability bits, declared by hand and checked at runtime. As
+// interfaces the compiler maintains them, and Describe derives what the API
+// reports from the same fact instead of from a parallel declaration.
+func TestMongoDBDriver_OptionalInterfaces(t *testing.T) {
 	d := &MongoDBDriver{}
-	caps := d.Capabilities()
 
-	// MongoDB supports these
-	have := []driver.Capability{driver.CapTicketExec, driver.CapMetadata}
-	// It used to declare no CapExport and no CapSQLParse. Both were wrong about
-	// this driver: Parse works, and the export path is driver-agnostic.
-	lack := []driver.Capability{}
-
-	for _, cap := range have {
-		if !caps.Has(cap) {
-			t.Errorf("Capabilities() missing %d", cap)
-		}
+	if _, ok := any(d).(driver.MetadataBrowser); !ok {
+		t.Error("does not satisfy MetadataBrowser, but metadata browsing is routed to it")
 	}
-	for _, cap := range lack {
-		if caps.Has(cap) {
-			t.Errorf("Capabilities() should NOT have %d", cap)
-		}
+	if _, ok := any(d).(driver.StatementExecutor); !ok {
+		t.Error("does not satisfy StatementExecutor, but the ticket executor routes statements to it")
 	}
 }
 

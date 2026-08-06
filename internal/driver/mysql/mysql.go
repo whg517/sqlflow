@@ -32,6 +32,8 @@ type MySQLDriver struct {
 // silently reports false. These assertions turn that into a build failure.
 var (
 	_ driver.Driver                     = (*MySQLDriver)(nil)
+	_ driver.MetadataBrowser            = (*MySQLDriver)(nil)
+	_ driver.StatementExecutor          = (*MySQLDriver)(nil)
 	_ driver.ParameterizedQueryExecutor = (*MySQLDriver)(nil)
 	_ driver.ParameterBinder            = (*MySQLDriver)(nil)
 	_ driver.QueryExplainer             = (*MySQLDriver)(nil)
@@ -39,11 +41,6 @@ var (
 
 // Type returns "mysql".
 func (d *MySQLDriver) Type() string { return "mysql" }
-
-// Capabilities declares MySQL's full capability set.
-func (d *MySQLDriver) Capabilities() driver.CapabilitySet {
-	return driver.CapabilitySet(driver.CapTicketExec | driver.CapMetadata)
-}
 
 // QueryForm declares how read queries are composed for this data source.
 func (d *MySQLDriver) QueryForm() driver.QueryForm { return driver.QueryFormSQL }

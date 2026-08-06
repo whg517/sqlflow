@@ -51,16 +51,6 @@ var (
 // Type returns "elasticsearch".
 func (d *ESDriver) Type() string { return "elasticsearch" }
 
-// Capabilities declares Elasticsearch's capability set.
-//
-// It declares no CapTicketExec and means it: ExecuteStatement returns an
-// unsupported error. It used to also declare no CapSQLParse and no
-// CapTableLevelPermission — Parse works, and its indices were being
-// Casbin-checked like any other target, so both were wrong.
-func (d *ESDriver) Capabilities() driver.CapabilitySet {
-	return driver.CapabilitySet(driver.CapMetadata)
-}
-
 // QueryForm declares how read queries are composed for this data source.
 func (d *ESDriver) QueryForm() driver.QueryForm { return driver.QueryFormDSL }
 
@@ -442,15 +432,9 @@ func (d *ESDriver) ExecuteQuery(ctx context.Context, database string, query stri
 	}
 }
 
-// ExecuteStatement is not supported for Elasticsearch (read-only).
-func (d *ESDriver) ExecuteStatement(ctx context.Context, database string, stmt string) (*driver.StatementResult, error) {
-	return nil, fmt.Errorf("elasticsearch: statement execution is not supported (read-only data source)")
-}
-
-// ExecuteStatements is not supported for Elasticsearch (read-only data source).
-func (d *ESDriver) ExecuteStatements(ctx context.Context, database string, statements []string) ([]driver.StatementResult, error) {
-	return nil, fmt.Errorf("elasticsearch: statement execution is not supported (read-only data source)")
-}
+// Elasticsearch implements no StatementExecutor. The two methods that used to
+// sit here returned "not supported" and existed only because Driver demanded
+// them; the type system now carries that fact.
 
 // Parse analyzes an Elasticsearch query JSON for security rules.
 func (d *ESDriver) Parse(query string) (*driver.ParseResult, error) {

@@ -16,16 +16,19 @@ func TestPostgreSQLDriver_Type(t *testing.T) {
 	}
 }
 
-func TestPostgreSQLDriver_Capabilities(t *testing.T) {
+// TestPostgreSQLDriver_OptionalInterfaces states which contracts this driver signs.
+//
+// These were capability bits, declared by hand and checked at runtime. As
+// interfaces the compiler maintains them, and Describe derives what the API
+// reports from the same fact instead of from a parallel declaration.
+func TestPostgreSQLDriver_OptionalInterfaces(t *testing.T) {
 	d := &PostgreSQLDriver{}
-	caps := d.Capabilities()
 
-	required := []driver.Capability{driver.CapTicketExec, driver.CapMetadata}
-
-	for _, cap := range required {
-		if !caps.Has(cap) {
-			t.Errorf("Capabilities() missing %d", cap)
-		}
+	if _, ok := any(d).(driver.MetadataBrowser); !ok {
+		t.Error("does not satisfy MetadataBrowser, but metadata browsing is routed to it")
+	}
+	if _, ok := any(d).(driver.StatementExecutor); !ok {
+		t.Error("does not satisfy StatementExecutor, but the ticket executor routes statements to it")
 	}
 }
 

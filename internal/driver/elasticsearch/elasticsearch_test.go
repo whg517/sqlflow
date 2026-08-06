@@ -14,27 +14,20 @@ func TestESDriver_Type(t *testing.T) {
 	}
 }
 
-func TestESDriver_Capabilities(t *testing.T) {
+// TestESDriver_OptionalInterfaces states which contracts this driver signs.
+//
+// These were capability bits, declared by hand and checked at runtime. As
+// interfaces the compiler maintains them, and Describe derives what the API
+// reports from the same fact instead of from a parallel declaration.
+func TestESDriver_OptionalInterfaces(t *testing.T) {
 	d := &ESDriver{}
-	caps := d.Capabilities()
 
-	have := []driver.Capability{driver.CapMetadata}
-	// Elasticsearch really cannot run ticket statements: ExecuteStatement
-	// returns an unsupported error. It used to also declare no CapSQLParse and
-	// no CapTableLevelPermission; Parse works, and its indices were being
-	// Casbin-checked like any other target, so honoring that second one would
-	// have removed an access check.
-	lack := []driver.Capability{driver.CapTicketExec}
-
-	for _, cap := range have {
-		if !caps.Has(cap) {
-			t.Errorf("Capabilities() missing %d", cap)
-		}
+	if _, ok := any(d).(driver.MetadataBrowser); !ok {
+		t.Error("does not satisfy MetadataBrowser, but metadata browsing is routed to it")
 	}
-	for _, cap := range lack {
-		if caps.Has(cap) {
-			t.Errorf("Capabilities() should NOT have %d", cap)
-		}
+	if _, ok := any(d).(driver.StatementExecutor); ok {
+		t.Error("satisfies StatementExecutor, but this data source is read-only here — " +
+			"those methods used to exist only to return \"not supported\"")
 	}
 }
 
@@ -132,17 +125,6 @@ func TestESDriver_NotConnected(t *testing.T) {
 	}
 	if _, err := d.ExecuteQuery(context.TODO(), "", `{"index":"test","body":{"query":{"match_all":{}}}}`, 10); err == nil {
 		t.Error("ExecuteQuery() should fail when not connected")
-	}
-	if _, err := d.ExecuteStatement(context.TODO(), "", ""); err == nil {
-		t.Error("ExecuteStatement() should fail (not supported)")
-	}
-}
-
-func TestESDriver_ExecuteStatement_NotSupported(t *testing.T) {
-	d := &ESDriver{}
-	_, err := d.ExecuteStatement(context.TODO(), "test", `{"operation":"delete","index":"test"}`)
-	if err == nil {
-		t.Error("ExecuteStatement should return error")
 	}
 }
 

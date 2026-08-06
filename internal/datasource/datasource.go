@@ -727,7 +727,7 @@ func (s *Service) testConnection(ctx context.Context, ds *model.DataSource) erro
 // It reports ErrMetadataNotSupported for drivers that do not declare
 // CapMetadata, so an unsupported source gets an explicit answer instead of
 // being silently routed somewhere that happens to compile.
-func (s *Service) metadataDriver(ctx context.Context, ds *model.DataSource, secrets driver.Secrets) (driver.Driver, error) {
+func (s *Service) metadataDriver(ctx context.Context, ds *model.DataSource, secrets driver.Secrets) (driver.MetadataBrowser, error) {
 	// An unregistered type is invalid regardless of how the service is wired,
 	// so it is reported before anything that depends on the pool.
 	if !driver.IsRegistered(ds.Type) {
@@ -745,10 +745,14 @@ func (s *Service) metadataDriver(ctx context.Context, ds *model.DataSource, secr
 	if err != nil {
 		return nil, fmt.Errorf("connect %s: %w", ds.Type, err)
 	}
-	if !d.Capabilities().Has(driver.CapMetadata) {
+	// The type answers this now. It used to be a CapMetadata bit that every
+	// driver declared, so the check could never fire — the guard existed and
+	// gated nothing.
+	browser, ok := d.(driver.MetadataBrowser)
+	if !ok {
 		return nil, ErrMetadataNotSupported
 	}
-	return d, nil
+	return browser, nil
 }
 
 // GetTables returns table names for a datasource.

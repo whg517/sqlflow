@@ -39,20 +39,13 @@ type MongoDBDriver struct {
 // renamed or never lands would otherwise only surface as a capability that
 // silently reports false. These assertions turn that into a build failure.
 var (
-	_ driver.Driver = (*MongoDBDriver)(nil)
+	_ driver.Driver            = (*MongoDBDriver)(nil)
+	_ driver.MetadataBrowser   = (*MongoDBDriver)(nil)
+	_ driver.StatementExecutor = (*MongoDBDriver)(nil)
 )
 
 // Type returns "mongodb".
 func (d *MongoDBDriver) Type() string { return "mongodb" }
-
-// Capabilities declares MongoDB's capability set.
-//
-// It used to also declare no CapSQLParse and no CapExport. Both were wrong:
-// Parse returns an operation and targets for a command body, and the export
-// path is driver-agnostic, so a MongoDB export works.
-func (d *MongoDBDriver) Capabilities() driver.CapabilitySet {
-	return driver.CapabilitySet(driver.CapTicketExec | driver.CapMetadata)
-}
 
 // QueryForm declares how read queries are composed for this data source.
 func (d *MongoDBDriver) QueryForm() driver.QueryForm { return driver.QueryFormDocument }

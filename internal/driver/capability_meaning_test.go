@@ -13,60 +13,21 @@ import (
 // nothing about whether a bit distinguishes real data sources.
 var productionDriverTypes = []string{"mysql", "postgresql", "sqlite", "mongodb", "elasticsearch"}
 
-// TestEveryCapabilityBitIsFalsifiable is the rule that keeps the set honest: a
-// bit no driver ever turns off is a constant wearing a flag's clothes.
+// The capability bit set is gone.
 //
-// Five bits failed it and are gone. CapQuery and CapFieldMasking were declared
-// by every driver, so nothing could ever be rejected for lacking them.
-// CapSQLParse and CapExport were declared false by drivers that demonstrably
-// did both — Parse returns an operation and targets for MongoDB and
-// Elasticsearch alike, and the export path is driver-agnostic — so honoring
-// them would have refused a MongoDB export that works.
+// It began with seven. Five were removed as vacuous or false — CapQuery and
+// CapFieldMasking were declared by every driver, so nothing could be rejected
+// for lacking them; CapSQLParse and CapExport were declared false by drivers
+// that did both, so honoring CapExport would have refused a MongoDB export that
+// works; and CapTableLevelPermission was declared false by Elasticsearch while
+// its indices were Casbin-checked like any other target, so honoring it would
+// have removed an access check rather than added one.
 //
-// CapTableLevelPermission was worse than vacuous. Elasticsearch declared false
-// while its indices were being Casbin-checked like any other target, so
-// honoring it would have removed an access check rather than added one. It
-// also asked the wrong party: table permissions are enforced by Casbin over
-// Parse's targets, and masking by platform/mask over the result — neither needs
-// anything from the driver, and whether a result can be masked at all is what
-// ResultShape already answers.
-//
-// CapMetadata is the known exception. It is equally vacuous — every driver
-// declares it — but unlike the five it has an enforcement point
-// (datasource.metadataDriver), so deleting it here would drop that answer with
-// nothing in its place. ListTables and GetColumns are interface methods, which
-// by the rule stated on QueryExplainer makes this structural: it becomes a
-// MetadataBrowser optional interface, and that is the same change that splits
-// ExecuteStatement out of Driver. Until then the bit stays and this test says
-// why rather than pretending it passes.
-func TestEveryCapabilityBitIsFalsifiable(t *testing.T) {
-	bits := []struct {
-		name string
-		cap  driver.Capability
-	}{
-		{"CapTicketExec", driver.CapTicketExec},
-	}
-
-	for _, bit := range bits {
-		var declared int
-		for _, typ := range productionDriverTypes {
-			d, err := driver.NewDriver(typ)
-			if err != nil {
-				t.Fatalf("NewDriver(%s): %v", typ, err)
-			}
-			if d.Capabilities().Has(bit.cap) {
-				declared++
-			}
-		}
-		switch declared {
-		case len(productionDriverTypes):
-			t.Errorf("%s is declared by all %d drivers — it can never reject anything, so it carries no information",
-				bit.name, len(productionDriverTypes))
-		case 0:
-			t.Errorf("%s is declared by no driver — it gates a feature nothing provides", bit.name)
-		}
-	}
-}
+// The last two, CapMetadata and CapTicketExec, guarded methods that lived on
+// Driver. Both were structural — the method is there or it is not — so they
+// became MetadataBrowser and StatementExecutor, and the type system maintains
+// them. What is left of this file checks the declarations against behavior,
+// which is how the five were found to be wrong rather than merely unread.
 
 // TestCapabilityBitsMatchBehaviour checks the declarations against what the
 // drivers actually do, which is how the five removed bits were found to be

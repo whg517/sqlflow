@@ -11,11 +11,12 @@ type Descriptor struct {
 	Type      string    `json:"type"`
 	QueryForm QueryForm `json:"query_form"`
 
-	// TicketExec and Metadata are the capability bits that still say something:
-	// SQLite and Elasticsearch genuinely cannot run ticket statements. The five
-	// that were here before — query, table_permission, field_masking, sql_parse,
-	// export — were either declared by every driver or declared false by drivers
-	// that did the thing anyway, and the UI read none of them.
+	// Every field is derived from an optional interface, so nothing here can
+	// disagree with what the driver actually implements. TicketExec and Metadata
+	// were capability bits until the methods behind them moved out of Driver;
+	// five others — query, table_permission, field_masking, sql_parse, export —
+	// were either declared by every driver or declared false by drivers that did
+	// the thing anyway, and the UI read none of them.
 	TicketExec bool `json:"ticket_exec"`
 	Metadata   bool `json:"metadata"`
 
@@ -41,15 +42,16 @@ func DescribeType(typeName string) (*Descriptor, error) {
 
 // Describe builds the Descriptor for a driver instance.
 func Describe(d Driver) *Descriptor {
-	caps := d.Capabilities()
+	_, ticketExec := d.(StatementExecutor)
+	_, metadata := d.(MetadataBrowser)
 	_, explain := d.(QueryExplainer)
 	_, parameterized := d.(ParameterizedQueryExecutor)
 
 	return &Descriptor{
 		Type:          d.Type(),
 		QueryForm:     d.QueryForm(),
-		TicketExec:    caps.Has(CapTicketExec),
-		Metadata:      caps.Has(CapMetadata),
+		TicketExec:    ticketExec,
+		Metadata:      metadata,
 		Explain:       explain,
 		Parameterized: parameterized,
 	}

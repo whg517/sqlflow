@@ -24,10 +24,7 @@ type testExecDriver struct {
 	connected   bool
 }
 
-func (m *testExecDriver) Type() string { return m.typ }
-func (m *testExecDriver) Capabilities() driver.CapabilitySet {
-	return driver.CapabilitySet(driver.CapTicketExec)
-}
+func (m *testExecDriver) Type() string                { return m.typ }
 func (m *testExecDriver) QueryForm() driver.QueryForm { return driver.QueryFormSQL }
 func (m *testExecDriver) Connect(ctx context.Context, cfg *driver.Config) error {
 	m.connected = true

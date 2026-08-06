@@ -17,10 +17,7 @@ type mockDriver struct {
 	typ string
 }
 
-func (m *mockDriver) Type() string { return m.typ }
-func (m *mockDriver) Capabilities() driver.CapabilitySet {
-	return driver.CapabilitySet(driver.CapMetadata)
-}
+func (m *mockDriver) Type() string                                          { return m.typ }
 func (m *mockDriver) QueryForm() driver.QueryForm                           { return driver.QueryFormSQL }
 func (m *mockDriver) Connect(ctx context.Context, cfg *driver.Config) error { return nil }
 func (m *mockDriver) Close() error                                          { return nil }
@@ -42,36 +39,6 @@ func (m *mockDriver) ExecuteStatements(ctx context.Context, db string, s []strin
 	return nil, nil
 }
 func (m *mockDriver) Parse(q string) (*driver.ParseResult, error) { return nil, nil }
-
-func TestCapabilitySet_Has(t *testing.T) {
-	cs := driver.CapabilitySet(driver.CapMetadata)
-
-	if !cs.Has(driver.CapMetadata) {
-		t.Error("should have CapMetadata")
-	}
-	if cs.Has(driver.CapTicketExec) {
-		t.Error("should not have CapTicketExec")
-	}
-}
-
-func TestCapabilitySet_String(t *testing.T) {
-	tests := []struct {
-		cs   driver.CapabilitySet
-		want string
-	}{
-		{driver.CapabilitySet(0), "none"},
-		{driver.CapabilitySet(driver.CapMetadata), "metadata"},
-		{driver.CapabilitySet(driver.CapTicketExec), "ticket_exec"},
-		{driver.CapabilitySet(driver.CapTicketExec | driver.CapMetadata), "ticket_exec,metadata"},
-	}
-
-	for _, tt := range tests {
-		got := tt.cs.String()
-		if got != tt.want {
-			t.Errorf("CapabilitySet(%d).String() = %q, want %q", tt.cs, got, tt.want)
-		}
-	}
-}
 
 func TestNewDriver_Unsupported(t *testing.T) {
 	_, err := driver.NewDriver("nonexistent_type")
@@ -114,9 +81,8 @@ func TestNewDriver_MySQL(t *testing.T) {
 	if d.Type() != "mysql" {
 		t.Errorf("Type() = %q, want mysql", d.Type())
 	}
-	caps := d.Capabilities()
-	if !caps.Has(driver.CapTicketExec) {
-		t.Error("mysql should have CapTicketExec")
+	if _, ok := d.(driver.StatementExecutor); !ok {
+		t.Error("mysql should satisfy StatementExecutor")
 	}
 }
 

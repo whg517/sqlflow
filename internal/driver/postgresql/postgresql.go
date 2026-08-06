@@ -31,6 +31,8 @@ type PostgreSQLDriver struct {
 // silently reports false. These assertions turn that into a build failure.
 var (
 	_ driver.Driver                     = (*PostgreSQLDriver)(nil)
+	_ driver.MetadataBrowser            = (*PostgreSQLDriver)(nil)
+	_ driver.StatementExecutor          = (*PostgreSQLDriver)(nil)
 	_ driver.ParameterizedQueryExecutor = (*PostgreSQLDriver)(nil)
 	_ driver.ParameterBinder            = (*PostgreSQLDriver)(nil)
 	_ driver.QueryExplainer             = (*PostgreSQLDriver)(nil)
@@ -38,11 +40,6 @@ var (
 
 // Type returns "postgresql".
 func (d *PostgreSQLDriver) Type() string { return "postgresql" }
-
-// Capabilities declares PostgreSQL's full capability set.
-func (d *PostgreSQLDriver) Capabilities() driver.CapabilitySet {
-	return driver.CapabilitySet(driver.CapTicketExec | driver.CapMetadata)
-}
 
 // QueryForm declares how read queries are composed for this data source.
 func (d *PostgreSQLDriver) QueryForm() driver.QueryForm { return driver.QueryFormSQL }

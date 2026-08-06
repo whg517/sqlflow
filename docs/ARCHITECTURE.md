@@ -97,7 +97,7 @@ flowchart TB
 | `internal/api/openapi` | 由 `make docs` 从 Handler 注解生成，不手工维护 | — |
 | 领域包（`audit`/`datasource`/`iam`/`security`/`query`/`ticket`/`notify`/`ops`） | 各自的用例编排、授权、状态机、审计与 HTTP handler | Ent、Driver、`internal/model`、`internal/platform`，以及 `allowedDomainEdges` 中登记的跨领域依赖 |
 | `internal/arch` | 分包依赖方向与数据访问路径的可执行约束（无代码，只有测试） | 标准库 |
-| `internal/driver` | 数据源统一端口、能力声明、注册表和驱动连接池 | 数据库客户端库，不依赖 API |
+| `internal/driver` | 数据源统一端口、可选能力接口、注册表和驱动连接池 | 数据库客户端库，不依赖 API |
 | `internal/db` | PostgreSQL 连接、golang-migrate、Ent Client 与 Schema | pgx、Ent、golang-migrate |
 | `internal/model` | 跨领域的持久化模型与状态枚举 | 标准库 |
 | `internal/authz` | Casbin 元组的唯一构造点 | 标准库 |
@@ -287,22 +287,23 @@ sequenceDiagram
 
 ## 6. 数据源驱动架构
 
-`internal/driver.Driver` 为所有目标数据源提供统一端口：连接、健康检查、元数据、只读查询、单条/批量变更和解析。每个驱动通过位集合声明能力：
+`internal/driver.Driver` 是所有目标数据源的统一端口，**只保留每个驱动都能兑现的方法**：
+`Type`、`QueryForm`、`Connect`、`Close`、`Ping`、`ExecuteQuery`、`Parse`。子集能力一律
+是可选接口。
 
-- `CapTicketExec` —— 能否通过工单执行 DML/DDL。SQLite 与 Elasticsearch 声明否，且属实：
-  它们的 `ExecuteStatement` 返回不支持错误。
-- `CapMetadata` —— 能否列出库/表/字段。当前五个驱动全部声明为真，读它的那处检查因此
-  永不触发；它是结构性的（`ListTables`/`GetColumns` 是方法），应随 `ExecuteStatement`
-  一起收进可选接口。
-
-**一个能力位只有在「某个驱动的回答与其他不同」且「某个调用方会依据回答行事」时才成立。**
-曾经有七个位，五个两条都不满足，已删除：
+**能力位已全部删除。** 曾经有七个手写的位，无一成立：
 
 | 已删除 | 原因 |
 |---|---|
 | `CapQuery`、`CapFieldMasking` | 五个驱动全声明为真，没有任何东西能因缺少它被拒绝 |
 | `CapSQLParse`、`CapExport` | 被 Mongo/ES 声明为假，但两者的 `Parse()` 都成功，导出链路也与驱动无关——照它执行反而会拒掉可用的 MongoDB 导出 |
 | `CapTableLevelPermission` | 被 ES 声明为假，而 ES 的索引实际正被 Casbin 当作普通目标校验——照它执行会**删掉**一处访问检查。它还问错了对象：权限由 Casbin 对 `Parse` 的 targets 施加，脱敏由 `platform/mask` 对结果施加，而「结果能否脱敏」是 `ResultShape` 回答的问题 |
+| `CapMetadata`、`CapTicketExec` | 守的是 `Driver` 上的方法，属于结构性事实。它们已成为 `MetadataBrowser` 与 `StatementExecutor` 可选接口 |
+
+`CapTicketExec` 的消失顺带修掉一处 Liskov 违反：这两个方法此前是 `Driver` 的必选项，
+SQLite 与 Elasticsearch 只能提供恒返回「不支持」的实现——一个无法兑现自己所满足契约的
+值不是该契约的替换品，而挡在调用方与这些桩之间的只有一处手写检查。现在类型系统决定，
+桩已删除。
 
 驱动注册由 `internal/driver/all` 的空导入完成，`internal/app.Container` 引入它。注册发生在各驱动的 `init()` 中，遗漏空导入只会在运行时查表失败，因此注册集合必须只有这一个来源。`PoolManager` 以数据源 ID 缓存已连接驱动；数据源更新或应用关闭时应移除并关闭连接。
 
@@ -312,15 +313,24 @@ sequenceDiagram
 
 | 轴 | 载体 | 回答的问题 |
 |---|---|---|
-| 能力位 | `Capabilities() CapabilitySet` | 能不能做（查询/工单执行/元数据/表级权限/脱敏/解析/导出） |
+| 能做什么 | 可选接口（类型断言） | 能不能做 |
 | 查询形态 | `QueryForm() QueryForm` | 查询怎么写（`sql` / `document` / `dsl`） |
 | 结果形态 | `QueryResult.Shape` | 结果怎么读（`table` / `documents` / `aggregation`） |
 
-能力位与查询形态是正交的：Elasticsearch 与 MySQL 都可查询，但前者是 `dsl` 形态，编辑器、请求载荷和结果渲染全不相同——「能不能查」从来不是有用的区分，「怎么查」才是。
+三者正交：Elasticsearch 与 MySQL 都可查询，但前者是 `dsl` 形态，编辑器、请求载荷和结果渲染全不相同——「能不能查」从来不是有用的区分，「怎么查」才是。
 
-结构性能力用**可选接口**而非能力位表达，由类型系统检查而非运行时查表：
-`ParameterizedQueryExecutor`（参数化执行）、`ParameterBinder`（占位符方言）、
-`QueryExplainer`（查询计划）、`ConfigValidator`（配置校验）。`driver.Describe` 把三者合成 `Descriptor`。
+**能力一律由可选接口表达，由类型系统检查而非运行时查表**：
+
+| 接口 | 回答 | 谁不实现 |
+|---|---|---|
+| `MetadataBrowser` | 能否列出库/表/字段 | — |
+| `StatementExecutor` | 能否通过工单执行 DML/DDL | SQLite、Elasticsearch |
+| `ParameterizedQueryExecutor` | 能否参数化执行 | MongoDB、Elasticsearch |
+| `ParameterBinder` | 占位符方言（`?` / `$N`） | MongoDB、Elasticsearch |
+| `QueryExplainer` | 能否给出查询计划 | SQLite、MongoDB、Elasticsearch |
+| `ConfigValidator` | 配置形态校验 | MySQL、PostgreSQL、MongoDB |
+
+`driver.Describe` 用类型断言把它们合成 `Descriptor`，所以 API 报告的能力**不可能**与驱动实际实现的方法不一致。
 
 **每个驱动必须写编译期断言**：
 
@@ -349,7 +359,7 @@ var (
 - 查询解析走 `driver.ParseFor(type, query)`，operation/risk/target 语义归驱动所有；Service 与 Handler 不再向解析器传数据源类型。
 - SQL 模板的参数占位符方言由驱动的可选接口 `ParameterBinder` 声明（`?` / `$N`），不绑定参数的驱动不实现它，渲染器改为转义内联。模板可用的数据源类型以注册表为准，不维护白名单。
 - 配置校验由驱动的可选接口 `ConfigValidator` 承担：字段含义归驱动所有，Service 不为任何类型代写校验。它不建立连接——保存数据源时目标可能尚不可达，因此只检查形态与传输约束（如 ES 的 HTTPS 要求），运行时事实（如 SQLite 文件是否存在）留给 `Connect`。
-- 元数据浏览按 `CapMetadata` 路由；不声明该能力的驱动返回明确的不支持错误。数据库/索引作用域原样传给驱动，Service 不代填默认值——空作用域的含义由驱动定义。
+- 元数据浏览按 `MetadataBrowser` 类型断言路由；不实现该接口的驱动返回明确的不支持错误。数据库/索引作用域原样传给驱动，Service 不代填默认值——空作用域的含义由驱动定义。
 - 连接失效按数据源 ID 统一处理（`PoolManager.Remove`），与类型无关，因此数据源改类型也无需特殊处理。
 - 新增数据源类型的改动面应当是：实现 `Driver`、在 `driver/all` 注册。查询、导出、AI 评审、元数据、连接测试与前端工作台都不需要改。
 
