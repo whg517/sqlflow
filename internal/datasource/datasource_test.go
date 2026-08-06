@@ -13,6 +13,7 @@ import (
 	"github.com/whg517/sqlflow/internal/driver"
 	mysqldriver "github.com/whg517/sqlflow/internal/driver/mysql"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/platform/crypto"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
@@ -28,7 +29,7 @@ func newTestDatasourceService(t *testing.T) (*Service, *sql.DB) {
 	t.Helper()
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
-	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, nil)
+	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, nil, auditlog.Discard)
 	return svc, testDB
 }
 
@@ -1078,7 +1079,7 @@ func TestGetTables_MySQLSuccess(t *testing.T) {
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	ctx := ctxWithTimeout(t)
 
 	ds := &model.DataSource{
@@ -1118,7 +1119,7 @@ func TestGetTables_MySQLEmptyResult(t *testing.T) {
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	ctx := ctxWithTimeout(t)
 
 	ds := &model.DataSource{
@@ -1154,7 +1155,7 @@ func TestGetTables_MySQLEmptyResult(t *testing.T) {
 func TestGetTables_InvalidDatasourceType(t *testing.T) {
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
-	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, nil)
+	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, nil, auditlog.Discard)
 	ctx := ctxWithTimeout(t)
 
 	// Manually insert a datasource with invalid type (bypassing validation)
@@ -1180,7 +1181,7 @@ func TestGetTables_InvalidDatasourceType(t *testing.T) {
 func TestGetTables_MongoDBConnectionFails(t *testing.T) {
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
-	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, nil)
+	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, nil, auditlog.Discard)
 	ctx := ctxWithTimeout(t)
 
 	ds := &model.DataSource{
@@ -1201,7 +1202,7 @@ func TestGetTables_MySQLQueryError(t *testing.T) {
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	ctx := ctxWithTimeout(t)
 
 	ds := &model.DataSource{

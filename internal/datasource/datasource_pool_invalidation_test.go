@@ -6,6 +6,7 @@ import (
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
@@ -27,7 +28,7 @@ func newInvalidationTestService(t *testing.T) (*Service, *connpool.Manager, *dri
 	testDB := setupDatasourceTestDB(t)
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	return svc, connMgr, poolMgr
 }
 

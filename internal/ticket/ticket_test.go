@@ -631,7 +631,7 @@ func TestFullWorkflow(t *testing.T) {
 	poolMgr := driver.NewPoolManager()
 	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), encKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), encKey, connMgr, poolMgr, auditlog.Discard)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
 	svc := New(Deps{DB: testutil.WrapSQL(t, testDB), Audit: auditSvc})
 	svc.dsSvc = dsSvc

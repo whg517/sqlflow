@@ -34,7 +34,7 @@ func setupQueryTest(t *testing.T) (*echo.Echo, *Service, *HistoryService, *datas
 	encKey := "0123456789abcdef0123456789abcdef"
 	connMgr := connpool.NewManager()
 
-	dsSvc := datasource.NewService(database, encKey, connMgr, nil)
+	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
 	historySvc := NewHistoryService(database)
 	permSvc, _ := security.NewService(database)
 	// PermissionService creation may fail if policy.csv is not found;
@@ -523,7 +523,7 @@ func TestQueryHandler_DeleteHistory_Success(t *testing.T) {
 	}
 	encKey := "0123456789abcdef0123456789abcdef"
 	connMgr := connpool.NewManager()
-	dsSvc2 := datasource.NewService(database, encKey, connMgr, nil)
+	dsSvc2 := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
 	ctx := testutil.ContextWithTimeout(t)
 	if err := dsSvc2.CreateDataSource(ctx, ds); err != nil {
 		t.Fatalf("create datasource: %v", err)
@@ -604,7 +604,7 @@ func TestQueryHandler_DeleteHistory_WrongUser(t *testing.T) {
 
 	encKey := "0123456789abcdef0123456789abcdef"
 	connMgr := connpool.NewManager()
-	dsSvc := datasource.NewService(database, encKey, connMgr, nil)
+	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
 
 	userOwner := seedTestUser(t, database, "owner", "developer")
 	userOther := seedTestUser(t, database, "other", "developer")
@@ -653,7 +653,7 @@ func TestQueryHandler_ClearHistory_Success(t *testing.T) {
 
 	encKey := "0123456789abcdef0123456789abcdef"
 	connMgr := connpool.NewManager()
-	dsSvc := datasource.NewService(database, encKey, connMgr, nil)
+	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
 	historySvc := NewHistoryService(database)
 	querySvc := NewService(database, dsSvc, historySvc, nil, auditlog.Discard, encKey, driver.NewPoolManager())
 	h := NewHandler(querySvc, historySvc)
@@ -1051,7 +1051,7 @@ func TestQueryHandler_ClearHistory_Error(t *testing.T) {
 
 	encKey := "0123456789abcdef0123456789abcdef"
 	connMgr := connpool.NewManager()
-	dsSvc := datasource.NewService(database, encKey, connMgr, nil)
+	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
 	historySvc := NewHistoryService(database)
 	querySvc := NewService(database, dsSvc, historySvc, nil, auditlog.Discard, encKey, driver.NewPoolManager())
 	h := NewHandler(querySvc, historySvc)

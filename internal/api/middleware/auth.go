@@ -11,6 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/iam"
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/platform/httpx"
 	"github.com/whg517/sqlflow/internal/security"
 )
@@ -57,6 +58,7 @@ func Auth(authSvc *iam.Service, tokenSvc *iam.TokenService) echo.MiddlewareFunc 
 				c.Set(httpx.ContextKeyRole, role)
 				c.Set(ContextKeyTokenID, true)
 				c.Set(ContextKeyTokenScopes, scopes)
+				setAuditActor(c, userID)
 				return next(c)
 			}
 
@@ -76,6 +78,7 @@ func Auth(authSvc *iam.Service, tokenSvc *iam.TokenService) echo.MiddlewareFunc 
 			c.Set(httpx.ContextKeyUserID, user.ID)
 			c.Set(httpx.ContextKeyUsername, user.Username)
 			c.Set(httpx.ContextKeyRole, user.Role)
+			setAuditActor(c, user.ID)
 
 			return next(c)
 		}
@@ -351,4 +354,16 @@ func bodyField(body map[string]interface{}, key string) string {
 	default:
 		return ""
 	}
+}
+
+// setAuditActor puts the authenticated user's id on the request context.
+//
+// Identity already reaches handlers through echo's own context, but services
+// receive a plain context.Context. Attaching it here means a domain can name
+// who acted without every one of its methods taking a userID parameter it
+// otherwise has no use for — and, more importantly, without each handler having
+// to remember to pass one.
+func setAuditActor(c echo.Context, userID int64) {
+	req := c.Request()
+	c.SetRequest(req.WithContext(auditlog.WithActor(req.Context(), userID)))
 }

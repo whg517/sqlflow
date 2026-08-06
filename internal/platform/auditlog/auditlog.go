@@ -89,3 +89,29 @@ func Summarize(sql string) string {
 	}
 	return sql
 }
+
+// actorKey types the context value so nothing else can collide with it.
+type actorKey struct{}
+
+// WithActor attaches the acting user's id to a context.
+//
+// Audit needs to name who did something, but most service methods have no
+// reason to take an identity parameter — a datasource CRUD call does not
+// otherwise care who is asking. Threading a userID argument through every one
+// of them to reach the audit line at the bottom would put the identity in a
+// hundred signatures that never read it.
+//
+// The authentication middleware sets this once, so every domain reached through
+// an HTTP request gets it without remembering to.
+func WithActor(ctx context.Context, userID int64) context.Context {
+	return context.WithValue(ctx, actorKey{}, userID)
+}
+
+// ActorFrom returns the acting user's id, or 0 when the context carries none.
+//
+// Zero means "no authenticated actor" — a scheduler, a startup task, or a test.
+// It is a legitimate answer, not an error: audit records what it knows.
+func ActorFrom(ctx context.Context) int64 {
+	id, _ := ctx.Value(actorKey{}).(int64)
+	return id
+}

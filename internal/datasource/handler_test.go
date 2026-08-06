@@ -14,6 +14,7 @@ import (
 	"github.com/whg517/sqlflow/internal/connpool"
 	_ "github.com/whg517/sqlflow/internal/driver/all"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
@@ -27,7 +28,7 @@ func setupDatasourceTest(t *testing.T) (*echo.Echo, *Service, *Handler) {
 
 	encKey := "0123456789abcdef0123456789abcdef" // 32 bytes for AES-256
 	connMgr := connpool.NewManager()
-	dsSvc := NewService(database, encKey, connMgr, nil)
+	dsSvc := NewService(database, encKey, connMgr, nil, auditlog.Discard)
 	handler := NewHandler(dsSvc)
 
 	e := echo.New()

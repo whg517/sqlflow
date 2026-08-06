@@ -12,6 +12,7 @@ import (
 	"github.com/whg517/sqlflow/internal/driver"
 	mysqldriver "github.com/whg517/sqlflow/internal/driver/mysql"
 	pgdriver "github.com/whg517/sqlflow/internal/driver/postgresql"
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/platform/crypto"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
@@ -30,7 +31,7 @@ func TestExecuteSQL_PostgreSQLRoute(t *testing.T) {
 	poolMgr := driver.NewPoolManager()
 	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := datasource.NewService(d, encKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(d, encKey, connMgr, poolMgr, auditlog.Discard)
 	svc := &Service{
 		database:      d,
 		client:        d.Client(),
@@ -97,7 +98,7 @@ func TestExecuteSQL_PostgreSQLRollback(t *testing.T) {
 	poolMgr := driver.NewPoolManager()
 	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := datasource.NewService(d, encKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(d, encKey, connMgr, poolMgr, auditlog.Discard)
 	svc := &Service{
 		database:      d,
 		client:        d.Client(),
@@ -163,7 +164,7 @@ func TestExecuteSQL_MySQLNoTransaction(t *testing.T) {
 	poolMgr := driver.NewPoolManager()
 	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := datasource.NewService(d, encKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(d, encKey, connMgr, poolMgr, auditlog.Discard)
 	svc := &Service{
 		database:      d,
 		client:        d.Client(),

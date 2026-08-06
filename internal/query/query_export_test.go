@@ -15,6 +15,7 @@ import (
 	"github.com/whg517/sqlflow/internal/driver"
 	mysqldriver "github.com/whg517/sqlflow/internal/driver/mysql"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/platform/crypto"
 	"github.com/whg517/sqlflow/internal/security"
 	"github.com/whg517/sqlflow/internal/testutil"
@@ -38,7 +39,7 @@ func setupExportService(t *testing.T) (*Service, *sql.DB) {
 	testDB := setupExportTestDB(t)
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	permSvc, err := security.NewService(testutil.WrapSQL(t, testDB))
 	if err != nil {
 		t.Fatalf("create permission service: %v", err)
@@ -145,7 +146,7 @@ func TestExportQuery_DisabledDataSource(t *testing.T) {
 
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	ds := &model.DataSource{
 		Name: "disabled-export", Type: "mysql", Host: "10.0.0.1", Port: 3306,
 		Username: "root", PasswordEncrypted: "secret", Database: "testdb",
@@ -165,7 +166,7 @@ func TestExportQuery_PasswordDecryptError(t *testing.T) {
 	testDB := setupExportTestDB(t)
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), "wrong-key-that-is-32-bytes-long!!", connMgr, nil)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), "wrong-key-that-is-32-bytes-long!!", connMgr, nil, auditlog.Discard)
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
@@ -179,7 +180,7 @@ func TestExportQuery_PasswordDecryptError(t *testing.T) {
 		Name: "decrypt-err", Type: "mysql", Host: "10.0.0.1", Port: 3306,
 		Username: "root", PasswordEncrypted: "secret", Database: "testdb",
 	}
-	encSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, nil)
+	encSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, nil, auditlog.Discard)
 	if err := encSvc.CreateDataSource(ctx, ds); err != nil {
 		t.Fatalf("CreateDataSource() error: %v", err)
 	}
@@ -201,7 +202,7 @@ func TestExportQuery_NonSelectBlocked(t *testing.T) {
 
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	tests := []struct {
@@ -229,7 +230,7 @@ func TestExportQuery_BlockedSQL(t *testing.T) {
 
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	tests := []struct {
@@ -260,7 +261,7 @@ func TestExportQuery_ConnectionError(t *testing.T) {
 
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT * FROM users LIMIT 10", "mysql")
@@ -276,7 +277,7 @@ func TestExportQuery_UnsupportedDBType(t *testing.T) {
 
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1", "postgres")
@@ -296,7 +297,7 @@ func TestExportQuery_Success(t *testing.T) {
 
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	// Inject SQLite DB as the target MySQL pool
@@ -337,7 +338,7 @@ func TestExportQuery_SuccessWithDesensitization(t *testing.T) {
 
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	sqliteDB := setupExportTestDB(t)
@@ -380,7 +381,7 @@ func TestExportQuery_EmptyResult(t *testing.T) {
 
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	sqliteDB := setupExportTestDB(t)
@@ -415,7 +416,7 @@ func TestExportQuery_RowLimitExceeded(t *testing.T) {
 	testDB := setupExportTestDB(t)
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
@@ -458,7 +459,7 @@ func TestExportQuery_AuditOnSuccess(t *testing.T) {
 
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	sqliteDB := setupExportTestDB(t)
@@ -498,7 +499,7 @@ func TestExportQuery_AuditOnFailure(t *testing.T) {
 
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
@@ -540,7 +541,7 @@ func TestExportQuery_DefaultDBType(t *testing.T) {
 
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	sqliteDB := setupExportTestDB(t)
@@ -571,7 +572,7 @@ func TestExportQuery_PermissionDenied(t *testing.T) {
 	testDB := setupExportTestDB(t)
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
@@ -600,7 +601,7 @@ func TestExportQuery_HighRiskSQL(t *testing.T) {
 
 	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	// UPDATE without WHERE is high risk

@@ -11,6 +11,7 @@ import (
 	"github.com/whg517/sqlflow/internal/driver"
 	mysqldriver "github.com/whg517/sqlflow/internal/driver/mysql"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/platform/crypto"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
@@ -68,7 +69,7 @@ func setupTicketExecTest(t *testing.T) (platform *db.DB, ticketSvc *Service, tar
 	// the driver is what gets injected.
 	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(target.DB))
 
-	dsSvc := datasource.NewService(platform, ticketExecTestKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(platform, ticketExecTestKey, connMgr, poolMgr, auditlog.Discard)
 	ticketSvc = New(Deps{
 		DB:            platform,
 		Audit:         auditSvc,

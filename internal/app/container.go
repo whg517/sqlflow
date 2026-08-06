@@ -120,7 +120,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	exportSvc := query.NewExportService(database, auditSvc)
 	exportAsyncSvc := query.NewAsyncExportService(database, exportSvc, auditSvc, cfg.DB.DataDir)
 
-	dsSvc := datasource.NewService(database, cfg.EncryptionKey, connMgr, poolMgr)
+	dsSvc := datasource.NewService(database, cfg.EncryptionKey, connMgr, poolMgr, auditSvc)
 	if _, err := dsSvc.EnsureInternalDataSource(context.Background(), cfg.DB.DSN); err != nil {
 		connMgr.Close()
 		poolMgr.Close()

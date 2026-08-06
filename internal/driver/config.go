@@ -83,28 +83,40 @@ func BuildConfigFromDataSource(ds DataSourceInfo, secrets Secrets) (*Config, err
 
 	switch dsType {
 	case "elasticsearch":
-		// ExtraConfig JSON takes priority
-		if extraMap != nil {
-			if v, ok := extraMap["urls"].(string); ok {
-				cfg.Extra["urls"] = parseCSV(v)
-			}
-			if v, ok := extraMap["auth_type"].(string); ok {
-				cfg.Extra["auth_type"] = v
-			}
-			if v, ok := extraMap["verify_certs"]; ok {
-				cfg.Extra["verify_certs"] = v
-			}
-			if v, ok := extraMap["index_pattern"].(string); ok {
-				cfg.Extra["index_pattern"] = v
-			}
-		} else {
-			// Legacy fields fallback
-			cfg.Extra["urls"] = parseCSV(ds.GetExtra("es_urls"))
-			cfg.Extra["auth_type"] = ds.GetExtra("es_auth_type")
-			cfg.Extra["verify_certs"] = ds.GetExtraBool("es_verify_certs", true)
-			if indexPattern := ds.GetExtra("es_index_pattern"); indexPattern != "" {
-				cfg.Extra["index_pattern"] = indexPattern
-			}
+		// extra_config overrides field by field, not all-or-nothing.
+		//
+		// These were exclusive branches, and extraMap is non-nil for any valid
+		// JSON object — including {}. So writing one unrelated key into
+		// extra_config dropped urls, auth_type and verify_certs together. The
+		// driver then fell back to host and port, and host is the literal
+		// "elasticsearch" the handler stores to satisfy a NOT NULL column, so
+		// it went looking for http://elasticsearch:0 with no credentials at
+		// all. The comment said extra_config took priority; the code made it
+		// take over.
+		urls := ds.GetExtra("es_urls")
+		if v, ok := extraString(extraMap, "urls"); ok {
+			urls = v
+		}
+		cfg.Extra["urls"] = parseCSV(urls)
+
+		authType := ds.GetExtra("es_auth_type")
+		if v, ok := extraString(extraMap, "auth_type"); ok {
+			authType = v
+		}
+		cfg.Extra["auth_type"] = authType
+
+		verifyCerts := ds.GetExtraBool("es_verify_certs", true)
+		if v, ok := extraMap["verify_certs"].(bool); ok {
+			verifyCerts = v
+		}
+		cfg.Extra["verify_certs"] = verifyCerts
+
+		indexPattern := ds.GetExtra("es_index_pattern")
+		if v, ok := extraString(extraMap, "index_pattern"); ok {
+			indexPattern = v
+		}
+		if indexPattern != "" {
+			cfg.Extra["index_pattern"] = indexPattern
 		}
 		// The key comes from the caller in either branch: extra_config holds
 		// whatever was written into it, but the stored secret is encrypted and
@@ -173,4 +185,18 @@ func ValidateDriverType(typeName string) error {
 		return fmt.Errorf("unsupported datasource type: %s (supported: %v)", typeName, SupportedTypes())
 	}
 	return nil
+}
+
+// extraString reads a string field out of a decoded extra_config object.
+//
+// A missing key and a key holding the wrong type are both reported as absent,
+// so the caller falls back to the stored column rather than to a zero value —
+// an empty urls list is indistinguishable from "not configured" once it reaches
+// the driver.
+func extraString(extra map[string]interface{}, key string) (string, bool) {
+	if extra == nil {
+		return "", false
+	}
+	v, ok := extra[key].(string)
+	return v, ok
 }

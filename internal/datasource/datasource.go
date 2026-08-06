@@ -17,7 +17,7 @@ import (
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
-	"github.com/whg517/sqlflow/internal/db/ent/auditlog"
+	entAuditLog "github.com/whg517/sqlflow/internal/db/ent/auditlog"
 	"github.com/whg517/sqlflow/internal/db/ent/casbinrule"
 	"github.com/whg517/sqlflow/internal/db/ent/datasource"
 	"github.com/whg517/sqlflow/internal/db/ent/maskrule"
@@ -28,6 +28,7 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent/ticket"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/platform/crypto"
 )
 
@@ -103,11 +104,33 @@ type Service struct {
 	encryptionKey string
 	connMgr       *connpool.Manager
 	poolMgr       *driver.PoolManager
+	auditSvc      auditlog.Writer
 }
 
 // NewService creates a new Service.
-func NewService(database *db.DB, encryptionKey string, connMgr *connpool.Manager, poolMgr *driver.PoolManager) *Service {
-	return &Service{database: database, client: database.Client(), encryptionKey: encryptionKey, connMgr: connMgr, poolMgr: poolMgr}
+func NewService(database *db.DB, encryptionKey string, connMgr *connpool.Manager, poolMgr *driver.PoolManager, audit auditlog.Writer) *Service {
+	return &Service{
+		database: database, client: database.Client(), encryptionKey: encryptionKey,
+		connMgr: connMgr, poolMgr: poolMgr, auditSvc: auditlog.OrDiscard(audit),
+	}
+}
+
+// audit records one datasource event.
+//
+// The actor comes from the context rather than a parameter: these methods have
+// no other use for an identity, and threading a userID through all of them to
+// reach this line would put it in a hundred signatures that ignore it. The
+// authentication middleware attaches it once per request.
+func (s *Service) audit(ctx context.Context, action string, id int64, err error) {
+	rec := auditlog.Record{
+		UserID:       auditlog.ActorFrom(ctx),
+		Action:       action,
+		DatasourceID: id,
+	}
+	if err != nil {
+		rec.ErrorMessage = err.Error()
+	}
+	s.auditSvc.Write(ctx, rec)
 }
 
 // PoolManager returns the driver PoolManager (may be nil if not configured).
@@ -204,6 +227,7 @@ func (s *Service) CreateDataSource(ctx context.Context, ds *model.DataSource) er
 		return err
 	}
 	*ds = *found
+	s.audit(ctx, "datasource_create", ds.ID, nil)
 	return nil
 }
 
@@ -459,8 +483,10 @@ func (s *Service) UpdateDataSource(ctx context.Context, id int64, ds *model.Data
 	// case by checking both the old and the new type.
 	s.removeDatasourcePool(id)
 
+	s.audit(ctx, "datasource_update", id, nil)
 	return nil
 }
+
 func (s *Service) DisableDataSource(ctx context.Context, id int64) error {
 	existing, err := s.GetDataSource(ctx, id)
 	if err != nil {
@@ -481,6 +507,7 @@ func (s *Service) DisableDataSource(ctx context.Context, id int64) error {
 	}
 
 	s.removeDatasourcePool(id)
+	s.audit(ctx, "datasource_disable", id, nil)
 	return nil
 }
 
@@ -503,6 +530,7 @@ func (s *Service) EnableDataSource(ctx context.Context, id int64) error {
 		}
 		return fmt.Errorf("enable datasource: %w", err)
 	}
+	s.audit(ctx, "datasource_enable", id, nil)
 	return nil
 }
 
@@ -533,6 +561,7 @@ func (s *Service) DeleteDataSource(ctx context.Context, id int64) error {
 		return fmt.Errorf("delete datasource: %w", err)
 	}
 	s.removeDatasourcePool(id)
+	s.audit(ctx, "datasource_delete", id, nil)
 	return nil
 }
 
@@ -553,7 +582,7 @@ func (s *Service) datasourceDependencies(ctx context.Context, id int64) ([]Datas
 			return s.client.QueryHistory.Query().Where(queryhistory.DatasourceID(id)).Count(ctx)
 		}},
 		{"审计日志", func(ctx context.Context) (int, error) {
-			return s.client.AuditLog.Query().Where(auditlog.DatasourceID(id)).Count(ctx)
+			return s.client.AuditLog.Query().Where(entAuditLog.DatasourceID(id)).Count(ctx)
 		}},
 		{"脱敏规则", func(ctx context.Context) (int, error) {
 			return s.client.MaskRule.Query().Where(maskrule.DatasourceID(id)).Count(ctx)
@@ -617,7 +646,21 @@ func (s *Service) datasourceSecrets(ds *model.DataSource) (driver.Secrets, error
 }
 
 // TestConnection attempts to connect to the datasource using the Driver abstraction.
-func (s *Service) TestConnection(ctx context.Context, ds *model.DataSource) error {
+//
+// A failure is audited, a success is not. The failing case is the one an
+// operator needs later — "why could nobody reach this last Tuesday" — while
+// recording every successful probe would fill the trail with form keystrokes,
+// since the UI tests as you type.
+func (s *Service) TestConnection(ctx context.Context, ds *model.DataSource) (err error) {
+	defer func() {
+		if err != nil {
+			s.audit(ctx, "datasource_test_connection_failed", ds.ID, err)
+		}
+	}()
+	return s.testConnection(ctx, ds)
+}
+
+func (s *Service) testConnection(ctx context.Context, ds *model.DataSource) error {
 	password := ds.PasswordEncrypted
 	esAPIKey := ds.ESApiKey
 
