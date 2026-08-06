@@ -18,13 +18,13 @@ func TestESDriver_Capabilities(t *testing.T) {
 	d := &ESDriver{}
 	caps := d.Capabilities()
 
-	have := []driver.Capability{
-		driver.CapQuery, driver.CapMetadata,
-		driver.CapFieldMasking, driver.CapExport,
-	}
-	lack := []driver.Capability{
-		driver.CapTicketExec, driver.CapSQLParse, driver.CapTableLevelPermission,
-	}
+	have := []driver.Capability{driver.CapMetadata}
+	// Elasticsearch really cannot run ticket statements: ExecuteStatement
+	// returns an unsupported error. It used to also declare no CapSQLParse and
+	// no CapTableLevelPermission; Parse works, and its indices were being
+	// Casbin-checked like any other target, so honoring that second one would
+	// have removed an access check.
+	lack := []driver.Capability{driver.CapTicketExec}
 
 	for _, cap := range have {
 		if !caps.Has(cap) {

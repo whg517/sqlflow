@@ -39,14 +39,7 @@ var (
 func (d *Driver) Type() string { return "sqlite" }
 
 func (d *Driver) Capabilities() driver.CapabilitySet {
-	return driver.CapabilitySet(
-		driver.CapQuery |
-			driver.CapMetadata |
-			driver.CapTableLevelPermission |
-			driver.CapFieldMasking |
-			driver.CapSQLParse |
-			driver.CapExport,
-	)
+	return driver.CapabilitySet(driver.CapMetadata)
 }
 
 // QueryForm declares how read queries are composed for this data source.

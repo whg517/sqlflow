@@ -21,13 +21,8 @@ func TestMySQLDriver_Capabilities(t *testing.T) {
 	caps := d.Capabilities()
 
 	expected := []driver.Capability{
-		driver.CapQuery,
 		driver.CapTicketExec,
 		driver.CapMetadata,
-		driver.CapTableLevelPermission,
-		driver.CapFieldMasking,
-		driver.CapSQLParse,
-		driver.CapExport,
 	}
 
 	for _, cap := range expected {

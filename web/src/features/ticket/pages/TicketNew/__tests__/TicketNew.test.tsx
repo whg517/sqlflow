@@ -372,14 +372,18 @@ describe("TicketNewPage", () => {
           datasource_id: 1,
           database: "testdb",
           sql: "ALTER TABLE users ADD COLUMN age INT",
-          db_type: "mysql",
           change_reason:
             "Adding age column for user profile feature requirement",
         });
       });
     });
 
-    it('uses "mongodb" db_type for MongoDB datasources', async () => {
+    // The request no longer carries db_type at all. It used to, derived here
+    // from the selected datasource, and the server trusted it — which meant a
+    // submitter could send "mysql" for a MongoDB datasource and skip the
+    // collection-level permission check. The server reads the type from the
+    // datasource row instead, so there is nothing left for this page to send.
+    it("does not send a db_type for MongoDB datasources", async () => {
       mockCreateTicket.mockResolvedValue({
         code: 0,
         data: { id: 43, status: "SUBMITTED" },
@@ -387,7 +391,6 @@ describe("TicketNewPage", () => {
 
       renderTicketNewPage();
 
-      // Wait for datasources to load and component to be fully rendered
       await waitFor(
         () => {
           expect(screen.getByText("MongoDB Prod")).toBeInTheDocument();
@@ -395,10 +398,8 @@ describe("TicketNewPage", () => {
         { timeout: 5000 },
       );
 
-      // Click the MongoDB option - this triggers our mocked onValueChange
       await userEvent.click(screen.getByText("MongoDB Prod"));
 
-      // Verify the select value changed by checking datasourceId state
       await userEvent.type(
         screen.getByPlaceholderText("输入要执行的 SQL 语句..."),
         "db.users.find()",
@@ -413,10 +414,9 @@ describe("TicketNewPage", () => {
       await userEvent.click(screen.getByText("提交工单"));
 
       await waitFor(() => {
-        expect(mockCreateTicket).toHaveBeenCalledWith(
-          expect.objectContaining({ db_type: "mongodb" }),
-        );
+        expect(mockCreateTicket).toHaveBeenCalled();
       });
+      expect(mockCreateTicket.mock.calls[0][0]).not.toHaveProperty("db_type");
     });
 
     it("shows loading state during submission", async () => {

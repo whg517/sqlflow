@@ -19,7 +19,7 @@ type mockDriver struct {
 
 func (m *mockDriver) Type() string { return m.typ }
 func (m *mockDriver) Capabilities() driver.CapabilitySet {
-	return driver.CapabilitySet(driver.CapQuery | driver.CapMetadata)
+	return driver.CapabilitySet(driver.CapMetadata)
 }
 func (m *mockDriver) QueryForm() driver.QueryForm                           { return driver.QueryFormSQL }
 func (m *mockDriver) Connect(ctx context.Context, cfg *driver.Config) error { return nil }
@@ -44,22 +44,13 @@ func (m *mockDriver) ExecuteStatements(ctx context.Context, db string, s []strin
 func (m *mockDriver) Parse(q string) (*driver.ParseResult, error) { return nil, nil }
 
 func TestCapabilitySet_Has(t *testing.T) {
-	cs := driver.CapabilitySet(driver.CapQuery | driver.CapMetadata | driver.CapExport)
+	cs := driver.CapabilitySet(driver.CapMetadata)
 
-	if !cs.Has(driver.CapQuery) {
-		t.Error("should have CapQuery")
-	}
 	if !cs.Has(driver.CapMetadata) {
 		t.Error("should have CapMetadata")
 	}
-	if !cs.Has(driver.CapExport) {
-		t.Error("should have CapExport")
-	}
 	if cs.Has(driver.CapTicketExec) {
 		t.Error("should not have CapTicketExec")
-	}
-	if cs.Has(driver.CapFieldMasking) {
-		t.Error("should not have CapFieldMasking")
 	}
 }
 
@@ -69,9 +60,9 @@ func TestCapabilitySet_String(t *testing.T) {
 		want string
 	}{
 		{driver.CapabilitySet(0), "none"},
-		{driver.CapabilitySet(driver.CapQuery), "query"},
-		{driver.CapabilitySet(driver.CapQuery | driver.CapMetadata), "query,metadata"},
-		{driver.CapabilitySet(driver.CapQuery | driver.CapTicketExec | driver.CapExport), "query,ticket_exec,export"},
+		{driver.CapabilitySet(driver.CapMetadata), "metadata"},
+		{driver.CapabilitySet(driver.CapTicketExec), "ticket_exec"},
+		{driver.CapabilitySet(driver.CapTicketExec | driver.CapMetadata), "ticket_exec,metadata"},
 	}
 
 	for _, tt := range tests {
@@ -124,9 +115,6 @@ func TestNewDriver_MySQL(t *testing.T) {
 		t.Errorf("Type() = %q, want mysql", d.Type())
 	}
 	caps := d.Capabilities()
-	if !caps.Has(driver.CapQuery) {
-		t.Error("mysql should have CapQuery")
-	}
 	if !caps.Has(driver.CapTicketExec) {
 		t.Error("mysql should have CapTicketExec")
 	}

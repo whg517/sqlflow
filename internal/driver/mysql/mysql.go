@@ -40,15 +40,7 @@ func (d *MySQLDriver) Type() string { return "mysql" }
 
 // Capabilities declares MySQL's full capability set.
 func (d *MySQLDriver) Capabilities() driver.CapabilitySet {
-	return driver.CapabilitySet(
-		driver.CapQuery |
-			driver.CapTicketExec |
-			driver.CapMetadata |
-			driver.CapTableLevelPermission |
-			driver.CapFieldMasking |
-			driver.CapSQLParse |
-			driver.CapExport,
-	)
+	return driver.CapabilitySet(driver.CapTicketExec | driver.CapMetadata)
 }
 
 // QueryForm declares how read queries are composed for this data source.

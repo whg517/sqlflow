@@ -20,11 +20,7 @@ func TestPostgreSQLDriver_Capabilities(t *testing.T) {
 	d := &PostgreSQLDriver{}
 	caps := d.Capabilities()
 
-	required := []driver.Capability{
-		driver.CapQuery, driver.CapTicketExec, driver.CapMetadata,
-		driver.CapTableLevelPermission, driver.CapFieldMasking,
-		driver.CapSQLParse, driver.CapExport,
-	}
+	required := []driver.Capability{driver.CapTicketExec, driver.CapMetadata}
 
 	for _, cap := range required {
 		if !caps.Has(cap) {

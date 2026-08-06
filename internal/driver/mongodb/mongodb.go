@@ -43,15 +43,12 @@ var (
 func (d *MongoDBDriver) Type() string { return "mongodb" }
 
 // Capabilities declares MongoDB's capability set.
-// MongoDB does not support CapSQLParse (no SQL syntax) or CapExport.
+//
+// It used to also declare no CapSQLParse and no CapExport. Both were wrong:
+// Parse returns an operation and targets for a command body, and the export
+// path is driver-agnostic, so a MongoDB export works.
 func (d *MongoDBDriver) Capabilities() driver.CapabilitySet {
-	return driver.CapabilitySet(
-		driver.CapQuery |
-			driver.CapTicketExec |
-			driver.CapMetadata |
-			driver.CapTableLevelPermission |
-			driver.CapFieldMasking,
-	)
+	return driver.CapabilitySet(driver.CapTicketExec | driver.CapMetadata)
 }
 
 // QueryForm declares how read queries are composed for this data source.

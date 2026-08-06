@@ -21,14 +21,10 @@ func TestMongoDBDriver_Capabilities(t *testing.T) {
 	caps := d.Capabilities()
 
 	// MongoDB supports these
-	have := []driver.Capability{
-		driver.CapQuery, driver.CapTicketExec, driver.CapMetadata,
-		driver.CapTableLevelPermission, driver.CapFieldMasking,
-	}
-	// MongoDB does NOT support these
-	lack := []driver.Capability{
-		driver.CapSQLParse, driver.CapExport,
-	}
+	have := []driver.Capability{driver.CapTicketExec, driver.CapMetadata}
+	// It used to declare no CapExport and no CapSQLParse. Both were wrong about
+	// this driver: Parse works, and the export path is driver-agnostic.
+	lack := []driver.Capability{}
 
 	for _, cap := range have {
 		if !caps.Has(cap) {

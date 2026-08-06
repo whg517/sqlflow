@@ -8,16 +8,15 @@ export type QueryForm = "sql" | "document" | "dsl";
 // DatasourceCapabilities mirrors driver.Descriptor on the server. It is the
 // single source of truth for what a data source type can do — the UI reads it
 // instead of branching on type names, so adding a driver needs no UI change.
+// The set is deliberately small. It used to also carry query, table_permission,
+// field_masking, sql_parse and export; nothing here read any of them, and three
+// were false for drivers that did the thing anyway — reading export would have
+// hidden a MongoDB export that works.
 export interface DatasourceCapabilities {
   type: string;
   query_form: QueryForm;
-  query: boolean;
   ticket_exec: boolean;
   metadata: boolean;
-  table_permission: boolean;
-  field_masking: boolean;
-  sql_parse: boolean;
-  export: boolean;
   explain: boolean;
   parameterized: boolean;
 }

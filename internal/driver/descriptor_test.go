@@ -8,9 +8,9 @@ import (
 )
 
 // TestDescribeType_QueryForms pins the axis that decides which editor the UI
-// shows. Elasticsearch declaring CapQuery like MySQL does is not enough — the
-// two are composed differently and must be distinguishable without the UI
-// hardcoding type names.
+// shows. Both Elasticsearch and MySQL are queryable, which is why "queryable"
+// was never the useful distinction — the two are composed differently and must
+// be distinguishable without the UI hardcoding type names.
 func TestDescribeType_QueryForms(t *testing.T) {
 	tests := []struct {
 		typeName string
@@ -39,35 +39,33 @@ func TestDescribeType_QueryForms(t *testing.T) {
 	}
 }
 
-// TestDescribeType_Capabilities checks that the descriptor reports the same
-// capability set the driver declares, for the cases the UI actually branches on.
+// TestDescribeType_Capabilities checks the descriptor against the one bit that
+// still distinguishes drivers.
+//
+// It used to assert seven; five of those were declared identically by every
+// driver or contradicted by the driver's own behavior, so asserting them only
+// restated the source file being tested.
 func TestDescribeType_Capabilities(t *testing.T) {
 	es, err := driver.DescribeType("elasticsearch")
 	if err != nil {
 		t.Fatalf("DescribeType(elasticsearch): %v", err)
 	}
-	if !es.Query {
-		t.Error("elasticsearch should declare query")
-	}
 	if es.TicketExec {
 		t.Error("elasticsearch must not declare ticket_exec — it has no DML/DDL path")
 	}
-	if es.SQLParse {
-		t.Error("elasticsearch must not declare sql_parse")
+	if !es.Metadata {
+		t.Error("elasticsearch should declare metadata — it lists indices and fields")
 	}
 
 	mysql, err := driver.DescribeType("mysql")
 	if err != nil {
 		t.Fatalf("DescribeType(mysql): %v", err)
 	}
-	for name, got := range map[string]bool{
-		"query": mysql.Query, "ticket_exec": mysql.TicketExec, "metadata": mysql.Metadata,
-		"table_permission": mysql.TablePermission, "field_masking": mysql.FieldMasking,
-		"sql_parse": mysql.SQLParse, "export": mysql.Export,
-	} {
-		if !got {
-			t.Errorf("mysql should declare %s", name)
-		}
+	if !mysql.TicketExec {
+		t.Error("mysql should declare ticket_exec")
+	}
+	if !mysql.Metadata {
+		t.Error("mysql should declare metadata")
 	}
 }
 

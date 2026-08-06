@@ -11,13 +11,13 @@ type Descriptor struct {
 	Type      string    `json:"type"`
 	QueryForm QueryForm `json:"query_form"`
 
-	Query           bool `json:"query"`
-	TicketExec      bool `json:"ticket_exec"`
-	Metadata        bool `json:"metadata"`
-	TablePermission bool `json:"table_permission"`
-	FieldMasking    bool `json:"field_masking"`
-	SQLParse        bool `json:"sql_parse"`
-	Export          bool `json:"export"`
+	// TicketExec and Metadata are the capability bits that still say something:
+	// SQLite and Elasticsearch genuinely cannot run ticket statements. The five
+	// that were here before — query, table_permission, field_masking, sql_parse,
+	// export — were either declared by every driver or declared false by drivers
+	// that did the thing anyway, and the UI read none of them.
+	TicketExec bool `json:"ticket_exec"`
+	Metadata   bool `json:"metadata"`
 
 	// Explain reports whether the driver can produce a query plan. It is not a
 	// Capability bit because it is derived from the optional QueryExplainer
@@ -46,16 +46,11 @@ func Describe(d Driver) *Descriptor {
 	_, parameterized := d.(ParameterizedQueryExecutor)
 
 	return &Descriptor{
-		Type:            d.Type(),
-		QueryForm:       d.QueryForm(),
-		Query:           caps.Has(CapQuery),
-		TicketExec:      caps.Has(CapTicketExec),
-		Metadata:        caps.Has(CapMetadata),
-		TablePermission: caps.Has(CapTableLevelPermission),
-		FieldMasking:    caps.Has(CapFieldMasking),
-		SQLParse:        caps.Has(CapSQLParse),
-		Export:          caps.Has(CapExport),
-		Explain:         explain,
-		Parameterized:   parameterized,
+		Type:          d.Type(),
+		QueryForm:     d.QueryForm(),
+		TicketExec:    caps.Has(CapTicketExec),
+		Metadata:      caps.Has(CapMetadata),
+		Explain:       explain,
+		Parameterized: parameterized,
 	}
 }

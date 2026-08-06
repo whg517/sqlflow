@@ -1493,8 +1493,8 @@ func TestDatasourceHandler_GetCapabilities(t *testing.T) {
 				Data struct {
 					Type       string `json:"type"`
 					QueryForm  string `json:"query_form"`
-					Query      bool   `json:"query"`
 					TicketExec bool   `json:"ticket_exec"`
+					Metadata   bool   `json:"metadata"`
 				} `json:"data"`
 			}
 			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
@@ -1503,8 +1503,8 @@ func TestDatasourceHandler_GetCapabilities(t *testing.T) {
 			if body.Data.QueryForm != tt.wantQueryForm {
 				t.Errorf("query_form = %q, want %q", body.Data.QueryForm, tt.wantQueryForm)
 			}
-			if !body.Data.Query {
-				t.Error("query capability should be true")
+			if !body.Data.Metadata {
+				t.Error("metadata capability should be true")
 			}
 			if body.Data.TicketExec != tt.wantTicketExec {
 				t.Errorf("ticket_exec = %v, want %v", body.Data.TicketExec, tt.wantTicketExec)

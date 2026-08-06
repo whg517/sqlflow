@@ -56,6 +56,13 @@ cd web && npx tsc -b && npm run test
 结构性能力用**可选接口**而非能力位，由类型系统检查：`ParameterizedQueryExecutor`、
 `ParameterBinder`、`QueryExplainer`、`ConfigValidator`。
 
+**一个能力位只有在「某个驱动的回答与其他不同」且「某个调用方会依据回答行事」时才成立。**
+曾经有七个位，五个两条都不满足，已删除——它们不是没被强制，而是**本身就是错的**：
+`CapQuery`/`CapFieldMasking` 五个驱动全声明为真；`CapSQLParse`/`CapExport` 被
+Mongo/ES 声明为假但两者都做得到；`CapTableLevelPermission` 被 ES 声明为假，而 ES 索引
+实际正被 Casbin 校验——照它执行会**删掉**一处访问检查。加新位前先跑
+`TestEveryCapabilityBitIsFalsifiable`。
+
 **每个驱动必须写编译期断言**（`internal/driver/*/`）：
 
 ```go

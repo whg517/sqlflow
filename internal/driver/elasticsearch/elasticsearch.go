@@ -51,12 +51,7 @@ func (d *ESDriver) Type() string { return "elasticsearch" }
 // ES does not support CapTicketExec (no DML/DDL), CapSQLParse (no SQL syntax),
 // or CapTableLevelPermission (no row-level access control).
 func (d *ESDriver) Capabilities() driver.CapabilitySet {
-	return driver.CapabilitySet(
-		driver.CapQuery |
-			driver.CapMetadata |
-			driver.CapFieldMasking |
-			driver.CapExport,
-	)
+	return driver.CapabilitySet(driver.CapMetadata)
 }
 
 // QueryForm declares how read queries are composed for this data source.

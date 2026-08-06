@@ -289,13 +289,20 @@ sequenceDiagram
 
 `internal/driver.Driver` 为所有目标数据源提供统一端口：连接、健康检查、元数据、只读查询、单条/批量变更和解析。每个驱动通过位集合声明能力：
 
-- `CapQuery`
-- `CapTicketExec`
-- `CapMetadata`
-- `CapTableLevelPermission`
-- `CapFieldMasking`
-- `CapSQLParse`
-- `CapExport`
+- `CapTicketExec` —— 能否通过工单执行 DML/DDL。SQLite 与 Elasticsearch 声明否，且属实：
+  它们的 `ExecuteStatement` 返回不支持错误。
+- `CapMetadata` —— 能否列出库/表/字段。当前五个驱动全部声明为真，读它的那处检查因此
+  永不触发；它是结构性的（`ListTables`/`GetColumns` 是方法），应随 `ExecuteStatement`
+  一起收进可选接口。
+
+**一个能力位只有在「某个驱动的回答与其他不同」且「某个调用方会依据回答行事」时才成立。**
+曾经有七个位，五个两条都不满足，已删除：
+
+| 已删除 | 原因 |
+|---|---|
+| `CapQuery`、`CapFieldMasking` | 五个驱动全声明为真，没有任何东西能因缺少它被拒绝 |
+| `CapSQLParse`、`CapExport` | 被 Mongo/ES 声明为假，但两者的 `Parse()` 都成功，导出链路也与驱动无关——照它执行反而会拒掉可用的 MongoDB 导出 |
+| `CapTableLevelPermission` | 被 ES 声明为假，而 ES 的索引实际正被 Casbin 当作普通目标校验——照它执行会**删掉**一处访问检查。它还问错了对象：权限由 Casbin 对 `Parse` 的 targets 施加，脱敏由 `platform/mask` 对结果施加，而「结果能否脱敏」是 `ResultShape` 回答的问题 |
 
 驱动注册由 `internal/driver/all` 的空导入完成，`internal/app.Container` 引入它。注册发生在各驱动的 `init()` 中，遗漏空导入只会在运行时查表失败，因此注册集合必须只有这一个来源。`PoolManager` 以数据源 ID 缓存已连接驱动；数据源更新或应用关闭时应移除并关闭连接。
 
@@ -309,7 +316,7 @@ sequenceDiagram
 | 查询形态 | `QueryForm() QueryForm` | 查询怎么写（`sql` / `document` / `dsl`） |
 | 结果形态 | `QueryResult.Shape` | 结果怎么读（`table` / `documents` / `aggregation`） |
 
-能力位与查询形态是正交的：Elasticsearch 与 MySQL 都声明 `CapQuery`，但前者是 `dsl` 形态，编辑器、请求载荷和结果渲染全不相同。
+能力位与查询形态是正交的：Elasticsearch 与 MySQL 都可查询，但前者是 `dsl` 形态，编辑器、请求载荷和结果渲染全不相同——「能不能查」从来不是有用的区分，「怎么查」才是。
 
 结构性能力用**可选接口**而非能力位表达，由类型系统检查而非运行时查表：
 `ParameterizedQueryExecutor`（参数化执行）、`ParameterBinder`（占位符方言）、

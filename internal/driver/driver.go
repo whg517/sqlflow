@@ -11,14 +11,31 @@ import (
 // Capability represents a single data source capability.
 type Capability int
 
+// A bit only earns its place if some driver answers it differently from the
+// others, and if some caller acts on the answer. Five failed both tests and are
+// gone:
+//
+//   - CapQuery, CapFieldMasking: declared by every driver, so nothing could be
+//     rejected for lacking them.
+//   - CapSQLParse, CapExport: declared false by drivers that do both. Parse is
+//     an interface method every driver has, and the export path is
+//     driver-agnostic — honoring CapExport would have refused a working
+//     MongoDB export.
+//   - CapTableLevelPermission: declared false by Elasticsearch while its
+//     indices were Casbin-checked like any other target, so honoring it would
+//     have removed an access check. It also asked the wrong party: permissions
+//     are enforced over Parse's targets and masking over the result, and
+//     whether a result can be masked at all is ResultShape's question.
 const (
-	CapQuery                Capability = 1 << iota // Execute read-only queries
-	CapTicketExec                                  // Execute DML/DDL via ticket workflow
-	CapMetadata                                    // List databases/tables/columns
-	CapTableLevelPermission                        // Table-level permission control (Casbin)
-	CapFieldMasking                                // Field-level data masking
-	CapSQLParse                                    // SQL/query syntax parsing
-	CapExport                                      // Data export
+	// CapTicketExec reports that the driver can run DML/DDL through the ticket
+	// workflow. SQLite and Elasticsearch answer no, and mean it: their
+	// ExecuteStatement returns an unsupported error.
+	CapTicketExec Capability = 1 << iota
+	// CapMetadata reports that databases, tables and columns can be listed.
+	// Every driver declares it today, which makes the check that reads it dead;
+	// it is structural — ListTables and GetColumns are methods — so it belongs
+	// in an optional interface alongside ExecuteStatement.
+	CapMetadata
 )
 
 // QueryForm describes how a read query is composed for a data source.
@@ -47,27 +64,21 @@ func (c CapabilitySet) Has(cap Capability) bool {
 
 // String returns a human-readable representation.
 func (c CapabilitySet) String() string {
+	// One table rather than a chain of ifs: the names were previously kept in
+	// three parallel places — here, in Describe, and in Descriptor's json tags —
+	// and drift between them is silent.
+	all := []struct {
+		cap  Capability
+		name string
+	}{
+		{CapTicketExec, "ticket_exec"},
+		{CapMetadata, "metadata"},
+	}
 	var names []string
-	if c.Has(CapQuery) {
-		names = append(names, "query")
-	}
-	if c.Has(CapTicketExec) {
-		names = append(names, "ticket_exec")
-	}
-	if c.Has(CapMetadata) {
-		names = append(names, "metadata")
-	}
-	if c.Has(CapTableLevelPermission) {
-		names = append(names, "permission")
-	}
-	if c.Has(CapFieldMasking) {
-		names = append(names, "masking")
-	}
-	if c.Has(CapSQLParse) {
-		names = append(names, "parse")
-	}
-	if c.Has(CapExport) {
-		names = append(names, "export")
+	for _, entry := range all {
+		if c.Has(entry.cap) {
+			names = append(names, entry.name)
+		}
 	}
 	if len(names) == 0 {
 		return "none"
