@@ -250,7 +250,9 @@ func (d *Driver) executeQuery(ctx context.Context, query string, args []interfac
 // because Driver demanded them. Callers now find out from the type.
 
 func (d *Driver) Parse(query string) (*driver.ParseResult, error) {
-	result, err := sqlparser.ParseSQL(query, "sqlite")
+	// SQLite shares the MySQL analysis: the dialects differ in ways the
+	// operation, target and risk rules do not look at.
+	result, err := sqlparser.ParseMySQLDialect(query)
 	if err != nil {
 		return nil, err
 	}

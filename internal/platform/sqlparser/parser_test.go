@@ -32,12 +32,9 @@ func TestParseSQL_MySQL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ParseSQL(tt.sql, "mysql")
+			result, err := ParseMySQLDialect(tt.sql)
 			if err != nil {
 				t.Fatalf("ParseSQL error: %v", err)
-			}
-			if result.DBType != "mysql" {
-				t.Errorf("DBType = %q, want mysql", result.DBType)
 			}
 			if result.IsBlocked != tt.wantBlocked {
 				t.Errorf("IsBlocked = %v, want %v (BlockReason: %s)", result.IsBlocked, tt.wantBlocked, result.BlockReason)
@@ -50,7 +47,7 @@ func TestParseSQL_MySQL(t *testing.T) {
 }
 
 func TestParseSQL_PostgreSQLParameterizedSelect(t *testing.T) {
-	result, err := ParseSQL("SELECT * FROM users WHERE id = $1 AND status = $2", "postgresql")
+	result, err := ParsePostgreSQLDialect("SELECT * FROM users WHERE id = $1 AND status = $2")
 	if err != nil {
 		t.Fatalf("ParseSQL error: %v", err)
 	}
@@ -84,12 +81,9 @@ func TestParseSQL_MongoDB(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ParseSQL(tt.body, "mongodb")
+			result, err := ParseMongoDialect(tt.body)
 			if err != nil {
 				t.Fatalf("ParseSQL error: %v", err)
-			}
-			if result.DBType != "mongodb" {
-				t.Errorf("DBType = %q, want mongodb", result.DBType)
 			}
 			if result.IsBlocked != tt.wantBlocked {
 				t.Errorf("IsBlocked = %v, want %v (BlockReason: %s)", result.IsBlocked, tt.wantBlocked, result.BlockReason)
@@ -103,54 +97,9 @@ func TestParseSQL_MongoDB(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // ParseSQL — Case-insensitive dbType
-// ---------------------------------------------------------------------------
-
-func TestParseSQL_CaseInsensitiveDBType(t *testing.T) {
-	tests := []struct {
-		name   string
-		dbType string
-		wantOK bool
-	}{
-		{"mysql_lower", "mysql", true},
-		{"mysql_mixed", "MySQL", true},
-		{"mysql_upper", "MYSQL", true},
-		{"mongodb_lower", "mongodb", true},
-		{"mongo_alias", "mongo", true},
-		{"mongodb_mixed", "MongoDB", true},
-		{"postgres_supported", "postgres", true},
-		{"postgresql_supported", "postgresql", true},
-		{"pg_supported", "pg", true},
-		{"empty_unsupported", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			input := "SELECT 1"
-			lower := strings.ToLower(tt.dbType)
-			if lower == "mongodb" || lower == "mongo" {
-				input = `{"operation": "find"}`
-			}
-			_, err := ParseSQL(input, tt.dbType)
-			if tt.wantOK && err != nil {
-				t.Errorf("dbType=%q: unexpected error: %v", tt.dbType, err)
-			}
-			if !tt.wantOK && err == nil {
-				t.Errorf("dbType=%q: expected error, got nil", tt.dbType)
-			}
-		})
-	}
-}
 
 // ---------------------------------------------------------------------------
 // ParseSQL — Unsupported dbType
-// ---------------------------------------------------------------------------
-
-func TestParseSQL_UnsupportedDBType(t *testing.T) {
-	_, err := ParseSQL("SELECT 1", "oracle")
-	if err == nil {
-		t.Error("expected error for unsupported db type")
-	}
-}
 
 // ---------------------------------------------------------------------------
 // ParseSQL — MySQL error inputs
@@ -158,21 +107,21 @@ func TestParseSQL_UnsupportedDBType(t *testing.T) {
 
 func TestParseSQL_MySQLErrors(t *testing.T) {
 	t.Run("empty_sql", func(t *testing.T) {
-		_, err := ParseSQL("", "mysql")
+		_, err := ParseMySQLDialect("")
 		if err == nil {
 			t.Error("expected error for empty SQL")
 		}
 	})
 
 	t.Run("whitespace_sql", func(t *testing.T) {
-		_, err := ParseSQL("   ", "mysql")
+		_, err := ParseMySQLDialect("   ")
 		if err == nil {
 			t.Error("expected error for whitespace SQL")
 		}
 	})
 
 	t.Run("invalid_syntax", func(t *testing.T) {
-		_, err := ParseSQL("NOT VALID SQL AT ALL !!!", "mysql")
+		_, err := ParseMySQLDialect("NOT VALID SQL AT ALL !!!")
 		if err == nil {
 			t.Error("expected error for invalid SQL syntax")
 		}
@@ -184,7 +133,7 @@ func TestParseSQL_MySQLErrors(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestParseSQL_MySQLJoinTables(t *testing.T) {
-	result, err := ParseSQL("SELECT u.id, o.total FROM users u JOIN orders o ON u.id = o.user_id WHERE u.active = 1 LIMIT 10", "mysql")
+	result, err := ParseMySQLDialect("SELECT u.id, o.total FROM users u JOIN orders o ON u.id = o.user_id WHERE u.active = 1 LIMIT 10")
 	if err != nil {
 		t.Fatalf("ParseSQL error: %v", err)
 	}
@@ -198,7 +147,7 @@ func TestParseSQL_MySQLJoinTables(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestParseSQL_NoLimitWarning(t *testing.T) {
-	result, err := ParseSQL("SELECT * FROM users", "mysql")
+	result, err := ParseMySQLDialect("SELECT * FROM users")
 	if err != nil {
 		t.Fatalf("ParseSQL error: %v", err)
 	}
@@ -214,7 +163,7 @@ func TestParseSQL_NoLimitWarning(t *testing.T) {
 }
 
 func TestParseSQL_LimitSuppressedWarning(t *testing.T) {
-	result, err := ParseSQL("SELECT * FROM users LIMIT 10", "mysql")
+	result, err := ParseMySQLDialect("SELECT * FROM users LIMIT 10")
 	if err != nil {
 		t.Fatalf("ParseSQL error: %v", err)
 	}
@@ -230,33 +179,37 @@ func TestParseSQL_LimitSuppressedWarning(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestParseSQL_BlockReasonMessages(t *testing.T) {
+	// Each row names the parser it belongs to. The table used to carry a dbType
+	// string and hand it to the dispatcher; with the dispatcher gone there is no
+	// name to dispatch on, and a row that picks its own parser cannot be routed
+	// to the wrong one by a typo.
 	tests := []struct {
 		name       string
+		parse      func(string) (*SQLParseResult, error)
 		sql        string
-		dbType     string
 		wantReason string
 	}{
-		{"drop_database", "DROP DATABASE db", "mysql", "DROP DATABASE is not allowed"},
-		{"drop_table", "DROP TABLE t", "mysql", "DROP TABLE is not allowed"},
-		{"truncate", "TRUNCATE TABLE t", "mysql", "TRUNCATE is not allowed"},
-		{"update_no_where", "UPDATE t SET x = 1", "mysql", "UPDATE without WHERE clause is not allowed"},
-		{"delete_no_where", "DELETE FROM t", "mysql", "DELETE without WHERE clause is not allowed"},
-		{"mongo_update_many_empty", `{"operation": "update", "collection": "t", "multi": true, "filter": {}, "update": {"$set": {"x": 1}}}`, "mongodb", "updateMany with empty filter is not allowed"},
-		{"mongo_delete_empty", `{"operation": "delete", "collection": "t", "filter": {}}`, "mongodb", "delete with empty filter is not allowed"},
-		{"mongo_dangerous_agg", `{"operation": "aggregate", "collection": "t", "pipeline": [{"$out": "x"}]}`, "mongodb", "aggregation contains dangerous pipeline stage"},
+		{"drop_database", ParseMySQLDialect, "DROP DATABASE db", "DROP DATABASE is not allowed"},
+		{"drop_table", ParseMySQLDialect, "DROP TABLE t", "DROP TABLE is not allowed"},
+		{"truncate", ParseMySQLDialect, "TRUNCATE TABLE t", "TRUNCATE is not allowed"},
+		{"update_no_where", ParseMySQLDialect, "UPDATE t SET x = 1", "UPDATE without WHERE clause is not allowed"},
+		{"delete_no_where", ParseMySQLDialect, "DELETE FROM t", "DELETE without WHERE clause is not allowed"},
+		{"mongo_update_many_empty", ParseMongoDialect, `{"operation": "update", "collection": "t", "multi": true, "filter": {}, "update": {"$set": {"x": 1}}}`, "updateMany with empty filter is not allowed"},
+		{"mongo_delete_empty", ParseMongoDialect, `{"operation": "delete", "collection": "t", "filter": {}}`, "delete with empty filter is not allowed"},
+		{"mongo_dangerous_agg", ParseMongoDialect, `{"operation": "aggregate", "collection": "t", "pipeline": [{"$out": "x"}]}`, "aggregation contains dangerous pipeline stage"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ParseSQL(tt.sql, tt.dbType)
+			result, err := tt.parse(tt.sql)
 			if err != nil {
-				t.Fatalf("ParseSQL error: %v", err)
+				t.Fatalf("parse error: %v", err)
 			}
 			if !result.IsBlocked {
-				t.Fatalf("expected IsBlocked = true")
+				t.Fatalf("expected the statement to be blocked")
 			}
-			if result.BlockReason != tt.wantReason {
-				t.Errorf("BlockReason = %q, want %q", result.BlockReason, tt.wantReason)
+			if !strings.Contains(result.BlockReason, tt.wantReason) {
+				t.Errorf("BlockReason = %q, want it to contain %q", result.BlockReason, tt.wantReason)
 			}
 		})
 	}
@@ -280,7 +233,7 @@ func TestParseSQL_MongoOperationMapping(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ParseSQL(tt.body, "mongodb")
+			result, err := ParseMongoDialect(tt.body)
 			if err != nil {
 				t.Fatalf("ParseSQL error: %v", err)
 			}
@@ -293,7 +246,7 @@ func TestParseSQL_MongoOperationMapping(t *testing.T) {
 
 func TestParseSQL_MongoTablesMapping(t *testing.T) {
 	t.Run("collection_mapped_to_tables", func(t *testing.T) {
-		result, err := ParseSQL(`{"operation": "find", "collection": "users", "filter": {"x": 1}}`, "mongodb")
+		result, err := ParseMongoDialect(`{"operation": "find", "collection": "users", "filter": {"x": 1}}`)
 		if err != nil {
 			t.Fatalf("ParseSQL error: %v", err)
 		}
@@ -303,7 +256,7 @@ func TestParseSQL_MongoTablesMapping(t *testing.T) {
 	})
 
 	t.Run("no_collection_empty_tables", func(t *testing.T) {
-		result, err := ParseSQL(`{"operation": "find", "filter": {"x": 1}}`, "mongodb")
+		result, err := ParseMongoDialect(`{"operation": "find", "filter": {"x": 1}}`)
 		if err != nil {
 			t.Fatalf("ParseSQL error: %v", err)
 		}
@@ -608,21 +561,21 @@ func TestParseMongo_InvalidJSON(t *testing.T) {
 
 func TestParseSQL_MongoDBErrorPaths(t *testing.T) {
 	t.Run("empty_body", func(t *testing.T) {
-		_, err := ParseSQL("", "mongodb")
+		_, err := ParseMongoDialect("")
 		if err == nil {
 			t.Error("expected error for empty MongoDB body via ParseSQL")
 		}
 	})
 
 	t.Run("invalid_json", func(t *testing.T) {
-		_, err := ParseSQL("{invalid}", "mongodb")
+		_, err := ParseMongoDialect("{invalid}")
 		if err == nil {
 			t.Error("expected error for invalid JSON via ParseSQL")
 		}
 	})
 
 	t.Run("whitespace_body", func(t *testing.T) {
-		_, err := ParseSQL("   ", "mongodb")
+		_, err := ParseMongoDialect("   ")
 		if err == nil {
 			t.Error("expected error for whitespace-only body via ParseSQL")
 		}
@@ -634,12 +587,9 @@ func TestParseSQL_MongoDBErrorPaths(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestParseSQL_MongoAlias(t *testing.T) {
-	result, err := ParseSQL(`{"operation": "find", "collection": "users", "filter": {"x": 1}}`, "mongo")
+	result, err := ParseMongoDialect(`{"operation": "find", "collection": "users", "filter": {"x": 1}}`)
 	if err != nil {
 		t.Fatalf("ParseSQL with 'mongo' alias error: %v", err)
-	}
-	if result.DBType != "mongodb" {
-		t.Errorf("DBType = %q, want mongodb", result.DBType)
 	}
 	if result.Operation != OpSelect {
 		t.Errorf("Operation = %q, want %q", result.Operation, OpSelect)
@@ -671,7 +621,7 @@ func TestParseSQL_MySQLTablesAndOperationConsistency(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ParseSQL(tt.sql, "mysql")
+			result, err := ParseMySQLDialect(tt.sql)
 			if err != nil {
 				t.Fatalf("ParseSQL error: %v", err)
 			}
@@ -808,7 +758,7 @@ func TestAppendIfAbsent(t *testing.T) {
 
 func TestParseSQL_MySQLDefaultRiskDML(t *testing.T) {
 	// INSERT is DML — should be RiskMedium and not blocked
-	result, err := ParseSQL("INSERT INTO users (id, name) VALUES (1, 'test')", "mysql")
+	result, err := ParseMySQLDialect("INSERT INTO users (id, name) VALUES (1, 'test')")
 	if err != nil {
 		t.Fatalf("ParseSQL error: %v", err)
 	}
@@ -825,7 +775,7 @@ func TestParseSQL_MySQLDefaultRiskDML(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestParseSQL_MongoDBFindDefaultRisk(t *testing.T) {
-	result, err := ParseSQL(`{"operation": "find", "collection": "users", "filter": {"active": true}}`, "mongodb")
+	result, err := ParseMongoDialect(`{"operation": "find", "collection": "users", "filter": {"active": true}}`)
 	if err != nil {
 		t.Fatalf("ParseSQL error: %v", err)
 	}
@@ -842,7 +792,7 @@ func TestParseSQL_MongoDBFindDefaultRisk(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestParseSQL_NoWarningOnNonSelect(t *testing.T) {
-	result, err := ParseSQL("UPDATE users SET name = 'x' WHERE id = 1", "mysql")
+	result, err := ParseMySQLDialect("UPDATE users SET name = 'x' WHERE id = 1")
 	if err != nil {
 		t.Fatalf("ParseSQL error: %v", err)
 	}

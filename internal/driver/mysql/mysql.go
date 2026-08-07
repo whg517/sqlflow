@@ -362,7 +362,7 @@ func (d *MySQLDriver) ExplainQuery(ctx context.Context, database string, query s
 }
 
 func (d *MySQLDriver) Parse(query string) (*driver.ParseResult, error) {
-	result, err := sqlparser.ParseSQL(query, "mysql")
+	result, err := sqlparser.ParseMySQLDialect(query)
 	if err != nil {
 		return nil, err
 	}

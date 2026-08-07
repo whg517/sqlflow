@@ -28,7 +28,6 @@ const (
 
 // SQLParseResult is the unified result for both MySQL and MongoDB parsing.
 type SQLParseResult struct {
-	DBType      string        // "mysql" or "mongodb"
 	Operation   OperationType // For MySQL: select/dml/update/delete/ddl; for Mongo maps to similar concept
 	Tables      []string      // MySQL tables or MongoDB collection
 	RiskLevel   RiskLevel
@@ -37,34 +36,14 @@ type SQLParseResult struct {
 	Warnings    []string
 }
 
-// ParseSQL is the unified entry point for SQL parsing.
-// dbType should be "mysql" or "mongodb".
-func ParseSQL(input string, dbType string) (*SQLParseResult, error) {
-	switch strings.ToLower(dbType) {
-	case "mysql":
-		return parseMySQLUnified(input)
-	case "sqlite", "sqlite3":
-		result, err := parseMySQLUnified(input)
-		if result != nil {
-			result.DBType = "sqlite"
-		}
-		return result, err
-	case "postgresql", "postgres", "pg":
-		return parsePostgreSQLUnified(input)
-	case "mongodb", "mongo":
-		return parseMongoUnified(input)
-	case "elasticsearch", "es":
-		return parseElasticsearch(input)
-	default:
-		return nil, fmt.Errorf("unsupported database type: %s", dbType)
-	}
-}
-
-// parseMySQLUnified parses MySQL SQL and applies static rules.
-func parseMySQLUnified(sql string) (*SQLParseResult, error) {
-	result := &SQLParseResult{
-		DBType: "mysql",
-	}
+// ParseMySQLDialect parses MySQL-family SQL and applies the static rules.
+//
+// SQLite uses it too: the dialects differ in ways this analysis does not look
+// at. Drivers call it directly rather than passing their type name to a switch
+// — that switch was a registry of driver names living in a package that is not
+// allowed to know about drivers.
+func ParseMySQLDialect(sql string) (*SQLParseResult, error) {
+	result := &SQLParseResult{}
 
 	mysqlResult, err := ParseMySQL(sql)
 	if err != nil {
@@ -80,13 +59,11 @@ func parseMySQLUnified(sql string) (*SQLParseResult, error) {
 	return result, nil
 }
 
-// parsePostgreSQLUnified parses PostgreSQL SQL using the native PG parser (pg_query_go).
-// If the PG parser fails (e.g. edge-case syntax), falls back to keyword-based detection
-// with UNKNOWN type — never blocks execution. The caller decides how to handle UNKNOWN.
-func parsePostgreSQLUnified(sql string) (*SQLParseResult, error) {
-	result := &SQLParseResult{
-		DBType: "postgresql",
-	}
+// ParsePostgreSQLDialect parses PostgreSQL SQL using the native parser, falling
+// back to keyword detection when it cannot — PostgreSQL syntax this parser does
+// not cover should not block a query outright.
+func ParsePostgreSQLDialect(sql string) (*SQLParseResult, error) {
+	result := &SQLParseResult{}
 
 	// Try native PG AST parser first
 	pgResult, err := ParsePostgreSQL(sql)
@@ -180,11 +157,10 @@ func classifyRiskLevel(op OperationType) RiskLevel {
 	}
 }
 
-// parseMongoUnified parses MongoDB command and applies static rules.
-func parseMongoUnified(body string) (*SQLParseResult, error) {
-	result := &SQLParseResult{
-		DBType: "mongodb",
-	}
+// ParseMongoDialect parses a MongoDB command body and maps its operation onto
+// the shared operation vocabulary.
+func ParseMongoDialect(body string) (*SQLParseResult, error) {
+	result := &SQLParseResult{}
 
 	mongoResult, err := ParseMongo(body)
 	if err != nil {
@@ -612,12 +588,9 @@ var esAllowedBodyFields = map[string]bool{
 	"pre_filter_shard_size": true,
 }
 
-// parseElasticsearch 解析 Elasticsearch 查询请求并执行安全检查。
-// 前端提交格式: {"index": "my-index-*", "body": {"query": {...}, "size": 100}}
-func parseElasticsearch(input string) (*SQLParseResult, error) {
-	result := &SQLParseResult{
-		DBType: "elasticsearch",
-	}
+// ParseElasticsearchDialect parses an Elasticsearch index-and-DSL request body.
+func ParseElasticsearchDialect(input string) (*SQLParseResult, error) {
+	result := &SQLParseResult{}
 
 	var req ESQueryRequest
 	if err := json.Unmarshal([]byte(input), &req); err != nil {

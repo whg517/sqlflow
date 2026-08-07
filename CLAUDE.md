@@ -87,7 +87,8 @@ var (
 问题变成编译失败。
 
 **新增数据源类型的改动面应当只有两处**：实现 `driver.Driver`、在
-`internal/driver/all` 注册。查询、导出、AI 评审、元数据、连接测试、前端工作台
+`internal/driver/all` 注册。解析也归驱动——直接调 `sqlparser.Parse<方言>Dialect`，
+`internal/platform` 里不得再出现按类型名的分支（`internal/arch` 强制）。查询、导出、AI 评审、元数据、连接测试、前端工作台
 都不该改。如果你发现必须改，说明抽象漏了一个轴——先讨论再动手。
 
 前端读 `GET /api/datasources/:id/capabilities` 决定编辑器、可用操作与渲染器，

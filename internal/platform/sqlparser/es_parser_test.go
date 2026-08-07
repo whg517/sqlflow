@@ -74,7 +74,7 @@ func TestParseElasticsearch_BodySchemaWhitelist(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := fmt.Sprintf(`{"index":"test-*","body":%s}`, tt.body)
-			result, err := ParseSQL(input, "elasticsearch")
+			result, err := ParseElasticsearchDialect(input)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -114,7 +114,7 @@ func TestParseElasticsearch_OperationWhitelist(t *testing.T) {
 			} else {
 				input = `{"index":"test-*","body":{"query":{"match_all":{}}}}`
 			}
-			result, err := ParseSQL(input, "elasticsearch")
+			result, err := ParseElasticsearchDialect(input)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -153,7 +153,7 @@ func TestParseElasticsearch_DangerousEndpoints(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := fmt.Sprintf(`{"index":"%s","body":{"query":{"match_all":{}}}}`, tt.index)
-			result, err := ParseSQL(input, "elasticsearch")
+			result, err := ParseElasticsearchDialect(input)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

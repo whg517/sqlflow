@@ -502,7 +502,7 @@ func (d *ESDriver) ExecuteQuery(ctx context.Context, database string, query stri
 
 // Parse analyzes an Elasticsearch query JSON for security rules.
 func (d *ESDriver) Parse(query string) (*driver.ParseResult, error) {
-	result, err := sqlparser.ParseSQL(query, "elasticsearch")
+	result, err := sqlparser.ParseElasticsearchDialect(query)
 	if err != nil {
 		return nil, err
 	}

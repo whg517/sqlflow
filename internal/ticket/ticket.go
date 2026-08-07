@@ -286,8 +286,14 @@ func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitter
 
 	summary := auditlog.Summarize(sqlContent)
 
-	// MongoDB collection-level permission check
-	if dbType == "mongodb" && s.permSvc != nil {
+	// Object-level permission for document-shaped bodies.
+	//
+	// Keyed on the query form rather than the type name: what makes this check
+	// possible is that the body names its collection, which is what
+	// QueryFormDocument means. Only MongoDB answers that today, so the set is
+	// unchanged — but a second document driver would be covered without anyone
+	// remembering to add it here.
+	if s.permSvc != nil && queryFormOf(dbType) == driver.QueryFormDocument {
 		if err := s.checkMongoPermission(ctx, submitterRole, datasourceID, sqlContent); err != nil {
 			return nil, err
 		}
@@ -1037,6 +1043,19 @@ func affectedTablesToJSON(tables []string) string {
 		return "[]"
 	}
 	return string(b)
+}
+
+// queryFormOf reports how queries are composed for a datasource type.
+//
+// An unregistered type answers with the SQL form, which is the conservative
+// choice here: it selects no extra checks rather than skipping the ones the
+// caller would otherwise get.
+func queryFormOf(dsType string) driver.QueryForm {
+	d, err := driver.NewDriver(dsType)
+	if err != nil {
+		return driver.QueryFormSQL
+	}
+	return d.QueryForm()
 }
 
 // datasourceType reads the driver type recorded for a datasource.

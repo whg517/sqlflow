@@ -441,7 +441,7 @@ func (d *MongoDBDriver) ExecuteStatements(ctx context.Context, database string, 
 
 // Parse analyzes a MongoDB command JSON body.
 func (d *MongoDBDriver) Parse(query string) (*driver.ParseResult, error) {
-	result, err := sqlparser.ParseSQL(query, "mongodb")
+	result, err := sqlparser.ParseMongoDialect(query)
 	if err != nil {
 		return nil, err
 	}

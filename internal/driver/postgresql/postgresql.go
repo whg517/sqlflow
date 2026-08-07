@@ -412,7 +412,7 @@ func (d *PostgreSQLDriver) ExplainQuery(ctx context.Context, database string, qu
 }
 
 func (d *PostgreSQLDriver) Parse(query string) (*driver.ParseResult, error) {
-	result, err := sqlparser.ParseSQL(query, "postgresql")
+	result, err := sqlparser.ParsePostgreSQLDialect(query)
 	if err != nil {
 		return nil, err
 	}

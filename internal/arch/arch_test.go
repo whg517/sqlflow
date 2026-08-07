@@ -392,3 +392,98 @@ func sortedKeys(m map[string]bool) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// datasourceTypeNames are the identifiers the driver registry keys on.
+//
+// They are business vocabulary: which data sources this platform governs is a
+// product decision, and it changes. A platform package that branches on one has
+// taken a position on it.
+var datasourceTypeNames = map[string]bool{
+	"mysql": true, "postgresql": true, "postgres": true, "pg": true,
+	"mongodb": true, "mongo": true, "elasticsearch": true, "es": true,
+	"sqlite": true, "sqlite3": true,
+}
+
+// TestPlatformDoesNotBranchOnDatasourceType closes the gap the import check
+// leaves open.
+//
+// TestPlatformDoesNotDependOnDomains catches a platform package that imports a
+// domain. It cannot catch one that hardcodes the domain's vocabulary instead,
+// and that is what sqlparser did: a `switch dbType` over every driver name,
+// which made it a third registry alongside internal/driver and the datasource
+// type whitelist. Adding a driver meant editing a package that is supposed to
+// know nothing about drivers, and forgetting to produced "unsupported database
+// type" at runtime rather than a compile error.
+//
+// Only comparisons count. A parser dedicated to MongoDB may say "MongoDB" in
+// its error messages — that is the product's name, not a branch on it.
+func TestPlatformDoesNotBranchOnDatasourceType(t *testing.T) {
+	root := repoRoot(t)
+	fset := token.NewFileSet()
+	var offenders []string
+
+	report := func(rel string, pos token.Pos, value, form string) {
+		offenders = append(offenders, fmt.Sprintf("%s:%d: %s %q",
+			rel, fset.Position(pos).Line, form, value))
+	}
+
+	// matched reports the type name a literal holds, if any.
+	matched := func(e ast.Expr) (string, bool) {
+		lit, ok := e.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return "", false
+		}
+		v, err := strconv.Unquote(lit.Value)
+		if err != nil {
+			return "", false
+		}
+		return v, datasourceTypeNames[strings.ToLower(v)]
+	}
+
+	err := filepath.WalkDir(filepath.Join(root, "internal", "platform"),
+		func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			file, parseErr := parser.ParseFile(fset, path, nil, 0)
+			if parseErr != nil {
+				return parseErr
+			}
+			rel, _ := filepath.Rel(root, path)
+			rel = filepath.ToSlash(rel)
+
+			ast.Inspect(file, func(n ast.Node) bool {
+				switch node := n.(type) {
+				case *ast.CaseClause:
+					for _, e := range node.List {
+						if v, ok := matched(e); ok {
+							report(rel, e.Pos(), v, "switch case on")
+						}
+					}
+				case *ast.BinaryExpr:
+					if node.Op != token.EQL && node.Op != token.NEQ {
+						return true
+					}
+					for _, e := range []ast.Expr{node.X, node.Y} {
+						if v, ok := matched(e); ok {
+							report(rel, e.Pos(), v, "compares against")
+						}
+					}
+				}
+				return true
+			})
+			return nil
+		})
+	if err != nil {
+		t.Fatalf("walk platform: %v", err)
+	}
+
+	sort.Strings(offenders)
+	if len(offenders) > 0 {
+		t.Errorf("internal/platform branches on %d datasource type name(s); the driver owns that vocabulary:\n  %s",
+			len(offenders), strings.Join(offenders, "\n  "))
+	}
+}

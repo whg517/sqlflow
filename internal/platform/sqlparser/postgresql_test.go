@@ -335,12 +335,9 @@ func TestParseSQL_PostgreSQLUnified(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ParseSQL(tt.sql, "postgresql")
+			result, err := ParsePostgreSQLDialect(tt.sql)
 			if err != nil {
 				t.Fatalf("ParseSQL error: %v", err)
-			}
-			if result.DBType != "postgresql" {
-				t.Errorf("DBType = %q, want postgresql", result.DBType)
 			}
 			if result.Operation != tt.wantOp {
 				t.Errorf("Operation = %q, want %q", result.Operation, tt.wantOp)
@@ -376,9 +373,9 @@ func TestParseSQL_MySQLStillWorksAfterPGChanges(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ParseSQL(tt.sql, "mysql")
+			result, err := ParseMySQLDialect(tt.sql)
 			if tt.wantOK && err != nil {
-				t.Fatalf("ParseSQL(mysql) error: %v", err)
+				t.Fatalf("ParsePostgreSQLDialect(mysql) error: %v", err)
 			}
 			if result.Operation != tt.wantOp {
 				t.Errorf("Operation = %q, want %q", result.Operation, tt.wantOp)
@@ -411,7 +408,7 @@ func TestParsePostgreSQL_Whitespace(t *testing.T) {
 
 func TestParseSQL_PostgreSQLDegradation(t *testing.T) {
 	// Empty SQL should still error — even through degradation path
-	_, err := ParseSQL("", "postgresql")
+	_, err := ParsePostgreSQLDialect("")
 	if err == nil {
 		t.Error("expected error for empty PG SQL via ParseSQL")
 	}
@@ -419,29 +416,13 @@ func TestParseSQL_PostgreSQLDegradation(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // PG dbType aliases
-// ---------------------------------------------------------------------------
-
-func TestParseSQL_PGTypeAliases(t *testing.T) {
-	aliases := []string{"postgresql", "postgres", "pg", "PostgreSQL", "PG"}
-	for _, alias := range aliases {
-		t.Run(alias, func(t *testing.T) {
-			result, err := ParseSQL("SELECT 1", alias)
-			if err != nil {
-				t.Fatalf("ParseSQL(%q) error: %v", alias, err)
-			}
-			if result.DBType != "postgresql" {
-				t.Errorf("DBType = %q, want postgresql for alias %q", result.DBType, alias)
-			}
-		})
-	}
-}
 
 // ---------------------------------------------------------------------------
 // No-LIMIT warning for PG
 // ---------------------------------------------------------------------------
 
 func TestParseSQL_PGNoLimitWarning(t *testing.T) {
-	result, err := ParseSQL("SELECT * FROM users", "postgresql")
+	result, err := ParsePostgreSQLDialect("SELECT * FROM users")
 	if err != nil {
 		t.Fatalf("ParseSQL error: %v", err)
 	}
@@ -457,7 +438,7 @@ func TestParseSQL_PGNoLimitWarning(t *testing.T) {
 }
 
 func TestParseSQL_PGLimitSuppressedWarning(t *testing.T) {
-	result, err := ParseSQL("SELECT * FROM users LIMIT 10", "postgresql")
+	result, err := ParsePostgreSQLDialect("SELECT * FROM users LIMIT 10")
 	if err != nil {
 		t.Fatalf("ParseSQL error: %v", err)
 	}

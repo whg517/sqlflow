@@ -607,8 +607,13 @@ func buildUserPrompt(req *AIReviewRequest, staticResult *AIReviewResult) string 
 
 	fmt.Fprintf(&b, "\nSQL:\n%s\n", req.SQL)
 
-	if req.DBType == "mongodb" {
-		b.WriteString("\nNote: This is a MongoDB operation. Analyze accordingly.\n")
+	// Tell the model what it is reading. The form is the driver's own answer,
+	// so a new document or DSL driver gets a correct prompt without an edit here.
+	switch queryFormOf(req.DBType) {
+	case driver.QueryFormDocument:
+		b.WriteString("\nNote: this is a document-store command body, not SQL. Analyze accordingly.\n")
+	case driver.QueryFormDSL:
+		b.WriteString("\nNote: this is a search-engine query DSL body, not SQL. Analyze accordingly.\n")
 	}
 
 	return b.String()

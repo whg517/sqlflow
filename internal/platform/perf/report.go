@@ -334,7 +334,11 @@ func RunFullBenchmark(testServerURL string, totalReqs, concurrency int) *Report 
 		log.Printf("  Ticket List: avg=%v, P95=%v, qps=%.1f\n", ticketListResult.AvgLatency, ticketListResult.P95Latency, ticketListResult.RequestsPerSec)
 
 		// 6. Ticket Create (authenticated, write)
-		ticketCreateBody := `{"datasource_id":1,"database":"testdb","sql":"SELECT 1","db_type":"mysql","change_reason":"性能测试","risk_level":"low"}`
+		// db_type and risk_level were removed from this endpoint: both selected
+		// which checks run, so accepting them let a submitter choose their own
+		// approval path. Sending them here measured a request shape the server
+		// no longer has.
+		ticketCreateBody := `{"datasource_id":1,"database":"testdb","sql":"SELECT 1","change_reason":"性能测试"}`
 		log.Println("  [测试] 创建工单 (POST /api/tickets)...")
 		ticketCreateResult := RunHTTPBenchmark("Ticket Create (POST /api/tickets)", RequestSpec{
 			Method:  "POST",

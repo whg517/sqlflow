@@ -396,18 +396,58 @@ func TestBuildUserPrompt(t *testing.T) {
 	}
 }
 
-func TestBuildUserPrompt_MongoDB(t *testing.T) {
-	req := &AIReviewRequest{
-		SQL:       `{"operation": "find", "collection": "orders", "filter": {"status": "active"}}`,
-		DBType:    "mongodb",
-		Operation: driver.OpSelect,
-		Tables:    []string{"orders"},
+// TestBuildUserPromptNamesTheQueryForm checks the model is told what it is
+// reading.
+//
+// The note used to be `if req.DBType == "mongodb"`, so Elasticsearch — whose
+// bodies are no more SQL than MongoDB's — got a prompt that presented a JSON
+// DSL as SQL. Keying on the driver's declared query form covers both and needs
+// no edit for a third.
+func TestBuildUserPromptNamesTheQueryForm(t *testing.T) {
+	tests := []struct {
+		name   string
+		dbType string
+		sql    string
+		want   string
+	}{
+		{
+			name:   "document body",
+			dbType: "mongodb",
+			sql:    `{"operation": "find", "collection": "orders", "filter": {"status": "active"}}`,
+			want:   "document-store command body",
+		},
+		{
+			name:   "dsl body",
+			dbType: "elasticsearch",
+			sql:    `{"index": "orders", "body": {"query": {"match_all": {}}}}`,
+			want:   "search-engine query DSL body",
+		},
+		{
+			name:   "sql needs no note",
+			dbType: "mysql",
+			sql:    "SELECT * FROM orders",
+			want:   "",
+		},
 	}
-	staticResult := &AIReviewResult{RiskLevel: AIRiskLow}
 
-	prompt := buildUserPrompt(req, staticResult)
-	if !strings.Contains(prompt, "MongoDB") {
-		t.Error("user prompt missing MongoDB note")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &AIReviewRequest{
+				SQL: tt.sql, DBType: tt.dbType,
+				Operation: driver.OpSelect, Tables: []string{"orders"},
+			}
+			prompt := buildUserPrompt(req, &AIReviewResult{RiskLevel: AIRiskLow})
+
+			if tt.want == "" {
+				if strings.Contains(prompt, "not SQL") {
+					t.Error("a SQL body was described as not SQL")
+				}
+				return
+			}
+			if !strings.Contains(prompt, tt.want) {
+				t.Errorf("prompt does not say %q", tt.want)
+			}
+		})
 	}
 }
 
