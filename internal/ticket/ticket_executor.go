@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"regexp"
-	"strings"
 
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/db/ent"
@@ -41,10 +40,13 @@ func convertDriverResults(drvResults []driver.StatementResult) []statementResult
 	return results
 }
 
-// executeSQL connects to the target database and executes the ticket's SQL.
-// For MySQL/PostgreSQL: splits multi-statement SQL and executes each statement individually.
-// For MongoDB: parses JSON command body and executes via mongo driver.
-func (s *Service) executeSQL(ctx context.Context, ds *model.DataSource, database, sqlContent string) ([]statementResult, error) {
+// executeSQL connects to the target database and runs the ticket's statements.
+//
+// dbType is the type the ticket was graded under, not ds.Type. They are almost
+// always the same, and when they are not — a datasource retyped between
+// approval and execution — the body must be cut the way the approver's grade
+// was computed, or the two disagree again in a new place.
+func (s *Service) executeSQL(ctx context.Context, ds *model.DataSource, dbType, database, sqlContent string) ([]statementResult, error) {
 	secrets, err := datasource.DecryptSecrets(ds, s.encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("解密数据源凭据失败: %w", err)
@@ -72,12 +74,20 @@ func (s *Service) executeSQL(ctx context.Context, ds *model.DataSource, database
 		return nil, ErrTicketExecNotSupported
 	}
 
+	// The same decomposition the grade was derived from. This used to be
+	// strings.Split(sqlContent, ";"), which cut string literals in half, shredded
+	// PostgreSQL routine bodies, and — because the analyzer read only the first
+	// keyword — ran statements the approver never saw scored.
+	plan, err := planTicketSQL(dbType, sqlContent)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrTicketSQLUnanalyzable, err)
+	}
+
 	// Transaction semantics differ per engine and are the driver's business:
 	// PostgreSQL rolls the batch back, MySQL auto-commits each DDL statement,
 	// MongoDB applies commands one by one. ExecuteStatements documents that
 	// contract; this function must not re-implement it per type.
-	statements := splitStatements(sqlContent)
-	drvResults, err := executor.ExecuteStatements(ctx, database, statements)
+	drvResults, err := executor.ExecuteStatements(ctx, database, plan.Statements)
 	// A failure still carries the results of whatever already ran, including
 	// any rolled_back markers, so they are returned either way.
 	return convertDriverResults(drvResults), err
@@ -97,21 +107,6 @@ func (s *Service) recordExecutionResult(ctx context.Context, ticketID int64, ind
 	if err != nil {
 		log.Printf("ticket: record execution result failed: %v", err)
 	}
-}
-
-// splitStatements splits SQL content into individual statements.
-// Handles simple semicolon-separated statements.
-func splitStatements(sqlContent string) []string {
-	// Simple split by semicolons - trim whitespace and skip empty
-	parts := strings.Split(sqlContent, ";")
-	statements := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			statements = append(statements, p)
-		}
-	}
-	return statements
 }
 
 // sha256Hash computes the SHA-256 hash of a string.

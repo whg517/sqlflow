@@ -27,17 +27,22 @@ func ParsePostgreSQL(sql string) (*PostgreSQLParseResult, error) {
 		return nil, fmt.Errorf("empty SQL statement")
 	}
 
-	// Handle multiple statements: only parse the first one
-	if idx := strings.IndexByte(sql, ';'); idx >= 0 {
-		sql = sql[:idx]
-		sql = strings.TrimSpace(sql)
-		if sql == "" {
-			return nil, fmt.Errorf("empty SQL statement")
-		}
+	// Refuse a multi-statement body rather than describing its first statement.
+	//
+	// This began as `sql = sql[:strings.IndexByte(sql, ';')]`, which answered
+	// confidently about a prefix: "SELECT 1; DROP TABLE users" was reported as a
+	// SELECT while the executor ran both. Cutting at a byte also split string
+	// literals, so a valid `WHERE name = 'a;b'` became a syntax error.
+	//
+	// A caller that wants every statement splits first and calls once per unit.
+	statements, err := SplitPostgreSQLDialect(sql)
+	if err != nil {
+		return nil, err
 	}
-
-	// Remove trailing semicolons
-	sql = strings.TrimRight(sql, ";")
+	if len(statements) > 1 {
+		return nil, ErrMultipleStatements
+	}
+	sql = strings.TrimRight(statements[0], ";")
 
 	result := &PostgreSQLParseResult{}
 

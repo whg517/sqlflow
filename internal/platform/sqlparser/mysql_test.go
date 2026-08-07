@@ -1,6 +1,7 @@
 package sqlparser
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -466,13 +467,14 @@ func TestParseMySQL_EdgeCases(t *testing.T) {
 		}
 	})
 
-	t.Run("multi_statement_parses_first", func(t *testing.T) {
-		result, err := ParseMySQL("SELECT 1; DROP TABLE users;")
-		if err != nil {
-			t.Fatalf("ParseMySQL error: %v", err)
-		}
-		if result.Operation != OpSelect {
-			t.Errorf("Operation = %q, want %q (should parse first statement only)", result.Operation, OpSelect)
+	// This asserted the opposite until the splitter existed: that a
+	// multi-statement body is described by its first statement. That is what let
+	// "SELECT 1; DROP TABLE users" be graded as a SELECT while the executor ran
+	// the DROP, so the old expectation was the defect written down as a test.
+	t.Run("multi_statement_is_refused", func(t *testing.T) {
+		_, err := ParseMySQL("SELECT 1; DROP TABLE users;")
+		if !errors.Is(err, ErrMultipleStatements) {
+			t.Errorf("err = %v, want ErrMultipleStatements", err)
 		}
 	})
 

@@ -47,6 +47,14 @@ var (
 	ErrRejectReasonRequired = errors.New("驳回原因不能为空")
 	// ErrCancelReasonRequired indicates a reason is required for cancellation.
 	ErrCancelReasonRequired = errors.New("取消原因不能为空")
+	// ErrTooManyStatements bounds one ticket, because each statement costs a
+	// parse and nothing else stops a pasted schema dump.
+	ErrTooManyStatements = errors.New("工单语句数量超出上限")
+	// ErrTicketSQLUnanalyzable indicates the body could not be decomposed into
+	// statements, so nothing can be said about what it would do. Refusing is the
+	// only honest answer: a body that cannot be read has not been shown to be
+	// safe.
+	ErrTicketSQLUnanalyzable = errors.New("无法解析工单语句，请检查 SQL 是否完整")
 	// ErrTicketSQLRequired indicates the SQL content is required.
 	ErrTicketSQLRequired = errors.New("SQL内容不能为空")
 	// ErrTicketDatasourceRequired indicates the datasource is required.
@@ -283,8 +291,25 @@ func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitter
 
 	summary := auditlog.Summarize(sqlContent)
 
-	// Parse the SQL and derive the risk level. Both are server-side facts.
-	analysis := analyzeTicketSQL(dbType, sqlContent)
+	// Decompose the body and derive risk from every statement it contains.
+	//
+	// The grade used to come from the first keyword while the executor split on
+	// ';', so prefixing a DROP with "SELECT 1;" moved the ticket from critical to
+	// low and it still ran the DROP.
+	plan, err := planTicketSQL(dbType, sqlContent)
+	if err != nil {
+		s.auditSvc.Write(ctx, auditlog.Record{
+			UserID:       submitterID,
+			Action:       "ticket_create_rejected",
+			DatasourceID: datasourceID,
+			Database:     database,
+			SQLContent:   sqlContent,
+			SQLSummary:   summary,
+			ErrorMessage: err.Error(),
+		})
+		return nil, fmt.Errorf("%w: %v", ErrTicketSQLUnanalyzable, err)
+	}
+	analysis := plan.Analysis
 	tablesJSON := affectedTablesToJSON(analysis.AffectedTables)
 	riskLevel := NewRiskEvaluator().Evaluate(analysis).Level
 
@@ -732,7 +757,7 @@ func (s *Service) executeTicket(ctx context.Context, t *model.Ticket, operatorID
 	execCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	execResults, execErr := s.executeSQL(execCtx, ds, t.Database, t.SQLContent)
+	execResults, execErr := s.executeSQL(execCtx, ds, t.DBType, t.Database, t.SQLContent)
 
 	// Record execution results
 	for i, r := range execResults {

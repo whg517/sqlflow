@@ -70,7 +70,7 @@ func TestExecuteSQL_PostgreSQLRoute(t *testing.T) {
 		t.Fatalf("GetDataSource: %v", err)
 	}
 
-	results, err := svc.executeSQL(context.Background(), ds, "testdb",
+	results, err := svc.executeSQL(context.Background(), ds, ds.Type, "testdb",
 		"CREATE TABLE test (id INT); INSERT INTO test VALUES (1)")
 	if err != nil {
 		t.Fatalf("executeSQL: %v", err)
@@ -126,7 +126,7 @@ func TestExecuteSQL_PostgreSQLRollback(t *testing.T) {
 	// Expect: BeginTx → Exec succeeds → Exec fails → Rollback
 	mock.ExpectBegin()
 	mock.ExpectExec("CREATE TABLE.*").WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec("BAD SQL.*").WillReturnError(sql.ErrNoRows)
+	mock.ExpectExec("INSERT INTO no_such_table.*").WillReturnError(sql.ErrNoRows)
 	mock.ExpectRollback()
 
 	ds, err := dsSvc.GetDataSource(context.Background(), dsID)
@@ -134,8 +134,8 @@ func TestExecuteSQL_PostgreSQLRollback(t *testing.T) {
 		t.Fatalf("GetDataSource: %v", err)
 	}
 
-	results, err := svc.executeSQL(context.Background(), ds, "testdb",
-		"CREATE TABLE test (id INT); BAD SQL SYNTAX HERE")
+	results, err := svc.executeSQL(context.Background(), ds, ds.Type, "testdb",
+		"CREATE TABLE test (id INT); INSERT INTO no_such_table VALUES (1)")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -198,7 +198,7 @@ func TestExecuteSQL_MySQLNoTransaction(t *testing.T) {
 		t.Fatalf("GetDataSource: %v", err)
 	}
 
-	results, err := svc.executeSQL(context.Background(), ds, "testdb",
+	results, err := svc.executeSQL(context.Background(), ds, ds.Type, "testdb",
 		"SELECT 1; SELECT 2")
 	if err != nil {
 		t.Fatalf("executeSQL: %v", err)

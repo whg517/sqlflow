@@ -33,6 +33,7 @@ type Driver struct {
 // renamed or never lands would otherwise only surface as a capability that
 // silently reports false. These assertions turn that into a build failure.
 var (
+	_ driver.StatementSplitter          = (*Driver)(nil)
 	_ driver.Driver                     = (*Driver)(nil)
 	_ driver.MetadataBrowser            = (*Driver)(nil)
 	_ driver.ParameterizedQueryExecutor = (*Driver)(nil)
@@ -41,6 +42,15 @@ var (
 )
 
 func (d *Driver) Type() string { return "sqlite" }
+
+// SplitStatements returns the units this driver will execute for a body.
+//
+// SQLite reuses the MySQL scanner, as its Parse reuses the MySQL analysis:
+// the lexical rules this cares about — quotes, comments, bracket identifiers —
+// are shared, and the places they diverge are not places a semicolon hides.
+func (d *Driver) SplitStatements(body string) ([]string, error) {
+	return sqlparser.SplitMySQLDialect(body)
+}
 
 // QueryForm declares how read queries are composed for this data source.
 func (d *Driver) QueryForm() driver.QueryForm { return driver.QueryFormSQL }

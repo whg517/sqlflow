@@ -2,6 +2,7 @@ package sqlparser
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -72,6 +73,14 @@ func ParsePostgreSQLDialect(sql string) (*SQLParseResult, error) {
 		result.Tables = pgResult.Tables
 		result.applyPostgreSQLRules(pgResult)
 		return result, nil
+	}
+
+	// A multi-statement body is not a parser shortcoming to degrade around.
+	// Keyword detection would read the first statement and answer "select" for
+	// "SELECT 1; DROP TABLE users" — the exact answer the truncation used to
+	// give, reintroduced one layer down.
+	if errors.Is(err, ErrMultipleStatements) {
+		return nil, err
 	}
 
 	// PG parser failed — fall back to keyword-based detection.

@@ -1,6 +1,7 @@
 package ticket
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/whg517/sqlflow/internal/driver"
@@ -34,6 +35,83 @@ func analyzeTicketSQL(dbType, sqlContent string) *SQLAnalysis {
 		return &SQLAnalysis{SQLType: "OTHER", Operations: []string{}, AffectedTables: []string{}}
 	}
 	return analysisFromParseResult(parsed)
+}
+
+// maxTicketStatements bounds one ticket.
+//
+// Each statement costs a parse, and the PostgreSQL parser is cgo. Nothing stops
+// a pasted schema dump today; a bound turns that into a refusal with a reason
+// instead of a request that takes minutes and grades everything at once.
+const maxTicketStatements = 100
+
+// ticketPlan is the decomposition of a ticket body: the statements that will
+// run, and the analysis those exact statements were folded into.
+//
+// They travel together because the defect this replaces was that they did not.
+// The executor split with strings.Split(body, ";") while the analyzer read only
+// the first keyword, so "SELECT 1; DROP TABLE users" was graded low and ran a
+// DROP. Two derivations of the same body can disagree; one cannot.
+type ticketPlan struct {
+	Statements []string
+	Analysis   *SQLAnalysis
+}
+
+// planTicketSQL splits a body and folds the per-statement analyzes into one.
+//
+// It returns an error rather than a safe-looking default when the body cannot
+// be decomposed. "We could not read this" is not "this is harmless", and the
+// caller has somewhere to put that — a refused ticket the submitter can fix,
+// rather than an approval chain chosen from a guess.
+func planTicketSQL(dbType, sqlContent string) (*ticketPlan, error) {
+	statements, err := driver.SplitStatementsFor(dbType, sqlContent)
+	if err != nil {
+		return nil, err
+	}
+	if len(statements) > maxTicketStatements {
+		return nil, fmt.Errorf("%w: %d 条，上限 %d", ErrTooManyStatements, len(statements), maxTicketStatements)
+	}
+
+	analyzes := make([]*SQLAnalysis, 0, len(statements))
+	for _, stmt := range statements {
+		analyzes = append(analyzes, analyzeTicketSQL(dbType, stmt))
+	}
+
+	return &ticketPlan{Statements: statements, Analysis: foldAnalyses(analyzes)}, nil
+}
+
+// foldAnalyses merges per-statement analyzes into the one a ticket is graded on.
+//
+// The merge is monotone by construction — it can only add tables and turn flags
+// on — so the folded analysis never scores below the worst single statement.
+// The type is taken from the worst-scoring statement rather than the first,
+// which is the whole point: a DROP behind a SELECT has to grade as a DROP.
+func foldAnalyses(analyzes []*SQLAnalysis) *SQLAnalysis {
+	folded := &SQLAnalysis{SQLType: "OTHER", Operations: []string{}, AffectedTables: []string{}, IsRead: true}
+
+	seen := map[string]bool{}
+	worstScore := -1
+
+	for _, a := range analyzes {
+		if score := NewRiskEvaluator().Evaluate(a).Score; score > worstScore {
+			worstScore = score
+			folded.SQLType = a.SQLType
+		}
+		folded.IsDDL = folded.IsDDL || a.IsDDL
+		folded.IsDML = folded.IsDML || a.IsDML
+		folded.IsRead = folded.IsRead && a.IsRead
+		folded.Operations = append(folded.Operations, a.Operations...)
+		for _, tbl := range a.AffectedTables {
+			if !seen[tbl] {
+				seen[tbl] = true
+				folded.AffectedTables = append(folded.AffectedTables, tbl)
+			}
+		}
+	}
+
+	if len(analyzes) == 0 {
+		folded.IsRead = false
+	}
+	return folded
 }
 
 // isSQLForm reports whether the datasource's queries are written as SQL.

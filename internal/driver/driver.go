@@ -136,6 +136,24 @@ type Driver interface {
 	Parse(query string) (*ParseResult, error)
 }
 
+// StatementSplitter is implemented by drivers whose bodies may carry more than
+// one statement.
+//
+// A driver that does not implement it carries exactly one statement per body,
+// which is the whole answer for a JSON command document — that is why absence
+// needs no method rather than a method that returns the body unchanged.
+//
+// Splitting is grammar knowledge, and grammar knowledge belongs to the driver
+// for the same reason Parse does. It also has to be the same knowledge: the
+// statements this returns are what the ticket is graded on and what the
+// executor runs, so a driver that split differently from how it parses would
+// reopen the gap between the analyzed object and the executed one.
+type StatementSplitter interface {
+	// SplitStatements returns the units this driver will execute for a body.
+	// It needs no connection: statement boundaries are a property of the text.
+	SplitStatements(body string) ([]string, error)
+}
+
 // MetadataBrowser is implemented by drivers that can enumerate their schema.
 //
 // It is an optional interface for the same reason as QueryExplainer: the

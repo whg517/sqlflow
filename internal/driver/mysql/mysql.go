@@ -31,6 +31,7 @@ type MySQLDriver struct {
 // renamed or never lands would otherwise only surface as a capability that
 // silently reports false. These assertions turn that into a build failure.
 var (
+	_ driver.StatementSplitter          = (*MySQLDriver)(nil)
 	_ driver.Driver                     = (*MySQLDriver)(nil)
 	_ driver.ConfigValidator            = (*MySQLDriver)(nil)
 	_ driver.MetadataBrowser            = (*MySQLDriver)(nil)
@@ -58,6 +59,11 @@ func (d *MySQLDriver) ValidateConfig(cfg *driver.Config) error {
 		return fmt.Errorf("mysql: 端口不能为空")
 	}
 	return nil
+}
+
+// SplitStatements returns the units this driver will execute for a body.
+func (d *MySQLDriver) SplitStatements(body string) ([]string, error) {
+	return sqlparser.SplitMySQLDialect(body)
 }
 
 // QueryForm declares how read queries are composed for this data source.

@@ -45,7 +45,11 @@ func (s *Service) ResubmitTicket(ctx context.Context, ticketID, submitterID int6
 	if err != nil {
 		return nil, err
 	}
-	analysis := analyzeTicketSQL(dbType, sqlContent)
+	plan, err := planTicketSQL(dbType, sqlContent)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrTicketSQLUnanalyzable, err)
+	}
+	analysis := plan.Analysis
 	riskLevel := NewRiskEvaluator().Evaluate(analysis).Level
 	tablesJSON := affectedTablesToJSON(analysis.AffectedTables)
 

@@ -30,6 +30,7 @@ type PostgreSQLDriver struct {
 // renamed or never lands would otherwise only surface as a capability that
 // silently reports false. These assertions turn that into a build failure.
 var (
+	_ driver.StatementSplitter          = (*PostgreSQLDriver)(nil)
 	_ driver.Driver                     = (*PostgreSQLDriver)(nil)
 	_ driver.ConfigValidator            = (*PostgreSQLDriver)(nil)
 	_ driver.MetadataBrowser            = (*PostgreSQLDriver)(nil)
@@ -57,6 +58,11 @@ func (d *PostgreSQLDriver) ValidateConfig(cfg *driver.Config) error {
 		return fmt.Errorf("postgresql: 端口不能为空")
 	}
 	return nil
+}
+
+// SplitStatements returns the units this driver will execute for a body.
+func (d *PostgreSQLDriver) SplitStatements(body string) ([]string, error) {
+	return sqlparser.SplitPostgreSQLDialect(body)
 }
 
 // QueryForm declares how read queries are composed for this data source.

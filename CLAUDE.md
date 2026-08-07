@@ -161,6 +161,14 @@ docs/                需求、架构、ADR、评审、路线图
   代码连跑三次可能 0、2、48 个失败。这是既有问题（在重组前的树上同样复现），
   不是某次改动的回归。判断一次失败是否真实，先单独重跑该文件。
 - 工单执行缺租约与崩溃恢复，进程在 `EXECUTING` 期间崩溃会使工单卡住。
+- **语句边界归驱动**（`StatementSplitter`），分析与执行消费同一个 `ticketPlan`。
+  曾经执行端是 `strings.Split(sql, ";")`、分析端只读首关键字，于是
+  `SELECT 1; DROP TABLE users` 评 low 却执行 DROP——提交者改 SQL 就能改自己的
+  审批路径。MySQL/SQLite 用手写词法扫描器（**被迫**：vendored 的 pingcap/parser
+  拒绝 `ALTER TABLE ... RENAME COLUMN`、CTE、窗口函数，拿它当分词器会让普通变更
+  工单提不了）；PostgreSQL 用 `pgquery.SplitWithParser`（scanner 会切碎
+  `BEGIN ATOMIC` 函数体）。`/*!nnnnn ... */` 按代码扫描，不按注释——服务器会执行
+  里面的内容。读不懂的语句体一律拒绝：无法定级不等于无害。
 
 ## 约定
 
