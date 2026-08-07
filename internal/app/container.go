@@ -202,7 +202,6 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 		Datasource:     dsSvc,
 		PoolManager:    poolMgr,
 		EncryptionKey:  cfg.EncryptionKey,
-		Permission:     permSvc,
 		ApprovalEngine: approvalEngine,
 	})
 

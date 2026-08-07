@@ -158,8 +158,7 @@ func TestResubmitTicket_ConcurrentResubmitsProduceOneRevision(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			if _, err := ticketSvc.ResubmitTicket(context.Background(), id, 1,
-				"DELETE FROM users WHERE status = 0", "added WHERE"); err == nil {
+			if _, err := ticketSvc.ResubmitTicket(context.Background(), id, 1, "developer", "DELETE FROM users WHERE status = 0", "added WHERE"); err == nil {
 				mu.Lock()
 				succeed++
 				mu.Unlock()
@@ -200,7 +199,7 @@ func TestResubmitTicket_RefreshesAnalysis(t *testing.T) {
 	}
 
 	const fixed = "ALTER TABLE orders ADD COLUMN note VARCHAR(20)"
-	result, err := ticketSvc.ResubmitTicket(context.Background(), id, 1, fixed, "replaced with an additive change")
+	result, err := ticketSvc.ResubmitTicket(context.Background(), id, 1, "developer", fixed, "replaced with an additive change")
 	if err != nil {
 		t.Fatalf("ResubmitTicket: %v", err)
 	}

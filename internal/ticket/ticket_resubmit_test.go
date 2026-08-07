@@ -25,8 +25,7 @@ func TestResubmitTicket(t *testing.T) {
 		}
 
 		// Resubmit with fixed SQL
-		result, err := svc.ResubmitTicket(context.Background(), ticket.ID, devID,
-			"DELETE FROM users WHERE status = 0", "加了WHERE条件")
+		result, err := svc.ResubmitTicket(context.Background(), ticket.ID, devID, "developer", "DELETE FROM users WHERE status = 0", "加了WHERE条件")
 		if err != nil {
 			t.Fatalf("ResubmitTicket() error: %v", err)
 		}
@@ -65,7 +64,7 @@ func TestResubmitTicket(t *testing.T) {
 	t.Run("cannot resubmit non-rejected ticket", func(t *testing.T) {
 		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
 
-		_, err := svc.ResubmitTicket(context.Background(), ticket.ID, devID, "SELECT 1", "test")
+		_, err := svc.ResubmitTicket(context.Background(), ticket.ID, devID, "developer", "SELECT 1", "test")
 		if err != ErrTicketNotResubmittable {
 			t.Errorf("ResubmitTicket() error = %v, want ErrTicketNotResubmittable", err)
 		}
@@ -76,7 +75,7 @@ func TestResubmitTicket(t *testing.T) {
 		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
 		svc.RejectTicket(context.Background(), ticket.ID, dbaID, "dba", "reject")
 
-		_, err := svc.ResubmitTicket(context.Background(), ticket.ID, otherID, "SELECT 1", "test")
+		_, err := svc.ResubmitTicket(context.Background(), ticket.ID, otherID, "developer", "SELECT 1", "test")
 		if err != ErrNoPermission {
 			t.Errorf("ResubmitTicket() error = %v, want ErrNoPermission", err)
 		}
@@ -86,7 +85,7 @@ func TestResubmitTicket(t *testing.T) {
 		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
 		svc.RejectTicket(context.Background(), ticket.ID, dbaID, "dba", "reject")
 
-		_, err := svc.ResubmitTicket(context.Background(), ticket.ID, devID, "", "test")
+		_, err := svc.ResubmitTicket(context.Background(), ticket.ID, devID, "developer", "", "test")
 		if err != ErrTicketSQLRequired {
 			t.Errorf("ResubmitTicket() error = %v, want ErrTicketSQLRequired", err)
 		}
@@ -96,7 +95,7 @@ func TestResubmitTicket(t *testing.T) {
 		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
 		svc.RejectTicket(context.Background(), ticket.ID, dbaID, "dba", "reject 1")
 
-		result, err := svc.ResubmitTicket(context.Background(), ticket.ID, devID, "DELETE FROM t WHERE id = 1", "fix 1")
+		result, err := svc.ResubmitTicket(context.Background(), ticket.ID, devID, "developer", "DELETE FROM t WHERE id = 1", "fix 1")
 		if err != nil {
 			t.Fatalf("first resubmit: %v", err)
 		}
@@ -108,7 +107,7 @@ func TestResubmitTicket(t *testing.T) {
 		setTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 		svc.RejectTicket(context.Background(), ticket.ID, dbaID, "dba", "reject 2")
 
-		result, err = svc.ResubmitTicket(context.Background(), ticket.ID, devID, "DELETE FROM t WHERE id = 1 LIMIT 10", "fix 2")
+		result, err = svc.ResubmitTicket(context.Background(), ticket.ID, devID, "developer", "DELETE FROM t WHERE id = 1 LIMIT 10", "fix 2")
 		if err != nil {
 			t.Fatalf("second resubmit: %v", err)
 		}
@@ -118,7 +117,7 @@ func TestResubmitTicket(t *testing.T) {
 	})
 
 	t.Run("not found ticket", func(t *testing.T) {
-		_, err := svc.ResubmitTicket(context.Background(), 99999, devID, "SELECT 1", "test")
+		_, err := svc.ResubmitTicket(context.Background(), 99999, devID, "developer", "SELECT 1", "test")
 		if err != ErrTicketNotFound {
 			t.Errorf("ResubmitTicket() error = %v, want ErrTicketNotFound", err)
 		}
@@ -149,7 +148,7 @@ func TestListRevisions(t *testing.T) {
 		svc.RejectTicket(context.Background(), ticket.ID, dbaID, "dba", "需要加WHERE")
 
 		// Resubmit
-		svc.ResubmitTicket(context.Background(), ticket.ID, devID, "DELETE FROM t WHERE id = 1", "加了WHERE")
+		svc.ResubmitTicket(context.Background(), ticket.ID, devID, "developer", "DELETE FROM t WHERE id = 1", "加了WHERE")
 
 		revisions, err := svc.ListRevisions(context.Background(), ticket.ID)
 		if err != nil {
@@ -177,11 +176,11 @@ func TestListRevisions(t *testing.T) {
 	t.Run("multiple revisions in order", func(t *testing.T) {
 		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
 		svc.RejectTicket(context.Background(), ticket.ID, dbaID, "dba", "reject 1")
-		svc.ResubmitTicket(context.Background(), ticket.ID, devID, "DELETE FROM t WHERE id = 1", "fix 1")
+		svc.ResubmitTicket(context.Background(), ticket.ID, devID, "developer", "DELETE FROM t WHERE id = 1", "fix 1")
 
 		setTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 		svc.RejectTicket(context.Background(), ticket.ID, dbaID, "dba", "reject 2")
-		svc.ResubmitTicket(context.Background(), ticket.ID, devID, "DELETE FROM t WHERE id = 1 LIMIT 10", "fix 2")
+		svc.ResubmitTicket(context.Background(), ticket.ID, devID, "developer", "DELETE FROM t WHERE id = 1 LIMIT 10", "fix 2")
 
 		revisions, err := svc.ListRevisions(context.Background(), ticket.ID)
 		if err != nil {

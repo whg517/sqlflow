@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
-	"github.com/whg517/sqlflow/internal/security"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
@@ -27,101 +26,56 @@ func seedTypedDatasource(t *testing.T, testDB *sql.DB, name, dsType string) int6
 	return id
 }
 
-// seedTicketCasbinRules gives developer select-only, so any write action on a
-// collection must be refused.
-func seedTicketCasbinRules(t *testing.T, testDB *sql.DB) {
-	t.Helper()
-	policies := [][]string{
-		{"p", "admin", "*", "*", "*"},
-		{"p", "developer", "*", "*", "select"},
-	}
-	for _, p := range policies {
-		if _, err := testDB.Exec(
-			`INSERT INTO casbin_rule (ptype, v0, v1, v2, v3) VALUES ($1, $2, $3, $4, $5)`,
-			p[0], p[1], p[2], p[3], p[4],
-		); err != nil {
-			t.Fatalf("seed casbin rule: %v", err)
-		}
-	}
-}
-
-// newMongoPermissionTicketService wires the collaborators the collection-level
-// check actually needs, rather than leaving permSvc nil.
-func newMongoPermissionTicketService(t *testing.T) (*Service, *sql.DB) {
+// newTicketServiceWithDatasources builds a Service against a real schema.
+//
+// It carried a permission service until the collection-level check came out:
+// that check demanded the very permission a ticket is filed to request, so a
+// read-only developer could not file one. What guards this path now is the
+// datasource gate, which needs no policy to test.
+func newTicketServiceWithDatasources(t *testing.T) (*Service, *sql.DB) {
 	t.Helper()
 	testDB := setupTicketTestDB(t)
-	seedTicketCasbinRules(t, testDB)
-
-	permSvc, err := security.NewService(testutil.WrapSQL(t, testDB))
-	if err != nil {
-		t.Fatalf("create permission service: %v", err)
-	}
 	svc := New(Deps{
-		DB:         testutil.WrapSQL(t, testDB),
-		Audit:      auditlog.Discard,
-		Permission: permSvc,
+		DB:    testutil.WrapSQL(t, testDB),
+		Audit: auditlog.Discard,
 	})
 	return svc, testDB
 }
 
-// mongoDeleteBody removes every document in the collection.
-const mongoDeleteBody = `{"operation":"delete","collection":"users","filter":{}}`
-
-// TestCreateTicketDerivesDBTypeFromDatasource is the negative case the
-// collection-level check existed for.
+// TestCreateTicketRecordsDatasourceType pins where the type comes from.
 //
-// db_type arrived in the request body and was the only thing that selected the
-// MongoDB branch. A submitter who wrote "mysql" — or who simply omitted the
-// field, since the default was "mysql" — skipped the Casbin check on the
-// collection entirely and got the ticket into the approval queue.
-//
-// The server is the only arbiter of what a datasource is: the type has to come
-// from the datasource row, never from the caller.
-func TestCreateTicketDerivesDBTypeFromDatasource(t *testing.T) {
-	svc, testDB := newMongoPermissionTicketService(t)
-	userID := seedTestUser(t, testDB, "dev-liar", "developer")
-	dsID := seedTypedDatasource(t, testDB, "mongo-target", "mongodb")
-
-	_, err := svc.CreateTicket(t.Context(), userID, "developer", dsID, "app", mongoDeleteBody, "变更需求")
-	if err == nil {
-		t.Fatal("a developer without delete permission created a MongoDB delete ticket — " +
-			"the collection-level check was skipped")
-	}
-}
-
-// TestCreateTicketMongoPermissionAllowsPermittedAction guards against the check
-// being applied so bluntly that legitimate tickets stop working.
-func TestCreateTicketMongoPermissionAllowsPermittedAction(t *testing.T) {
-	svc, testDB := newMongoPermissionTicketService(t)
-	userID := seedTestUser(t, testDB, "dev-ok", "developer")
-	dsID := seedTypedDatasource(t, testDB, "mongo-readable", "mongodb")
-
-	body := `{"operation":"find","collection":"users","filter":{}}`
-	if _, err := svc.CreateTicket(t.Context(), userID, "developer", dsID, "app", body, "变更需求"); err != nil {
-		t.Fatalf("a permitted find was refused: %v", err)
-	}
-}
-
-// TestCreateTicketRecordsDatasourceType pins the stored value, since db_type is
-// read back on the execution path and shown to approvers.
+// db_type used to arrive in the request body and select which checks ran, so a
+// submitter could steer their own ticket by claiming a different one. It is not
+// a parameter any more — the compiler enforces that — and this checks the value
+// that lands in the row is the datasource's own.
 func TestCreateTicketRecordsDatasourceType(t *testing.T) {
-	svc, testDB := newMongoPermissionTicketService(t)
+	svc, testDB := newTicketServiceWithDatasources(t)
 	userID := seedTestUser(t, testDB, "dev-type", "admin")
-	dsID := seedTypedDatasource(t, testDB, "pg-target", "postgresql")
 
-	tk, err := svc.CreateTicket(t.Context(), userID, "admin", dsID, "app", "UPDATE t SET x = 1 WHERE id = 2", "变更需求")
-	if err != nil {
-		t.Fatalf("CreateTicket: %v", err)
-	}
-	if tk.DBType != "postgresql" {
-		t.Errorf("db_type = %q, want postgresql — it must come from the datasource", tk.DBType)
+	for _, dsType := range []string{"postgresql", "mysql", "mongodb"} {
+		t.Run(dsType, func(t *testing.T) {
+			dsID := seedTypedDatasource(t, testDB, dsType+"-target", dsType)
+			sqlContent := "UPDATE t SET x = 1 WHERE id = 2"
+			if dsType == "mongodb" {
+				sqlContent = `{"operation":"update","collection":"t","filter":{"id":2},"update":{"$set":{"x":1}}}`
+			}
+
+			tk, err := svc.CreateTicket(t.Context(), userID, "admin", dsID, "app", sqlContent, "变更需求")
+			if err != nil {
+				t.Fatalf("CreateTicket: %v", err)
+			}
+			if tk.DBType != dsType {
+				t.Errorf("db_type = %q, want %q — it must come from the datasource", tk.DBType, dsType)
+			}
+		})
 	}
 }
 
 // TestCreateTicketRejectsUnknownDatasource closes the gap the type lookup
-// exposed: nothing used to verify the datasource existed at all.
+// exposed: nothing used to verify the datasource existed at all, so a ticket
+// could be filed against any integer.
 func TestCreateTicketRejectsUnknownDatasource(t *testing.T) {
-	svc, testDB := newMongoPermissionTicketService(t)
+	svc, testDB := newTicketServiceWithDatasources(t)
 	userID := seedTestUser(t, testDB, "dev-ghost", "developer")
 
 	if _, err := svc.CreateTicket(t.Context(), userID, "developer", 99999, "app", "SELECT 1", "变更需求"); err == nil {

@@ -46,7 +46,7 @@ func (h *Handler) ResubmitTicket(c echo.Context) error {
 
 	userID := httpx.UserID(c)
 
-	ticket, err := h.ticketSvc.ResubmitTicket(c.Request().Context(), id, userID, req.SQLContent, req.ChangeReason)
+	ticket, err := h.ticketSvc.ResubmitTicket(c.Request().Context(), id, userID, httpx.Role(c), req.SQLContent, req.ChangeReason)
 	if err != nil {
 		switch err {
 		case ErrTicketNotFound:

@@ -14,7 +14,7 @@ import (
 
 // ResubmitTicket resubmits a rejected ticket with optional SQL and reason changes.
 // The ticket must be in REJECTED status. Only the original submitter can resubmit.
-func (s *Service) ResubmitTicket(ctx context.Context, ticketID, submitterID int64, sqlContent, changeReason string) (*model.Ticket, error) {
+func (s *Service) ResubmitTicket(ctx context.Context, ticketID, submitterID int64, submitterRole, sqlContent, changeReason string) (*model.Ticket, error) {
 	if strings.TrimSpace(sqlContent) == "" {
 		return nil, ErrTicketSQLRequired
 	}
@@ -38,7 +38,10 @@ func (s *Service) ResubmitTicket(ctx context.Context, ticketID, submitterID int6
 	// rejected. Done before the transaction opens — these are pure functions,
 	// but the platform pool holds a single connection, so no query may run
 	// while the transaction is open.
-	dbType, err := s.datasourceType(ctx, t.DatasourceID)
+	// A resubmission re-enters the queue, so it re-enters through the same
+	// gates: the datasource may have been disabled, or the submitter's role
+	// changed, since the ticket was first filed.
+	dbType, err := s.checkDatasourceAccess(ctx, t.DatasourceID, submitterRole)
 	if err != nil {
 		return nil, err
 	}

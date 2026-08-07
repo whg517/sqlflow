@@ -190,7 +190,7 @@ func TestResubmitTicket_ClearsSQLHash(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if _, err := ticketSvc.ResubmitTicket(ctx, id, 1, "UPDATE demo SET n = 8", "fixed"); err != nil {
+	if _, err := ticketSvc.ResubmitTicket(ctx, id, 1, "developer", "UPDATE demo SET n = 8", "fixed"); err != nil {
 		t.Fatalf("ResubmitTicket: %v", err)
 	}
 

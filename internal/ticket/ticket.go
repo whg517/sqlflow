@@ -10,11 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
-	entDataSource "github.com/whg517/sqlflow/internal/db/ent/datasource"
 	"github.com/whg517/sqlflow/internal/db/ent/predicate"
 	entTicket "github.com/whg517/sqlflow/internal/db/ent/ticket"
 	"github.com/whg517/sqlflow/internal/driver"
@@ -22,9 +20,7 @@ import (
 	"github.com/whg517/sqlflow/internal/notify"
 	"github.com/whg517/sqlflow/internal/ops"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
-	"github.com/whg517/sqlflow/internal/platform/sqlparser"
 	"github.com/whg517/sqlflow/internal/platform/sqlutil"
-	"github.com/whg517/sqlflow/internal/security"
 )
 
 var (
@@ -60,6 +56,12 @@ var (
 	// gone. Reading the type made this reachable: nothing used to verify the
 	// datasource existed, so a ticket could be filed against any integer.
 	ErrTicketDatasourceNotFound = errors.New("数据源不存在")
+	// ErrTicketDatasourceDisabled mirrors the query path: a datasource an
+	// operator took out of service should not accumulate queued changes.
+	ErrTicketDatasourceDisabled = errors.New("数据源已禁用")
+	// ErrTicketInternalDatasource keeps the platform's own store admin-only,
+	// which ExecuteQuery already did and this path did not.
+	ErrTicketInternalDatasource = errors.New("SQLFlow 元数据库仅允许管理员提交变更")
 	// ErrScheduleTimeRequired indicates a schedule time is required.
 	ErrScheduleTimeRequired = errors.New("定时执行时间不能为空")
 	// ErrScheduleTimeInPast indicates the schedule time must be in the future.
@@ -113,9 +115,6 @@ type Deps struct {
 	Datasource    *datasource.Service
 	PoolManager   *driver.PoolManager
 	EncryptionKey string
-	// Permission enforces collection-level checks for MongoDB tickets. Without
-	// it those checks are skipped.
-	Permission *security.Service
 	// ApprovalEngine applies policy-based auto-approval. Without it every
 	// ticket waits for a human.
 	ApprovalEngine *ApprovalEngine
@@ -132,7 +131,6 @@ type Service struct {
 	dsSvc          *datasource.Service
 	poolMgr        *driver.PoolManager
 	encryptionKey  string
-	permSvc        *security.Service
 	approvalEngine *ApprovalEngine
 }
 
@@ -151,7 +149,6 @@ func New(deps Deps) *Service {
 		dsSvc:          deps.Datasource,
 		poolMgr:        deps.PoolManager,
 		encryptionKey:  deps.EncryptionKey,
-		permSvc:        deps.Permission,
 		approvalEngine: deps.ApprovalEngine,
 	}
 }
@@ -279,25 +276,12 @@ func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitter
 		return nil, ErrTicketDatasourceRequired
 	}
 
-	dbType, err := s.datasourceType(ctx, datasourceID)
+	dbType, err := s.checkDatasourceAccess(ctx, datasourceID, submitterRole)
 	if err != nil {
 		return nil, err
 	}
 
 	summary := auditlog.Summarize(sqlContent)
-
-	// Object-level permission for document-shaped bodies.
-	//
-	// Keyed on the query form rather than the type name: what makes this check
-	// possible is that the body names its collection, which is what
-	// QueryFormDocument means. Only MongoDB answers that today, so the set is
-	// unchanged — but a second document driver would be covered without anyone
-	// remembering to add it here.
-	if s.permSvc != nil && queryFormOf(dbType) == driver.QueryFormDocument {
-		if err := s.checkMongoPermission(ctx, submitterRole, datasourceID, sqlContent); err != nil {
-			return nil, err
-		}
-	}
 
 	// Parse the SQL and derive the risk level. Both are server-side facts.
 	analysis := analyzeTicketSQL(dbType, sqlContent)
@@ -1058,55 +1042,45 @@ func queryFormOf(dsType string) driver.QueryForm {
 	return d.QueryForm()
 }
 
-// datasourceType reads the driver type recorded for a datasource.
+// checkDatasourceAccess decides whether this submitter may file against this
+// datasource at all, and returns its driver type.
 //
-// It reads the single column rather than going through datasource.Service so
-// that a ticket cannot be created against a datasource that no longer exists,
-// and so the check holds even in wiring where the service is absent — a check
-// that can be switched off by a missing collaborator is not a check.
-func (s *Service) datasourceType(ctx context.Context, datasourceID int64) (string, error) {
-	dsType, err := s.client.DataSource.Query().
-		Where(entDataSource.IDEQ(int(datasourceID))).
-		Select(entDataSource.FieldType).
-		String(ctx)
+// These are the gates ExecuteQuery already applies. The ticket path applied
+// none of them, so a developer could file DROP TABLE tickets against SQLFlow's
+// own metadata database — every ticket, approval record, audit row and
+// encrypted credential lives there — and have it queued as an ordinary change.
+// A gate on one entrance says nothing about another.
+//
+// What it deliberately does not check is whether the submitter already holds
+// the permission the statement needs. A developer is read-only by default and
+// files a ticket precisely because they lack it; that is the workflow. The
+// approval step is the control for what may be done inside a datasource the
+// submitter is allowed to use.
+func (s *Service) checkDatasourceAccess(ctx context.Context, datasourceID int64, role string) (string, error) {
+	ds, err := s.client.DataSource.Get(ctx, int(datasourceID))
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return "", ErrTicketDatasourceNotFound
 		}
-		return "", fmt.Errorf("读取数据源类型失败: %w", err)
+		return "", fmt.Errorf("读取数据源失败: %w", err)
 	}
-	return dsType, nil
+	if ds.Status == "disabled" {
+		return "", ErrTicketDatasourceDisabled
+	}
+	if isInternalDatasource(ds.ExtraConfig) && role != "admin" {
+		return "", ErrTicketInternalDatasource
+	}
+	return ds.Type, nil
 }
 
-// checkMongoPermission validates that the user has permission to perform the MongoDB operation.
-// It parses the MongoDB command body, extracts the collection and operation type,
-// and checks collection-level permission via Casbin.
-func (s *Service) checkMongoPermission(ctx context.Context, role string, datasourceID int64, sqlContent string) error {
-	if s.permSvc == nil {
-		return nil
+// isInternalDatasource reports whether the row is SQLFlow's own metadata
+// database, which marks itself with system=true in extra_config.
+func isInternalDatasource(extraConfig string) bool {
+	if extraConfig == "" {
+		return false
 	}
-
-	mongoResult, err := sqlparser.ParseMongo(sqlContent)
-	if err != nil {
-		// If we can't parse it, let it through — the approval process will catch issues
-		return nil
+	var extra struct {
+		System bool `json:"system"`
 	}
-
-	if mongoResult.Collection == "" {
-		// No collection specified, check datasource-level permission
-		return nil
-	}
-
-	act := security.MongoOpToCasbinAct(mongoResult.Operation)
-	dom := authz.DatasourceDomain(datasourceID)
-
-	allowed, err := s.permSvc.Enforce(role, dom, mongoResult.Collection, act)
-	if err != nil {
-		return fmt.Errorf("MongoDB权限校验失败: %w", err)
-	}
-	if !allowed {
-		return fmt.Errorf("没有集合 %s 的 %s 权限", mongoResult.Collection, act)
-	}
-
-	return nil
+	return json.Unmarshal([]byte(extraConfig), &extra) == nil && extra.System
 }
