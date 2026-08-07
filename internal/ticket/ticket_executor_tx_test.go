@@ -70,7 +70,7 @@ func TestExecuteSQL_PostgreSQLRoute(t *testing.T) {
 		t.Fatalf("GetDataSource: %v", err)
 	}
 
-	results, err := svc.executeSQL(context.Background(), ds, "testdb", "postgresql",
+	results, err := svc.executeSQL(context.Background(), ds, "testdb",
 		"CREATE TABLE test (id INT); INSERT INTO test VALUES (1)")
 	if err != nil {
 		t.Fatalf("executeSQL: %v", err)
@@ -134,7 +134,7 @@ func TestExecuteSQL_PostgreSQLRollback(t *testing.T) {
 		t.Fatalf("GetDataSource: %v", err)
 	}
 
-	results, err := svc.executeSQL(context.Background(), ds, "testdb", "postgresql",
+	results, err := svc.executeSQL(context.Background(), ds, "testdb",
 		"CREATE TABLE test (id INT); BAD SQL SYNTAX HERE")
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -198,7 +198,7 @@ func TestExecuteSQL_MySQLNoTransaction(t *testing.T) {
 		t.Fatalf("GetDataSource: %v", err)
 	}
 
-	results, err := svc.executeSQL(context.Background(), ds, "testdb", "mysql",
+	results, err := svc.executeSQL(context.Background(), ds, "testdb",
 		"SELECT 1; SELECT 2")
 	if err != nil {
 		t.Fatalf("executeSQL: %v", err)

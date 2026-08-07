@@ -57,10 +57,7 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, userID int64, name
 		return nil, ErrTemplateDBType
 	}
 
-	paramsJSON, err := extractParamsJSON(sqlContent)
-	if err != nil {
-		return nil, fmt.Errorf("extract params: %w", err)
-	}
+	paramsJSON := extractParamsJSON(sqlContent)
 
 	now := time.Now()
 
@@ -212,10 +209,7 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id, userID int64, 
 		return ErrTemplateDBType
 	}
 
-	paramsJSON, err := extractParamsJSON(sqlContent)
-	if err != nil {
-		return fmt.Errorf("extract params: %w", err)
-	}
+	paramsJSON := extractParamsJSON(sqlContent)
 
 	// The owner predicate is part of the update, not a check before it: a
 	// separate read would leave a window in which ownership changed, and would
@@ -362,7 +356,12 @@ func (s *TemplateService) renderTemplate(ctx context.Context, id, userID int64, 
 }
 
 // extractParamsJSON extracts all placeholder names and defaults into a JSON array.
-func extractParamsJSON(sqlContent string) (string, error) {
+// extractParamsJSON returns the template's parameters as a JSON array.
+//
+// It returns no error. It used to, and the one branch that could have produced
+// one swallowed it and returned nil anyway — so every caller wrote a check for
+// a case that could not arise. Marshaling two string fields cannot fail.
+func extractParamsJSON(sqlContent string) string {
 	matches := placeholderRegex.FindAllStringSubmatch(sqlContent, -1)
 
 	type paramInfo struct {
@@ -387,7 +386,7 @@ func extractParamsJSON(sqlContent string) (string, error) {
 	}
 
 	if len(params) == 0 {
-		return "[]", nil
+		return "[]"
 	}
 
 	// Ensure deterministic JSON output
@@ -395,11 +394,8 @@ func extractParamsJSON(sqlContent string) (string, error) {
 		return params[i].Name < params[j].Name
 	})
 
-	data, err := json.Marshal(params)
-	if err != nil {
-		return "[]", nil
-	}
-	return string(data), nil
+	data, _ := json.Marshal(params)
+	return string(data)
 }
 
 // ParseExtractedParams is a convenience function that returns placeholder info from a template.

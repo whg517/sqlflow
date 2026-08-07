@@ -82,7 +82,15 @@ func (s *AsyncExportService) Close() {
 
 // CreateAsyncExport creates an async export task and starts it in a goroutine.
 // It returns the task ID immediately.
-func (s *AsyncExportService) CreateAsyncExport(ctx context.Context, userID int64, username, role, exportType string, filtersJSON string, fileFormat string) (*model.ExportTask, error) {
+// CreateAsyncExport queues an export and starts it.
+//
+// columns is the caller's column selection, nil meaning every column. It
+// travels to the worker the same way fileFormat does — as a parameter rather
+// than on the task row — because the goroutine starts here and nothing resumes
+// a task across a restart. It used to stop at the handler, so an export that
+// crossed the sync row limit and switched to this path silently widened back
+// to every column.
+func (s *AsyncExportService) CreateAsyncExport(ctx context.Context, userID int64, username, role, exportType string, filtersJSON string, fileFormat string, columns map[string]int) (*model.ExportTask, error) {
 	if !s.exportSvc.hasExportPermission(role, ExportType(exportType)) {
 		return nil, ErrExportNoPermission
 	}
@@ -118,7 +126,7 @@ func (s *AsyncExportService) CreateAsyncExport(ctx context.Context, userID int64
 	s.tasks.Store(task.ID, task)
 
 	// Launch async export in goroutine
-	go s.executeExport(task, username, role, fileFormat)
+	go s.executeExport(task, username, fileFormat, columns)
 
 	return task, nil
 }
@@ -206,7 +214,11 @@ func (s *AsyncExportService) DownloadFile(ctx context.Context, taskID int64, use
 }
 
 // executeExport runs the actual export in a background goroutine.
-func (s *AsyncExportService) executeExport(task *model.ExportTask, username, role, fileFormat string) {
+//
+// It takes no role: CreateAsyncExport has already checked hasExportPermission,
+// and a second copy of that decision here would be a second place to get it
+// wrong.
+func (s *AsyncExportService) executeExport(task *model.ExportTask, username, fileFormat string, columns map[string]int) {
 	ctx := context.Background()
 
 	// Mark as processing
@@ -233,7 +245,7 @@ func (s *AsyncExportService) executeExport(task *model.ExportTask, username, rol
 		var filters AuditExportFilters
 		_ = json.Unmarshal([]byte(task.FiltersJSON), &filters)
 		if fileFormat == string(ExportFormatExcel) {
-			totalRows, err = s.exportSvc.StreamExportAuditLogsExcel(ctx, f, username, filters, nil)
+			totalRows, err = s.exportSvc.StreamExportAuditLogsExcel(ctx, f, username, filters, columns)
 		} else {
 			totalRows, err = s.exportSvc.StreamExportAuditLogs(ctx, f, username, filters)
 		}
@@ -241,7 +253,7 @@ func (s *AsyncExportService) executeExport(task *model.ExportTask, username, rol
 		var filters TicketExportFilters
 		_ = json.Unmarshal([]byte(task.FiltersJSON), &filters)
 		if fileFormat == string(ExportFormatExcel) {
-			totalRows, err = s.exportSvc.StreamExportTicketsExcel(ctx, f, username, filters, nil)
+			totalRows, err = s.exportSvc.StreamExportTicketsExcel(ctx, f, username, filters, columns)
 		} else {
 			totalRows, err = s.exportSvc.StreamExportTickets(ctx, f, username, filters)
 		}

@@ -161,16 +161,16 @@ func (s *AIReviewService) Review(ctx context.Context, req *AIReviewRequest) (*AI
 
 		if isNetworkError(err) {
 			log.Printf("AI review network error: %v, using static rules", err)
-			return s.fallbackResult(staticResult, req), nil
+			return s.fallbackResult(staticResult), nil
 		}
 
 		// Other errors → also fallback
 		log.Printf("AI review error: %v, using static rules", err)
-		return s.fallbackResult(staticResult, req), nil
+		return s.fallbackResult(staticResult), nil
 	}
 
 	// 3. AI not configured → static rules only
-	return s.fallbackResult(staticResult, req), nil
+	return s.fallbackResult(staticResult), nil
 }
 
 // ReviewStream performs AI review with SSE streaming.
@@ -186,7 +186,7 @@ func (s *AIReviewService) ReviewStream(ctx context.Context, req *AIReviewRequest
 
 	if !s.config.Enabled {
 		ch := make(chan SSEEvent, 1)
-		result := s.fallbackResult(staticResult, req)
+		result := s.fallbackResult(staticResult)
 		ch <- SSEEvent{Type: "result", Data: result}
 		close(ch)
 		return ch, nil
@@ -239,7 +239,7 @@ func (s *AIReviewService) applyStaticRules(ctx context.Context, req *AIReviewReq
 	isSensitive := len(sensitiveTables) > 0
 
 	// Risk determination based on operation type + sensitivity + conditions
-	result.RiskLevel = determineStaticRisk(pr, isSensitive, req.Role)
+	result.RiskLevel = determineStaticRisk(pr, isSensitive)
 	result.Suggestions = generateStaticSuggestions(pr, isSensitive)
 
 	// Set decision
@@ -252,7 +252,13 @@ func (s *AIReviewService) applyStaticRules(ctx context.Context, req *AIReviewReq
 }
 
 // determineStaticRisk determines risk level using static rules.
-func determineStaticRisk(pr *driver.ParseResult, isSensitive bool, role string) string {
+//
+// It takes no role, and must not: risk selects the approval policy, so a
+// role-dependent risk would make the same statement carry different risk for
+// different submitters — which is what "clients must not influence risk or the
+// approval path" forbids. The parameter was accepted and ignored, leaving the
+// door ajar rather than open.
+func determineStaticRisk(pr *driver.ParseResult, isSensitive bool) string {
 	switch pr.Operation {
 	case driver.OpSelect:
 		if isSensitive {
@@ -462,7 +468,7 @@ func (s *AIReviewService) streamLLM(ctx context.Context, req *AIReviewRequest, s
 		ch := make(chan SSEEvent, 2)
 		if isNetworkError(err) {
 			ch <- SSEEvent{Type: "error", Data: "AI服务网络不可达，使用静态规则评审"}
-			ch <- SSEEvent{Type: "result", Data: s.fallbackResult(staticResult, req)}
+			ch <- SSEEvent{Type: "result", Data: s.fallbackResult(staticResult)}
 		} else {
 			ch <- SSEEvent{Type: "error", Data: "AI评审超时，降级为中风险处理"}
 			ch <- SSEEvent{Type: "result", Data: s.degradeResult(staticResult, req)}
@@ -476,7 +482,7 @@ func (s *AIReviewService) streamLLM(ctx context.Context, req *AIReviewRequest, s
 		_ = resp.Body.Close()
 		ch := make(chan SSEEvent, 2)
 		ch <- SSEEvent{Type: "error", Data: fmt.Sprintf("AI服务返回错误(%d)，使用静态规则", resp.StatusCode)}
-		ch <- SSEEvent{Type: "result", Data: s.fallbackResult(staticResult, req)}
+		ch <- SSEEvent{Type: "result", Data: s.fallbackResult(staticResult)}
 		close(ch)
 		return ch, nil
 	}
@@ -526,7 +532,7 @@ func (s *AIReviewService) processSSEStream(body io.Reader, ch chan<- SSEEvent, r
 	content := fullContent.String()
 	if content == "" {
 		ch <- SSEEvent{Type: "error", Data: "AI评审返回空内容，使用静态规则"}
-		ch <- SSEEvent{Type: "result", Data: s.fallbackResult(staticResult, req)}
+		ch <- SSEEvent{Type: "result", Data: s.fallbackResult(staticResult)}
 		return
 	}
 
@@ -534,7 +540,7 @@ func (s *AIReviewService) processSSEStream(body io.Reader, ch chan<- SSEEvent, r
 	if err != nil {
 		log.Printf("parse streaming AI response: %v", err)
 		ch <- SSEEvent{Type: "error", Data: "AI评审结果解析失败，使用静态规则"}
-		ch <- SSEEvent{Type: "result", Data: s.fallbackResult(staticResult, req)}
+		ch <- SSEEvent{Type: "result", Data: s.fallbackResult(staticResult)}
 		return
 	}
 
@@ -721,7 +727,7 @@ func (s *AIReviewService) degradeResult(staticResult *AIReviewResult, req *AIRev
 }
 
 // fallbackResult creates a static-only result when AI is unavailable.
-func (s *AIReviewService) fallbackResult(staticResult *AIReviewResult, req *AIReviewRequest) *AIReviewResult {
+func (s *AIReviewService) fallbackResult(staticResult *AIReviewResult) *AIReviewResult {
 	result := *staticResult
 	result.ReviewSource = "static"
 	result.ReviewedAt = time.Now()

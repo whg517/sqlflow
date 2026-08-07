@@ -302,12 +302,6 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 	return result, nil
 }
 
-// applyDesensitization checks if the user has desensitize:bypass permission.
-// If not, applies masking rules to the result set.
-func (s *Service) applyDesensitization(ctx context.Context, result *QueryResult, role string, datasourceID int64, database string, tables []string) (bool, []string) {
-	return s.applyDesensitizationForActor(ctx, result, 0, role, datasourceID, database, tables)
-}
-
 func (s *Service) applyDesensitizationForActor(ctx context.Context, result *QueryResult, userID int64, role string, datasourceID int64, database string, tables []string) (bool, []string) {
 	// Check the canonical unmask permission, retaining the legacy action during
 	// migration so existing installations do not unexpectedly lose access.

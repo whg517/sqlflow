@@ -732,7 +732,7 @@ func (s *Service) executeTicket(ctx context.Context, t *model.Ticket, operatorID
 	execCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	execResults, execErr := s.executeSQL(execCtx, ds, t.Database, t.DBType, t.SQLContent)
+	execResults, execErr := s.executeSQL(execCtx, ds, t.Database, t.SQLContent)
 
 	// Record execution results
 	for i, r := range execResults {

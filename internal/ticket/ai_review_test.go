@@ -300,7 +300,7 @@ func TestDetermineStaticRisk(t *testing.T) {
 				Operation: tt.operation,
 				RiskLevel: tt.parserRisk,
 			}
-			got := determineStaticRisk(pr, tt.isSensitive, "developer")
+			got := determineStaticRisk(pr, tt.isSensitive)
 			if got != tt.wantRisk {
 				t.Errorf("risk = %v, want %v", got, tt.wantRisk)
 			}
@@ -735,9 +735,7 @@ func TestFallbackResult(t *testing.T) {
 		ReviewSource: "static",
 	}
 
-	req := makeTestRequest("SELECT * FROM users", driver.OpSelect)
-
-	result := svc.fallbackResult(staticResult, req)
+	result := svc.fallbackResult(staticResult)
 	if result.ReviewSource != "static" {
 		t.Errorf("source = %v, want static", result.ReviewSource)
 	}

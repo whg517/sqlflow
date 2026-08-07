@@ -47,7 +47,7 @@ func TestExportAsyncService_CreateAndRetrieve(t *testing.T) {
 	filters := AuditExportFilters{}
 	filtersJSON, _ := json.Marshal(filters)
 
-	task, err := asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin", "audit", string(filtersJSON), "csv")
+	task, err := asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin", "audit", string(filtersJSON), "csv", nil)
 	if err != nil {
 		t.Fatalf("CreateAsyncExport: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestExportAsyncService_ListTasks(t *testing.T) {
 
 	// Create a task
 	filtersJSON, _ := json.Marshal(AuditExportFilters{})
-	_, err = asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin", "audit", string(filtersJSON), "csv")
+	_, err = asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin", "audit", string(filtersJSON), "csv", nil)
 	if err != nil {
 		t.Fatalf("CreateAsyncExport: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestExportAsyncService_PermissionDenied(t *testing.T) {
 	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('dev', 'hash', 'developer')")
 
 	filtersJSON, _ := json.Marshal(AuditExportFilters{})
-	_, err := asyncSvc.CreateAsyncExport(context.Background(), 2, "dev", "developer", "audit", string(filtersJSON), "csv")
+	_, err := asyncSvc.CreateAsyncExport(context.Background(), 2, "dev", "developer", "audit", string(filtersJSON), "csv", nil)
 	if err != ErrExportNoPermission {
 		t.Errorf("expected ErrExportNoPermission, got %v", err)
 	}
@@ -155,7 +155,7 @@ func TestExportAsyncService_DownloadFile(t *testing.T) {
 	})
 
 	filtersJSON, _ := json.Marshal(AuditExportFilters{})
-	task, err := asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin", "audit", string(filtersJSON), "csv")
+	task, err := asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin", "audit", string(filtersJSON), "csv", nil)
 	if err != nil {
 		t.Fatalf("CreateAsyncExport: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestExportAsyncService_CleanupExpiredFiles(t *testing.T) {
 	})
 
 	filtersJSON, _ := json.Marshal(AuditExportFilters{})
-	task, _ := asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin", "audit", string(filtersJSON), "csv")
+	task, _ := asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin", "audit", string(filtersJSON), "csv", nil)
 
 	// Wait for completion
 	deadline := time.After(5 * time.Second)

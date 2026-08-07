@@ -44,7 +44,7 @@ func convertDriverResults(drvResults []driver.StatementResult) []statementResult
 // executeSQL connects to the target database and executes the ticket's SQL.
 // For MySQL/PostgreSQL: splits multi-statement SQL and executes each statement individually.
 // For MongoDB: parses JSON command body and executes via mongo driver.
-func (s *Service) executeSQL(ctx context.Context, ds *model.DataSource, database, dbType, sqlContent string) ([]statementResult, error) {
+func (s *Service) executeSQL(ctx context.Context, ds *model.DataSource, database, sqlContent string) ([]statementResult, error) {
 	secrets, err := datasource.DecryptSecrets(ds, s.encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("解密数据源凭据失败: %w", err)

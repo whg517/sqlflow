@@ -19,7 +19,7 @@ func seedSubscription(t *testing.T, svc *WebhookSubscriptionService, name string
 		Name:   name,
 		URL:    "https://example.com/hook",
 		Events: []string{"ticket.created"},
-	}, "tester")
+	}, 1, "tester")
 	if err != nil {
 		t.Fatalf("create subscription: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestSubscriptionToggle(t *testing.T) {
 	svc := newSubscriptionService(t)
 	id := seedSubscription(t, svc, "toggle-me")
 
-	disabled, err := svc.Toggle(t.Context(), id, "tester")
+	disabled, err := svc.Toggle(t.Context(), id, 1, "tester")
 	if err != nil {
 		t.Fatalf("Toggle to disabled: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestSubscriptionToggle(t *testing.T) {
 		t.Error("subscription still reports enabled after the first toggle")
 	}
 
-	enabled, err := svc.Toggle(t.Context(), id, "tester")
+	enabled, err := svc.Toggle(t.Context(), id, 1, "tester")
 	if err != nil {
 		t.Fatalf("Toggle to enabled: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestSubscriptionToggleResetsFailureCountOnEnable(t *testing.T) {
 		t.Fatalf("subscription is still enabled after %d consecutive failures", MaxConsecutiveFailures)
 	}
 
-	reEnabled, err := svc.Toggle(t.Context(), id, "tester")
+	reEnabled, err := svc.Toggle(t.Context(), id, 1, "tester")
 	if err != nil {
 		t.Fatalf("Toggle: %v", err)
 	}

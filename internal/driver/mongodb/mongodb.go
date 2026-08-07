@@ -368,12 +368,12 @@ func (d *MongoDBDriver) ExecuteStatement(ctx context.Context, database string, s
 			if _, err := collection.InsertMany(execCtx, docs); err != nil {
 				return errorResult(stmt, time.Since(start).Milliseconds(), err)
 			}
-			return successResult(stmt, int64(len(docs)), time.Since(start).Milliseconds())
+			return successResult(stmt, int64(len(docs)), time.Since(start).Milliseconds()), nil
 		}
 		if _, err := collection.InsertOne(execCtx, doc); err != nil {
 			return errorResult(stmt, time.Since(start).Milliseconds(), err)
 		}
-		return successResult(stmt, 1, time.Since(start).Milliseconds())
+		return successResult(stmt, 1, time.Since(start).Milliseconds()), nil
 
 	case sqlparser.MongoOpUpdate:
 		filter := extractMap(stmt, "filter")
@@ -390,7 +390,7 @@ func (d *MongoDBDriver) ExecuteStatement(ctx context.Context, database string, s
 		if err != nil {
 			return errorResult(stmt, time.Since(start).Milliseconds(), err)
 		}
-		return successResult(stmt, res.ModifiedCount, time.Since(start).Milliseconds())
+		return successResult(stmt, res.ModifiedCount, time.Since(start).Milliseconds()), nil
 
 	case sqlparser.MongoOpDelete:
 		filter := extractMap(stmt, "filter")
@@ -401,7 +401,7 @@ func (d *MongoDBDriver) ExecuteStatement(ctx context.Context, database string, s
 		if err != nil {
 			return errorResult(stmt, time.Since(start).Milliseconds(), err)
 		}
-		return successResult(stmt, res.DeletedCount, time.Since(start).Milliseconds())
+		return successResult(stmt, res.DeletedCount, time.Since(start).Milliseconds()), nil
 
 	default:
 		return nil, fmt.Errorf("mongodb: operation %s is not supported for execution", mongoResult.Operation)
@@ -596,11 +596,15 @@ func errorResult(stmt string, ms int64, err error) (*driver.StatementResult, err
 	}, err
 }
 
-func successResult(stmt string, affected int64, ms int64) (*driver.StatementResult, error) {
+// successResult builds the result of a statement that succeeded.
+//
+// It returns no error: there is nothing here that can fail, and a signature
+// that says otherwise makes every caller write a branch that cannot be taken.
+func successResult(stmt string, affected int64, ms int64) *driver.StatementResult {
 	return &driver.StatementResult{
 		Statement:    stmt,
 		Status:       "success",
 		RowsAffected: affected,
 		DurationMs:   ms,
-	}, nil
+	}
 }

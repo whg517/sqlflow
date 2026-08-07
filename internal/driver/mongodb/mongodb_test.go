@@ -333,10 +333,7 @@ func TestMongoDBDriver_Parse_InvalidJSON(t *testing.T) {
 }
 
 func TestSuccessAndErrorResult(t *testing.T) {
-	sr, err := successResult("stmt", 5, 100)
-	if err != nil {
-		t.Fatalf("successResult() error: %v", err)
-	}
+	sr := successResult("stmt", 5, 100)
 	if sr.Status != "success" || sr.RowsAffected != 5 || sr.DurationMs != 100 {
 		t.Errorf("successResult() = %+v, want success/5/100", sr)
 	}

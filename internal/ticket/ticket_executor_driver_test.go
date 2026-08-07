@@ -97,7 +97,7 @@ func TestExecuteSQL_DriverPath_MySQL(t *testing.T) {
 		t.Fatalf("get datasource: %v", err)
 	}
 
-	results, err := svc.executeSQL(context.Background(), ds, "testdb", "mysql", "CREATE TABLE t1 (id INT); INSERT INTO t1 VALUES (1)")
+	results, err := svc.executeSQL(context.Background(), ds, "testdb", "CREATE TABLE t1 (id INT); INSERT INTO t1 VALUES (1)")
 	if err != nil {
 		t.Fatalf("executeSQL via driver path: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestExecuteSQL_DriverPath_PostgreSQLRollback(t *testing.T) {
 		t.Fatalf("get datasource: %v", err)
 	}
 
-	results, err := svc.executeSQL(context.Background(), ds, "testdb", "postgresql", "CREATE TABLE t1 (id INT); INVALID SQL")
+	results, err := svc.executeSQL(context.Background(), ds, "testdb", "CREATE TABLE t1 (id INT); INVALID SQL")
 	if err == nil {
 		t.Fatal("expected error from failed statement, got nil")
 	}

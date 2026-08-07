@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/whg517/sqlflow/internal/platform/httpx"
 	"github.com/whg517/sqlflow/internal/resp"
 )
 
@@ -36,12 +37,12 @@ func (h *SubscriptionHandler) Create(c echo.Context) error {
 		return resp.BadRequest(c, "请求格式错误")
 	}
 
-	username := "admin"
-	if u, ok := c.Get("username").(string); ok && u != "" {
-		username = u
-	}
+	// No fallback identity. These routes sit behind the admin group, so a
+	// request without one is a wiring fault — and an audit trail that invents an
+	// actor ("admin") is worse than one that records none.
+	actorID, actorName := httpx.UserID(c), httpx.Username(c)
 
-	sub, plainSecret, err := h.svc.Create(c.Request().Context(), req, username)
+	sub, plainSecret, err := h.svc.Create(c.Request().Context(), req, actorID, actorName)
 	if err != nil {
 		code, msg := mapWebhookError(err)
 		if code == http.StatusBadRequest {
@@ -101,12 +102,9 @@ func (h *SubscriptionHandler) Update(c echo.Context) error {
 		return resp.BadRequest(c, "请求格式错误")
 	}
 
-	username := "admin"
-	if u, ok := c.Get("username").(string); ok && u != "" {
-		username = u
-	}
+	actorID, actorName := httpx.UserID(c), httpx.Username(c)
 
-	sub, err := h.svc.Update(c.Request().Context(), id, req, username)
+	sub, err := h.svc.Update(c.Request().Context(), id, req, actorID, actorName)
 	if err != nil {
 		code, msg := mapWebhookError(err)
 		if code == http.StatusNotFound {
@@ -128,12 +126,9 @@ func (h *SubscriptionHandler) Delete(c echo.Context) error {
 		return resp.BadRequest(c, "无效的 ID")
 	}
 
-	username := "admin"
-	if u, ok := c.Get("username").(string); ok && u != "" {
-		username = u
-	}
+	actorID, actorName := httpx.UserID(c), httpx.Username(c)
 
-	if err := h.svc.Delete(c.Request().Context(), id, username); err != nil {
+	if err := h.svc.Delete(c.Request().Context(), id, actorID, actorName); err != nil {
 		code, msg := mapWebhookError(err)
 		if code == http.StatusNotFound {
 			return c.JSON(http.StatusNotFound, resp.ErrorResponse{Code: http.StatusNotFound, Message: msg})
@@ -151,12 +146,9 @@ func (h *SubscriptionHandler) Toggle(c echo.Context) error {
 		return resp.BadRequest(c, "无效的 ID")
 	}
 
-	username := "admin"
-	if u, ok := c.Get("username").(string); ok && u != "" {
-		username = u
-	}
+	actorID, actorName := httpx.UserID(c), httpx.Username(c)
 
-	sub, err := h.svc.Toggle(c.Request().Context(), id, username)
+	sub, err := h.svc.Toggle(c.Request().Context(), id, actorID, actorName)
 	if err != nil {
 		code, msg := mapWebhookError(err)
 		if code == http.StatusNotFound {

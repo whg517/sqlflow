@@ -281,7 +281,7 @@ func (s *SLAService) CheckSLA(ctx context.Context) error {
 				// Escalation: limit 1 per day — idempotent via sla_action_log
 				dedupKey := fmt.Sprintf("%d:escalate:%s", t.ID, now.Format("2006-01-02"))
 				if ok, _ := s.tryRecordAction(ctx, t.ID, "escalate", dedupKey, approverName, cfg.ID); ok {
-					s.sendEscalation(ctx, t, cfg, approverName)
+					s.sendEscalation(t, cfg, approverName)
 				}
 			}
 			// Update status to breached
@@ -293,7 +293,7 @@ func (s *SLAService) CheckSLA(ctx context.Context) error {
 			// Reminder: limit 3 per day — idempotent via sla_action_log with hour granularity
 			dedupKey := fmt.Sprintf("%d:reminder:%s:%02d", t.ID, now.Format("2006-01-02"), now.Hour())
 			if ok, _ := s.tryRecordAction(ctx, t.ID, "reminder", dedupKey, approverName, cfg.ID); ok {
-				s.sendReminder(ctx, t, cfg, percent, approverName)
+				s.sendReminder(t, cfg, percent, approverName)
 			}
 			// Update status to warning
 			if t.SLAStatus != "warning" && t.SLAStatus != "breached" {
@@ -468,7 +468,10 @@ func (s *SLAService) tryRecordAction(ctx context.Context, ticketID int64, action
 	return err == nil && affected > 0, nil
 }
 
-func (s *SLAService) sendReminder(ctx context.Context, t slaTicketRow, cfg *model.SLAConfig, percent float64, approverName string) {
+// sendReminder takes no context because the notify layer accepts none; its HTTP
+// client carries its own 5s timeout, so the call is bounded but not cancellable.
+// Threading a context through notify is a separate change.
+func (s *SLAService) sendReminder(t slaTicketRow, cfg *model.SLAConfig, percent float64, approverName string) {
 	if s.notifySvc == nil {
 		return
 	}
@@ -478,7 +481,7 @@ func (s *SLAService) sendReminder(ctx context.Context, t slaTicketRow, cfg *mode
 	s.notifySvc.NotifySLAReminderRaw(t.ID, fmt.Sprintf("%.1f", elapsedHours), fmt.Sprintf("%.1f", slaHours), approverName, percent)
 }
 
-func (s *SLAService) sendEscalation(ctx context.Context, t slaTicketRow, cfg *model.SLAConfig, approverName string) {
+func (s *SLAService) sendEscalation(t slaTicketRow, cfg *model.SLAConfig, approverName string) {
 	if s.notifySvc == nil {
 		return
 	}

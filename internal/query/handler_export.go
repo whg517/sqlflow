@@ -313,7 +313,7 @@ func (h *ExportHandler) createAsyncExport(c echo.Context, userID int64, username
 		return resp.BadRequest(c, "序列化筛选参数失败")
 	}
 
-	task, err := h.exportAsyncSvc.CreateAsyncExport(c.Request().Context(), userID, username, role, exportType, string(filtersJSON), string(exportFormat))
+	task, err := h.exportAsyncSvc.CreateAsyncExport(c.Request().Context(), userID, username, role, exportType, string(filtersJSON), string(exportFormat), columns)
 	if err != nil {
 		switch err {
 		case ErrExportNoPermission:

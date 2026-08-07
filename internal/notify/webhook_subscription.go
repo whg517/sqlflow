@@ -207,7 +207,7 @@ func newSSRFSafeClient() *http.Client {
 
 // --- CRUD ---
 
-func (s *WebhookSubscriptionService) Create(ctx context.Context, req CreateSubscriptionRequest, createdBy string) (*model.WebhookSubscription, string, error) {
+func (s *WebhookSubscriptionService) Create(ctx context.Context, req CreateSubscriptionRequest, actorID int64, actorName string) (*model.WebhookSubscription, string, error) {
 	if req.Name == "" {
 		return nil, "", fmt.Errorf("%w: name 不能为空", ErrValidation)
 	}
@@ -240,7 +240,7 @@ func (s *WebhookSubscriptionService) Create(ctx context.Context, req CreateSubsc
 		SetEvents(string(eventsJSON)).
 		SetEnabled(true).
 		SetFailureCount(0).
-		SetCreatedBy(createdBy).
+		SetCreatedBy(actorName).
 		Save(ctx)
 	if err != nil {
 		return nil, "", fmt.Errorf("创建订阅失败: %w", err)
@@ -248,7 +248,7 @@ func (s *WebhookSubscriptionService) Create(ctx context.Context, req CreateSubsc
 	id := int64(created.ID)
 	sub := entWebhookSubscriptionToModel(created)
 
-	s.writeAuditLog(ctx, "webhook_subscription.create", 0, createdBy, fmt.Sprintf("创建 Webhook 订阅: %s (ID:%d)", req.Name, id))
+	s.writeAuditLog(ctx, "webhook_subscription.create", actorID, actorName, fmt.Sprintf("创建 Webhook 订阅: %s (ID:%d)", req.Name, id))
 
 	return sub, plainSecret, nil
 }
@@ -338,7 +338,7 @@ func (s *WebhookSubscriptionService) listForDelivery(ctx context.Context) ([]*de
 	return targets, nil
 }
 
-func (s *WebhookSubscriptionService) Update(ctx context.Context, id int64, req UpdateSubscriptionRequest, username string) (*model.WebhookSubscription, error) {
+func (s *WebhookSubscriptionService) Update(ctx context.Context, id int64, req UpdateSubscriptionRequest, actorID int64, actorName string) (*model.WebhookSubscription, error) {
 	existing, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -381,12 +381,12 @@ func (s *WebhookSubscriptionService) Update(ctx context.Context, id int64, req U
 		return nil, fmt.Errorf("更新订阅失败: %w", err)
 	}
 
-	s.writeAuditLog(ctx, "webhook_subscription.update", 0, username, fmt.Sprintf("更新 Webhook 订阅: %s (ID:%d)", name, id))
+	s.writeAuditLog(ctx, "webhook_subscription.update", actorID, actorName, fmt.Sprintf("更新 Webhook 订阅: %s (ID:%d)", name, id))
 
 	return entWebhookSubscriptionToModel(updated), nil
 }
 
-func (s *WebhookSubscriptionService) Delete(ctx context.Context, id int64, username string) error {
+func (s *WebhookSubscriptionService) Delete(ctx context.Context, id int64, actorID int64, actorName string) error {
 	existing, err := s.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -400,12 +400,12 @@ func (s *WebhookSubscriptionService) Delete(ctx context.Context, id int64, usern
 		return fmt.Errorf("删除订阅失败: %w", err)
 	}
 
-	s.writeAuditLog(ctx, "webhook_subscription.delete", 0, username, fmt.Sprintf("删除 Webhook 订阅: %s (ID:%d)", existing.Name, id))
+	s.writeAuditLog(ctx, "webhook_subscription.delete", actorID, actorName, fmt.Sprintf("删除 Webhook 订阅: %s (ID:%d)", existing.Name, id))
 
 	return nil
 }
 
-func (s *WebhookSubscriptionService) Toggle(ctx context.Context, id int64, username string) (*model.WebhookSubscription, error) {
+func (s *WebhookSubscriptionService) Toggle(ctx context.Context, id int64, actorID int64, actorName string) (*model.WebhookSubscription, error) {
 	existing, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -436,7 +436,7 @@ func (s *WebhookSubscriptionService) Toggle(ctx context.Context, id int64, usern
 	if newEnabled {
 		action = "启用"
 	}
-	s.writeAuditLog(ctx, "webhook_subscription.toggle", 0, username, fmt.Sprintf("%s Webhook 订阅: %s (ID:%d)", action, existing.Name, id))
+	s.writeAuditLog(ctx, "webhook_subscription.toggle", actorID, actorName, fmt.Sprintf("%s Webhook 订阅: %s (ID:%d)", action, existing.Name, id))
 
 	return entWebhookSubscriptionToModel(toggled), nil
 }
@@ -633,12 +633,17 @@ func (s *WebhookSubscriptionService) sendWebhookRequest(targetURL, secret string
 
 // --- Audit Logging ---
 
-func (s *WebhookSubscriptionService) writeAuditLog(ctx context.Context, action string, userID int64, username, details string) {
+// writeAuditLog records who changed what.
+//
+// actorID used to be 0 at every call site, with the name formatted into
+// error_message. So these rows had no actor: filtering the audit log by user
+// never returned them, and the per-user reports counted them against nobody.
+func (s *WebhookSubscriptionService) writeAuditLog(ctx context.Context, action string, actorID int64, actorName, details string) {
 	err := s.entClient.AuditLog.Create().
-		SetUserID(userID).
+		SetUserID(actorID).
 		SetAction(action).
 		SetIPAddress("").
-		SetErrorMessage(fmt.Sprintf("%s — %s", username, details)).
+		SetErrorMessage(fmt.Sprintf("%s — %s", actorName, details)).
 		SetCreatedAt(time.Now()).
 		Exec(ctx)
 	if err != nil {

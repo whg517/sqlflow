@@ -7,6 +7,15 @@
 # leaves behind, and it misleads whoever (or whatever) reads the package next.
 # It stays enabled for test files too — orphaned fixtures are the same problem.
 #
+# `unparam` is a gate because "accepted and ignored" is a defect shape the
+# compiler permits. It found an Elasticsearch driver that took a row limit and
+# never applied it, a risk function that accepted a role it must not depend on,
+# and an async export that took the caller's column selection and dropped it —
+# so a large export silently widened back to every column.
+#
+# Two of its categories are excluded below. Neither is a judgement that the
+# finding is wrong; both are different problems with different fixes.
+#
 # `errcheck` is still off; enabling it needs ~50 call sites triaged into real
 # bugs versus deliberate ignores. Track separately.
 # =============================================================================
@@ -22,6 +31,7 @@ linters:
     - errcheck
   enable:
     - misspell
+    - unparam
     - unused
   settings:
     govet:
@@ -62,6 +72,18 @@ linters:
       - path: _test.go
         linters:
           - errcheck
+      # A test helper whose parameter currently takes one value is a helper
+      # waiting for its second caller, not a defect. Production code has no
+      # such excuse.
+      - path: _test.go
+        linters:
+          - unparam
+      # "receiver is never used" says a method could be a function. That is a
+      # shape decision — a method kept for symmetry across a type's API is
+      # deliberate — and it drowns out the parameter findings that are not.
+      - linters:
+          - unparam
+        text: "is never used"
     paths:
       - testdata
       - third_party$
