@@ -248,9 +248,11 @@ function RenderDialog({
   const [loading, setLoading] = useState(false);
   const [copiedSQL, setCopiedSQL] = useState(false);
   const [renderError, setRenderError] = useState("");
-  const canUseInQuery =
-    (template.db_type === "mysql" || template.db_type === "postgresql") &&
-    /^(select|with)\b/i.test(template.sql_content.trim());
+  // The shape of the body is the predicate, not the driver's name. A pair of
+  // type names excluded SQLite, which is as SQL as the other two, and would
+  // have excluded the next SQL driver as well. A document or DSL template
+  // starts with "{", so it fails this test without anyone listing it.
+  const canUseInQuery = /^(select|with)\b/i.test(template.sql_content.trim());
 
   const handleRender = async () => {
     setLoading(true);

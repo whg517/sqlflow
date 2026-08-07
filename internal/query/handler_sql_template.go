@@ -64,8 +64,15 @@ func (h *TemplateHandler) CreateTemplate(c echo.Context) error {
 	if req.SQLContent == "" {
 		return resp.BadRequest(c, "SQL 内容不能为空")
 	}
+	// db_type is required, not defaulted.
+	//
+	// It selects the placeholder dialect the renderer emits, so guessing "mysql"
+	// gave a PostgreSQL template `?` markers that PostgreSQL rejects — and on
+	// update it silently rewrote the dialect of a template that already had one.
+	// The browser always sends it; a server that only holds when the caller is
+	// well behaved is not holding.
 	if req.DBType == "" {
-		req.DBType = "mysql"
+		return resp.BadRequest(c, "必须指定数据库类型")
 	}
 	if req.Category == "" {
 		req.Category = "general"
@@ -186,8 +193,15 @@ func (h *TemplateHandler) UpdateTemplate(c echo.Context) error {
 	if req.SQLContent == "" {
 		return resp.BadRequest(c, "SQL 内容不能为空")
 	}
+	// db_type is required, not defaulted.
+	//
+	// It selects the placeholder dialect the renderer emits, so guessing "mysql"
+	// gave a PostgreSQL template `?` markers that PostgreSQL rejects — and on
+	// update it silently rewrote the dialect of a template that already had one.
+	// The browser always sends it; a server that only holds when the caller is
+	// well behaved is not holding.
 	if req.DBType == "" {
-		req.DBType = "mysql"
+		return resp.BadRequest(c, "必须指定数据库类型")
 	}
 	if req.Category == "" {
 		req.Category = "general"

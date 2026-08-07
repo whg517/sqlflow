@@ -32,6 +32,7 @@ func TestSQLTemplateHandler_CreateTemplate_ValidationErrors(t *testing.T) {
 		{"name too long", `{"name":"` + strings.Repeat("x", 101) + `","sql_content":"SELECT 1"}`},
 		{"empty sql_content", `{"name":"t1","sql_content":""}`},
 		{"unsupported db type", `{"name":"t1","sql_content":"SELECT 1","db_type":"oracle"}`},
+		{"omitted db type", `{"name":"t1","sql_content":"SELECT 1"}`},
 		{"malformed JSON", `{not-json`},
 	}
 	for _, tc := range cases {
@@ -83,7 +84,7 @@ func TestSQLTemplateHandler_CreateTemplate_DuplicateName(t *testing.T) {
 	if _, err := svc.CreateTemplate(ctx, 1, "dup", "", "SELECT 1", "mysql", "general", true); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	body := `{"name":"dup","sql_content":"SELECT 2"}`
+	body := `{"name":"dup","sql_content":"SELECT 2","db_type":"mysql"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/sql-templates", strings.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
