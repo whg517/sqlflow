@@ -487,3 +487,174 @@ func TestPlatformDoesNotBranchOnDatasourceType(t *testing.T) {
 			len(offenders), strings.Join(offenders, "\n  "))
 	}
 }
+
+// TestNoWriteOnlyFields fails on a field that is assigned and never read.
+//
+// staticcheck's `unused` does not report this: a field set by a constructor
+// counts as used, so the value can be written on every path and read on none.
+// Four such fields survived a full pass of the linter — PoolManager.lastUse,
+// which was also the subject of a data race, poolEntry.config, ESIndexInfo's
+// StoreBytes, and ticket Service.permSvc, left behind when the check that
+// needed it came out.
+//
+// The scope is deliberately narrow, and the narrowness is what makes the result
+// trustworthy rather than a source of //nolint noise:
+//
+//   - Unexported only. Every use is then inside the package, so a package-wide
+//     scan is complete. An exported field can be read by any importer, and
+//     answering that needs the whole-program call graph that make deadcode uses.
+//   - Untagged only. A struct tag means something reads the field by
+//     reflection — encoding/json, ent, a SQL scanner — and no syntactic scan
+//     can see that call. StoreBytes had a json tag and is the miss this rule
+//     accepts in exchange for having no false positives.
+//
+// Fields are keyed by name within a package rather than by (type, field),
+// because a syntactic scan cannot always resolve what x.foo selects. Two
+// structs sharing a field name are therefore treated as one, which under-reports
+// — the right direction for a gate.
+func TestNoWriteOnlyFields(t *testing.T) {
+	root := repoRoot(t)
+	fset := token.NewFileSet()
+
+	type parsedFile struct {
+		pkg  string
+		file *ast.File
+	}
+	var parsed []parsedFile
+
+	type field struct {
+		pkg, structName, name, file string
+		line                        int
+	}
+	var declared []field
+
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case ".git", "node_modules", "web", "ent", "openapi", "testdata":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return relErr
+		}
+		rel = filepath.ToSlash(rel)
+		if !strings.HasPrefix(rel, "internal/") && !strings.HasPrefix(rel, "cmd/") {
+			return nil
+		}
+		f, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			return parseErr
+		}
+		pkg := filepath.ToSlash(filepath.Dir(rel))
+		parsed = append(parsed, parsedFile{pkg: pkg, file: f})
+
+		ast.Inspect(f, func(n ast.Node) bool {
+			spec, ok := n.(*ast.TypeSpec)
+			if !ok {
+				return true
+			}
+			st, ok := spec.Type.(*ast.StructType)
+			if !ok || st.Fields == nil {
+				return true
+			}
+			for _, fld := range st.Fields.List {
+				if fld.Tag != nil {
+					continue
+				}
+				for _, name := range fld.Names {
+					if ast.IsExported(name.Name) || name.Name == "_" {
+						continue
+					}
+					declared = append(declared, field{
+						pkg: pkg, structName: spec.Name.Name, name: name.Name,
+						file: rel, line: fset.Position(name.Pos()).Line,
+					})
+				}
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk repo: %v", err)
+	}
+	if len(declared) == 0 {
+		t.Fatal("no unexported struct fields found — the walk root is probably wrong")
+	}
+
+	read := map[string]bool{}
+	for _, pf := range parsed {
+		// notRead holds the nodes that are a write or a declaration rather than
+		// a read: the left side of an assignment, a composite-literal key, and
+		// the field's own name in its struct type. Leaving out that last one
+		// made every field look read, and the check reported nothing at all —
+		// which is why it is sabotage-tested rather than trusted for returning
+		// zero.
+		notRead := map[ast.Node]bool{}
+		ast.Inspect(pf.file, func(n ast.Node) bool {
+			switch node := n.(type) {
+			case *ast.AssignStmt:
+				if node.Tok != token.ASSIGN && node.Tok != token.DEFINE {
+					return true // x.f += v reads before it writes
+				}
+				for _, lhs := range node.Lhs {
+					if sel, ok := lhs.(*ast.SelectorExpr); ok {
+						notRead[sel] = true
+					}
+				}
+			case *ast.CompositeLit:
+				for _, elt := range node.Elts {
+					if kv, ok := elt.(*ast.KeyValueExpr); ok {
+						if id, ok := kv.Key.(*ast.Ident); ok {
+							notRead[id] = true
+						}
+					}
+				}
+			case *ast.StructType:
+				if node.Fields == nil {
+					return true
+				}
+				for _, fld := range node.Fields.List {
+					for _, name := range fld.Names {
+						notRead[name] = true
+					}
+				}
+			}
+			return true
+		})
+
+		ast.Inspect(pf.file, func(n ast.Node) bool {
+			if notRead[n] {
+				return true
+			}
+			switch node := n.(type) {
+			case *ast.SelectorExpr:
+				read[pf.pkg+"."+node.Sel.Name] = true
+			case *ast.Ident:
+				read[pf.pkg+"."+node.Name] = true
+			}
+			return true
+		})
+	}
+
+	var offenders []string
+	for _, f := range declared {
+		if !read[f.pkg+"."+f.name] {
+			offenders = append(offenders, fmt.Sprintf("%s:%d: %s.%s", f.file, f.line, f.structName, f.name))
+		}
+	}
+	sort.Strings(offenders)
+	if len(offenders) > 0 {
+		t.Errorf("%d field(s) are written and never read; delete them or read them:\n  %s",
+			len(offenders), strings.Join(offenders, "\n  "))
+	}
+}
