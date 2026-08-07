@@ -42,11 +42,6 @@ func (s *SLAScheduler) Stop() {
 	log.Println("SLA scheduler stopped")
 }
 
-// RunOnce performs a single SLA check. Useful for testing.
-func (s *SLAScheduler) RunOnce(ctx context.Context) error {
-	return s.slaSvc.CheckSLA(ctx)
-}
-
 func (s *SLAScheduler) loop() {
 	defer s.wg.Done()
 

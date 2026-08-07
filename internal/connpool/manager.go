@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -212,100 +211,12 @@ func (m *Manager) RemoveMongo(dsID int64) {
 	})
 }
 
-// pgPoolKey generates a unique cache key for a PostgreSQL connection.
-func pgPoolKey(dsID int64, host string, port int, database string) string {
-	return fmt.Sprintf("pg:%d:%s:%d:%s", dsID, host, port, database)
-}
-
 // PGPoolConfig holds pool configuration for PostgreSQL connections.
 type PGPoolConfig struct {
 	MaxOpen     int
 	MaxIdle     int
 	MaxLifetime int // seconds
 	MaxIdleTime int // seconds
-}
-
-// GetPostgreSQL returns a cached *sql.DB for the given PostgreSQL datasource parameters,
-// creating and configuring one if it doesn't exist.
-func (m *Manager) GetPostgreSQL(dsID int64, host string, port int, user, password, database, sslmode string, cfg PGPoolConfig) (*sql.DB, error) {
-	key := pgPoolKey(dsID, host, port, database)
-
-	// Fast path: check cache
-	if v, ok := m.sqlPools.Load(key); ok {
-		return v.(*sql.DB), nil
-	}
-
-	// Slow path: create new pool
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Double-check after acquiring write lock
-	if v, ok := m.sqlPools.Load(key); ok {
-		return v.(*sql.DB), nil
-	}
-
-	if sslmode == "" {
-		sslmode = "prefer"
-	}
-
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s&connect_timeout=30",
-		url.QueryEscape(user), url.QueryEscape(password), host, port, database, sslmode)
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("open postgresql: %w", err)
-	}
-
-	maxOpen := cfg.MaxOpen
-	if maxOpen <= 0 {
-		maxOpen = 10
-	}
-	maxIdle := cfg.MaxIdle
-	if maxIdle <= 0 {
-		maxIdle = 5
-	}
-	maxLifetime := cfg.MaxLifetime
-	if maxLifetime <= 0 {
-		maxLifetime = 3600
-	}
-	maxIdleTime := cfg.MaxIdleTime
-	if maxIdleTime <= 0 {
-		maxIdleTime = 600
-	}
-
-	db.SetMaxOpenConns(maxOpen)
-	db.SetMaxIdleConns(maxIdle)
-	db.SetConnMaxLifetime(time.Duration(maxLifetime) * time.Second)
-	db.SetConnMaxIdleTime(time.Duration(maxIdleTime) * time.Second)
-
-	m.sqlPools.Store(key, db)
-	return db, nil
-}
-
-// RemovePG removes a cached PostgreSQL connection pool for the given datasource.
-func (m *Manager) RemovePG(dsID int64, host string, port int, database string) {
-	key := pgPoolKey(dsID, host, port, database)
-	if v, ok := m.sqlPools.LoadAndDelete(key); ok {
-		_ = v.(*sql.DB).Close()
-	}
-}
-
-// PostgreSQLPing attempts to ping a PostgreSQL server to verify connectivity.
-func PostgreSQLPing(ctx context.Context, host string, port int, user, password, database, sslmode string) error {
-	if sslmode == "" {
-		sslmode = "prefer"
-	}
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s&connect_timeout=10",
-		url.QueryEscape(user), url.QueryEscape(password), host, port, database, sslmode)
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		return fmt.Errorf("open postgresql: %w", err)
-	}
-	defer db.Close()
-
-	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	return db.PingContext(pingCtx)
 }
 
 // HealthCheck verifies that all cached connection pools are still alive.
@@ -343,10 +254,4 @@ func (m *Manager) HealthCheck() error {
 		return fmt.Errorf("unhealthy pools: %s", strings.Join(errs, "; "))
 	}
 	return nil
-}
-
-// InjectPGForTest stores a pre-built *sql.DB in the PostgreSQL pool for testing.
-func (m *Manager) InjectPGForTest(dsID int64, host string, port int, database string, db *sql.DB) {
-	key := pgPoolKey(dsID, host, port, database)
-	m.sqlPools.Store(key, db)
 }

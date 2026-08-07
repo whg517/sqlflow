@@ -133,11 +133,6 @@ func (s *Service) audit(ctx context.Context, action string, id int64, err error)
 	s.auditSvc.Write(ctx, rec)
 }
 
-// PoolManager returns the driver PoolManager (may be nil if not configured).
-func (s *Service) PoolManager() *driver.PoolManager {
-	return s.poolMgr
-}
-
 // validateDriverConfig runs the driver's own configuration rules.
 //
 // It is deliberately connection-free: this runs before a datasource is saved,

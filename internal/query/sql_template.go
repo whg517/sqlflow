@@ -260,12 +260,6 @@ type RenderResult struct {
 	SQL         string        `json:"sql"`
 }
 
-// RenderTemplate replaces placeholders in a template with parameter values.
-// MySQL: ?, PostgreSQL: $1,$2,..., MongoDB: original template.
-func (s *TemplateService) RenderTemplate(ctx context.Context, id int64, params map[string]string) (*RenderResult, error) {
-	return s.renderTemplate(ctx, id, 0, params, false)
-}
-
 // RenderTemplateForUser renders a template after enforcing public/owner access.
 func (s *TemplateService) RenderTemplateForUser(ctx context.Context, id, userID int64, params map[string]string) (*RenderResult, error) {
 	return s.renderTemplate(ctx, id, userID, params, true)
@@ -396,20 +390,4 @@ func extractParamsJSON(sqlContent string) string {
 
 	data, _ := json.Marshal(params)
 	return string(data)
-}
-
-// ParseExtractedParams is a convenience function that returns placeholder info from a template.
-func ParseExtractedParams(paramsJSON string) ([]map[string]string, error) {
-	var raw []struct {
-		Name    string `json:"name"`
-		Default string `json:"default"`
-	}
-	if err := json.Unmarshal([]byte(paramsJSON), &raw); err != nil {
-		return nil, err
-	}
-	result := make([]map[string]string, len(raw))
-	for i, p := range raw {
-		result[i] = map[string]string{"name": p.Name, "default": p.Default}
-	}
-	return result, nil
 }

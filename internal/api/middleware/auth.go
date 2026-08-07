@@ -125,51 +125,6 @@ func JWT(authSvc *iam.Service) echo.MiddlewareFunc {
 	}
 }
 
-// APITokenAuth returns a middleware that validates API tokens from the
-// Authorization header (format: "Bearer sqlflow_...") as an alternative
-// to JWT authentication. If the header looks like a JWT (doesn't start
-// with "sqlflow_"), the middleware passes through to the next handler
-// (allowing JWT middleware downstream to handle it).
-// NOTE: Prefer Auth() for new code — this middleware is kept for backward compatibility.
-func APITokenAuth(tokenSvc *iam.TokenService) echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			authHeader := c.Request().Header.Get("Authorization")
-			if authHeader == "" {
-				return next(c)
-			}
-
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-				return next(c)
-			}
-
-			token := parts[1]
-
-			// Only handle tokens that look like API tokens (prefix: "sqlflow_")
-			if !strings.HasPrefix(token, "sqlflow_") {
-				return next(c) // let JWT middleware handle it
-			}
-
-			userID, username, role, scopes, err := tokenSvc.ValidateTokenWithRole(c.Request().Context(), token)
-			if err != nil {
-				return c.JSON(http.StatusUnauthorized, map[string]string{
-					"error": "API Token 无效或已过期",
-				})
-			}
-
-			// Set context values compatible with JWT middleware
-			c.Set(httpx.ContextKeyUserID, userID)
-			c.Set(httpx.ContextKeyUsername, username)
-			c.Set(httpx.ContextKeyRole, role)
-			c.Set(ContextKeyTokenID, true)
-			c.Set(ContextKeyTokenScopes, scopes)
-
-			return next(c)
-		}
-	}
-}
-
 // RequireScope returns a middleware that checks if the authenticated
 // API token has the required scope.
 func RequireScope(requiredScope string) echo.MiddlewareFunc {

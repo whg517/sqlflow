@@ -621,54 +621,6 @@ func (s *Service) isEnabled() bool {
 	return s.enabled
 }
 
-// NotifySLAReminder sends a DingTalk notification for SLA reminder (80% elapsed).
-func (s *Service) NotifySLAReminder(ticket *model.Ticket, elapsedHours, slaHours, approverName, submitterName string, percent float64) {
-	if !s.isEnabled() {
-		return
-	}
-
-	title := "⏰ [SQLFlow] 工单审批提醒"
-	text := fmt.Sprintf(
-		"**工单 #%d 审批提醒**\n\n"+
-			"- **SQL 摘要**: %s\n"+
-			"- **提交人**: %s\n"+
-			"- **风险等级**: %s\n"+
-			"- **审批人**: %s\n"+
-			"- **已等待**: %sh / 时限 %sh（%.0f%%）\n"+
-			"- **提交时间**: %s\n\n"+
-			"请及时处理该工单。",
-		ticket.ID, ticket.SQLSummary, submitterName, riskLabel(ticket.RiskLevel),
-		approverName, elapsedHours, slaHours, percent,
-		ticket.CreatedAt.Format("2006-01-02 15:04:05"),
-	)
-
-	go s.sendMarkdown(title, text)
-}
-
-// NotifySLAEscalate sends a DingTalk notification for SLA escalation (100% elapsed).
-func (s *Service) NotifySLAEscalate(ticket *model.Ticket, slaHours, approverName, submitterName string) {
-	if !s.isEnabled() {
-		return
-	}
-
-	title := "🚨 [SQLFlow] 工单审批超时升级"
-	text := fmt.Sprintf(
-		"**工单 #%d 审批超时升级**\n\n"+
-			"- **SQL 摘要**: %s\n"+
-			"- **提交人**: %s\n"+
-			"- **风险等级**: %s\n"+
-			"- **超时时限**: %sh\n"+
-			"- **审批人**: %s（已提醒未处理）\n"+
-			"- **提交时间**: %s\n\n"+
-			"请立即处理该工单。",
-		ticket.ID, ticket.SQLSummary, submitterName, riskLabel(ticket.RiskLevel),
-		slaHours, approverName,
-		ticket.CreatedAt.Format("2006-01-02 15:04:05"),
-	)
-
-	go s.sendMarkdown(title, text)
-}
-
 // NotifySLAReminderRaw sends an SLA reminder notification using minimal fields.
 // This decouples Service from the Ticket model — SLAService only provides
 // what's needed for the notification, not a full Ticket struct.

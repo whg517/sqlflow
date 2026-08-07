@@ -61,7 +61,7 @@ web-cover: ## Generate frontend coverage report
 ##@ Quality
 
 lint: ## Lint all (golangci-lint + ESLint)
-lint: go-lint web-lint
+lint: go-lint web-lint deadcode
 
 go-lint: ## Run golangci-lint
 	golangci-lint run ./...
@@ -71,6 +71,15 @@ go-vet: ## Run Go vet (superseded by golangci-lint, kept for compat)
 
 arch: ## Check package layering (also runs as part of `make test`)
 	go test ./internal/arch/ -count=1
+
+deadcode: ## Fail on code nothing can reach, from main or from a test
+	./scripts/deadcode.sh
+
+deadcode-report: ## List code no production path reaches (test helpers included)
+	@echo "Unreachable from main. Test-only helpers are expected here; anything"
+	@echo "else is a caller that went away and left its callee behind."
+	@go run golang.org/x/tools/cmd/deadcode@v0.48.0 ./internal/... ./cmd/... \
+		| grep -v '^internal/db/ent/' || true
 
 ##@ Database
 

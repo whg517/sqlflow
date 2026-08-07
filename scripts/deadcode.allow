@@ -1,0 +1,14 @@
+# Symbols nothing can reach, kept deliberately. Format: <symbol> <reason>
+#
+# An entry without a reason is indistinguishable from an oversight, and a stale
+# entry reads as permission for something that is no longer there — the gate
+# rejects both.
+
+# Webhook subscription delivery is implemented but never triggered: the service
+# is constructed and its management endpoints work, so a subscription can be
+# created, listed and toggled, but no event source calls DeliverEvent. This is a
+# feature that was never wired, not code that outlived its caller — deleting it
+# would remove the only implementation. Tracked separately.
+WebhookSubscriptionService.DeliverEvent      webhook delivery is implemented but no event source calls it
+WebhookSubscriptionService.listForDelivery   reached only from DeliverEvent
+WebhookSubscriptionService.deliverWithRetry  reached only from DeliverEvent

@@ -511,13 +511,6 @@ func (s *OIDCService) ensureUniqueUsername(ctx context.Context, username string)
 	return base + "_overflow"
 }
 
-// InvalidateDiscovery clears cached discovery documents for a provider.
-func (s *OIDCService) InvalidateDiscovery(providerName string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.discovery, providerName)
-}
-
 // generateState creates a random state parameter for OAuth2.
 func generateState() string {
 	b := make([]byte, 16)

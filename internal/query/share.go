@@ -325,20 +325,6 @@ func (s *ShareService) RevokeShare(ctx context.Context, id, userID int64) error 
 	return nil
 }
 
-// CleanupExpired removes expired shared results (for periodic cleanup).
-func (s *ShareService) CleanupExpired(ctx context.Context) (int64, error) {
-	n, err := s.client.SharedResult.Delete().
-		Where(
-			sharedresult.ExpiresAtLT(time.Now()),
-			sharedresult.Revoked(false),
-		).
-		Exec(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("cleanup expired shares: %w", err)
-	}
-	return int64(n), nil
-}
-
 // CreateShareRequest is the input for creating a shared result.
 type CreateShareRequest struct {
 	UserID         int64
