@@ -56,9 +56,22 @@ cd web && npx tsc -b && npm run test
    返回值、出错返回 nil，而两个调用方都把空规则集当作「没什么要保护的」，
    于是一次读取失败就把行明文发了出去。无法施加脱敏的结果形态（如聚合载荷）
    必须拒绝返回，而不是放行。每个返回目标库行的入口都要跨过同一条缝——
-   `ExplainQuery` 就是新增入口绕开检查的现成例子（它漏掉了内部数据源闸门）。
+   现在这条缝是 `internal/query/targetread.go` 的 `authorizeRead`，由
+   `internal/arch` 的 `TestTargetDatabaseReadsGoThroughOneSeam` 强制：任何
+   到达 `executeDriverQuery` 而没先经过它的函数都构建失败。
+   `ExplainQuery` 是它存在的理由：三个入口各自手写十一步前奏，第三份漏了五步，
+   其中一步让 `EXPLAIN ANALYZE DELETE FROM t` 真的删了行（我复现过：3 行进，0 行出）。
+   释放侧同理收敛为 `releaseRows` 一个决策——放行 / 脱敏放行 / 拒绝，一次 Casbin
+   扫描、一次规则读取、一次形态裁决；分享以「不持任何授权的 actor」进入同一个决策。
 5. **客户端不得影响风险等级或审批路径。** 风险由服务端从 SQL 派生，它决定审批
-   策略；AI 结论不接受客户端提供。
+   策略；AI 结论不接受客户端提供。**审批条件语言只有一套**：
+   `ParseCondition` 是获得 `Condition` 的唯一途径，解析产出的值就是匹配器读的值，
+   不认识的字段或运算符**报错而不是跳过**——跳过会让匹配变宽。曾经是三套互不相通的
+   写法：表单发 `conditions`/`operator`，校验器要 `children`/`op`（于是表单能存下的
+   只有 `{}`），匹配器读的是第三种扁平数组；手写一份能通过校验的条件会解析成全空值，
+   而全空 = 匹配全部，配上 `auto_approve_enabled` 就是一个自动通过一切的策略。
+   **提交人不得裁决自己的工单**（`refuseSelfDecision`，三个入口都查），
+   驳回与审批一样必须走审批链。
 
 ## 数据源抽象
 
