@@ -152,13 +152,25 @@ func (h *Handler) ExplainQuery(c echo.Context) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrExplainNonSelect):
-			return resp.BadRequest(c, "EXPLAIN 仅支持 SELECT 语句")
+			return resp.BadRequest(c, ErrExplainNonSelect.Error())
 		case errors.Is(err, ErrExplainNotSupported):
-			return resp.BadRequest(c, "EXPLAIN 仅支持 MySQL 数据源")
+			// Not "MySQL only" — PostgreSQL implements QueryExplainer too, and
+			// naming one engine sends the user looking for the wrong cause.
+			return resp.BadRequest(c, ErrExplainNotSupported.Error())
+		case errors.Is(err, ErrSQLBlocked):
+			return resp.BadRequest(c, err.Error())
+		case errors.Is(err, ErrSQLHighRisk):
+			return resp.BadRequest(c, err.Error())
+		case errors.Is(err, ErrInternalDatasourceOnly):
+			return resp.Forbidden(c, err.Error())
+		case errors.Is(err, datasource.ErrDatasourceDisabled):
+			return resp.BadRequest(c, err.Error())
 		case errors.Is(err, datasource.ErrDatabaseScopeMismatch):
 			return resp.BadRequest(c, err.Error())
 		case errors.Is(err, ErrSQLTimeout):
-			return resp.BadRequest(c, "查询超时（30秒）")
+			return resp.BadRequest(c, err.Error())
+		case errors.Is(err, ErrQueryUnavailable):
+			return resp.InternalError(c, err.Error())
 		case errors.Is(err, ErrEmptySQL):
 			return resp.BadRequest(c, "SQL不能为空")
 		default:

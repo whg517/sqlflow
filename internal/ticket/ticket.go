@@ -30,7 +30,11 @@ var (
 	// ErrInvalidStatusTransition indicates an invalid state transition.
 	ErrInvalidStatusTransition = errors.New("无效的工单状态变更")
 	// ErrTicketAlreadyProcessed indicates the ticket has already been processed.
-	ErrTicketAlreadyProcessed = errors.New("工单已处理，无法重复操作")
+	// ErrTicketExecutionConflict means another actor moved the ticket out of
+	// EXECUTING while this execution was running — the reclaim sweep, in
+	// practice. The outcome of this run was not recorded.
+	ErrTicketExecutionConflict = errors.New("工单已被其他操作改变状态，本次执行结果未被记录")
+	ErrTicketAlreadyProcessed  = errors.New("工单已处理，无法重复操作")
 	// ErrTicketNotCancellable indicates the ticket cannot be cancelled.
 	ErrTicketNotCancellable = errors.New("当前状态不可取消")
 	// ErrTicketExecUnavailable indicates the service was built without a
@@ -815,14 +819,11 @@ func (s *Service) executeTicket(ctx context.Context, t *model.Ticket, operatorID
 	// Guarded like every other move. As a bare write it would clobber whatever
 	// the row said, which is how a cancel that landed mid-execution disappeared.
 	now = time.Now()
-	if _, err = applyTransition(ctx, s.client.Ticket, t.ID, now, transition{
-		From: []model.TicketStatus{model.TicketStatusExecuting},
-		To:   model.TicketStatusDone,
-		Extra: func(u *ent.TicketUpdate) *ent.TicketUpdate {
+	if err = s.concludeExecution(ctx, t.ID, now, model.TicketStatusDone,
+		func(u *ent.TicketUpdate) *ent.TicketUpdate {
 			return u.SetExecutedAt(now).ClearScheduledAt()
-		},
-	}); err != nil {
-		return nil, fmt.Errorf("更新工单状态失败: %w", err)
+		}); err != nil {
+		return nil, err
 	}
 
 	// Compute SQL hash for audit
@@ -858,11 +859,8 @@ func (s *Service) executeTicket(ctx context.Context, t *model.Ticket, operatorID
 // failTicket transitions a ticket to FAILED status and writes audit log.
 func (s *Service) failTicket(ctx context.Context, t *model.Ticket, operatorID int64, errMsg string) error {
 	now := time.Now()
-	if _, err := applyTransition(ctx, s.client.Ticket, t.ID, now, transition{
-		From: []model.TicketStatus{model.TicketStatusExecuting},
-		To:   model.TicketStatusFailed,
-	}); err != nil {
-		return fmt.Errorf("设置失败状态失败: %w (原始错误: %s)", err, errMsg)
+	if err := s.concludeExecution(ctx, t.ID, now, model.TicketStatusFailed, nil); err != nil {
+		return fmt.Errorf("%w (原始错误: %s)", err, errMsg)
 	}
 
 	s.auditSvc.Write(ctx, auditlog.Record{
@@ -1150,4 +1148,36 @@ func isInternalDatasource(extraConfig string) bool {
 		System bool `json:"system"`
 	}
 	return json.Unmarshal([]byte(extraConfig), &extra) == nil && extra.System
+}
+
+// concludeExecution moves a ticket out of EXECUTING and refuses to overwrite a
+// decision another actor already made.
+//
+// Both ends of an execution used to discard applyTransition's first result with
+// `_`, against its stated contract that a false return is a conflict rather
+// than a success. The reachable case is the reclaim sweep: it moves a ticket
+// whose lease expired to FAILED without coordinating with an executor that is
+// still running, so when that executor finished its swap matched zero rows —
+// and the caller was told DONE while the row said FAILED and the audit trail
+// recorded a successful execution. Reporting the conflict is what keeps the
+// answer, the row and the audit record talking about the same ticket.
+func (s *Service) concludeExecution(
+	ctx context.Context,
+	ticketID int64,
+	now time.Time,
+	to model.TicketStatus,
+	extra func(*ent.TicketUpdate) *ent.TicketUpdate,
+) error {
+	applied, err := applyTransition(ctx, s.client.Ticket, ticketID, now, transition{
+		From:  []model.TicketStatus{model.TicketStatusExecuting},
+		To:    to,
+		Extra: extra,
+	})
+	if err != nil {
+		return fmt.Errorf("更新工单状态失败: %w", err)
+	}
+	if !applied {
+		return ErrTicketExecutionConflict
+	}
+	return nil
 }

@@ -757,3 +757,68 @@ func selectorChain(e ast.Expr) map[string]bool {
 		}
 	}
 }
+
+// TestTransitionResultIsNeverDiscarded keeps applyTransition's contract from
+// being optional.
+//
+// It returns whether a row matched, and a false return means another actor
+// decided the ticket first — a conflict the caller has to report rather than a
+// success it can ignore. Two call sites ignored it with `_`, and the reachable
+// consequence was an execution that lost its race to the reclaim sweep telling
+// the operator DONE while the row said FAILED.
+//
+// A deep module only helps if callers cannot step around it, and `_` is the
+// cheapest way to step around this one: it compiles, it reads like the other
+// call sites, and no test notices. This makes it a build failure instead.
+func TestTransitionResultIsNeverDiscarded(t *testing.T) {
+	dir := filepath.Join(repoRoot(t), "internal", "ticket")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read internal/ticket: %v", err)
+	}
+
+	fset := token.NewFileSet()
+	var offenders []string
+
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+
+		ast.Inspect(f, func(n ast.Node) bool {
+			assign, ok := n.(*ast.AssignStmt)
+			if !ok || len(assign.Rhs) != 1 {
+				return true
+			}
+			call, ok := assign.Rhs[0].(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			fn, ok := call.Fun.(*ast.Ident)
+			if !ok || fn.Name != "applyTransition" {
+				return true
+			}
+			if len(assign.Lhs) == 0 {
+				return true
+			}
+			if ident, ok := assign.Lhs[0].(*ast.Ident); ok && ident.Name == "_" {
+				offenders = append(offenders,
+					fmt.Sprintf("%s:%d", name, fset.Position(assign.Pos()).Line))
+			}
+			return true
+		})
+	}
+
+	if len(offenders) > 0 {
+		t.Errorf("applyTransition's first result is discarded at:\n  %s\n\n"+
+			"A false return means another actor decided this ticket first. Report it as a\n"+
+			"conflict — internal/ticket/ticket.go's concludeExecution is the shape to copy.",
+			strings.Join(offenders, "\n  "))
+	}
+}

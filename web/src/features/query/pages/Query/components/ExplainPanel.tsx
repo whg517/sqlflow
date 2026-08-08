@@ -252,7 +252,15 @@ export default function ExplainPanel({
     );
   }
 
-  if (plan.length === 0) {
+  // A plan the structured and tree views cannot read is still a plan.
+  //
+  // `plan` is MySQL's step table, and only MySQL fills it — PostgreSQL reports
+  // a plan as one text column. Treating an empty `plan` as "no data" therefore
+  // hid every PostgreSQL plan behind 无执行计划数据, including ones the server
+  // had computed successfully. Only the text view can render those, so it is
+  // the only one offered.
+  const hasStepTable = plan.length > 0;
+  if (!hasStepTable && !formatted) {
     return (
       <div className="flex items-center justify-center py-12">
         <span className="text-sm text-[var(--text-muted)]">无执行计划数据</span>
@@ -260,43 +268,47 @@ export default function ExplainPanel({
     );
   }
 
+  const effectiveMode: ViewMode = hasStepTable ? viewMode : "text";
+
   return (
     <div className="flex flex-col gap-3">
       {/* View mode toggle */}
-      <div className="flex items-center gap-1">
-        <Button
-          variant={viewMode === "structured" ? "secondary" : "ghost"}
-          size="sm"
-          className="h-7 gap-1 text-xs"
-          onClick={() => setViewMode("structured")}
-        >
-          <Table2 size={12} />
-          结构化
-        </Button>
-        <Button
-          variant={viewMode === "tree" ? "secondary" : "ghost"}
-          size="sm"
-          className="h-7 gap-1 text-xs"
-          onClick={() => setViewMode("tree")}
-        >
-          <GitBranch size={12} />
-          树形
-        </Button>
-        <Button
-          variant={viewMode === "text" ? "secondary" : "ghost"}
-          size="sm"
-          className="h-7 gap-1 text-xs"
-          onClick={() => setViewMode("text")}
-        >
-          <FileText size={12} />
-          文本
-        </Button>
-      </div>
+      {hasStepTable && (
+        <div className="flex items-center gap-1">
+          <Button
+            variant={effectiveMode === "structured" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={() => setViewMode("structured")}
+          >
+            <Table2 size={12} />
+            结构化
+          </Button>
+          <Button
+            variant={effectiveMode === "tree" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={() => setViewMode("tree")}
+          >
+            <GitBranch size={12} />
+            树形
+          </Button>
+          <Button
+            variant={effectiveMode === "text" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={() => setViewMode("text")}
+          >
+            <FileText size={12} />
+            文本
+          </Button>
+        </div>
+      )}
 
       {/* Content */}
-      {viewMode === "structured" ? (
+      {effectiveMode === "structured" ? (
         <StructuredView plan={plan} />
-      ) : viewMode === "tree" ? (
+      ) : effectiveMode === "tree" ? (
         <ExplainTreeView plan={plan} />
       ) : (
         <pre className="overflow-x-auto rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 font-mono text-xs text-[var(--text-primary)]">

@@ -593,6 +593,56 @@ type ExplainRow struct {
 
 // hasMySQLExplainColumns reports whether a plan uses MySQL's step-table shape,
 // which is what the typed ExplainRow view understands.
+// trimLeadingExplain removes a leading EXPLAIN keyword and nothing else.
+//
+// Whole word only: the character after it must not be one that could continue
+// an identifier, or a column named `explain_id` would lose its prefix. What it
+// deliberately does not do is decide whether the rest is safe — that is
+// driver.ParseFor's answer, and conflating the two is how a write got through.
+func trimLeadingExplain(sqlContent string) string {
+	trimmed := strings.TrimSpace(sqlContent)
+	const kw = "EXPLAIN"
+	if len(trimmed) < len(kw) || !strings.EqualFold(trimmed[:len(kw)], kw) {
+		return trimmed
+	}
+	if len(trimmed) > len(kw) {
+		switch c := trimmed[len(kw)]; {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_':
+			return trimmed
+		}
+	}
+	return strings.TrimSpace(trimmed[len(kw):])
+}
+
+// formatDriverPlan lays the driver's own plan columns out as a text table.
+func formatDriverPlan(columns []string, rows []map[string]interface{}) string {
+	if len(columns) == 0 {
+		return ""
+	}
+	strRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		cells := make([]string, len(columns))
+		for i, c := range columns {
+			cells[i] = formatExplainCell(row[c])
+		}
+		strRows = append(strRows, cells)
+	}
+	return renderTextTable(columns, strRows)
+}
+
+func formatExplainCell(v interface{}) string {
+	switch t := v.(type) {
+	case nil:
+		return "NULL"
+	case string:
+		return t
+	case []byte:
+		return string(t)
+	default:
+		return fmt.Sprintf("%v", t)
+	}
+}
+
 func hasMySQLExplainColumns(columns []string) bool {
 	for _, c := range columns {
 		if strings.EqualFold(c, "select_type") {
@@ -618,7 +668,9 @@ type ExplainResult struct {
 
 var (
 	ErrExplainNotSupported = errors.New("该数据源不支持 EXPLAIN")
-	ErrExplainNonSelect    = errors.New("EXPLAIN 仅支持 SELECT 语句")
+	// Names the real reason: EXPLAIN ANALYZE executes the statement, so this
+	// entrance cannot accept anything it would not have executed.
+	ErrExplainNonSelect = errors.New("EXPLAIN 仅支持 SELECT 语句（EXPLAIN ANALYZE 会真正执行语句）")
 )
 
 // ExplainQuery executes EXPLAIN for a SQL query and returns structured results.
@@ -627,17 +679,9 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 		return nil, ErrEmptySQL
 	}
 
-	// Only allow SELECT statements
-	upper := strings.TrimSpace(strings.ToUpper(sqlContent))
-	if !strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "WITH") && !strings.HasPrefix(upper, "EXPLAIN") {
-		return nil, ErrExplainNonSelect
-	}
-
-	// Strip leading EXPLAIN if user already prefixed it
-	explainSQL := sqlContent
-	if strings.HasPrefix(upper, "EXPLAIN") {
-		explainSQL = strings.TrimSpace(sqlContent[len("EXPLAIN"):])
-	}
+	// The statement the driver will plan. A user who already typed EXPLAIN gets
+	// that one word removed, because the driver adds it back.
+	explainSQL := trimLeadingExplain(sqlContent)
 
 	// Get datasource
 	ds, err := s.dsSvc.GetDataSource(ctx, datasourceID)
@@ -667,6 +711,26 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 		return nil, fmt.Errorf("SQL解析失败: %w", err)
 	}
 
+	// The same three verdicts ExecuteQuery and ExportQuery apply, which this
+	// entrance did not.
+	//
+	// EXPLAIN ANALYZE is not a description of a statement, it is the statement:
+	// the engine runs the plan for real to report actual timings. So a prefix
+	// test could never be enough — matching the word EXPLAIN and stripping it
+	// let "EXPLAIN ANALYZE DELETE FROM t" through, and the driver prepended
+	// EXPLAIN back on the way out. This entrance may only accept statements it
+	// would have been willing to execute, and driver.ParseFor is what answers
+	// that for every other entrance.
+	if parseResult.IsBlocked {
+		return nil, ErrSQLBlocked
+	}
+	if parseResult.Operation != driver.OpSelect {
+		return nil, ErrExplainNonSelect
+	}
+	if parseResult.RiskLevel == driver.RiskHigh {
+		return nil, ErrSQLHighRisk
+	}
+
 	for _, table := range parseResult.Targets {
 		allowed, err := s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "select")
 		if err != nil {
@@ -692,19 +756,31 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 	if err != nil {
 		return nil, err
 	}
-	d, err := s.poolMgr.Get(ctx, cfg)
+	// One budget over connecting and planning, as the other two entrances have.
+	// This was the only entrance running on the caller's unbounded context, and
+	// a plan holds a pooled connection exactly as long as a query does.
+	drvCtx, drvCancel := context.WithTimeout(ctx, s.limits.Timeout)
+	defer drvCancel()
+
+	d, err := s.poolMgr.Get(drvCtx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("连接数据源失败: %w", err)
+		s.auditExplainFailure(ctx, userID, datasourceID, scope, sqlContent, ErrSQLTimeout)
+		return nil, ErrSQLTimeout
 	}
 
 	// Only drivers that declare the optional QueryExplainer can produce a
 	// plan; the dialect and the plan's shape belong to the driver.
 	explainer, ok := d.(driver.QueryExplainer)
 	if !ok {
+		s.auditExplainFailure(ctx, userID, datasourceID, scope, sqlContent, ErrExplainNotSupported)
 		return nil, ErrExplainNotSupported
 	}
-	drvResult, err := explainer.ExplainQuery(ctx, explainSQL, queryParams)
+	drvResult, err := explainer.ExplainQuery(drvCtx, explainSQL, queryParams)
 	if err != nil {
+		if drvCtx.Err() == context.DeadlineExceeded {
+			err = ErrSQLTimeout
+		}
+		s.auditExplainFailure(ctx, userID, datasourceID, scope, sqlContent, err)
 		return nil, fmt.Errorf("执行 EXPLAIN 失败: %w", err)
 	}
 
@@ -717,8 +793,14 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 		}
 	}
 
-	explainColumns := []string{"id", "select_type", "table", "partitions", "type", "possible_keys", "key", "key_len", "ref", "rows", "filtered", "Extra"}
-	formatted := formatExplainTable(explainColumns, plan)
+	// Formatted from the columns the driver actually returned.
+	//
+	// It used to be rendered against a hardcoded twelve-column MySQL header fed
+	// by `plan`, which is empty for every engine that is not MySQL. PostgreSQL
+	// reports a plan as one QUERY PLAN text column, so the server produced a
+	// MySQL header with nothing under it and the workbench showed
+	// "无执行计划数据" for a plan it had successfully computed.
+	formatted := formatDriverPlan(drvResult.Columns, drvResult.Rows)
 
 	// Write audit log (best-effort)
 	s.auditSvc.Write(ctx, auditlog.Record{
@@ -740,27 +822,13 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 	}, nil
 }
 
-func formatExplainTable(columns []string, rows []ExplainRow) string {
-	// Build row data as string slices
-	strRows := make([][]string, len(rows))
-	for i, r := range rows {
-		strRows[i] = []string{
-			fmt.Sprintf("%d", r.ID),
-			r.SelectType,
-			r.Table,
-			derefOrNull(r.Partitions),
-			r.Type,
-			derefOrNull(r.PossibleKeys),
-			derefOrNull(r.Key),
-			derefOrNull(r.KeyLen),
-			derefOrNull(r.Ref),
-			fmt.Sprintf("%d", r.Rows),
-			fmt.Sprintf("%.2f", r.Filtered),
-			derefOrNull(r.Extra),
-		}
-	}
-
-	// Calculate column widths
+// renderTextTable lays a column set and its rows out as a bordered text table.
+//
+// The plan's shape belongs to the driver, so this takes strings and knows
+// nothing about which engine produced them. It replaced a version that built
+// its rows from MySQL's twelve-field step struct, which is why every other
+// engine rendered as a header with nothing beneath it.
+func renderTextTable(columns []string, strRows [][]string) string {
 	widths := make([]int, len(columns))
 	for i, col := range columns {
 		widths[i] = len(col)
@@ -776,7 +844,6 @@ func formatExplainTable(columns []string, rows []ExplainRow) string {
 	var b strings.Builder
 	b.WriteString("EXPLAIN\n")
 
-	// Build separator line
 	sep := func() {
 		b.WriteByte('+')
 		for _, w := range widths {
@@ -787,17 +854,13 @@ func formatExplainTable(columns []string, rows []ExplainRow) string {
 	}
 
 	sep()
-
-	// Header row
 	b.WriteByte('|')
 	for i, col := range columns {
 		fmt.Fprintf(&b, " %-*s |", widths[i], col)
 	}
 	b.WriteByte('\n')
-
 	sep()
 
-	// Data rows
 	for _, row := range strRows {
 		b.WriteByte('|')
 		for i, val := range row {
@@ -807,20 +870,10 @@ func formatExplainTable(columns []string, rows []ExplainRow) string {
 		}
 		b.WriteByte('\n')
 	}
-
 	sep()
 
 	return b.String()
 }
-
-func derefOrNull(s *string) string {
-	if s == nil {
-		return "NULL"
-	}
-	return *s
-}
-
-// explainRowFromMap converts a map[string]interface{} (from driver.QueryResult) to ExplainRow.
 func explainRowFromMap(row map[string]interface{}) ExplainRow {
 	r := ExplainRow{}
 	if v, ok := row["id"]; ok {
@@ -929,4 +982,22 @@ func toFloat64Val(v interface{}) float64 {
 	default:
 		return 0
 	}
+}
+
+// auditExplainFailure records a plan request that reached the datasource stage
+// and did not produce a plan.
+//
+// The entrance used to write only its success record, so a refused or failed
+// EXPLAIN left no trace at all — and the plans that fail are the ones an
+// operator most wants to see (invariant 3).
+func (s *Service) auditExplainFailure(ctx context.Context, userID, datasourceID int64, scope, sqlContent string, cause error) {
+	s.auditSvc.Write(ctx, auditlog.Record{
+		UserID:       userID,
+		Action:       "explain_failed",
+		DatasourceID: datasourceID,
+		Database:     scope,
+		SQLContent:   sqlContent,
+		SQLSummary:   auditlog.Summarize(sqlContent),
+		ErrorMessage: cause.Error(),
+	})
 }

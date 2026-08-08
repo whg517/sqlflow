@@ -20,8 +20,12 @@ export interface ExplainRow {
 export interface ExplainResult {
   query: string;
   datasource_id: number;
+  /** MySQL's step table. Empty for engines that report a plan differently. */
   plan: ExplainRow[];
   formatted: string;
+  /** The driver's own plan columns, verbatim. Prefer these over `plan`. */
+  columns?: string[];
+  rows?: Record<string, unknown>[];
 }
 
 interface ExplainResponse {
