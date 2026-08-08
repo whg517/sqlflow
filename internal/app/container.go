@@ -17,7 +17,6 @@ import (
 
 	"github.com/whg517/sqlflow/config"
 	"github.com/whg517/sqlflow/internal/audit"
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/driver"
@@ -37,7 +36,6 @@ type Container struct {
 	// 基础设施
 	DB      *db.DB
 	Cfg     *config.Config
-	ConnMgr *connpool.Manager
 	PoolMgr *driver.PoolManager
 
 	// 认证 & 用户
@@ -102,7 +100,6 @@ type Container struct {
 //
 // 注意：database 的 Close 由调用方持有（main 的 defer），本容器通过 Close 停止调度器与异步 service。
 func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
-	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
 
 	// --- 基础 service（无循环依赖）---
@@ -110,7 +107,6 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 
 	permSvc, err := security.NewService(database)
 	if err != nil {
-		connMgr.Close()
 		poolMgr.Close()
 		return nil, err
 	}
@@ -120,14 +116,12 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	exportSvc := query.NewExportService(database, permSvc, auditSvc)
 	exportAsyncSvc, err := query.NewAsyncExportService(database, exportSvc, auditSvc, cfg.DB.DataDir)
 	if err != nil {
-		connMgr.Close()
 		poolMgr.Close()
 		return nil, err
 	}
 
-	dsSvc := datasource.NewService(database, cfg.EncryptionKey, connMgr, poolMgr, auditSvc)
+	dsSvc := datasource.NewService(database, cfg.EncryptionKey, poolMgr, auditSvc)
 	if _, err := dsSvc.EnsureInternalDataSource(context.Background(), cfg.DB.DSN); err != nil {
-		connMgr.Close()
 		poolMgr.Close()
 		return nil, err
 	}
@@ -242,14 +236,12 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	// --- admin seed ---
 	count, err := authSvc.UserCount(context.Background())
 	if err != nil {
-		connMgr.Close()
 		poolMgr.Close()
 		return nil, err
 	}
 	if count == 0 {
 		admin, err := authSvc.CreateUser(context.Background(), cfg.Admin.Username, cfg.Admin.Password, "admin")
 		if err != nil {
-			connMgr.Close()
 			poolMgr.Close()
 			return nil, err
 		}
@@ -266,7 +258,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	slaScheduler.Start()
 
 	return &Container{
-		DB: database, Cfg: cfg, ConnMgr: connMgr, PoolMgr: poolMgr,
+		DB: database, Cfg: cfg, PoolMgr: poolMgr,
 		Auth: authSvc, Datasource: dsSvc, Permission: permSvc,
 		Query: querySvc, History: historySvc,
 		Ticket: ticketSvc, ApprovalEngine: approvalEngine,
@@ -304,9 +296,6 @@ func (c *Container) Close() {
 	}
 	if c.PoolMgr != nil {
 		c.PoolMgr.Close()
-	}
-	if c.ConnMgr != nil {
-		c.ConnMgr.Close()
 	}
 }
 

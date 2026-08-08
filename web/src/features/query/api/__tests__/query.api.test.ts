@@ -9,7 +9,6 @@ vi.stubGlobal("fetch", mockFetch);
 
 import {
   executeQuery,
-  fetchESIndices,
   fetchHistory,
   searchQueryHistory,
   deleteHistory,
@@ -89,35 +88,6 @@ describe("Query API Functions", () => {
     });
   });
 
-  describe("fetchESIndices", () => {
-    it("uses the Elasticsearch index endpoint and returns index metadata", async () => {
-      mockJson({
-        code: 0,
-        data: {
-          items: [
-            {
-              name: "logs-2026.07",
-              health: "green",
-              status: "open",
-              doc_count: 12,
-              store_size: "2kb",
-              store_bytes: 2048,
-              created_time: "",
-            },
-          ],
-          total: 1,
-        },
-      });
-
-      const indices = await fetchESIndices(42);
-
-      expect(indices.map((index) => index.name)).toEqual(["logs-2026.07"]);
-      expect(mockFetch).toHaveBeenCalledWith(
-        "/api/datasources/42/es/indices?page=1&page_size=100",
-        expect.objectContaining({ method: "GET" }),
-      );
-    });
-  });
 
   describe("fetchHistory", () => {
     it("fetches query history with default params", async () => {

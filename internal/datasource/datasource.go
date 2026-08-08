@@ -6,15 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 
-	es "github.com/elastic/go-elasticsearch/v8"
-	"github.com/elastic/go-elasticsearch/v8/esapi"
-
 	"github.com/whg517/sqlflow/internal/authz"
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
 	entAuditLog "github.com/whg517/sqlflow/internal/db/ent/auditlog"
@@ -102,16 +97,15 @@ type Service struct {
 	database      *db.DB
 	client        *ent.Client
 	encryptionKey string
-	connMgr       *connpool.Manager
 	poolMgr       *driver.PoolManager
 	auditSvc      auditlog.Writer
 }
 
 // NewService creates a new Service.
-func NewService(database *db.DB, encryptionKey string, connMgr *connpool.Manager, poolMgr *driver.PoolManager, audit auditlog.Writer) *Service {
+func NewService(database *db.DB, encryptionKey string, poolMgr *driver.PoolManager, audit auditlog.Writer) *Service {
 	return &Service{
 		database: database, client: database.Client(), encryptionKey: encryptionKey,
-		connMgr: connMgr, poolMgr: poolMgr, auditSvc: auditlog.OrDiscard(audit),
+		poolMgr: poolMgr, auditSvc: auditlog.OrDiscard(audit),
 	}
 }
 
@@ -606,22 +600,17 @@ func (s *Service) datasourceDependencies(ctx context.Context, id int64) ([]Datas
 
 // removeDatasourcePool drops every cached connection for a datasource.
 //
-// Both caches are keyed by datasource ID, so this needs to know nothing about
-// the datasource's type or its connection fields — which is also why it has to
-// clear both. It used to clear only the driver pool; the Elasticsearch client
-// behind index and field browsing lives in connpool, and RemoveElasticsearch
-// had no caller outside its own test, so rotating an ES password left that
-// client authenticating with the old one until the process restarted.
+// It is keyed by datasource ID, so it needs to know nothing about the
+// datasource's type or its connection fields.
 //
-// The ES cache key is datasource id plus URLs and deliberately holds no
-// credentials. Evicting on write is what keeps it correct; putting secrets into
-// map keys would not.
+// It used to have to clear two caches: the driver pool and a second
+// Elasticsearch client that index browsing reached through connpool. That
+// second client is gone — the driver's MetadataBrowser answers the same
+// question — so there is one cache to evict and one place a rotated password
+// takes effect.
 func (s *Service) removeDatasourcePool(id int64) {
 	if s.poolMgr != nil {
 		s.poolMgr.Remove(id)
-	}
-	if s.connMgr != nil {
-		s.connMgr.RemoveElasticsearch(id)
 	}
 }
 
@@ -852,273 +841,6 @@ type ESIndexField struct {
 	Searchable   bool           `json:"searchable"`
 	Aggregatable bool           `json:"aggregatable"`
 	SubFields    []ESIndexField `json:"sub_fields,omitempty"` // nested/object children
-}
-
-// getESClient is a helper that resolves and returns an ES client for a datasource.
-func (s *Service) getESClient(ctx context.Context, id int64) (*model.DataSource, string, *es.Client, error) {
-	ds, err := s.GetDataSource(ctx, id)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	if ds.Status == "disabled" {
-		return nil, "", nil, ErrDatasourceDisabled
-	}
-	if ds.Type != "elasticsearch" {
-		return nil, "", nil, ErrInvalidDatasourceType
-	}
-
-	password, err := crypto.Decrypt(ds.PasswordEncrypted, s.encryptionKey)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("decrypt password: %w", err)
-	}
-
-	secrets, err := DecryptSecrets(ds, s.encryptionKey)
-	if err != nil {
-		return nil, "", nil, err
-	}
-
-	// Settings come from the driver's own decoder rather than from columns this
-	// package would otherwise have to know the meaning of. parseESUrls used to
-	// live here and was the third implementation of the same split.
-	cfg, err := driver.BuildConfigFromDataSource(NewAdapter(ds), secrets)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	urls, _ := cfg.Extra["urls"].([]string)
-	if len(urls) == 0 {
-		return nil, "", nil, fmt.Errorf("Elasticsearch 数据源未配置连接地址")
-	}
-	authType, _ := cfg.Extra["auth_type"].(string)
-	verifyCerts, _ := cfg.Extra["verify_certs"].(bool)
-
-	// The only remaining connpool user. Index and field browsing need the raw
-	// Elasticsearch client for paginated _cat/indices and mapping calls, which
-	// the Driver interface does not model — ListTables reports index names but
-	// not doc counts, sizes or pagination. Extending the driver contract is the
-	// prerequisite for removing connpool entirely.
-	client, err := s.connMgr.GetElasticsearch(ctx, id, urls, authType, ds.Username, secrets.Password, secrets.APIKey, verifyCerts)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("连接 Elasticsearch 失败: %w", err)
-	}
-	return ds, password, client, nil
-}
-
-// GetESIndices returns every index in the cluster that matches the keyword.
-//
-// It does not paginate. Pagination has to happen after the caller's object
-// permissions are applied, and those live above this layer — cutting a page
-// first and filtering it afterwards produced pages of unpredictable size and a
-// total that counted indices the caller could not see.
-//
-// _cat/indices returns the whole list in one response regardless, so there is
-// nothing to stream and no per-page request to save.
-func (s *Service) GetESIndices(ctx context.Context, id int64, query string) ([]ESIndexInfo, error) {
-	_, _, client, err := s.getESClient(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	// Use _cat/indices API with format=json
-	req := esapi.CatIndicesRequest{
-		Format: "json",
-	}
-
-	resp, err := req.Do(ctx, client)
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("查询 ES 索引超时")
-		}
-		return nil, fmt.Errorf("查询 ES 索引失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.IsError() {
-		return nil, fmt.Errorf("ES _cat/indices 返回错误: %s", resp.Status())
-	}
-
-	// Parse response
-	var rawIndices []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&rawIndices); err != nil {
-		return nil, fmt.Errorf("解析 ES 索引响应失败: %w", err)
-	}
-
-	// Map to ESIndexInfo and filter
-	var all []ESIndexInfo
-	for _, raw := range rawIndices {
-		name := getStrVal(raw, "index")
-
-		// Filter by query keyword
-		if query != "" && !strings.Contains(strings.ToLower(name), strings.ToLower(query)) {
-			continue
-		}
-
-		// Skip system indices (starting with .) unless explicitly searched
-		if query == "" && strings.HasPrefix(name, ".") {
-			continue
-		}
-
-		info := ESIndexInfo{
-			Name:        name,
-			Health:      getStrVal(raw, "health"),
-			Status:      getStrVal(raw, "status"),
-			StoreSize:   getStrVal(raw, "store.size"),
-			CreatedTime: getStrVal(raw, "creation.date.string"),
-		}
-		info.DocCount, _ = strconv.ParseInt(getStrVal(raw, "docs.count"), 10, 64)
-
-		all = append(all, info)
-	}
-
-	return all, nil
-}
-
-// GetESIndexFields returns the field mapping for a specific Elasticsearch index.
-func (s *Service) GetESIndexFields(ctx context.Context, id int64, indexName string) ([]ESIndexField, error) {
-	_, _, client, err := s.getESClient(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	if indexName == "" {
-		return nil, fmt.Errorf("索引名称不能为空")
-	}
-
-	// Use ES _mapping API
-	req := esapi.IndicesGetMappingRequest{
-		Index: []string{indexName},
-	}
-
-	resp, err := req.Do(ctx, client)
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("查询 ES 索引字段超时")
-		}
-		return nil, fmt.Errorf("查询 ES 索引字段失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.IsError() {
-		if resp.StatusCode == 404 {
-			return nil, fmt.Errorf("索引 %q 不存在", indexName)
-		}
-		return nil, fmt.Errorf("ES _mapping 返回错误: %s", resp.Status())
-	}
-
-	// Parse mapping response: { "index_name": { "mappings": { "properties": { ... } } } }
-	var mappingResp map[string]struct {
-		Mappings struct {
-			Properties map[string]interface{} `json:"properties"`
-		} `json:"mappings"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&mappingResp); err != nil {
-		return nil, fmt.Errorf("解析 ES mapping 响应失败: %w", err)
-	}
-
-	// Extract fields from the first (and usually only) index in the response
-	for _, idxData := range mappingResp {
-		return parseESProperties(idxData.Mappings.Properties), nil
-	}
-
-	return nil, fmt.Errorf("索引 %q 的 mapping 为空", indexName)
-}
-
-// parseESProperties recursively parses ES mapping properties into ESIndexField slice.
-func parseESProperties(props map[string]interface{}) []ESIndexField {
-	var fields []ESIndexField
-
-	// Sort field names for deterministic output
-	names := make([]string, 0, len(props))
-	for name := range props {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	for _, name := range names {
-		propData, ok := props[name]
-		if !ok {
-			continue
-		}
-		propMap, ok := propData.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		field := ESIndexField{
-			Name:   name,
-			ESType: getStrVal(propMap, "type"),
-		}
-
-		// Determine searchable / aggregatable from "index" field
-		// Default: indexed (searchable) unless explicitly set to false
-		if idx, ok := propMap["index"]; ok {
-			field.Searchable = idx != false
-		} else {
-			field.Searchable = true
-		}
-
-		// Aggregatable: keyword type and text with fielddata are aggregatable
-		field.Aggregatable = isAggregatable(field.ESType, propMap)
-
-		// Recurse for nested/object types
-		if field.ESType == "nested" || field.ESType == "object" {
-			if subProps, ok := propMap["properties"]; ok {
-				if subMap, ok := subProps.(map[string]interface{}); ok {
-					field.SubFields = parseESProperties(subMap)
-				}
-			}
-		}
-
-		// Also handle multi-fields ("fields" key)
-		if subFields, ok := propMap["fields"]; ok {
-			if subMap, ok := subFields.(map[string]interface{}); ok {
-				for subName, subData := range subMap {
-					if sm, ok := subData.(map[string]interface{}); ok {
-						field.SubFields = append(field.SubFields, ESIndexField{
-							Name:         name + "." + subName,
-							ESType:       getStrVal(sm, "type"),
-							Searchable:   true,
-							Aggregatable: true, // multi-fields are typically keyword for agg
-						})
-					}
-				}
-				sort.Slice(field.SubFields, func(i, j int) bool {
-					return field.SubFields[i].Name < field.SubFields[j].Name
-				})
-			}
-		}
-
-		fields = append(fields, field)
-	}
-
-	return fields
-}
-
-// isAggregatable determines if an ES field type supports aggregation.
-func isAggregatable(esType string, propMap map[string]interface{}) bool {
-	switch esType {
-	case "keyword", "numeric", "long", "integer", "short", "byte",
-		"double", "float", "half_float", "scaled_float",
-		"date", "boolean", "ip", "geo_point", "geo_shape":
-		return true
-	case "text":
-		// text is aggregatable only if fielddata=true
-		if fd, ok := propMap["fielddata"]; ok {
-			return fd == true
-		}
-		return false
-	default:
-		return false
-	}
-}
-
-// getStrVal safely extracts a string value from a map[string]interface{}.
-func getStrVal(m map[string]interface{}, key string) string {
-	if v, ok := m[key]; ok {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
 }
 
 // entDatasourceToModel converts an ent DataSource entity to a model.DataSource.

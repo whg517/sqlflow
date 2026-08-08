@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/connpool"
 	_ "github.com/whg517/sqlflow/internal/driver/all"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
@@ -27,8 +26,7 @@ func setupDatasourceTest(t *testing.T) (*echo.Echo, *Service, *Handler) {
 	database := testutil.NewDB(t)
 
 	encKey := "0123456789abcdef0123456789abcdef" // 32 bytes for AES-256
-	connMgr := connpool.NewManager()
-	dsSvc := NewService(database, encKey, connMgr, nil, auditlog.Discard)
+	dsSvc := NewService(database, encKey, nil, auditlog.Discard)
 	handler := NewHandler(dsSvc)
 
 	e := echo.New()

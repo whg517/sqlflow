@@ -6,7 +6,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/testutil"
@@ -50,7 +49,7 @@ func newAuditedDatasourceService(t *testing.T) (*Service, *recordingAudit) {
 	t.Helper()
 	testDB := setupDatasourceTestDB(t)
 	audit := &recordingAudit{}
-	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connpool.NewManager(), nil, audit)
+	svc := NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, nil, audit)
 	return svc, audit
 }
 

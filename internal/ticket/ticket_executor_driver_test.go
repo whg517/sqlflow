@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/driver"
 	_ "github.com/whg517/sqlflow/internal/driver/mysql"
@@ -58,12 +57,10 @@ func (m *testExecDriver) Parse(q string) (*driver.ParseResult, error) { return n
 func TestExecuteSQL_DriverPath_MySQL(t *testing.T) {
 	d := setupTxTestDB(t)
 	encKey := "test-encryption-key-32byte-len!!"
-	connMgr := connpool.NewManager()
-	t.Cleanup(func() { connMgr.Close() })
 	poolMgr := driver.NewPoolManager()
 	t.Cleanup(func() { poolMgr.Close() })
 
-	dsSvc := datasource.NewService(d, encKey, connMgr, poolMgr, auditlog.Discard)
+	dsSvc := datasource.NewService(d, encKey, poolMgr, auditlog.Discard)
 	svc := &Service{
 		database:      d,
 		client:        d.Client(),
@@ -122,12 +119,10 @@ func TestExecuteSQL_DriverPath_MySQL(t *testing.T) {
 func TestExecuteSQL_DriverPath_PostgreSQLRollback(t *testing.T) {
 	d := setupTxTestDB(t)
 	encKey := "test-encryption-key-32byte-len!!"
-	connMgr := connpool.NewManager()
-	t.Cleanup(func() { connMgr.Close() })
 	poolMgr := driver.NewPoolManager()
 	t.Cleanup(func() { poolMgr.Close() })
 
-	dsSvc := datasource.NewService(d, encKey, connMgr, poolMgr, auditlog.Discard)
+	dsSvc := datasource.NewService(d, encKey, poolMgr, auditlog.Discard)
 	svc := &Service{
 		database:      d,
 		client:        d.Client(),

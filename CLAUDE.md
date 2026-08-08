@@ -188,14 +188,16 @@ docs/                需求、架构、ADR、评审、路线图
 - **`internal/db/ent/` 是生成代码，不要手改。** 改 `internal/db/ent/schema/`
   后跑 `go generate ./internal/db/ent/` 重新生成。SQL migration 是 DDL 的唯一事实来源，ent 自动迁移未启用——
   改表结构要同时评估 migration、ent schema 和测试夹具。
-- **`internal/connpool` 只剩一处用途**：ES 索引与字段浏览需要原生客户端。
-  不要扩大它；其余路径一律走 `internal/driver.PoolManager`。曾经它有三分之二不可达
-  ——MySQL/MongoDB 连接池、ping 辅助函数、走空 map 的 `HealthCheck`、一个零实现者的
-  `Pool` 接口——全部靠自己的测试躲过 `make deadcode`，已删除。留下的那处缺口是真实的：
-  `GetESIndices`/`GetESIndexFields` 需要分页 `_cat/indices` 与原始 mapping，而
-  `driver.MetadataBrowser` 只回答 `TableInfo`/`ColumnInfo`，不含健康度、文档数、
-  存储大小与子字段。**代价是同一个集群有两个独立配置的客户端**；要真正消除它，
-  应该扩展驱动契约，而不是把这个包养大。
+- **`internal/connpool` 已删除。** 它最后的用途是 ES 索引与字段浏览，理由写着
+  `driver.MetadataBrowser` 答不了健康度、文档数、存储大小与子字段——但**它给自己写的
+  理由有一半是假的**：注释和本文都说需要「分页 `_cat/indices`」，而 `GetESIndices`
+  根本不传分页参数，它自己的文档注释也写着不分页；分页在 handler 里、在权限过滤之后，
+  那才是正确的位置。真实的缺口只有字段丰富度，而工作台从来只用索引名。
+  于是前端改走通用元数据端点，`GetESIndices`/`GetESIndexFields`、
+  `/api/datasources/:id/es/indices` 这条**唯一按类型命名的路由**、以及同一集群的
+  第二个独立配置客户端一并删除。代价消失了：一次密码轮换只有一处缓存要失效。
+  `internal/arch` 的 `TestNoTypeNamedRoutes` 把「再出现类型命名的路由」变成构建失败——
+  客户端不该为了向数据源提问而先知道它是什么类型。
 - **AI 评审属于 `internal/query` 而不是工单域。** 它是建议性的（[ADR-0004](docs/adr/0004-ai-is-advisory.md)），
   唯一入口是查询工作台的 `POST /api/query/review`，工单生命周期从未调用过它。
   它曾是 `internal/ticket` 里 891 行与该域无关的代码，还带着一套写着

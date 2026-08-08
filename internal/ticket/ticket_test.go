@@ -11,7 +11,6 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/whg517/sqlflow/internal/audit"
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/driver"
 	mysqldriver "github.com/whg517/sqlflow/internal/driver/mysql"
@@ -651,11 +650,9 @@ func TestFullWorkflow(t *testing.T) {
 	testDB := setupTicketTestDB(t)
 	encKey := "test-encryption-key-32byte-len!!"
 
-	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), encKey, connMgr, poolMgr, auditlog.Discard)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), encKey, poolMgr, auditlog.Discard)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
 	svc := New(Deps{DB: testutil.WrapSQL(t, testDB), Audit: auditSvc})
 	svc.dsSvc = dsSvc

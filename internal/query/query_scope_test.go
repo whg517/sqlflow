@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/whg517/sqlflow/internal/audit"
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/driver"
 	mysqldriver "github.com/whg517/sqlflow/internal/driver/mysql"
@@ -38,9 +37,8 @@ func newScopeFixture(t *testing.T) *scopeFixture {
 	t.Helper()
 
 	metaDB := setupQueryTestDB(t)
-	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(testutil.WrapSQL(t, metaDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, metaDB), testutil.EncryptionKey, poolMgr, auditlog.Discard)
 
 	ctx, cancel := queryCtx(t)
 	defer cancel()

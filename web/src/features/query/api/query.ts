@@ -73,23 +73,7 @@ export interface ApiResponse {
   message: string;
 }
 
-export interface ESIndexInfo {
-  name: string;
-  health: string;
-  status: string;
-  doc_count: number;
-  store_size: string;
-  created_time: string;
-}
 
-interface ESIndexListResponse {
-  code: number;
-  message: string;
-  data: {
-    items: ESIndexInfo[];
-    total: number;
-  };
-}
 
 // --- AI Review Types ---
 
@@ -139,14 +123,6 @@ export async function executeQuery(
   return res.data;
 }
 
-export async function fetchESIndices(
-  datasourceId: number,
-): Promise<ESIndexInfo[]> {
-  const res = await api.get<ESIndexListResponse>(
-    `/datasources/${datasourceId}/es/indices?page=1&page_size=100`,
-  );
-  return res.data?.items ?? [];
-}
 
 /**
  * streamAIReview opens an SSE connection to the AI review endpoint.

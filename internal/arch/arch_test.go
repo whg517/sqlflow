@@ -924,3 +924,59 @@ func TestTargetDatabaseReadsGoThroughOneSeam(t *testing.T) {
 			strings.Join(offenders, "\n  "))
 	}
 }
+
+// TestNoTypeNamedRoutes keeps the datasource-type name out of the URL space.
+//
+// CLAUDE.md says the platform must not branch on a datasource's type name, and
+// internal/arch enforces that inside internal/platform — but a route path is a
+// branch too, and a more durable one: /api/datasources/:id/es/indices meant
+// every client had to know which datasources were Elasticsearch before it could
+// ask them anything. It existed because a second, independently configured
+// client answered that question, and both are now gone.
+//
+// A sixth driver should add zero routes. This makes a seventh type-named one a
+// build failure rather than something noticed at review.
+func TestNoTypeNamedRoutes(t *testing.T) {
+	// The names the registry knows. Hard-coded rather than read from the driver
+	// registry, because internal/arch must not import a domain package — and a
+	// new driver whose name is missing here is caught by the driver registry's
+	// own completeness tests.
+	typeNames := []string{"mysql", "postgres", "postgresql", "sqlite", "mongodb", "mongo", "elasticsearch", "es"}
+
+	path := filepath.Join(repoRoot(t), "internal", "api", "router.go")
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read router.go: %v", err)
+	}
+
+	var offenders []string
+	for i, line := range strings.Split(string(src), "\n") {
+		// Only the route literal, which is always the first argument.
+		start := strings.Index(line, `"/api/`)
+		if start < 0 {
+			continue
+		}
+		rest := line[start+1:]
+		end := strings.Index(rest, `"`)
+		if end < 0 {
+			continue
+		}
+		route := rest[:end]
+
+		for _, segment := range strings.Split(route, "/") {
+			for _, name := range typeNames {
+				if strings.EqualFold(segment, name) {
+					offenders = append(offenders, fmt.Sprintf("router.go:%d %s", i+1, route))
+				}
+			}
+		}
+	}
+
+	if len(offenders) > 0 {
+		t.Errorf("these routes name a datasource type:\n  %s\n\n"+
+			"A client should not have to know a datasource's type to ask it a question.\n"+
+			"Answer it through the generic endpoint and let the driver's optional\n"+
+			"interfaces decide what it can say.",
+			strings.Join(offenders, "\n  "))
+	}
+}

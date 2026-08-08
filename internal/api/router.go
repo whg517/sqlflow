@@ -104,8 +104,6 @@ func NewRouter(c *app.Container) *echo.Echo {
 	authGroup.GET("/api/datasources/:id/capabilities", dsHandler.GetDatasourceCapabilities, middleware.RequireScope("read:datasource"))
 	authGroup.GET("/api/datasources/:id/tables", dsHandler.GetTables, middleware.RequireScope("read:datasource"))
 	authGroup.GET("/api/datasources/:id/tables/:name/columns", dsHandler.GetTableColumns, middleware.RequireScope("read:datasource"))
-	authGroup.GET("/api/datasources/:id/es/indices", dsHandler.GetESIndices, middleware.RequireScope("read:datasource"))
-	authGroup.GET("/api/datasources/:id/es/indices/:index/fields", dsHandler.GetESIndexFields, middleware.RequireScope("read:datasource"))
 
 	// Query execution & history (authenticated users)
 	authGroup.POST("/api/query/execute", queryHandler.ExecuteQuery, middleware.RequireScope("execute:query"))

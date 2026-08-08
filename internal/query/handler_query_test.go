@@ -11,7 +11,6 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/audit"
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/driver"
@@ -32,9 +31,8 @@ func setupQueryTest(t *testing.T) (*echo.Echo, *Service, *HistoryService, *datas
 	database := testutil.NewDB(t)
 
 	encKey := "0123456789abcdef0123456789abcdef"
-	connMgr := connpool.NewManager()
 
-	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
+	dsSvc := datasource.NewService(database, encKey, nil, auditlog.Discard)
 	historySvc := NewHistoryService(database)
 	permSvc, _ := security.NewService(database)
 	// PermissionService creation may fail if policy.csv is not found;
@@ -522,8 +520,7 @@ func TestQueryHandler_DeleteHistory_Success(t *testing.T) {
 		Username: "root", Database: "testdb",
 	}
 	encKey := "0123456789abcdef0123456789abcdef"
-	connMgr := connpool.NewManager()
-	dsSvc2 := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
+	dsSvc2 := datasource.NewService(database, encKey, nil, auditlog.Discard)
 	ctx := testutil.ContextWithTimeout(t)
 	if err := dsSvc2.CreateDataSource(ctx, ds); err != nil {
 		t.Fatalf("create datasource: %v", err)
@@ -603,8 +600,7 @@ func TestQueryHandler_DeleteHistory_WrongUser(t *testing.T) {
 	}
 
 	encKey := "0123456789abcdef0123456789abcdef"
-	connMgr := connpool.NewManager()
-	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
+	dsSvc := datasource.NewService(database, encKey, nil, auditlog.Discard)
 
 	userOwner := seedTestUser(t, database, "owner", "developer")
 	userOther := seedTestUser(t, database, "other", "developer")
@@ -652,8 +648,7 @@ func TestQueryHandler_ClearHistory_Success(t *testing.T) {
 	}
 
 	encKey := "0123456789abcdef0123456789abcdef"
-	connMgr := connpool.NewManager()
-	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
+	dsSvc := datasource.NewService(database, encKey, nil, auditlog.Discard)
 	historySvc := NewHistoryService(database)
 	querySvc := NewService(database, dsSvc, historySvc, nil, auditlog.Discard, encKey, driver.NewPoolManager(), Limits{})
 	h := NewHandler(querySvc, historySvc)
@@ -1050,8 +1045,7 @@ func TestQueryHandler_ClearHistory_Error(t *testing.T) {
 	database := testutil.NewDB(t)
 
 	encKey := "0123456789abcdef0123456789abcdef"
-	connMgr := connpool.NewManager()
-	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
+	dsSvc := datasource.NewService(database, encKey, nil, auditlog.Discard)
 	historySvc := NewHistoryService(database)
 	querySvc := NewService(database, dsSvc, historySvc, nil, auditlog.Discard, encKey, driver.NewPoolManager(), Limits{})
 	h := NewHandler(querySvc, historySvc)

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/whg517/sqlflow/internal/audit"
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/driver"
@@ -41,9 +40,8 @@ func newReleaseFixture(t *testing.T) *releaseFixture {
 	seedCasbinRules(t, testDB)
 	wrap := testutil.WrapSQL(t, testDB)
 
-	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(wrap, testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
+	dsSvc := datasource.NewService(wrap, testutil.EncryptionKey, poolMgr, auditlog.Discard)
 
 	ds := &model.DataSource{
 		Name: "release-ds", Type: "mysql", Host: "10.0.0.1", Port: 3306,

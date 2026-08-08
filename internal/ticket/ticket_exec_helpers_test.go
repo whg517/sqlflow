@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/whg517/sqlflow/internal/audit"
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/driver"
@@ -64,13 +63,12 @@ func setupTicketExecTest(t *testing.T) (platform *db.DB, ticketSvc *Service, tar
 		t.Fatalf("seed demo table: %v", err)
 	}
 
-	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
 	// Stand in for the governed target: execution runs through the driver, so
 	// the driver is what gets injected.
 	poolMgr.InjectForTest(dsID, mysqldriver.NewWithDB(target.DB))
 
-	dsSvc := datasource.NewService(platform, ticketExecTestKey, connMgr, poolMgr, auditlog.Discard)
+	dsSvc := datasource.NewService(platform, ticketExecTestKey, poolMgr, auditlog.Discard)
 	ticketSvc = New(Deps{
 		DB:            platform,
 		Audit:         auditSvc,

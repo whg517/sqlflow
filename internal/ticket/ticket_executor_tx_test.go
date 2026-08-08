@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/driver"
@@ -27,11 +26,9 @@ func setupTxTestDB(t *testing.T) *db.DB {
 func TestExecuteSQL_PostgreSQLRoute(t *testing.T) {
 	d := setupTxTestDB(t)
 	encKey := "test-encryption-key-32byte-len!!"
-	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := datasource.NewService(d, encKey, connMgr, poolMgr, auditlog.Discard)
+	dsSvc := datasource.NewService(d, encKey, poolMgr, auditlog.Discard)
 	svc := &Service{
 		database:      d,
 		client:        d.Client(),
@@ -94,11 +91,9 @@ func TestExecuteSQL_PostgreSQLRoute(t *testing.T) {
 func TestExecuteSQL_PostgreSQLRollback(t *testing.T) {
 	d := setupTxTestDB(t)
 	encKey := "test-encryption-key-32byte-len!!"
-	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := datasource.NewService(d, encKey, connMgr, poolMgr, auditlog.Discard)
+	dsSvc := datasource.NewService(d, encKey, poolMgr, auditlog.Discard)
 	svc := &Service{
 		database:      d,
 		client:        d.Client(),
@@ -160,11 +155,9 @@ func TestExecuteSQL_PostgreSQLRollback(t *testing.T) {
 func TestExecuteSQL_MySQLNoTransaction(t *testing.T) {
 	d := setupTxTestDB(t)
 	encKey := "test-encryption-key-32byte-len!!"
-	connMgr := connpool.NewManager()
 	poolMgr := driver.NewPoolManager()
-	t.Cleanup(func() { connMgr.Close() })
 
-	dsSvc := datasource.NewService(d, encKey, connMgr, poolMgr, auditlog.Discard)
+	dsSvc := datasource.NewService(d, encKey, poolMgr, auditlog.Discard)
 	svc := &Service{
 		database:      d,
 		client:        d.Client(),

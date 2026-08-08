@@ -21,7 +21,6 @@ import { useDatasourceCapabilities } from "@/features/query/hooks/useDatasourceC
 import { queryModeFor } from "./queryModes";
 import {
   executeQuery,
-  fetchESIndices,
   streamAIReview,
   type AIReviewResult,
 } from "@/features/query/api/query";
@@ -91,10 +90,6 @@ export default function QueryPage() {
     datasourceId: number;
     data: SchemaData | null;
   } | null>(null);
-  const [esIndexMetadata, setESIndexMetadata] = useState<{
-    datasourceId: number;
-    patterns: string[];
-  } | null>(null);
   const [explainSheetOpen, setExplainSheetOpen] = useState(false);
   const [explainResult, setExplainResult] = useState<ExplainResult | null>(null);
   const [explaining, setExplaining] = useState(false);
@@ -160,7 +155,13 @@ export default function QueryPage() {
     };
   }, []);
 
-  // Load the metadata endpoint appropriate for the selected datasource type.
+  // One metadata path for every datasource.
+  //
+  // There used to be two: Elasticsearch went to a type-named endpoint that a
+  // separate client reached through a second, independently configured
+  // connection to the same cluster. The generic endpoint answers the same
+  // question — the driver's MetadataBrowser already enumerates indices — so the
+  // branch and the endpoint behind it are both gone.
   useEffect(() => {
     let cancelled = false;
 
@@ -168,32 +169,6 @@ export default function QueryPage() {
       return;
     }
     const datasourceId = activeTab.datasourceId;
-
-    // The driver says whether this data source speaks a DSL; the page does not
-    // recognise it by name. isES comes from the same capabilities response the
-    // editor and the renderer already use.
-    if (isES) {
-      void fetchESIndices(datasourceId)
-        .then((indices) => {
-          if (!cancelled) {
-            setESIndexMetadata({
-              datasourceId,
-              patterns: indices.map((index) => index.name),
-            });
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setESIndexMetadata({
-              datasourceId,
-              patterns: [],
-            });
-          }
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
 
     void fetchTables(datasourceId).then((data) => {
       if (!cancelled) {
@@ -206,21 +181,14 @@ export default function QueryPage() {
     return () => {
       cancelled = true;
     };
-  }, [
-    activeTab?.datasourceId,
-    isES,
-    fetchTables,
-  ]);
+  }, [activeTab?.datasourceId, fetchTables]);
 
   // Derive: when datasource is cleared, schema is implicitly null
   const effectiveSchemaData =
     activeTab?.datasourceId === schemaMetadata?.datasourceId
       ? schemaMetadata.data
       : null;
-  const esIndexPatterns =
-    activeTab?.datasourceId === esIndexMetadata?.datasourceId
-      ? esIndexMetadata.patterns
-      : [];
+  const esIndexPatterns = effectiveSchemaData?.tables ?? [];
 
   // Execute query directly (bypasses AI review — used for confirmed/low-risk)
   const doExecute = useCallback(

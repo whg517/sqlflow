@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/model"
@@ -32,8 +31,7 @@ func setupAIReviewTest(t *testing.T) (*echo.Echo, *AIReviewService, *datasource.
 	database := testutil.NewDB(t)
 
 	encKey := "0123456789abcdef0123456789abcdef"
-	connMgr := connpool.NewManager()
-	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
+	dsSvc := datasource.NewService(database, encKey, nil, auditlog.Discard)
 	aiReviewSvc := NewAIReviewService(database, "openai", "test-model", "", "https://api.example.com/v1", 5*time.Second)
 	handler := NewAIReviewHandler(aiReviewSvc, dsSvc)
 
@@ -48,8 +46,7 @@ func setupAIReviewTestWithMockLLM(t *testing.T, handler http.HandlerFunc) (*echo
 	database := testutil.NewDB(t)
 
 	encKey := "0123456789abcdef0123456789abcdef"
-	connMgr := connpool.NewManager()
-	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
+	dsSvc := datasource.NewService(database, encKey, nil, auditlog.Discard)
 
 	// Create AI service with API key and mock server
 	aiReviewSvc := NewAIReviewService(database, "openai", "test-model", "test-api-key", "https://api.example.com/v1", 5*time.Second)
@@ -600,8 +597,7 @@ func TestAIReviewHandler_ReviewStream_LLMNetworkError(t *testing.T) {
 	}
 
 	encKey := "0123456789abcdef0123456789abcdef"
-	connMgr := connpool.NewManager()
-	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
+	dsSvc := datasource.NewService(database, encKey, nil, auditlog.Discard)
 	aiSvc := NewAIReviewService(database, "openai", "test-model", "test-key", server.URL, 2*time.Second)
 	h := NewAIReviewHandler(aiSvc, dsSvc)
 

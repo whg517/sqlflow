@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/whg517/sqlflow/internal/audit"
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/driver"
 	pgdriver "github.com/whg517/sqlflow/internal/driver/postgresql"
@@ -36,7 +35,7 @@ func newExplainFixture(t *testing.T) *explainFixture {
 	wrap := testutil.WrapSQL(t, testDB)
 
 	poolMgr := driver.NewPoolManager()
-	dsSvc := datasource.NewService(wrap, testutil.EncryptionKey, connpool.NewManager(), poolMgr, auditlog.Discard)
+	dsSvc := datasource.NewService(wrap, testutil.EncryptionKey, poolMgr, auditlog.Discard)
 
 	ds := &model.DataSource{
 		Name: "explain-ds", Type: "postgresql", Host: "10.0.0.1", Port: 5432,
