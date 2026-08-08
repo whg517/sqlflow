@@ -724,6 +724,22 @@ func TestTicketStatusHasOneWriter(t *testing.T) {
 			if chain["Ticket"] && (chain["Update"] || chain["UpdateOneID"]) {
 				offenders = append(offenders, fmt.Sprintf("%s:%d",
 					name, fset.Position(call.Pos()).Line))
+				return true
+			}
+
+			// The seam's own Extra hook hands callers a *ent.TicketUpdate, and
+			// inside that closure the receiver is a bare parameter — so the
+			// chain above finds neither Ticket nor Update and the guard used to
+			// pass. The one construct that can bypass the state machine was the
+			// one the state machine handed out.
+			//
+			// Any SetStatus on a lone identifier is therefore an offender too.
+			// Ticket.Create() roots at a chain, TicketRevision and
+			// ExecutionResult are other tables, so this catches the closure case
+			// without reaching them.
+			if _, ok := sel.X.(*ast.Ident); ok {
+				offenders = append(offenders, fmt.Sprintf("%s:%d (inside a builder closure)",
+					name, fset.Position(call.Pos()).Line))
 			}
 			return true
 		})
