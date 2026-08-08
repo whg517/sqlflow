@@ -822,3 +822,89 @@ func TestTransitionResultIsNeverDiscarded(t *testing.T) {
 			strings.Join(offenders, "\n  "))
 	}
 }
+
+// TestTargetDatabaseReadsGoThroughOneSeam keeps a fourth entrance from
+// re-deriving the checklist.
+//
+// Three functions in internal/query returned rows from a target database, each
+// with its own hand-written eleven-step prologue, and the third omitted five of
+// the steps — including the one that let EXPLAIN ANALYZE DELETE reach the
+// database and delete the rows. authorizeRead is now the only place that
+// decision is made, and executeDriverQuery is the only way to reach a driver's
+// rows, so this checks that nothing calls the latter without the former.
+//
+// A deep module only helps if callers cannot step around it. This is the
+// same guard TestTicketStatusHasOneWriter provides for ticket status.
+func TestTargetDatabaseReadsGoThroughOneSeam(t *testing.T) {
+	const owner = "targetread.go"
+
+	dir := filepath.Join(repoRoot(t), "internal", "query")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read internal/query: %v", err)
+	}
+
+	fset := token.NewFileSet()
+	var offenders []string
+
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") ||
+			strings.HasSuffix(name, "_test.go") || name == owner {
+			continue
+		}
+
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+
+		// Collect the functions that reach a driver's rows, and the ones that
+		// asked for permission first.
+		reaches := map[string]int{}
+		authorized := map[string]bool{}
+
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				switch c := call.Fun.(type) {
+				case *ast.Ident:
+					if c.Name == "executeDriverQuery" {
+						reaches[fn.Name.Name] = fset.Position(call.Pos()).Line
+					}
+				case *ast.SelectorExpr:
+					switch c.Sel.Name {
+					case "authorizeRead":
+						authorized[fn.Name.Name] = true
+					case "runRead":
+						// runRead is authorizeRead's other half and lives in the
+						// owner file; reaching rows through it is the sanctioned
+						// route.
+						authorized[fn.Name.Name] = true
+					}
+				}
+				return true
+			})
+		}
+
+		for fnName, line := range reaches {
+			if !authorized[fnName] {
+				offenders = append(offenders, fmt.Sprintf("%s:%d %s", name, line, fnName))
+			}
+		}
+	}
+
+	if len(offenders) > 0 {
+		t.Errorf("these reach a target database without going through authorizeRead:\n  %s\n\n"+
+			"Every entrance that returns target-database rows crosses the same eleven gates.\n"+
+			"Name a readPurpose and call authorizeRead — do not re-derive the prologue.",
+			strings.Join(offenders, "\n  "))
+	}
+}

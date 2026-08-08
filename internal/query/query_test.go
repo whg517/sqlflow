@@ -283,14 +283,14 @@ func TestExecuteQuery_EmptySQL(t *testing.T) {
 	defer cancel()
 
 	t.Run("empty_string", func(t *testing.T) {
-		_, err := qs.ExecuteQuery(ctx, 1, "user1", "developer", 1, "testdb", "", "mysql")
+		_, err := qs.ExecuteQuery(ctx, 1, "user1", "developer", 1, "testdb", "")
 		if !errors.Is(err, ErrEmptySQL) {
 			t.Errorf("ExecuteQuery(empty) error = %v, want ErrEmptySQL", err)
 		}
 	})
 
 	t.Run("whitespace_only", func(t *testing.T) {
-		_, err := qs.ExecuteQuery(ctx, 1, "user1", "developer", 1, "testdb", "   \t\n  ", "mysql")
+		_, err := qs.ExecuteQuery(ctx, 1, "user1", "developer", 1, "testdb", "   \t\n  ")
 		if !errors.Is(err, ErrEmptySQL) {
 			t.Errorf("ExecuteQuery(whitespace) error = %v, want ErrEmptySQL", err)
 		}
@@ -302,7 +302,7 @@ func TestExecuteQuery_DataSourceNotFound(t *testing.T) {
 	ctx, cancel := queryCtx(t)
 	defer cancel()
 
-	_, err := qs.ExecuteQuery(ctx, 1, "user1", "developer", 99999, "testdb", "SELECT 1", "mysql")
+	_, err := qs.ExecuteQuery(ctx, 1, "user1", "developer", 99999, "testdb", "SELECT 1")
 	if err == nil {
 		t.Error("expected error for nonexistent datasource, got nil")
 	}
@@ -316,7 +316,7 @@ func TestExecuteQuery_DisabledDataSource(t *testing.T) {
 	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connpool.NewManager(), nil, auditlog.Discard)
 	dsID := seedQueryDatasourceWithStatus(t, dsSvc, ctx, "disabled")
 
-	_, err := qs.ExecuteQuery(ctx, 1, "user1", "developer", dsID, "testdb", "SELECT 1", "mysql")
+	_, err := qs.ExecuteQuery(ctx, 1, "user1", "developer", dsID, "testdb", "SELECT 1")
 	if !errors.Is(err, datasource.ErrDatasourceDisabled) {
 		t.Errorf("ExecuteQuery(disabled ds) error = %v, want datasource.ErrDatasourceDisabled", err)
 	}
@@ -347,7 +347,7 @@ func TestExecuteQuery_NonSelectBlocked(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", tt.sql, "mysql")
+			_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", tt.sql)
 			if !errors.Is(err, ErrSQLOperationForbidden) {
 				t.Errorf("ExecuteQuery(%q) error = %v, want ErrSQLOperationForbidden", tt.name, err)
 			}
@@ -376,7 +376,7 @@ func TestExecuteQuery_BlockedSQL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", tt.sql, "mysql")
+			_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", tt.sql)
 			// Should be blocked by either ErrSQLBlocked, ErrSQLHighRisk, or ErrSQLOperationForbidden
 			if err == nil {
 				t.Errorf("ExecuteQuery(%q): expected blocked error, got nil", tt.name)
@@ -397,7 +397,7 @@ func TestExecuteQuery_SelectPassesParsing(t *testing.T) {
 	dsID := seedQueryDatasource(t, dsSvc, ctx)
 
 	// SELECT should pass parsing and risk checks but fail at connection stage
-	_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT * FROM users LIMIT 10", "mysql")
+	_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT * FROM users LIMIT 10")
 	if err == nil {
 		t.Error("expected connection error (no real MySQL), got nil")
 	}
@@ -416,7 +416,7 @@ func TestExecuteQuery_InvalidSQL(t *testing.T) {
 	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connpool.NewManager(), nil, auditlog.Discard)
 	dsID := seedQueryDatasource(t, dsSvc, ctx)
 
-	_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "NOT VALID SQL !!!", "mysql")
+	_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "NOT VALID SQL !!!")
 	if err == nil {
 		t.Error("expected error for invalid SQL, got nil")
 	}
@@ -430,7 +430,7 @@ func TestExecuteQuery_UnsupportedDBType(t *testing.T) {
 	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connpool.NewManager(), nil, auditlog.Discard)
 	dsID := seedQueryDatasource(t, dsSvc, ctx)
 
-	_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1", "postgres")
+	_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1")
 	if err == nil {
 		t.Error("expected error for unsupported db type, got nil")
 	}
@@ -458,7 +458,7 @@ func TestExecuteQuery_PermissionDenied(t *testing.T) {
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
 	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
-	_, err = qs.ExecuteQuery(ctx, 1, "user1", "restricted", dsID, "testdb", "SELECT * FROM users", "mysql")
+	_, err = qs.ExecuteQuery(ctx, 1, "user1", "restricted", dsID, "testdb", "SELECT * FROM users")
 	// Permission denied or connection error are both acceptable outcomes
 	if err == nil {
 		t.Error("expected error (permission denied or connection), got nil")
@@ -486,7 +486,7 @@ func TestExecuteQuery_AdminHasWildcardPermission(t *testing.T) {
 	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
 	// Should pass permission check but fail at connection stage (no real MySQL)
-	_, err = qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT * FROM users", "mysql")
+	_, err = qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT * FROM users")
 	if err == nil {
 		t.Error("expected connection error, got nil")
 	}
@@ -946,7 +946,7 @@ func TestExecuteQuery_AuditOnFailure(t *testing.T) {
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
 	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
-	_, err = qs.ExecuteQuery(ctx, userID, "audit-user", "admin", dsID, "testdb", "SELECT 1", "mysql")
+	_, err = qs.ExecuteQuery(ctx, userID, "audit-user", "admin", dsID, "testdb", "SELECT 1")
 	if err == nil {
 		t.Error("expected connection error, got nil")
 	}
@@ -1128,7 +1128,7 @@ func TestExecuteQuery_CancelledContext(t *testing.T) {
 	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connpool.NewManager(), nil, auditlog.Discard)
 	dsID := seedQueryDatasource(t, dsSvc, context.Background())
 
-	_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1", "mysql")
+	_, err := qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1")
 	if err == nil {
 		t.Error("expected error with cancelled context, got nil")
 	}

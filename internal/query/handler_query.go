@@ -94,7 +94,7 @@ func (h *Handler) ExecuteQuery(c echo.Context) error {
 	username := httpx.Username(c)
 	role := httpx.Role(c)
 
-	result, err := h.querySvc.ExecuteQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, "", req.Params...)
+	result, err := h.querySvc.ExecuteQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, req.Params...)
 	if err != nil {
 		switch {
 		case errors.Is(err, datasource.ErrDatasourceNotFound):
@@ -313,7 +313,7 @@ func (h *Handler) ExportQuery(c echo.Context) error {
 	username := httpx.Username(c)
 	role := httpx.Role(c)
 
-	result, err := h.querySvc.ExportQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, "", req.Params...)
+	result, err := h.querySvc.ExportQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, req.Params...)
 	if err != nil {
 		switch {
 		case errors.Is(err, datasource.ErrDatasourceNotFound):

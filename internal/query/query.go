@@ -115,145 +115,48 @@ func executeDriverQuery(
 }
 
 // ExecuteQuery executes a SQL query on the specified datasource.
-func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role string, datasourceID int64, database, sqlContent, dbType string, queryParams ...interface{}) (*QueryResult, error) {
-	if strings.TrimSpace(sqlContent) == "" {
-		return nil, ErrEmptySQL
+func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role string, datasourceID int64, database, sqlContent string, queryParams ...interface{}) (*QueryResult, error) {
+	req := readRequest{
+		UserID:       userID,
+		Role:         role,
+		DatasourceID: datasourceID,
+		Database:     database,
+		SQL:          sqlContent,
+		Purpose:      purposeInteractive,
 	}
-
-	// Get datasource
-	ds, err := s.dsSvc.GetDataSource(ctx, datasourceID)
+	grant, err := s.authorizeRead(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("获取数据源失败: %w", err)
-	}
-	if ds.Status == "disabled" {
-		return nil, datasource.ErrDatasourceDisabled
-	}
-	if datasource.IsInternal(ds) && role != "admin" {
-		return nil, ErrInternalDatasourceOnly
-	}
-
-	// Use datasource type if dbType not explicitly provided
-	if dbType == "" {
-		dbType = ds.Type
-	}
-
-	secrets, err := datasource.DecryptSecrets(ds, s.encryptionKey)
-	if err != nil {
-		return nil, fmt.Errorf("解密数据源凭据失败: %w", err)
-	}
-
-	// Ask the driver to interpret the query. Parsing needs no connection, and
-	// routing it through the driver keeps operation/risk/target semantics owned
-	// by the data source rather than by a switch in this function.
-	parseResult, err := driver.ParseFor(dbType, sqlContent)
-	if err != nil {
-		return nil, fmt.Errorf("SQL解析失败: %w", err)
-	}
-
-	// Check if blocked by static rules
-	if parseResult.IsBlocked {
-		return nil, fmt.Errorf("%w: %s", ErrSQLBlocked, parseResult.BlockReason)
-	}
-
-	// Only allow SELECT for direct execution
-	if parseResult.Operation != driver.OpSelect {
-		return nil, ErrSQLOperationForbidden
-	}
-
-	// Check high risk
-	if parseResult.RiskLevel == driver.RiskHigh {
-		return nil, ErrSQLHighRisk
-	}
-
-	// Check table-level permissions via Casbin
-	for _, table := range parseResult.Targets {
-		allowed, err := s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "select")
-		if err != nil {
-			return nil, fmt.Errorf("权限校验失败: %w", err)
-		}
-		if !allowed {
-			return nil, fmt.Errorf("没有表 %s 的查询权限", table)
-		}
-	}
-
-	// Settle which database this query runs in before anything consumes the
-	// answer. The scope is the datasource's — the pool keys on datasource ID and
-	// the DSN pins the database — so a request naming another one is refused
-	// rather than honored in name only. It used to be honored in name only in
-	// the worst possible place: the driver dropped it, while loadMaskRules below
-	// used it to decide which rules to load.
-	scope, err := datasource.ResolveQueryScope(ds.Database, database)
-	if err != nil {
-		s.auditSvc.Write(ctx, auditlog.Record{
-			UserID:       userID,
-			Action:       "query_failed",
-			DatasourceID: datasourceID,
-			Database:     ds.Database,
-			SQLContent:   sqlContent,
-			SQLSummary:   auditlog.Summarize(sqlContent),
-			ErrorMessage: err.Error(),
-		})
 		return nil, err
 	}
+	// The datasource decides its own type. This used to arrive as a parameter
+	// that both handlers always passed as "" — the server derives it, so a
+	// client had nothing to say about it and the argument only looked like it
+	// did.
+	dbType := grant.DBType
+	scope := grant.Scope
 
 	queryStart := time.Now()
 
-	if s.poolMgr == nil {
-		return nil, ErrQueryUnavailable
-	}
-	adapter := datasource.NewAdapter(ds)
-	cfg, err := driver.BuildConfigFromDataSource(adapter, secrets)
-	if err != nil {
-		return nil, err
-	}
-	// Everything from here on funnels into the shared error handling below, so
-	// that a failure at any stage still produces a query_failed audit record.
-	// A connection failure used to bypass it, which lost the evidence for
-	// exactly the queries an operator most wants to see.
+	// Connect and execute under one budget; runRead owns that, and the failure
+	// audit below covers every way this can end.
 	var result *QueryResult
-
-	// One deadline over connecting and executing both.
-	//
-	// It used to cover only the connection, on the stated theory that "the
-	// driver bounds the execution itself". Three of the five do not: PostgreSQL
-	// sets no query deadline, and MySQL's Timeout is the dial timeout, which
-	// says nothing about a query already in flight. So a slow query ran until
-	// the client hung up, holding a pooled connection — and the DeadlineExceeded
-	// branch below could never fire, because the context it tested was the
-	// caller's, which has no deadline of its own.
-	//
-	// Connect and execute share one budget rather than getting one each because
-	// the sum is what the user waits and what the pool is occupied for.
-	drvCtx, drvCancel := context.WithTimeout(ctx, s.limits.Timeout)
-	defer drvCancel()
-	d, connErr := s.poolMgr.Get(drvCtx, cfg)
-	if connErr != nil {
-		// 连接失败：统一映射为 ErrSQLTimeout（数据源不可达/超时，对用户来说语义一致），
-		// 让 handler 返回 400（客户端可重试）而非 500。
-		err = ErrSQLTimeout
-	} else {
-		var drvResult *driver.QueryResult
-		drvResult, err = executeDriverQuery(drvCtx, d, sqlContent, queryParams, s.limits.MaxRows)
-		switch {
-		case err == nil:
-			result = &QueryResult{
-				Shape:         drvResult.Shape,
-				Columns:       drvResult.Columns,
-				Rows:          drvResult.Rows,
-				Total:         drvResult.Total,
-				ExecutionTime: drvResult.ExecutionTime,
-				AffectedRows:  drvResult.AffectedRows,
-				Aggregations:  drvResult.Aggregations,
-			}
-		case drvCtx.Err() == context.DeadlineExceeded:
-			err = ErrSQLTimeout
+	drvResult, err := s.runRead(ctx, grant, queryParams, s.limits.MaxRows)
+	if err == nil {
+		result = &QueryResult{
+			Shape:         drvResult.Shape,
+			Columns:       drvResult.Columns,
+			Rows:          drvResult.Rows,
+			Total:         drvResult.Total,
+			ExecutionTime: drvResult.ExecutionTime,
+			AffectedRows:  drvResult.AffectedRows,
+			Aggregations:  drvResult.Aggregations,
 		}
 	}
 
 	// Record Prometheus metrics for external datasource queries
 	queryDuration := time.Since(queryStart).Seconds()
 	pkgmetrics.DBQueryDuration.WithLabelValues(dbType).Observe(queryDuration)
-	pkgmetrics.DBQueriesTotal.WithLabelValues(ds.Name).Inc()
+	pkgmetrics.DBQueriesTotal.WithLabelValues(grant.DatasourceName).Inc()
 
 	if err != nil {
 		// Write audit log for failed query
@@ -273,20 +176,19 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 		return nil, err
 	}
 
-	if err := s.refuseUnmaskableShape(ctx, result.Shape, userID, role, datasourceID, scope, parseResult.Targets); err != nil {
+	if err := s.refuseUnmaskableShape(ctx, result.Shape, userID, role, datasourceID, scope, grant.Targets); err != nil {
 		s.auditRelease(ctx, userID, datasourceID, scope, sqlContent, err)
 		return nil, err
 	}
 
 	// Apply desensitization
-	desensitized, maskedFields, err := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, scope, parseResult.Targets)
+	desensitized, maskedFields, err := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, scope, grant.Targets)
 	if err != nil {
 		s.auditRelease(ctx, userID, datasourceID, scope, sqlContent, err)
 		return nil, err
 	}
 	result.Desensitized = desensitized
 	result.DesensitizedFields = maskedFields
-	result.Warnings = parseResult.Warnings
 
 	// Write query history (async, best-effort)
 	summary := auditlog.Summarize(sqlContent)
@@ -315,7 +217,7 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 	// Write audit log for successful query
 	s.auditSvc.Write(ctx, auditlog.Record{
 		UserID:             userID,
-		Action:             "query",
+		Action:             readPolicies[purposeInteractive].okAction,
 		DatasourceID:       datasourceID,
 		Database:           scope,
 		SQLContent:         sqlContent,
@@ -673,77 +575,27 @@ var (
 	ErrExplainNonSelect = errors.New("EXPLAIN 仅支持 SELECT 语句（EXPLAIN ANALYZE 会真正执行语句）")
 )
 
-// ExplainQuery executes EXPLAIN for a SQL query and returns structured results.
+// ExplainQuery returns the target database's plan for a read.
+//
+// A thin thing over authorizeRead: it names its purpose, rewrites the statement
+// the one way a plan needs (a leading EXPLAIN the user typed is removed, because
+// the driver adds one), and formats what comes back. It does not decide what may
+// run — that is the point. This entrance used to make those decisions itself and
+// omitted five of them, and one omission let EXPLAIN ANALYZE DELETE reach the
+// database and delete the rows.
 func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, datasourceID int64, database, sqlContent string, queryParams ...interface{}) (*ExplainResult, error) {
-	if strings.TrimSpace(sqlContent) == "" {
-		return nil, ErrEmptySQL
+	req := readRequest{
+		UserID:       userID,
+		Role:         role,
+		DatasourceID: datasourceID,
+		Database:     database,
+		// Parsed and executed as the same statement: whatever the gates judged
+		// is what the driver runs.
+		SQL:     trimLeadingExplain(sqlContent),
+		Purpose: purposePlan,
 	}
 
-	// The statement the driver will plan. A user who already typed EXPLAIN gets
-	// that one word removed, because the driver adds it back.
-	explainSQL := trimLeadingExplain(sqlContent)
-
-	// Get datasource
-	ds, err := s.dsSvc.GetDataSource(ctx, datasourceID)
-	if err != nil {
-		return nil, fmt.Errorf("获取数据源失败: %w", err)
-	}
-	if ds.Status == "disabled" {
-		return nil, datasource.ErrDatasourceDisabled
-	}
-	// The same gate ExecuteQuery and ExportQuery apply, which this entrance did
-	// not. The shipped seed policy grants `developer` select on every object, so
-	// the Casbin loop below denies nothing and this was the only thing standing
-	// between a non-admin and the platform's own metadata store.
-	if datasource.IsInternal(ds) && role != "admin" {
-		return nil, ErrInternalDatasourceOnly
-	}
-
-	secrets, err := datasource.DecryptSecrets(ds, s.encryptionKey)
-	if err != nil {
-		return nil, fmt.Errorf("解密数据源凭据失败: %w", err)
-	}
-
-	// Parse for the table-level permission check. The datasource type is
-	// checked above, so the driver here is the datasource's own.
-	parseResult, err := driver.ParseFor(ds.Type, explainSQL)
-	if err != nil {
-		return nil, fmt.Errorf("SQL解析失败: %w", err)
-	}
-
-	// The same three verdicts ExecuteQuery and ExportQuery apply, which this
-	// entrance did not.
-	//
-	// EXPLAIN ANALYZE is not a description of a statement, it is the statement:
-	// the engine runs the plan for real to report actual timings. So a prefix
-	// test could never be enough — matching the word EXPLAIN and stripping it
-	// let "EXPLAIN ANALYZE DELETE FROM t" through, and the driver prepended
-	// EXPLAIN back on the way out. This entrance may only accept statements it
-	// would have been willing to execute, and driver.ParseFor is what answers
-	// that for every other entrance.
-	if parseResult.IsBlocked {
-		return nil, ErrSQLBlocked
-	}
-	if parseResult.Operation != driver.OpSelect {
-		return nil, ErrExplainNonSelect
-	}
-	if parseResult.RiskLevel == driver.RiskHigh {
-		return nil, ErrSQLHighRisk
-	}
-
-	for _, table := range parseResult.Targets {
-		allowed, err := s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "select")
-		if err != nil {
-			return nil, fmt.Errorf("权限校验失败: %w", err)
-		}
-		if !allowed {
-			return nil, fmt.Errorf("没有表 %s 的查询权限", table)
-		}
-	}
-
-	// A plan is produced by the same connection that would run the query, so it
-	// answers for the same scope and is held to the same rule.
-	scope, err := datasource.ResolveQueryScope(ds.Database, database)
+	grant, err := s.authorizeRead(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -751,41 +603,34 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 	if s.poolMgr == nil {
 		return nil, ErrQueryUnavailable
 	}
-	adapter := datasource.NewAdapter(ds)
-	cfg, err := driver.BuildConfigFromDataSource(adapter, secrets)
-	if err != nil {
-		return nil, err
-	}
-	// One budget over connecting and planning, as the other two entrances have.
-	// This was the only entrance running on the caller's unbounded context, and
-	// a plan holds a pooled connection exactly as long as a query does.
-	drvCtx, drvCancel := context.WithTimeout(ctx, s.limits.Timeout)
-	defer drvCancel()
+	drvCtx, cancel := context.WithTimeout(ctx, s.limits.Timeout)
+	defer cancel()
 
-	d, err := s.poolMgr.Get(drvCtx, cfg)
+	d, err := s.poolMgr.Get(drvCtx, grant.Config)
 	if err != nil {
-		s.auditExplainFailure(ctx, userID, datasourceID, scope, sqlContent, ErrSQLTimeout)
+		s.auditReadFailure(ctx, "explain_failed", req, grant.Scope, ErrSQLTimeout)
 		return nil, ErrSQLTimeout
 	}
 
-	// Only drivers that declare the optional QueryExplainer can produce a
-	// plan; the dialect and the plan's shape belong to the driver.
+	// Only drivers that declare the optional QueryExplainer can produce a plan;
+	// the dialect and the plan's shape belong to the driver.
 	explainer, ok := d.(driver.QueryExplainer)
 	if !ok {
-		s.auditExplainFailure(ctx, userID, datasourceID, scope, sqlContent, ErrExplainNotSupported)
+		s.auditReadFailure(ctx, "explain_failed", req, grant.Scope, ErrExplainNotSupported)
 		return nil, ErrExplainNotSupported
 	}
-	drvResult, err := explainer.ExplainQuery(drvCtx, explainSQL, queryParams)
+
+	drvResult, err := explainer.ExplainQuery(drvCtx, grant.SQL, queryParams)
 	if err != nil {
 		if drvCtx.Err() == context.DeadlineExceeded {
 			err = ErrSQLTimeout
 		}
-		s.auditExplainFailure(ctx, userID, datasourceID, scope, sqlContent, err)
+		s.auditReadFailure(ctx, "explain_failed", req, grant.Scope, err)
 		return nil, fmt.Errorf("执行 EXPLAIN 失败: %w", err)
 	}
 
-	// MySQL-style step tables also populate the typed Plan for the existing
-	// tree view; other engines are carried through as generic rows.
+	// MySQL-style step tables also populate the typed Plan for the tree view;
+	// other engines are carried through as generic rows.
 	plan := make([]ExplainRow, 0, len(drvResult.Rows))
 	if hasMySQLExplainColumns(drvResult.Columns) {
 		for _, row := range drvResult.Rows {
@@ -802,12 +647,11 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 	// "无执行计划数据" for a plan it had successfully computed.
 	formatted := formatDriverPlan(drvResult.Columns, drvResult.Rows)
 
-	// Write audit log (best-effort)
 	s.auditSvc.Write(ctx, auditlog.Record{
 		UserID:       userID,
-		Action:       "explain",
+		Action:       readPolicies[purposePlan].okAction,
 		DatasourceID: datasourceID,
-		Database:     scope,
+		Database:     grant.Scope,
 		SQLContent:   sqlContent,
 		SQLSummary:   auditlog.Summarize(sqlContent),
 	})
@@ -822,12 +666,6 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 	}, nil
 }
 
-// renderTextTable lays a column set and its rows out as a bordered text table.
-//
-// The plan's shape belongs to the driver, so this takes strings and knows
-// nothing about which engine produced them. It replaced a version that built
-// its rows from MySQL's twelve-field step struct, which is why every other
-// engine rendered as a header with nothing beneath it.
 func renderTextTable(columns []string, strRows [][]string) string {
 	widths := make([]int, len(columns))
 	for i, col := range columns {
@@ -982,22 +820,4 @@ func toFloat64Val(v interface{}) float64 {
 	default:
 		return 0
 	}
-}
-
-// auditExplainFailure records a plan request that reached the datasource stage
-// and did not produce a plan.
-//
-// The entrance used to write only its success record, so a refused or failed
-// EXPLAIN left no trace at all — and the plans that fail are the ones an
-// operator most wants to see (invariant 3).
-func (s *Service) auditExplainFailure(ctx context.Context, userID, datasourceID int64, scope, sqlContent string, cause error) {
-	s.auditSvc.Write(ctx, auditlog.Record{
-		UserID:       userID,
-		Action:       "explain_failed",
-		DatasourceID: datasourceID,
-		Database:     scope,
-		SQLContent:   sqlContent,
-		SQLSummary:   auditlog.Summarize(sqlContent),
-		ErrorMessage: cause.Error(),
-	})
 }

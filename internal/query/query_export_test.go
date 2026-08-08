@@ -122,14 +122,14 @@ func TestExportQuery_EmptySQL(t *testing.T) {
 	defer cancel()
 
 	t.Run("empty_string", func(t *testing.T) {
-		_, err := qs.ExportQuery(ctx, 1, "user1", "admin", 1, "testdb", "", "mysql")
+		_, err := qs.ExportQuery(ctx, 1, "user1", "admin", 1, "testdb", "")
 		if !errors.Is(err, ErrEmptySQL) {
 			t.Errorf("ExportQuery(empty) error = %v, want ErrEmptySQL", err)
 		}
 	})
 
 	t.Run("whitespace_only", func(t *testing.T) {
-		_, err := qs.ExportQuery(ctx, 1, "user1", "admin", 1, "testdb", "   \t\n  ", "mysql")
+		_, err := qs.ExportQuery(ctx, 1, "user1", "admin", 1, "testdb", "   \t\n  ")
 		if !errors.Is(err, ErrEmptySQL) {
 			t.Errorf("ExportQuery(whitespace) error = %v, want ErrEmptySQL", err)
 		}
@@ -141,7 +141,7 @@ func TestExportQuery_DataSourceNotFound(t *testing.T) {
 	ctx, cancel := exportCtx(t)
 	defer cancel()
 
-	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", 99999, "testdb", "SELECT 1", "mysql")
+	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", 99999, "testdb", "SELECT 1")
 	if err == nil {
 		t.Error("expected error for nonexistent datasource, got nil")
 	}
@@ -164,7 +164,7 @@ func TestExportQuery_DisabledDataSource(t *testing.T) {
 		t.Fatalf("CreateDataSource() error: %v", err)
 	}
 
-	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", ds.ID, "testdb", "SELECT 1", "mysql")
+	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", ds.ID, "testdb", "SELECT 1")
 	if !errors.Is(err, datasource.ErrDatasourceDisabled) {
 		t.Errorf("ExportQuery(disabled ds) error = %v, want datasource.ErrDatasourceDisabled", err)
 	}
@@ -193,7 +193,7 @@ func TestExportQuery_PasswordDecryptError(t *testing.T) {
 		t.Fatalf("CreateDataSource() error: %v", err)
 	}
 
-	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", ds.ID, "testdb", "SELECT 1", "mysql")
+	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", ds.ID, "testdb", "SELECT 1")
 	if err == nil {
 		t.Error("expected decrypt error, got nil")
 	}
@@ -223,7 +223,7 @@ func TestExportQuery_NonSelectBlocked(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", tt.sql, "mysql")
+			_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", tt.sql)
 			if !errors.Is(err, ErrSQLOperationForbidden) {
 				t.Errorf("ExportQuery(%q) error = %v, want ErrSQLOperationForbidden", tt.name, err)
 			}
@@ -250,7 +250,7 @@ func TestExportQuery_BlockedSQL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", tt.sql, "mysql")
+			_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", tt.sql)
 			if err == nil {
 				t.Errorf("ExportQuery(%q): expected blocked error, got nil", tt.name)
 			}
@@ -272,7 +272,7 @@ func TestExportQuery_ConnectionError(t *testing.T) {
 	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
-	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT * FROM users LIMIT 10", "mysql")
+	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT * FROM users LIMIT 10")
 	if err == nil {
 		t.Error("expected connection error, got nil")
 	}
@@ -288,7 +288,7 @@ func TestExportQuery_UnsupportedDBType(t *testing.T) {
 	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, connMgr, poolMgr, auditlog.Discard)
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
-	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1", "postgres")
+	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1")
 	if err == nil {
 		t.Error("expected error for unsupported db type, got nil")
 	}
@@ -321,7 +321,7 @@ func TestExportQuery_Success(t *testing.T) {
 	// Also add select policy for admin on this datasource domain
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "select")
 
-	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1 AS id, 'test' AS name", "mysql")
+	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1 AS id, 'test' AS name")
 	if err != nil {
 		t.Fatalf("ExportQuery() error: %v", err)
 	}
@@ -371,7 +371,7 @@ func TestExportQuery_SuccessWithDesensitization(t *testing.T) {
 	}
 
 	result, err := qs.ExportQuery(ctx, 1, "user1", "developer", dsID, "testdb",
-		"SELECT 1 AS id, '13812345678' AS phone", "mysql")
+		"SELECT 1 AS id, '13812345678' AS phone")
 	if err != nil {
 		t.Fatalf("ExportQuery() error: %v", err)
 	}
@@ -404,7 +404,7 @@ func TestExportQuery_EmptyResult(t *testing.T) {
 
 	// Query the users table (empty in the injected SQLite) with an impossible condition
 	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb",
-		"SELECT * FROM users WHERE id = -1", "mysql")
+		"SELECT * FROM users WHERE id = -1")
 	if err != nil {
 		t.Fatalf("ExportQuery() error: %v", err)
 	}
@@ -450,7 +450,7 @@ func TestExportQuery_RowLimitExceeded(t *testing.T) {
 	}
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
 
-	_, err = qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT id FROM users", "mysql")
+	_, err = qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT id FROM users")
 	if !errors.Is(err, ErrExportRowLimit) {
 		t.Errorf("ExportQuery(row limit) error = %v, want ErrExportRowLimit", err)
 	}
@@ -482,7 +482,7 @@ func TestExportQuery_AuditOnSuccess(t *testing.T) {
 
 	userID := seedUser(t, testDB, "export-user", "admin")
 
-	_, err := qs.ExportQuery(ctx, userID, "export-user", "admin", dsID, "testdb", "SELECT 1 AS id", "mysql")
+	_, err := qs.ExportQuery(ctx, userID, "export-user", "admin", dsID, "testdb", "SELECT 1 AS id")
 	if err != nil {
 		t.Fatalf("ExportQuery() error: %v", err)
 	}
@@ -520,7 +520,7 @@ func TestExportQuery_AuditOnFailure(t *testing.T) {
 	userID := seedUser(t, testDB, "export-fail-user", "admin")
 
 	// This will fail at connection stage (no real MySQL) — passes permission check first
-	_, err := qs.ExportQuery(ctx, userID, "export-fail-user", "admin", dsID, "testdb", "SELECT * FROM users LIMIT 10", "mysql")
+	_, err := qs.ExportQuery(ctx, userID, "export-fail-user", "admin", dsID, "testdb", "SELECT * FROM users LIMIT 10")
 	if err == nil {
 		t.Error("expected connection error, got nil")
 	}
@@ -542,7 +542,7 @@ func TestExportQuery_AuditOnFailure(t *testing.T) {
 // ExportQuery: Datasource type defaults to ds.Type
 // ---------------------------------------------------------------------------
 
-func TestExportQuery_DefaultDBType(t *testing.T) {
+func TestExportQuery_RecordsTheDatasourcesOwnType(t *testing.T) {
 	_, testDB := setupExportService(t)
 	ctx, cancel := exportCtx(t)
 	defer cancel()
@@ -562,8 +562,12 @@ func TestExportQuery_DefaultDBType(t *testing.T) {
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
 	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr, Limits{})
 
-	// Pass empty dbType — should default to datasource type (mysql)
-	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1 AS id", "")
+	// The datasource decides its own type. This used to be a parameter the
+	// caller could pass, and both handlers always passed "" — so the only thing
+	// it could express was "let the server decide", which is now the only
+	// behavior there is. What the test still pins is that the derived type
+	// reaches the record, which is the part anyone reads.
+	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1 AS id")
 	if err != nil {
 		t.Fatalf("ExportQuery() error: %v", err)
 	}
@@ -592,7 +596,7 @@ func TestExportQuery_PermissionDenied(t *testing.T) {
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	// "restricted" role has no select permission
-	_, err := qs.ExportQuery(ctx, 1, "user1", "restricted", dsID, "testdb", "SELECT * FROM users", "mysql")
+	_, err := qs.ExportQuery(ctx, 1, "user1", "restricted", dsID, "testdb", "SELECT * FROM users")
 	if err == nil {
 		t.Error("expected permission error or connection error, got nil")
 	}
@@ -613,7 +617,7 @@ func TestExportQuery_HighRiskSQL(t *testing.T) {
 	dsID := seedExportDatasource(t, dsSvc, ctx)
 
 	// UPDATE without WHERE is high risk
-	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "UPDATE users SET name='x'", "mysql")
+	_, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "UPDATE users SET name='x'")
 	if err == nil {
 		t.Error("expected high risk error, got nil")
 	}

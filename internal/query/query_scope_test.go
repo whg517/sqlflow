@@ -120,7 +120,7 @@ func TestExecuteQuery_ForeignDatabaseCannotDropMaskRules(t *testing.T) {
 			defer cancel()
 
 			result, err := f.svc.ExecuteQuery(ctx, testActorID, "dev", "developer", f.dsID,
-				tt.requested, "SELECT id, phone FROM customers", "mysql")
+				tt.requested, "SELECT id, phone FROM customers")
 			if err != nil {
 				if tt.mustSucceed {
 					t.Fatalf("ExecuteQuery(%q) error = %v, want rows", tt.requested, err)
@@ -147,7 +147,7 @@ func TestExportQuery_ForeignDatabaseCannotDropMaskRules(t *testing.T) {
 	seedPolicy(t, f.metaDB, f.svc.permSvc, "developer", fmt.Sprintf("ds_%d", f.dsID), "*", "export")
 
 	result, err := f.svc.ExportQuery(ctx, testActorID, "dev", "developer", f.dsID,
-		"someone_elses_db", "SELECT id, phone FROM customers", "mysql")
+		"someone_elses_db", "SELECT id, phone FROM customers")
 	if err != nil {
 		return // refused, nothing leaked
 	}
@@ -170,11 +170,11 @@ func TestQueryEntrancesRefuseAForeignDatabase(t *testing.T) {
 	const sql = "SELECT id, phone FROM customers"
 	entrances := map[string]func() error{
 		"query": func() error {
-			_, err := f.svc.ExecuteQuery(ctx, testActorID, "dev", "developer", f.dsID, "someone_elses_db", sql, "mysql")
+			_, err := f.svc.ExecuteQuery(ctx, testActorID, "dev", "developer", f.dsID, "someone_elses_db", sql)
 			return err
 		},
 		"export": func() error {
-			_, err := f.svc.ExportQuery(ctx, testActorID, "dev", "developer", f.dsID, "someone_elses_db", sql, "mysql")
+			_, err := f.svc.ExportQuery(ctx, testActorID, "dev", "developer", f.dsID, "someone_elses_db", sql)
 			return err
 		},
 		"explain": func() error {
@@ -202,7 +202,7 @@ func TestExecuteQuery_TrailRecordsTheDatabaseActuallyUsed(t *testing.T) {
 	defer cancel()
 
 	if _, err := f.svc.ExecuteQuery(ctx, testActorID, "dev", "developer", f.dsID,
-		"", "SELECT id, phone FROM customers", "mysql"); err != nil {
+		"", "SELECT id, phone FROM customers"); err != nil {
 		t.Fatalf("ExecuteQuery: %v", err)
 	}
 

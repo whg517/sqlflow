@@ -98,7 +98,7 @@ func TestExecuteQuery_MasksRealDriverRows(t *testing.T) {
 	f.maskPhoneOn(t)
 
 	result, err := f.svc.ExecuteQuery(context.Background(), 1, "user1", "developer",
-		f.dsID, "testdb", "SELECT id, phone FROM people", "mysql")
+		f.dsID, "testdb", "SELECT id, phone FROM people")
 	if err != nil {
 		t.Fatalf("ExecuteQuery: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestExecuteQuery_RefusesWhenMaskRulesCannotBeLoaded(t *testing.T) {
 	}
 
 	result, err := f.svc.ExecuteQuery(context.Background(), 1, "user1", "developer",
-		f.dsID, "testdb", "SELECT id, phone FROM people", "mysql")
+		f.dsID, "testdb", "SELECT id, phone FROM people")
 	if err == nil {
 		got := ""
 		if len(result.Rows) > 0 {
