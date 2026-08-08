@@ -212,7 +212,12 @@ docs/                需求、架构、ADR、评审、路线图
 - **前端单测套件对负载敏感**，`findByText` / `waitFor` 在并行压力下会超时，同一份
   代码连跑三次可能 0、2、48 个失败。这是既有问题（在重组前的树上同样复现），
   不是某次改动的回归。判断一次失败是否真实，先单独重跑该文件。
-- 工单执行缺租约与崩溃恢复，进程在 `EXECUTING` 期间崩溃会使工单卡住。
+- **工单执行持租约。** 进入 `EXECUTING` 时由 `applyTransition` 本身写下
+  `lease_owner` / `lease_expires_at`，离开时清除——不是调用方传的 `Extra`，因为
+  「认领了但没拿租约」正是崩溃后永久卡死的那种行；反证过：把它做成调用方可选，
+  去掉一处调用就悄悄退化。`ReclaimExpiredExecutions` 在启动时与每个调度周期回收，
+  置为 FAILED 并写审计。**回收到 FAILED 而不是退回 APPROVED**：没人知道语句是否
+  已经到达目标库，重跑一条已生效的 DDL 比让人来看一眼更糟。空租约按已过期处理。
 - **语句边界归驱动**（`StatementSplitter`），分析与执行消费同一个 `ticketPlan`。
   曾经执行端是 `strings.Split(sql, ";")`、分析端只读首关键字，于是
   `SELECT 1; DROP TABLE users` 评 low 却执行 DROP——提交者改 SQL 就能改自己的

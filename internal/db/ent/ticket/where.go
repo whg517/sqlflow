@@ -179,6 +179,16 @@ func SLAStatus(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldSLAStatus, v))
 }
 
+// LeaseOwner applies equality check predicate on the "lease_owner" field. It's identical to LeaseOwnerEQ.
+func LeaseOwner(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldLeaseOwner, v))
+}
+
+// LeaseExpiresAt applies equality check predicate on the "lease_expires_at" field. It's identical to LeaseExpiresAtEQ.
+func LeaseExpiresAt(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldLeaseExpiresAt, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldCreatedAt, v))
@@ -1557,6 +1567,121 @@ func SLAStatusEqualFold(v string) predicate.Ticket {
 // SLAStatusContainsFold applies the ContainsFold predicate on the "sla_status" field.
 func SLAStatusContainsFold(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldContainsFold(FieldSLAStatus, v))
+}
+
+// LeaseOwnerEQ applies the EQ predicate on the "lease_owner" field.
+func LeaseOwnerEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerNEQ applies the NEQ predicate on the "lease_owner" field.
+func LeaseOwnerNEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerIn applies the In predicate on the "lease_owner" field.
+func LeaseOwnerIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldLeaseOwner, vs...))
+}
+
+// LeaseOwnerNotIn applies the NotIn predicate on the "lease_owner" field.
+func LeaseOwnerNotIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldLeaseOwner, vs...))
+}
+
+// LeaseOwnerGT applies the GT predicate on the "lease_owner" field.
+func LeaseOwnerGT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerGTE applies the GTE predicate on the "lease_owner" field.
+func LeaseOwnerGTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerLT applies the LT predicate on the "lease_owner" field.
+func LeaseOwnerLT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerLTE applies the LTE predicate on the "lease_owner" field.
+func LeaseOwnerLTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerContains applies the Contains predicate on the "lease_owner" field.
+func LeaseOwnerContains(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContains(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerHasPrefix applies the HasPrefix predicate on the "lease_owner" field.
+func LeaseOwnerHasPrefix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasPrefix(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerHasSuffix applies the HasSuffix predicate on the "lease_owner" field.
+func LeaseOwnerHasSuffix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasSuffix(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerEqualFold applies the EqualFold predicate on the "lease_owner" field.
+func LeaseOwnerEqualFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEqualFold(FieldLeaseOwner, v))
+}
+
+// LeaseOwnerContainsFold applies the ContainsFold predicate on the "lease_owner" field.
+func LeaseOwnerContainsFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContainsFold(FieldLeaseOwner, v))
+}
+
+// LeaseExpiresAtEQ applies the EQ predicate on the "lease_expires_at" field.
+func LeaseExpiresAtEQ(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldLeaseExpiresAt, v))
+}
+
+// LeaseExpiresAtNEQ applies the NEQ predicate on the "lease_expires_at" field.
+func LeaseExpiresAtNEQ(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldLeaseExpiresAt, v))
+}
+
+// LeaseExpiresAtIn applies the In predicate on the "lease_expires_at" field.
+func LeaseExpiresAtIn(vs ...time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldLeaseExpiresAt, vs...))
+}
+
+// LeaseExpiresAtNotIn applies the NotIn predicate on the "lease_expires_at" field.
+func LeaseExpiresAtNotIn(vs ...time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldLeaseExpiresAt, vs...))
+}
+
+// LeaseExpiresAtGT applies the GT predicate on the "lease_expires_at" field.
+func LeaseExpiresAtGT(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldLeaseExpiresAt, v))
+}
+
+// LeaseExpiresAtGTE applies the GTE predicate on the "lease_expires_at" field.
+func LeaseExpiresAtGTE(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldLeaseExpiresAt, v))
+}
+
+// LeaseExpiresAtLT applies the LT predicate on the "lease_expires_at" field.
+func LeaseExpiresAtLT(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldLeaseExpiresAt, v))
+}
+
+// LeaseExpiresAtLTE applies the LTE predicate on the "lease_expires_at" field.
+func LeaseExpiresAtLTE(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldLeaseExpiresAt, v))
+}
+
+// LeaseExpiresAtIsNil applies the IsNil predicate on the "lease_expires_at" field.
+func LeaseExpiresAtIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldLeaseExpiresAt))
+}
+
+// LeaseExpiresAtNotNil applies the NotNil predicate on the "lease_expires_at" field.
+func LeaseExpiresAtNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldLeaseExpiresAt))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

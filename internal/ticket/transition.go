@@ -4,13 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"time"
+
+	"log"
 
 	"github.com/whg517/sqlflow/internal/db/ent"
 	"github.com/whg517/sqlflow/internal/db/ent/predicate"
 	entTicket "github.com/whg517/sqlflow/internal/db/ent/ticket"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
 )
 
 // ErrTransitionNotDeclared reports a move the state machine does not allow.
@@ -144,6 +148,22 @@ func applyTransition(
 	upd := tickets.Update().Where(preds...).
 		SetStatus(string(tr.To)).
 		SetUpdatedAt(now)
+
+	// The lease belongs to the state, not to the caller.
+	//
+	// Taking it here rather than as an Extra each executor remembers to pass is
+	// what makes it impossible to claim a ticket without one — and a claim
+	// without a lease is precisely the row that gets stranded forever when the
+	// process dies. Leaving EXECUTING releases it for the same reason: a
+	// finished run that kept its lease would look live to the reclaim sweep
+	// until it expired.
+	switch {
+	case tr.To == model.TicketStatusExecuting:
+		upd = upd.SetLeaseOwner(leaseOwner).SetLeaseExpiresAt(now.Add(executionLeaseTTL))
+	case slices.Contains(tr.From, model.TicketStatusExecuting):
+		upd = upd.SetLeaseOwner("").ClearLeaseExpiresAt()
+	}
+
 	if tr.Extra != nil {
 		upd = tr.Extra(upd)
 	}
@@ -189,3 +209,100 @@ var (
 	executableByOperator  = []model.TicketStatus{model.TicketStatusApproved, model.TicketStatusScheduled}
 	executableByScheduler = []model.TicketStatus{model.TicketStatusScheduled}
 )
+
+// executionLeaseTTL bounds how long a claimed execution may go unheard from.
+//
+// Comfortably longer than the 30-second execution timeout, because expiring a
+// lease on a run that is still going would let a second executor start the same
+// statement — the failure the lease exists to prevent, arrived at from the other
+// side. Long enough to absorb a slow shutdown; short enough that an operator is
+// not waiting an hour on a crashed instance.
+const executionLeaseTTL = 5 * time.Minute
+
+// leaseOwner identifies this process in a lease.
+//
+// A ticket stranded by a crash is only recognizable if the row says who was
+// running it, and "some instance" is not an answer an operator can act on.
+var leaseOwner = func() string {
+	host, err := os.Hostname()
+	if err != nil {
+		host = "unknown-host"
+	}
+	return fmt.Sprintf("%s/%d", host, os.Getpid())
+}()
+
+// ReclaimExpiredExecutions frees tickets whose executor is gone.
+//
+// EXECUTING is the only state a crash can strand a ticket in: the process
+// running it is the sole thing that would move it out, so if that process dies
+// the ticket is left uncancellable — CancelTicket does not accept EXECUTING —
+// and unexecutable, because the claim already happened. Nothing else in the
+// platform looks at it again.
+//
+// Reclaimed tickets go to FAILED, not back to APPROVED. Nothing here knows
+// whether the statement reached the target database: the process died somewhere
+// between claiming the ticket and recording the outcome, and a DDL that already
+// applied would be applied a second time. Failing it puts a human in the loop
+// with the evidence, which is the honest answer to "we do not know".
+//
+// A null expiry is treated as expired. Any row in EXECUTING without a lease
+// predates this mechanism or reached the state by a path that does not claim
+// one, and either way it is the permanently-stuck ticket this exists to free.
+func (s *Service) ReclaimExpiredExecutions(ctx context.Context) (int, error) {
+	now := time.Now()
+
+	stale, err := s.client.Ticket.Query().
+		Where(
+			entTicket.StatusEQ(string(model.TicketStatusExecuting)),
+			entTicket.Or(
+				entTicket.LeaseExpiresAtIsNil(),
+				entTicket.LeaseExpiresAtLT(now),
+			),
+		).
+		All(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("查询过期执行租约失败: %w", err)
+	}
+
+	reclaimed := 0
+	for _, row := range stale {
+		owner := row.LeaseOwner
+		if owner == "" {
+			owner = "未知实例"
+		}
+		reason := fmt.Sprintf("执行进程 %s 已失联，工单被回收为失败；语句是否已在目标库生效未知，请人工确认后再重提", owner)
+
+		// Guarded like every other move, and on the lease as well as the status:
+		// the owner may have come back between the query and this write, and
+		// stealing a live run is the one outcome worse than a stuck ticket.
+		applied, err := applyTransition(ctx, s.client.Ticket, int64(row.ID), now, transition{
+			From: []model.TicketStatus{model.TicketStatusExecuting},
+			To:   model.TicketStatusFailed,
+			Extra: func(u *ent.TicketUpdate) *ent.TicketUpdate {
+				return u.SetReviewComment(reason)
+			},
+		})
+		if err != nil {
+			log.Printf("ticket: reclaim lease for #%d: %v", row.ID, err)
+			continue
+		}
+		if !applied {
+			continue
+		}
+
+		reclaimed++
+		s.auditSvc.Write(ctx, auditlog.Record{
+			UserID:       0,
+			Action:       "ticket_execution_reclaimed",
+			DatasourceID: row.DatasourceID,
+			Database:     row.Database,
+			SQLContent:   row.SQLContent,
+			SQLSummary:   row.SQLSummary,
+			ErrorMessage: reason,
+			TicketID:     int64(row.ID),
+		})
+		log.Printf("ticket: reclaimed #%d from %s", row.ID, owner)
+	}
+
+	return reclaimed, nil
+}

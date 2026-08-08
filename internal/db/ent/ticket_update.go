@@ -458,6 +458,40 @@ func (_u *TicketUpdate) SetNillableSLAStatus(v *string) *TicketUpdate {
 	return _u
 }
 
+// SetLeaseOwner sets the "lease_owner" field.
+func (_u *TicketUpdate) SetLeaseOwner(v string) *TicketUpdate {
+	_u.mutation.SetLeaseOwner(v)
+	return _u
+}
+
+// SetNillableLeaseOwner sets the "lease_owner" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableLeaseOwner(v *string) *TicketUpdate {
+	if v != nil {
+		_u.SetLeaseOwner(*v)
+	}
+	return _u
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (_u *TicketUpdate) SetLeaseExpiresAt(v time.Time) *TicketUpdate {
+	_u.mutation.SetLeaseExpiresAt(v)
+	return _u
+}
+
+// SetNillableLeaseExpiresAt sets the "lease_expires_at" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableLeaseExpiresAt(v *time.Time) *TicketUpdate {
+	if v != nil {
+		_u.SetLeaseExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (_u *TicketUpdate) ClearLeaseExpiresAt() *TicketUpdate {
+	_u.mutation.ClearLeaseExpiresAt()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *TicketUpdate) SetCreatedAt(v time.Time) *TicketUpdate {
 	_u.mutation.SetCreatedAt(v)
@@ -657,6 +691,15 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.SLAStatus(); ok {
 		_spec.SetField(ticket.FieldSLAStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LeaseOwner(); ok {
+		_spec.SetField(ticket.FieldLeaseOwner, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LeaseExpiresAt(); ok {
+		_spec.SetField(ticket.FieldLeaseExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.LeaseExpiresAtCleared() {
+		_spec.ClearField(ticket.FieldLeaseExpiresAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(ticket.FieldCreatedAt, field.TypeTime, value)
@@ -1115,6 +1158,40 @@ func (_u *TicketUpdateOne) SetNillableSLAStatus(v *string) *TicketUpdateOne {
 	return _u
 }
 
+// SetLeaseOwner sets the "lease_owner" field.
+func (_u *TicketUpdateOne) SetLeaseOwner(v string) *TicketUpdateOne {
+	_u.mutation.SetLeaseOwner(v)
+	return _u
+}
+
+// SetNillableLeaseOwner sets the "lease_owner" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableLeaseOwner(v *string) *TicketUpdateOne {
+	if v != nil {
+		_u.SetLeaseOwner(*v)
+	}
+	return _u
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (_u *TicketUpdateOne) SetLeaseExpiresAt(v time.Time) *TicketUpdateOne {
+	_u.mutation.SetLeaseExpiresAt(v)
+	return _u
+}
+
+// SetNillableLeaseExpiresAt sets the "lease_expires_at" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableLeaseExpiresAt(v *time.Time) *TicketUpdateOne {
+	if v != nil {
+		_u.SetLeaseExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (_u *TicketUpdateOne) ClearLeaseExpiresAt() *TicketUpdateOne {
+	_u.mutation.ClearLeaseExpiresAt()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *TicketUpdateOne) SetCreatedAt(v time.Time) *TicketUpdateOne {
 	_u.mutation.SetCreatedAt(v)
@@ -1344,6 +1421,15 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if value, ok := _u.mutation.SLAStatus(); ok {
 		_spec.SetField(ticket.FieldSLAStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LeaseOwner(); ok {
+		_spec.SetField(ticket.FieldLeaseOwner, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LeaseExpiresAt(); ok {
+		_spec.SetField(ticket.FieldLeaseExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.LeaseExpiresAtCleared() {
+		_spec.ClearField(ticket.FieldLeaseExpiresAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(ticket.FieldCreatedAt, field.TypeTime, value)

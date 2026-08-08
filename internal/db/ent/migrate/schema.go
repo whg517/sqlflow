@@ -790,6 +790,8 @@ var (
 		{Name: "executed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "sla_deadline", Type: field.TypeTime, Nullable: true},
 		{Name: "sla_status", Type: field.TypeString, Default: "normal"},
+		{Name: "lease_owner", Type: field.TypeString, Default: ""},
+		{Name: "lease_expires_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}

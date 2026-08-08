@@ -132,7 +132,11 @@ CREATE TABLE IF NOT EXISTS tickets (
     policy_id              BIGINT,
     sql_type               TEXT NOT NULL DEFAULT '',
     affected_tables        TEXT NOT NULL DEFAULT '[]',
-    sql_hash               TEXT NOT NULL DEFAULT ''
+    sql_hash               TEXT NOT NULL DEFAULT '',
+    -- Who is executing this ticket, and until when. EXECUTING is the only
+    -- state a crashed process can strand a ticket in.
+    lease_owner            TEXT NOT NULL DEFAULT '',
+    lease_expires_at       TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS comments (

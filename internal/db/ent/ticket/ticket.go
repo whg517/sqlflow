@@ -63,6 +63,10 @@ const (
 	FieldSLADeadline = "sla_deadline"
 	// FieldSLAStatus holds the string denoting the sla_status field in the database.
 	FieldSLAStatus = "sla_status"
+	// FieldLeaseOwner holds the string denoting the lease_owner field in the database.
+	FieldLeaseOwner = "lease_owner"
+	// FieldLeaseExpiresAt holds the string denoting the lease_expires_at field in the database.
+	FieldLeaseExpiresAt = "lease_expires_at"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -99,6 +103,8 @@ var Columns = []string{
 	FieldExecutedAt,
 	FieldSLADeadline,
 	FieldSLAStatus,
+	FieldLeaseOwner,
+	FieldLeaseExpiresAt,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -152,6 +158,8 @@ var (
 	DefaultAutoApproveReason string
 	// DefaultSLAStatus holds the default value on creation for the "sla_status" field.
 	DefaultSLAStatus string
+	// DefaultLeaseOwner holds the default value on creation for the "lease_owner" field.
+	DefaultLeaseOwner string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -291,6 +299,16 @@ func BySLADeadline(opts ...sql.OrderTermOption) OrderOption {
 // BySLAStatus orders the results by the sla_status field.
 func BySLAStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSLAStatus, opts...).ToFunc()
+}
+
+// ByLeaseOwner orders the results by the lease_owner field.
+func ByLeaseOwner(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLeaseOwner, opts...).ToFunc()
+}
+
+// ByLeaseExpiresAt orders the results by the lease_expires_at field.
+func ByLeaseExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLeaseExpiresAt, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

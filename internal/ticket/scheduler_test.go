@@ -157,10 +157,21 @@ func TestScheduler_RunOnce_SkipsFutureTicket(t *testing.T) {
 // TestScheduler_RunOnce_SkipsNonScheduledTicket ensures the scheduler only
 // picks up SCHEDULED tickets, so a ticket already being executed elsewhere is
 // not started a second time.
+//
+// The ticket holds a live lease, because that is now what "being executed
+// elsewhere" means. Without one it is indistinguishable from a run whose
+// process died — which is the case the reclaim sweep exists to clear, and it
+// would legitimately move this ticket to FAILED. That path has its own test.
 func TestScheduler_RunOnce_SkipsNonScheduledTicket(t *testing.T) {
 	platform, ticketSvc, target := setupTicketExecTest(t)
 	id := insertTicket(t, platform, model.TicketStatusExecuting,
 		"UPDATE demo SET n = 99", time.Now().Add(-time.Minute))
+	if _, err := platform.Exec(
+		`UPDATE tickets SET lease_owner = $1, lease_expires_at = $2 WHERE id = $3`,
+		"another-instance", time.Now().Add(10*time.Minute), id,
+	); err != nil {
+		t.Fatalf("take lease: %v", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

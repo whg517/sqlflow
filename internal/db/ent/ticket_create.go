@@ -348,6 +348,34 @@ func (_c *TicketCreate) SetNillableSLAStatus(v *string) *TicketCreate {
 	return _c
 }
 
+// SetLeaseOwner sets the "lease_owner" field.
+func (_c *TicketCreate) SetLeaseOwner(v string) *TicketCreate {
+	_c.mutation.SetLeaseOwner(v)
+	return _c
+}
+
+// SetNillableLeaseOwner sets the "lease_owner" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableLeaseOwner(v *string) *TicketCreate {
+	if v != nil {
+		_c.SetLeaseOwner(*v)
+	}
+	return _c
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (_c *TicketCreate) SetLeaseExpiresAt(v time.Time) *TicketCreate {
+	_c.mutation.SetLeaseExpiresAt(v)
+	return _c
+}
+
+// SetNillableLeaseExpiresAt sets the "lease_expires_at" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableLeaseExpiresAt(v *time.Time) *TicketCreate {
+	if v != nil {
+		_c.SetLeaseExpiresAt(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *TicketCreate) SetCreatedAt(v time.Time) *TicketCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -483,6 +511,10 @@ func (_c *TicketCreate) defaults() {
 		v := ticket.DefaultSLAStatus
 		_c.mutation.SetSLAStatus(v)
 	}
+	if _, ok := _c.mutation.LeaseOwner(); !ok {
+		v := ticket.DefaultLeaseOwner
+		_c.mutation.SetLeaseOwner(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := ticket.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -559,6 +591,9 @@ func (_c *TicketCreate) check() error {
 	}
 	if _, ok := _c.mutation.SLAStatus(); !ok {
 		return &ValidationError{Name: "sla_status", err: errors.New(`ent: missing required field "Ticket.sla_status"`)}
+	}
+	if _, ok := _c.mutation.LeaseOwner(); !ok {
+		return &ValidationError{Name: "lease_owner", err: errors.New(`ent: missing required field "Ticket.lease_owner"`)}
 	}
 	return nil
 }
@@ -686,6 +721,14 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SLAStatus(); ok {
 		_spec.SetField(ticket.FieldSLAStatus, field.TypeString, value)
 		_node.SLAStatus = value
+	}
+	if value, ok := _c.mutation.LeaseOwner(); ok {
+		_spec.SetField(ticket.FieldLeaseOwner, field.TypeString, value)
+		_node.LeaseOwner = value
+	}
+	if value, ok := _c.mutation.LeaseExpiresAt(); ok {
+		_spec.SetField(ticket.FieldLeaseExpiresAt, field.TypeTime, value)
+		_node.LeaseExpiresAt = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(ticket.FieldCreatedAt, field.TypeTime, value)
@@ -1116,6 +1159,36 @@ func (u *TicketUpsert) SetSLAStatus(v string) *TicketUpsert {
 // UpdateSLAStatus sets the "sla_status" field to the value that was provided on create.
 func (u *TicketUpsert) UpdateSLAStatus() *TicketUpsert {
 	u.SetExcluded(ticket.FieldSLAStatus)
+	return u
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (u *TicketUpsert) SetLeaseOwner(v string) *TicketUpsert {
+	u.Set(ticket.FieldLeaseOwner, v)
+	return u
+}
+
+// UpdateLeaseOwner sets the "lease_owner" field to the value that was provided on create.
+func (u *TicketUpsert) UpdateLeaseOwner() *TicketUpsert {
+	u.SetExcluded(ticket.FieldLeaseOwner)
+	return u
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (u *TicketUpsert) SetLeaseExpiresAt(v time.Time) *TicketUpsert {
+	u.Set(ticket.FieldLeaseExpiresAt, v)
+	return u
+}
+
+// UpdateLeaseExpiresAt sets the "lease_expires_at" field to the value that was provided on create.
+func (u *TicketUpsert) UpdateLeaseExpiresAt() *TicketUpsert {
+	u.SetExcluded(ticket.FieldLeaseExpiresAt)
+	return u
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (u *TicketUpsert) ClearLeaseExpiresAt() *TicketUpsert {
+	u.SetNull(ticket.FieldLeaseExpiresAt)
 	return u
 }
 
@@ -1614,6 +1687,41 @@ func (u *TicketUpsertOne) SetSLAStatus(v string) *TicketUpsertOne {
 func (u *TicketUpsertOne) UpdateSLAStatus() *TicketUpsertOne {
 	return u.Update(func(s *TicketUpsert) {
 		s.UpdateSLAStatus()
+	})
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (u *TicketUpsertOne) SetLeaseOwner(v string) *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetLeaseOwner(v)
+	})
+}
+
+// UpdateLeaseOwner sets the "lease_owner" field to the value that was provided on create.
+func (u *TicketUpsertOne) UpdateLeaseOwner() *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateLeaseOwner()
+	})
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (u *TicketUpsertOne) SetLeaseExpiresAt(v time.Time) *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetLeaseExpiresAt(v)
+	})
+}
+
+// UpdateLeaseExpiresAt sets the "lease_expires_at" field to the value that was provided on create.
+func (u *TicketUpsertOne) UpdateLeaseExpiresAt() *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateLeaseExpiresAt()
+	})
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (u *TicketUpsertOne) ClearLeaseExpiresAt() *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.ClearLeaseExpiresAt()
 	})
 }
 
@@ -2280,6 +2388,41 @@ func (u *TicketUpsertBulk) SetSLAStatus(v string) *TicketUpsertBulk {
 func (u *TicketUpsertBulk) UpdateSLAStatus() *TicketUpsertBulk {
 	return u.Update(func(s *TicketUpsert) {
 		s.UpdateSLAStatus()
+	})
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (u *TicketUpsertBulk) SetLeaseOwner(v string) *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetLeaseOwner(v)
+	})
+}
+
+// UpdateLeaseOwner sets the "lease_owner" field to the value that was provided on create.
+func (u *TicketUpsertBulk) UpdateLeaseOwner() *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateLeaseOwner()
+	})
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (u *TicketUpsertBulk) SetLeaseExpiresAt(v time.Time) *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetLeaseExpiresAt(v)
+	})
+}
+
+// UpdateLeaseExpiresAt sets the "lease_expires_at" field to the value that was provided on create.
+func (u *TicketUpsertBulk) UpdateLeaseExpiresAt() *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateLeaseExpiresAt()
+	})
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (u *TicketUpsertBulk) ClearLeaseExpiresAt() *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.ClearLeaseExpiresAt()
 	})
 }
 

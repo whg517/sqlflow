@@ -22345,6 +22345,8 @@ type TicketMutation struct {
 	executed_at         *time.Time
 	sla_deadline        *time.Time
 	sla_status          *string
+	lease_owner         *string
+	lease_expires_at    *time.Time
 	created_at          *time.Time
 	updated_at          *time.Time
 	clearedFields       map[string]struct{}
@@ -23557,6 +23559,91 @@ func (m *TicketMutation) ResetSLAStatus() {
 	m.sla_status = nil
 }
 
+// SetLeaseOwner sets the "lease_owner" field.
+func (m *TicketMutation) SetLeaseOwner(s string) {
+	m.lease_owner = &s
+}
+
+// LeaseOwner returns the value of the "lease_owner" field in the mutation.
+func (m *TicketMutation) LeaseOwner() (r string, exists bool) {
+	v := m.lease_owner
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLeaseOwner returns the old "lease_owner" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldLeaseOwner(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLeaseOwner is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLeaseOwner requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLeaseOwner: %w", err)
+	}
+	return oldValue.LeaseOwner, nil
+}
+
+// ResetLeaseOwner resets all changes to the "lease_owner" field.
+func (m *TicketMutation) ResetLeaseOwner() {
+	m.lease_owner = nil
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (m *TicketMutation) SetLeaseExpiresAt(t time.Time) {
+	m.lease_expires_at = &t
+}
+
+// LeaseExpiresAt returns the value of the "lease_expires_at" field in the mutation.
+func (m *TicketMutation) LeaseExpiresAt() (r time.Time, exists bool) {
+	v := m.lease_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLeaseExpiresAt returns the old "lease_expires_at" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldLeaseExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLeaseExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLeaseExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLeaseExpiresAt: %w", err)
+	}
+	return oldValue.LeaseExpiresAt, nil
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (m *TicketMutation) ClearLeaseExpiresAt() {
+	m.lease_expires_at = nil
+	m.clearedFields[ticket.FieldLeaseExpiresAt] = struct{}{}
+}
+
+// LeaseExpiresAtCleared returns if the "lease_expires_at" field was cleared in this mutation.
+func (m *TicketMutation) LeaseExpiresAtCleared() bool {
+	_, ok := m.clearedFields[ticket.FieldLeaseExpiresAt]
+	return ok
+}
+
+// ResetLeaseExpiresAt resets all changes to the "lease_expires_at" field.
+func (m *TicketMutation) ResetLeaseExpiresAt() {
+	m.lease_expires_at = nil
+	delete(m.clearedFields, ticket.FieldLeaseExpiresAt)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *TicketMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -23663,7 +23750,7 @@ func (m *TicketMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 29)
 	if m.submitter_id != nil {
 		fields = append(fields, ticket.FieldSubmitterID)
 	}
@@ -23739,6 +23826,12 @@ func (m *TicketMutation) Fields() []string {
 	if m.sla_status != nil {
 		fields = append(fields, ticket.FieldSLAStatus)
 	}
+	if m.lease_owner != nil {
+		fields = append(fields, ticket.FieldLeaseOwner)
+	}
+	if m.lease_expires_at != nil {
+		fields = append(fields, ticket.FieldLeaseExpiresAt)
+	}
 	if m.created_at != nil {
 		fields = append(fields, ticket.FieldCreatedAt)
 	}
@@ -23803,6 +23896,10 @@ func (m *TicketMutation) Field(name string) (ent.Value, bool) {
 		return m.SLADeadline()
 	case ticket.FieldSLAStatus:
 		return m.SLAStatus()
+	case ticket.FieldLeaseOwner:
+		return m.LeaseOwner()
+	case ticket.FieldLeaseExpiresAt:
+		return m.LeaseExpiresAt()
 	case ticket.FieldCreatedAt:
 		return m.CreatedAt()
 	case ticket.FieldUpdatedAt:
@@ -23866,6 +23963,10 @@ func (m *TicketMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldSLADeadline(ctx)
 	case ticket.FieldSLAStatus:
 		return m.OldSLAStatus(ctx)
+	case ticket.FieldLeaseOwner:
+		return m.OldLeaseOwner(ctx)
+	case ticket.FieldLeaseExpiresAt:
+		return m.OldLeaseExpiresAt(ctx)
 	case ticket.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case ticket.FieldUpdatedAt:
@@ -24054,6 +24155,20 @@ func (m *TicketMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSLAStatus(v)
 		return nil
+	case ticket.FieldLeaseOwner:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLeaseOwner(v)
+		return nil
+	case ticket.FieldLeaseExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLeaseExpiresAt(v)
+		return nil
 	case ticket.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -24200,6 +24315,9 @@ func (m *TicketMutation) ClearedFields() []string {
 	if m.FieldCleared(ticket.FieldSLADeadline) {
 		fields = append(fields, ticket.FieldSLADeadline)
 	}
+	if m.FieldCleared(ticket.FieldLeaseExpiresAt) {
+		fields = append(fields, ticket.FieldLeaseExpiresAt)
+	}
 	return fields
 }
 
@@ -24228,6 +24346,9 @@ func (m *TicketMutation) ClearField(name string) error {
 		return nil
 	case ticket.FieldSLADeadline:
 		m.ClearSLADeadline()
+		return nil
+	case ticket.FieldLeaseExpiresAt:
+		m.ClearLeaseExpiresAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Ticket nullable field %s", name)
@@ -24311,6 +24432,12 @@ func (m *TicketMutation) ResetField(name string) error {
 		return nil
 	case ticket.FieldSLAStatus:
 		m.ResetSLAStatus()
+		return nil
+	case ticket.FieldLeaseOwner:
+		m.ResetLeaseOwner()
+		return nil
+	case ticket.FieldLeaseExpiresAt:
+		m.ResetLeaseExpiresAt()
 		return nil
 	case ticket.FieldCreatedAt:
 		m.ResetCreatedAt()

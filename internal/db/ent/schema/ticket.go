@@ -75,6 +75,19 @@ func (Ticket) Fields() []ent.Field {
 			Nillable(),
 		field.String("sla_status").
 			Default("normal"),
+		// Execution lease.
+		//
+		// EXECUTING is the one state a crash can strand a ticket in: the process
+		// that owns the run is the only thing that would move it out, so if it
+		// dies the ticket sits there forever, uncancellable and unretryable. The
+		// lease says who is running it and until when, so a survivor can tell a
+		// live execution from an abandoned one.
+		field.String("lease_owner").
+			Default(""),
+		field.Time("lease_expires_at").
+			Optional().
+			Nillable(),
+
 		field.Time("created_at").
 			Default(timeNow).Annotations(entsql.DefaultExpr("now()")),
 		field.Time("updated_at").

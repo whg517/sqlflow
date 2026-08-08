@@ -67,6 +67,10 @@ type Ticket struct {
 	SLADeadline *time.Time `json:"sla_deadline,omitempty"`
 	// SLAStatus holds the value of the "sla_status" field.
 	SLAStatus string `json:"sla_status,omitempty"`
+	// LeaseOwner holds the value of the "lease_owner" field.
+	LeaseOwner string `json:"lease_owner,omitempty"`
+	// LeaseExpiresAt holds the value of the "lease_expires_at" field.
+	LeaseExpiresAt *time.Time `json:"lease_expires_at,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -83,9 +87,9 @@ func (*Ticket) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case ticket.FieldID, ticket.FieldSubmitterID, ticket.FieldDatasourceID, ticket.FieldReviewerID, ticket.FieldRevision, ticket.FieldCurrentStage, ticket.FieldTotalStages, ticket.FieldPolicyID:
 			values[i] = new(sql.NullInt64)
-		case ticket.FieldDatabase, ticket.FieldSQLContent, ticket.FieldSQLSummary, ticket.FieldSQLType, ticket.FieldDbType, ticket.FieldChangeReason, ticket.FieldStatus, ticket.FieldAffectedTables, ticket.FieldRiskLevel, ticket.FieldAiReviewResult, ticket.FieldReviewComment, ticket.FieldSQLHash, ticket.FieldAutoApproveReason, ticket.FieldSLAStatus:
+		case ticket.FieldDatabase, ticket.FieldSQLContent, ticket.FieldSQLSummary, ticket.FieldSQLType, ticket.FieldDbType, ticket.FieldChangeReason, ticket.FieldStatus, ticket.FieldAffectedTables, ticket.FieldRiskLevel, ticket.FieldAiReviewResult, ticket.FieldReviewComment, ticket.FieldSQLHash, ticket.FieldAutoApproveReason, ticket.FieldSLAStatus, ticket.FieldLeaseOwner:
 			values[i] = new(sql.NullString)
-		case ticket.FieldScheduledAt, ticket.FieldExecutedAt, ticket.FieldSLADeadline, ticket.FieldCreatedAt, ticket.FieldUpdatedAt:
+		case ticket.FieldScheduledAt, ticket.FieldExecutedAt, ticket.FieldSLADeadline, ticket.FieldLeaseExpiresAt, ticket.FieldCreatedAt, ticket.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -262,6 +266,19 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SLAStatus = value.String
 			}
+		case ticket.FieldLeaseOwner:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field lease_owner", values[i])
+			} else if value.Valid {
+				_m.LeaseOwner = value.String
+			}
+		case ticket.FieldLeaseExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field lease_expires_at", values[i])
+			} else if value.Valid {
+				_m.LeaseExpiresAt = new(time.Time)
+				*_m.LeaseExpiresAt = value.Time
+			}
 		case ticket.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -392,6 +409,14 @@ func (_m *Ticket) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("sla_status=")
 	builder.WriteString(_m.SLAStatus)
+	builder.WriteString(", ")
+	builder.WriteString("lease_owner=")
+	builder.WriteString(_m.LeaseOwner)
+	builder.WriteString(", ")
+	if v := _m.LeaseExpiresAt; v != nil {
+		builder.WriteString("lease_expires_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

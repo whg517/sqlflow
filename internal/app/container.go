@@ -118,7 +118,12 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	historySvc := query.NewHistoryService(database)
 	auditSvc := audit.NewService(database, 0, 0)
 	exportSvc := query.NewExportService(database, permSvc, auditSvc)
-	exportAsyncSvc := query.NewAsyncExportService(database, exportSvc, auditSvc, cfg.DB.DataDir)
+	exportAsyncSvc, err := query.NewAsyncExportService(database, exportSvc, auditSvc, cfg.DB.DataDir)
+	if err != nil {
+		connMgr.Close()
+		poolMgr.Close()
+		return nil, err
+	}
 
 	dsSvc := datasource.NewService(database, cfg.EncryptionKey, connMgr, poolMgr, auditSvc)
 	if _, err := dsSvc.EnsureInternalDataSource(context.Background(), cfg.DB.DSN); err != nil {
@@ -207,6 +212,16 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 		EncryptionKey:  cfg.EncryptionKey,
 		ApprovalEngine: approvalEngine,
 	})
+
+	// A ticket left in EXECUTING by a crashed process is unreachable: it cannot
+	// be cancelled, cannot be executed, and nothing else looks at it again.
+	// Sweeping at startup is what makes a restart a recovery rather than just a
+	// restart.
+	if reclaimed, err := ticketSvc.ReclaimExpiredExecutions(context.Background()); err != nil {
+		log.Printf("warn: reclaim abandoned executions: %v", err)
+	} else if reclaimed > 0 {
+		log.Printf("reclaimed %d ticket(s) abandoned by a previous process", reclaimed)
+	}
 
 	// router 内部曾各自 new 的 service（提到 Container，消除重复实例）
 	notifPrefSvc := notify.NewPreferenceService(database)

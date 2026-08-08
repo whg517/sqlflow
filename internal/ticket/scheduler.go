@@ -71,6 +71,17 @@ func (s *Scheduler) loop() {
 }
 
 func (s *Scheduler) executeDueTickets(ctx context.Context) error {
+	// Free anything a dead executor left claimed before looking for new work.
+	//
+	// Here rather than only at startup because the process that crashed may not
+	// be this one: a ticket claimed by a peer that never came back would
+	// otherwise sit in EXECUTING until someone restarted this instance too.
+	if reclaimed, err := s.ticketSvc.ReclaimExpiredExecutions(ctx); err != nil {
+		log.Printf("scheduler: reclaim expired executions: %v", err)
+	} else if reclaimed > 0 {
+		log.Printf("scheduler: reclaimed %d abandoned execution(s)", reclaimed)
+	}
+
 	ids, err := s.dueTicketIDs(ctx, time.Now())
 	if err != nil {
 		return err
