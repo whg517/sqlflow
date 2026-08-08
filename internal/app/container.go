@@ -84,7 +84,7 @@ type Container struct {
 	SQLTemplate *query.TemplateService
 	Share       *query.ShareService
 	WebVitals   *ops.WebVitalsService
-	AIReview    *ticket.AIReviewService
+	AIReview    *query.AIReviewService
 
 	// 调度器（需在 Close 时停止）
 	ticketScheduler *ticket.Scheduler
@@ -146,7 +146,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	permReqSvc := security.NewRequestService(database, permSvc, auditSvc)
 
 	// AI / Dashboard
-	aiReviewSvc := ticket.NewAIReviewService(database, cfg.AI.Provider, cfg.AI.Model, cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Timeout)
+	aiReviewSvc := query.NewAIReviewService(database, cfg.AI.Provider, cfg.AI.Model, cfg.AI.APIKey, cfg.AI.BaseURL, cfg.AI.Timeout)
 	dashboardSvc := ops.NewDashboardService(database)
 
 	// Backup（需 Start）

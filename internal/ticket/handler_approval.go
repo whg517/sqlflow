@@ -24,24 +24,27 @@ type ApprovalHandler struct {
 }
 
 // NewApprovalHandler creates a new ApprovalHandler.
-func NewApprovalHandler(engine *ApprovalEngine) *ApprovalHandler {
-	return &ApprovalHandler{engine: engine}
-}
-
-// SetAuditService injects the audit service for audit logging.
-func (h *ApprovalHandler) SetAuditService(auditSvc auditlog.Writer) {
-	h.auditSvc = auditSvc
-}
-
-func (h *ApprovalHandler) SetPermissionService(permissionSvc *security.Service) {
-	h.permSvc = permissionSvc
+//
+// All three collaborators are parameters, not setters.
+//
+// They used to arrive afterwards through SetAuditService and
+// SetPermissionService, and both use sites guarded on nil by degrading to a
+// no-op: forgetting the first meant policy changes went unaudited, and
+// forgetting the second meant the approval chain stopped checking whether the
+// roles it names still exist. Neither would fail, or say anything. Whether the
+// audit invariant holds should not be a question about wiring order, and the
+// compiler can settle it. An absent audit writer is spelled auditlog.Discard,
+// which is a decision rather than an omission.
+func NewApprovalHandler(engine *ApprovalEngine, auditSvc auditlog.Writer, permSvc *security.Service) *ApprovalHandler {
+	return &ApprovalHandler{
+		engine:   engine,
+		auditSvc: auditlog.OrDiscard(auditSvc),
+		permSvc:  permSvc,
+	}
 }
 
 // writeAuditLog writes an audit entry for policy management actions.
 func (h *ApprovalHandler) writeAuditLog(c echo.Context, action, detail string) {
-	if h.auditSvc == nil {
-		return
-	}
 	h.auditSvc.Write(c.Request().Context(), auditlog.Record{
 		UserID:     httpx.UserID(c),
 		Action:     action,

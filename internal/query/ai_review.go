@@ -1,4 +1,4 @@
-package ticket
+package query
 
 import (
 	"bufio"
@@ -615,7 +615,7 @@ func buildUserPrompt(req *AIReviewRequest, staticResult *AIReviewResult) string 
 
 	// Tell the model what it is reading. The form is the driver's own answer,
 	// so a new document or DSL driver gets a correct prompt without an edit here.
-	switch queryFormOf(req.DBType) {
+	switch describeQueryForm(req.DBType) {
 	case driver.QueryFormDocument:
 		b.WriteString("\nNote: this is a document-store command body, not SQL. Analyze accordingly.\n")
 	case driver.QueryFormDSL:
@@ -888,4 +888,19 @@ func (s *AIReviewService) sensitiveTables(ctx context.Context, tables []string, 
 	// calls.
 	sort.Strings(names)
 	return names, nil
+}
+
+// describeQueryForm reports how queries are composed for a datasource type.
+//
+// It goes through driver.DescribeType, which is the same entry point the ticket
+// analyzer uses. There used to be two — one via DescribeType and one via
+// NewDriver — answering the same question with different fallbacks for an
+// unregistered type. SQL is the safe default here: the note it selects only
+// tells the model what it is reading.
+func describeQueryForm(dsType string) driver.QueryForm {
+	desc, err := driver.DescribeType(dsType)
+	if err != nil {
+		return driver.QueryFormSQL
+	}
+	return desc.QueryForm
 }

@@ -72,7 +72,10 @@ cd web && npx tsc -b && npm run test
 
 **能力全部由可选接口表达，没有能力位。** `MetadataBrowser`、`StatementExecutor`、
 `ParameterizedQueryExecutor`、`ParameterBinder`、`QueryExplainer`、`ConfigValidator`、
-`ConfigDecoder`——方法在不在，类型系统说了算，`driver.Describe` 用类型断言合成 `Descriptor`。
+`ConfigDecoder`、`StatementSplitter`——方法在不在，类型系统说了算，`driver.Describe`
+用类型断言合成 `Descriptor`。约定由 `TestEveryDriverAssertsWhatItSatisfies` 强制：
+类型系统说驱动满足什么，它的断言块就必须写出什么。这条也曾漂移——ES 实现了整个
+`MetadataBrowser` 却一个断言都没写。见 [ADR-0011](docs/adr/0011-optional-interfaces-as-driver-capabilities.md)。
 
 **驱动专属配置存在 `extra_config` JSON，由驱动自己解码**（`ConfigDecoder`，对称于
 `ConfigValidator`）。ES 曾有五个专属列，从 DDL 一路穿透到 ent schema、model、adapter
@@ -137,8 +140,8 @@ internal/audit/      审计写入、检索、报表、用户行为分析
 internal/datasource/ 数据源 CRUD、连接测试、元数据浏览
 internal/iam/        认证、JWT、API token、OIDC
 internal/security/   Casbin 权限、权限申请、脱敏规则
-internal/query/      查询执行、历史、导出、分享、SQL 模板
-internal/ticket/     工单状态机、审批引擎、SLA、AI 评审、调度
+internal/query/      查询执行、历史、导出、分享、SQL 模板、AI 评审
+internal/ticket/     工单状态机、审批引擎、SLA、调度
 internal/notify/     Webhook、飞书、通知偏好与订阅
 internal/ops/        备份、仪表盘、Git 关联、前端性能指标
 
@@ -176,7 +179,17 @@ docs/                需求、架构、ADR、评审、路线图
   后跑 `go generate ./internal/db/ent/` 重新生成。SQL migration 是 DDL 的唯一事实来源，ent 自动迁移未启用——
   改表结构要同时评估 migration、ent schema 和测试夹具。
 - **`internal/connpool` 只剩一处用途**：ES 索引与字段浏览需要原生客户端。
-  不要扩大它；其余路径一律走 `internal/driver.PoolManager`。
+  不要扩大它；其余路径一律走 `internal/driver.PoolManager`。曾经它有三分之二不可达
+  ——MySQL/MongoDB 连接池、ping 辅助函数、走空 map 的 `HealthCheck`、一个零实现者的
+  `Pool` 接口——全部靠自己的测试躲过 `make deadcode`，已删除。留下的那处缺口是真实的：
+  `GetESIndices`/`GetESIndexFields` 需要分页 `_cat/indices` 与原始 mapping，而
+  `driver.MetadataBrowser` 只回答 `TableInfo`/`ColumnInfo`，不含健康度、文档数、
+  存储大小与子字段。**代价是同一个集群有两个独立配置的客户端**；要真正消除它，
+  应该扩展驱动契约，而不是把这个包养大。
+- **AI 评审属于 `internal/query` 而不是工单域。** 它是建议性的（[ADR-0004](docs/adr/0004-ai-is-advisory.md)），
+  唯一入口是查询工作台的 `POST /api/query/review`，工单生命周期从未调用过它。
+  它曾是 `internal/ticket` 里 891 行与该域无关的代码，还带着一套写着
+  「SQL 解析 → AI 评审 → 工单创建流水线」的集成测试——那条流水线不存在。
 - **领域包访问平台库只能通过 ent**（[ADR-0010](docs/adr/0010-ent-as-the-single-data-access-path.md)），
   由 `internal/arch` 的 `TestDomainsDoNotQueryThroughDatabaseSQL` 强制。双轨期
   暴露了 8 个缺陷，5 个是静默的：占位符复用让私有模板的归属校验失效、

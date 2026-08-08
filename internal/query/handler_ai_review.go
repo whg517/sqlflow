@@ -1,4 +1,4 @@
-package ticket
+package query
 
 import (
 	"encoding/json"

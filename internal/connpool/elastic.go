@@ -103,78 +103,30 @@ func (m *Manager) RemoveElasticsearch(dsID int64) {
 	})
 }
 
-// ElasticsearchPing 尝试 ping 一个 Elasticsearch 集群以验证连通性。
-func ElasticsearchPing(ctx context.Context, urls []string, authType, username, password, apiKey string, verifyCerts bool) error {
-	cfg := es.Config{
-		Addresses: urls,
-	}
-
-	// 根据认证类型配置
-	switch authType {
-	case "api_key":
-		cfg.Header = http.Header{"Authorization": {"ApiKey " + apiKey}}
-	case "basic":
-		cfg.Username = username
-		cfg.Password = password
-	case "none":
-		// 无认证
-	default:
-		if username != "" {
-			cfg.Username = username
-			cfg.Password = password
-		}
-	}
-
-	if !verifyCerts {
-		cfg.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	}
-
-	client, err := es.NewClient(cfg)
-	if err != nil {
-		return fmt.Errorf("创建 Elasticsearch 客户端: %w", err)
-	}
-
-	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	res, err := client.Ping(client.Ping.WithContext(pingCtx))
-	if err != nil {
-		return fmt.Errorf("Elasticsearch ping 失败: %w", err)
-	}
-	defer res.Body.Close()
-	if res.IsError() {
-		return fmt.Errorf("Elasticsearch ping 返回错误: %s", res.Status())
-	}
-
-	return nil
-}
-
-// InjectESForTest 在测试中注入预构建的 ES 客户端。
-func (m *Manager) InjectESForTest(dsID int64, urls []string, client *es.Client) {
-	key := esPoolKey(dsID, urls)
-	m.esPools.Store(key, client)
-}
-
-// CachedESIDs returns the datasource IDs that currently hold a cached client.
+// InjectESForTest stores a pre-built client so a test can exercise index and
+// field browsing without a cluster.
 //
-// It exists so that code which evicts connections can be checked from outside
-// this package. Without an observer the only way to ask "is this still cached"
-// was to call GetElasticsearch, which connects when the answer is no.
+// It is the one injection hook that survived the package's cleanup, because it
+// is the one with a caller: internal/datasource's ES pagination tests. The
+// MySQL and MongoDB equivalents were kept alive only by tests of the pools they
+// injected into, which no longer exist.
+func (m *Manager) InjectESForTest(dsID int64, urls []string, client *es.Client) {
+	m.esPools.Store(esPoolKey(dsID, urls), client)
+}
+
+// CachedESIDs lists the datasources with a cached client.
+//
+// Test support with a live caller: internal/datasource asserts that rotating a
+// credential or deleting a datasource evicts the client, which is a regression
+// test for a cache that used to survive both.
 func (m *Manager) CachedESIDs() []int64 {
-	seen := map[int64]struct{}{}
-	m.esPools.Range(func(key, _ interface{}) bool {
-		var id int64
-		if _, err := fmt.Sscanf(key.(string), "es:%d:", &id); err == nil {
-			seen[id] = struct{}{}
+	var ids []int64
+	m.esPools.Range(func(key, _ any) bool {
+		var dsID int64
+		if _, err := fmt.Sscanf(key.(string), "es:%d:", &dsID); err == nil {
+			ids = append(ids, dsID)
 		}
 		return true
 	})
-	ids := make([]int64, 0, len(seen))
-	for id := range seen {
-		ids = append(ids, id)
-	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	return ids
 }

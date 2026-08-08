@@ -609,6 +609,15 @@ func TestNoWriteOnlyFields(t *testing.T) {
 				for _, lhs := range node.Lhs {
 					if sel, ok := lhs.(*ast.SelectorExpr); ok {
 						notRead[sel] = true
+						// And its Sel, because ast.Inspect descends into a node
+						// even when the caller ignores it: marking only the
+						// SelectorExpr left the walk to visit `connMgr` in
+						// `h.connMgr = mgr` as a bare Ident and count the write
+						// as a read. Every field assigned through a selector was
+						// invisible to this check — which is most of them, and
+						// is why it found only the three written in composite
+						// literals.
+						notRead[sel.Sel] = true
 					}
 				}
 			case *ast.CompositeLit:

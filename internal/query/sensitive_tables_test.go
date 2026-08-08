@@ -1,4 +1,4 @@
-package ticket
+package query
 
 import (
 	"slices"
@@ -18,7 +18,7 @@ func newSensitiveTableService(t *testing.T) *AIReviewService {
 }
 
 // seedMaskRule marks one field of one table as masked.
-func seedMaskRule(t *testing.T, svc *AIReviewService, datasourceID int64, table, field string) {
+func seedAIMaskRule(t *testing.T, svc *AIReviewService, datasourceID int64, table, field string) {
 	t.Helper()
 	if err := svc.entClient.MaskRule.Create().
 		SetDatasourceID(datasourceID).
@@ -37,9 +37,9 @@ func seedMaskRule(t *testing.T, svc *AIReviewService, datasourceID int64, table,
 // change touching masked data through the low-risk path.
 func TestSensitiveTables(t *testing.T) {
 	svc := newSensitiveTableService(t)
-	seedMaskRule(t, svc, 1, "users", "phone")
-	seedMaskRule(t, svc, 1, "orders", "credit_card")
-	seedMaskRule(t, svc, 2, "users", "email")
+	seedAIMaskRule(t, svc, 1, "users", "phone")
+	seedAIMaskRule(t, svc, 1, "orders", "credit_card")
+	seedAIMaskRule(t, svc, 2, "users", "email")
 
 	tests := []struct {
 		name         string
@@ -83,8 +83,8 @@ func TestSensitiveTables(t *testing.T) {
 // because it has three masked columns reads as three findings.
 func TestSensitiveTablesDedupes(t *testing.T) {
 	svc := newSensitiveTableService(t)
-	seedMaskRule(t, svc, 1, "users", "phone")
-	seedMaskRule(t, svc, 1, "users", "email")
+	seedAIMaskRule(t, svc, 1, "users", "phone")
+	seedAIMaskRule(t, svc, 1, "users", "email")
 
 	got, err := svc.sensitiveTables(t.Context(), []string{"users"}, 1)
 	if err != nil {

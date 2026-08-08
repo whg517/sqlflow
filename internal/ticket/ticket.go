@@ -1096,19 +1096,6 @@ func affectedTablesToJSON(tables []string) string {
 	return string(b)
 }
 
-// queryFormOf reports how queries are composed for a datasource type.
-//
-// An unregistered type answers with the SQL form, which is the conservative
-// choice here: it selects no extra checks rather than skipping the ones the
-// caller would otherwise get.
-func queryFormOf(dsType string) driver.QueryForm {
-	d, err := driver.NewDriver(dsType)
-	if err != nil {
-		return driver.QueryFormSQL
-	}
-	return d.QueryForm()
-}
-
 // ticketTarget holds the server-owned facts about the datasource a ticket is
 // filed against.
 //

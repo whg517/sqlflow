@@ -1,26 +1,30 @@
+// Package connpool caches the raw Elasticsearch clients that index and field
+// browsing need.
+//
+// It is deliberately small, and it used to be much larger: MySQL and MongoDB
+// pools, a PostgreSQL pool config, ping helpers, a HealthCheck that walked maps
+// nothing filled, three test-injection hooks and a Pool interface with no
+// implementations — roughly two thirds of the package, none of it reachable
+// from main, all of it kept alive past `make deadcode` by its own tests. Every
+// connection path except this one goes through internal/driver.PoolManager.
+//
+// What survives is one genuine gap in the driver contract: GetESIndices and
+// GetESIndexFields need paginated _cat/indices and raw mappings, which
+// driver.MetadataBrowser does not model — it answers with TableInfo and
+// ColumnInfo, not health, doc counts, store sizes or sub-fields. That gap means
+// one cluster is reached through two independently-configured clients, and
+// closing it properly means extending the driver contract rather than growing
+// this package.
 package connpool
 
 import (
-	"context"
-	"database/sql"
-	"fmt"
-	"strings"
 	"sync"
-	"time"
-
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Manager manages cached connection pools for MySQL, PostgreSQL, MongoDB and Elasticsearch datasources.
-// It reuses *sql.DB / *mongo.Client / *es.TypedClient instances instead of creating new connections per query.
+// Manager caches Elasticsearch clients by datasource.
 type Manager struct {
-	mu         sync.RWMutex
-	sqlPools   sync.Map // key: string → value: *sql.DB (MySQL + PostgreSQL)
-	mongoPools sync.Map // key: string → value: *mongo.Client
-	esPools    sync.Map // key: string → value: *es.TypedClient (Elasticsearch)
+	mu      sync.RWMutex
+	esPools sync.Map // key: string → value: *es.Client
 }
 
 // NewManager creates a new connection pool Manager.
@@ -28,230 +32,13 @@ func NewManager() *Manager {
 	return &Manager{}
 }
 
-// poolKey generates a unique cache key for a MySQL connection.
-func poolKey(dsID int64, host string, port int, database string) string {
-	return fmt.Sprintf("mysql:%d:%s:%d:%s", dsID, host, port, database)
-}
-
-// MySQLPoolConfig holds pool configuration from datasource settings.
-type MySQLPoolConfig struct {
-	MaxOpen     int
-	MaxIdle     int
-	MaxLifetime int // seconds
-	MaxIdleTime int // seconds
-}
-
-// GetMySQL returns a cached *sql.DB for the given datasource parameters,
-// creating and configuring one if it doesn't exist.
-func (m *Manager) GetMySQL(dsID int64, host string, port int, user, password, database string, cfg MySQLPoolConfig) (*sql.DB, error) {
-	key := poolKey(dsID, host, port, database)
-
-	// Fast path: check cache
-	if v, ok := m.sqlPools.Load(key); ok {
-		return v.(*sql.DB), nil
-	}
-
-	// Slow path: create new pool
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Double-check after acquiring write lock
-	if v, ok := m.sqlPools.Load(key); ok {
-		return v.(*sql.DB), nil
-	}
-
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=30s&parseTime=true", user, password, host, port, database)
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("open mysql: %w", err)
-	}
-
-	// Apply pool settings
-	maxOpen := cfg.MaxOpen
-	if maxOpen <= 0 {
-		maxOpen = 10
-	}
-	maxIdle := cfg.MaxIdle
-	if maxIdle <= 0 {
-		maxIdle = 5
-	}
-	maxLifetime := cfg.MaxLifetime
-	if maxLifetime <= 0 {
-		maxLifetime = 3600
-	}
-	maxIdleTime := cfg.MaxIdleTime
-	if maxIdleTime <= 0 {
-		maxIdleTime = 600
-	}
-
-	db.SetMaxOpenConns(maxOpen)
-	db.SetMaxIdleConns(maxIdle)
-	db.SetConnMaxLifetime(time.Duration(maxLifetime) * time.Second)
-	db.SetConnMaxIdleTime(time.Duration(maxIdleTime) * time.Second)
-
-	m.sqlPools.Store(key, db)
-	return db, nil
-}
-
-// Remove removes a cached connection pool for the given datasource.
-// This should be called when a datasource is updated or deleted.
-func (m *Manager) Remove(dsID int64, host string, port int, database string) {
-	key := poolKey(dsID, host, port, database)
-	if v, ok := m.sqlPools.LoadAndDelete(key); ok {
-		_ = v.(*sql.DB).Close()
-	}
-}
-
-// InjectMySQLForTest stores a pre-built *sql.DB in the pool for testing.
-func (m *Manager) InjectMySQLForTest(dsID int64, host string, port int, database string, db *sql.DB) {
-	key := poolKey(dsID, host, port, database)
-	m.sqlPools.Store(key, db)
-}
-
-// InjectMongoForTest stores a pre-built *mongo.Client in the pool for testing.
-func (m *Manager) InjectMongoForTest(dsID int64, uri string, client *mongo.Client) {
-	key := mongoPoolKey(dsID, uri)
-	m.mongoPools.Store(key, client)
-}
-
-// Close closes all cached connection pools (MySQL, PostgreSQL, MongoDB and Elasticsearch).
+// Close drops every cached client.
+//
+// The Elasticsearch client has no explicit close, so this only clears the
+// cache. It exists so the composition root has one shutdown call to make.
 func (m *Manager) Close() {
-	m.sqlPools.Range(func(key, value interface{}) bool {
-		_ = value.(*sql.DB).Close()
-		m.sqlPools.Delete(key)
-		return true
-	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	m.mongoPools.Range(func(key, value interface{}) bool {
-		_ = value.(*mongo.Client).Disconnect(ctx)
-		m.mongoPools.Delete(key)
-		return true
-	})
-
-	// Elasticsearch 客户端没有显式的 Close 方法，仅清理缓存
-	m.esPools.Range(func(key, value interface{}) bool {
+	m.esPools.Range(func(key, _ any) bool {
 		m.esPools.Delete(key)
 		return true
 	})
-}
-
-// mongoPoolKey generates a unique cache key for a MongoDB connection.
-func mongoPoolKey(dsID int64, uri string) string {
-	return fmt.Sprintf("mongo:%d:%s", dsID, uri)
-}
-
-// GetMongoDB returns a cached *mongo.Client for the given datasource,
-// creating and pinging one if it doesn't exist.
-func (m *Manager) GetMongoDB(ctx context.Context, dsID int64, uri string) (*mongo.Client, error) {
-	key := mongoPoolKey(dsID, uri)
-
-	// Fast path: check cache
-	if v, ok := m.mongoPools.Load(key); ok {
-		return v.(*mongo.Client), nil
-	}
-
-	// Slow path: create new client
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Double-check after acquiring write lock
-	if v, ok := m.mongoPools.Load(key); ok {
-		return v.(*mongo.Client), nil
-	}
-
-	connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	client, err := mongo.Connect(connectCtx, options.Client().ApplyURI(uri))
-	if err != nil {
-		return nil, fmt.Errorf("connect mongodb: %w", err)
-	}
-
-	if err := client.Ping(connectCtx, nil); err != nil {
-		_ = client.Disconnect(connectCtx)
-		return nil, fmt.Errorf("ping mongodb: %w", err)
-	}
-
-	m.mongoPools.Store(key, client)
-	return client, nil
-}
-
-// GetMongoDatabaseNames returns the list of database names using a cached MongoDB client.
-// It creates and caches the client if not already present.
-func (m *Manager) GetMongoDatabaseNames(ctx context.Context, dsID int64, uri string) ([]string, error) {
-	client, err := m.GetMongoDB(ctx, dsID, uri)
-	if err != nil {
-		return nil, err
-	}
-
-	listCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	names, err := client.ListDatabaseNames(listCtx, map[string]interface{}{})
-	if err != nil {
-		return nil, fmt.Errorf("list databases: %w", err)
-	}
-	return names, nil
-}
-
-// RemoveMongo removes all cached MongoDB clients for the given datasource ID.
-func (m *Manager) RemoveMongo(dsID int64) {
-	prefix := fmt.Sprintf("mongo:%d:", dsID)
-	m.mongoPools.Range(func(key, value interface{}) bool {
-		if strings.HasPrefix(key.(string), prefix) {
-			m.mongoPools.Delete(key)
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_ = value.(*mongo.Client).Disconnect(ctx)
-			cancel()
-		}
-		return true
-	})
-}
-
-// PGPoolConfig holds pool configuration for PostgreSQL connections.
-type PGPoolConfig struct {
-	MaxOpen     int
-	MaxIdle     int
-	MaxLifetime int // seconds
-	MaxIdleTime int // seconds
-}
-
-// HealthCheck verifies that all cached connection pools are still alive.
-// Returns an error summarizing which pools are unhealthy.
-func (m *Manager) HealthCheck() error {
-	var errs []string
-
-	// Check SQL pools (MySQL + PostgreSQL)
-	m.sqlPools.Range(func(key, value interface{}) bool {
-		pool, ok := value.(*sql.DB)
-		if !ok {
-			return true
-		}
-		if err := pool.Ping(); err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", key, err))
-		}
-		return true
-	})
-
-	// Check MongoDB pools
-	m.mongoPools.Range(func(key, value interface{}) bool {
-		client, ok := value.(*mongo.Client)
-		if !ok {
-			return true
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := client.Ping(ctx, nil); err != nil {
-			errs = append(errs, fmt.Sprintf("mongo:%s: %v", key, err))
-		}
-		return true
-	})
-
-	if len(errs) > 0 {
-		return fmt.Errorf("unhealthy pools: %s", strings.Join(errs, "; "))
-	}
-	return nil
 }

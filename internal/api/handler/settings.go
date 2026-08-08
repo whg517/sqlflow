@@ -5,18 +5,18 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/notify"
+	"github.com/whg517/sqlflow/internal/query"
 	"github.com/whg517/sqlflow/internal/resp"
-	"github.com/whg517/sqlflow/internal/ticket"
 )
 
 // SettingsHandler handles notification settings.
 type SettingsHandler struct {
 	notifySvc   *notify.Service
-	aiReviewSvc *ticket.AIReviewService
+	aiReviewSvc *query.AIReviewService
 }
 
 // NewSettingsHandler creates a new SettingsHandler.
-func NewSettingsHandler(notifySvc *notify.Service, aiReviewSvc *ticket.AIReviewService) *SettingsHandler {
+func NewSettingsHandler(notifySvc *notify.Service, aiReviewSvc *query.AIReviewService) *SettingsHandler {
 	return &SettingsHandler{
 		notifySvc:   notifySvc,
 		aiReviewSvc: aiReviewSvc,

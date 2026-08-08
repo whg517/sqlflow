@@ -47,6 +47,11 @@ var (
 	_ driver.Driver          = (*ESDriver)(nil)
 	_ driver.ConfigValidator = (*ESDriver)(nil)
 	_ driver.ConfigDecoder   = (*ESDriver)(nil)
+	// MetadataBrowser was missing from this block while ListDatabases, ListTables
+	// and GetColumns were all implemented — the only incomplete assertion block of
+	// the five drivers, and precisely the drift the convention exists to catch.
+	// It was covered only by a test, which is a weaker thing than a build failure.
+	_ driver.MetadataBrowser = (*ESDriver)(nil)
 )
 
 // Type returns "elasticsearch".

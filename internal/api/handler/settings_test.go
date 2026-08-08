@@ -10,17 +10,17 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/notify"
-	"github.com/whg517/sqlflow/internal/ticket"
+	"github.com/whg517/sqlflow/internal/query"
 )
 
 // ─── Test Setup ──────────────────────────────────────────────────────────────
 
 // setupNotifyTest creates a fresh Echo, services, and SettingsHandler for testing.
-func setupNotifyTest(t *testing.T) (*echo.Echo, *notify.Service, *ticket.AIReviewService, *SettingsHandler) {
+func setupNotifyTest(t *testing.T) (*echo.Echo, *notify.Service, *query.AIReviewService, *SettingsHandler) {
 	t.Helper()
 
 	notifySvc := notify.NewService(notify.Deps{})
-	aiReviewSvc := ticket.NewAIReviewService(nil, "openai", "gpt-4", "test-api-key-12345678", "https://api.openai.com/v1", 10*time.Second)
+	aiReviewSvc := query.NewAIReviewService(nil, "openai", "gpt-4", "test-api-key-12345678", "https://api.openai.com/v1", 10*time.Second)
 	handler := NewSettingsHandler(notifySvc, aiReviewSvc)
 
 	e := echo.New()
@@ -582,7 +582,7 @@ func TestNotifyHandler_GetSettings_AfterUpdates(t *testing.T) {
 
 func TestNewNotifyHandler(t *testing.T) {
 	notifySvc := notify.NewService(notify.Deps{})
-	aiReviewSvc := ticket.NewAIReviewService(nil, "", "", "", "", 0)
+	aiReviewSvc := query.NewAIReviewService(nil, "", "", "", "", 0)
 
 	handler := NewSettingsHandler(notifySvc, aiReviewSvc)
 	if handler == nil {

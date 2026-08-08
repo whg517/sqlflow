@@ -21,7 +21,6 @@ import (
 type reqRecorder struct {
 	mu       sync.Mutex
 	body     dingTalkRequest
-	feishu   map[string]interface{}
 	url      string
 	called   bool
 	notifyCh chan struct{} // closed-per-call signal (see newReqRecorder / signalOnce)
@@ -80,7 +79,6 @@ func (r *reqRecorder) reset() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.body = dingTalkRequest{}
-	r.feishu = nil
 	r.url = ""
 	r.called = false
 	// drain pending signals

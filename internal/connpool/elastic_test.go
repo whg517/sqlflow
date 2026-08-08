@@ -96,51 +96,6 @@ func mockESServer() *httptest.Server {
 	}))
 }
 
-// TestElasticsearchPingWithMockServer 使用 mock HTTP server 测试 Elasticsearch ping。
-func TestElasticsearchPingWithMockServer(t *testing.T) {
-	server := mockESServer()
-	defer server.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// 测试无认证
-	err := ElasticsearchPing(ctx, []string{server.URL}, "none", "", "", "", false)
-	if err != nil {
-		t.Errorf("ElasticsearchPing(none) 失败: %v", err)
-	}
-
-	// 测试 basic auth（mock server 不校验凭据）
-	err = ElasticsearchPing(ctx, []string{server.URL}, "basic", "admin", "pass", "", false)
-	if err != nil {
-		t.Errorf("ElasticsearchPing(basic) 失败: %v", err)
-	}
-
-	// 测试 api_key 认证
-	err = ElasticsearchPing(ctx, []string{server.URL}, "api_key", "", "", "test-key", false)
-	if err != nil {
-		t.Errorf("ElasticsearchPing(api_key) 失败: %v", err)
-	}
-
-	// 测试默认 authType（兼容：有用户名时按 basic 处理）
-	err = ElasticsearchPing(ctx, []string{server.URL}, "", "user", "pwd", "", false)
-	if err != nil {
-		t.Errorf("ElasticsearchPing(default) 失败: %v", err)
-	}
-}
-
-// TestElasticsearchPingError 测试连接失败场景。
-func TestElasticsearchPingError(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	// 连接不存在的地址
-	err := ElasticsearchPing(ctx, []string{"http://127.0.0.1:1"}, "none", "", "", "", false)
-	if err == nil {
-		t.Error("连接失败时应该返回错误")
-	}
-}
-
 // TestGetElasticsearchCaching 测试 ES 客户端缓存机制。
 func TestGetElasticsearchCaching(t *testing.T) {
 	server := mockESServer()

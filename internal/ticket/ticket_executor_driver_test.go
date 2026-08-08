@@ -21,18 +21,14 @@ type testExecDriver struct {
 	stmts       []string // 记录收到的语句
 	mockResults []driver.StatementResult
 	mockErr     error
-	connected   bool
 }
 
-func (m *testExecDriver) Type() string                { return m.typ }
-func (m *testExecDriver) QueryForm() driver.QueryForm { return driver.QueryFormSQL }
-func (m *testExecDriver) Connect(ctx context.Context, cfg *driver.Config) error {
-	m.connected = true
-	return nil
-}
-func (m *testExecDriver) Close() error                                        { m.connected = false; return nil }
-func (m *testExecDriver) Ping(ctx context.Context) error                      { return nil }
-func (m *testExecDriver) ListDatabases(ctx context.Context) ([]string, error) { return nil, nil }
+func (m *testExecDriver) Type() string                                          { return m.typ }
+func (m *testExecDriver) QueryForm() driver.QueryForm                           { return driver.QueryFormSQL }
+func (m *testExecDriver) Connect(ctx context.Context, cfg *driver.Config) error { return nil }
+func (m *testExecDriver) Close() error                                          { return nil }
+func (m *testExecDriver) Ping(ctx context.Context) error                        { return nil }
+func (m *testExecDriver) ListDatabases(ctx context.Context) ([]string, error)   { return nil, nil }
 func (m *testExecDriver) ListTables(ctx context.Context, db string) ([]driver.TableInfo, error) {
 	return nil, nil
 }

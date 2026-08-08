@@ -1,11 +1,23 @@
 # ADR-0003：使用能力声明的数据源驱动抽象
 
-- 状态：accepted
+> **本 ADR 已被取代，保留作为历史记录。**
+>
+> 它要求驱动显式声明能力，而那份声明与实现之间没有任何东西保证一致。七个能力位
+> 上线后逐条检验的结果是：三个被全部五个驱动声明为真（不承载信息），两个被做得到
+> 的驱动声明为假（照它执行会拒掉可用的 MongoDB 导出），一个被 Elasticsearch 声明
+> 为假而其索引实际正被 Casbin 校验（照它执行会删掉一处访问检查）。
+>
+> 取代它的 [ADR-0011](0011-optional-interfaces-as-driver-capabilities.md) 把能力
+> 交给类型系统：方法在不在，编译器说了算，不存在第二份可以漂移的声明。
+>
+> 下文「验证」一节点名的 `CapabilitySet` 已随该决策一并删除。
+
+- 状态：superseded
 - 日期：2026-07-14（补录）
 - 决策者：SQLFlow Team
 - 关联需求：FR-DS-001、FR-DS-003、NFR-MNT-001
 - 取代：无
-- 被取代：无
+- 被取代：[ADR-0011](0011-optional-interfaces-as-driver-capabilities.md)
 
 ## 背景
 

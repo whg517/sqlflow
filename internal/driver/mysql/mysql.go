@@ -13,6 +13,7 @@ import (
 	gomysql "github.com/go-sql-driver/mysql"
 
 	"github.com/whg517/sqlflow/internal/driver"
+	"github.com/whg517/sqlflow/internal/driver/sqlrows"
 	"github.com/whg517/sqlflow/internal/platform/sqlparser"
 )
 
@@ -219,74 +220,7 @@ func (d *MySQLDriver) ExecuteQueryWithArgs(ctx context.Context, query string, ar
 }
 
 func (d *MySQLDriver) executeQuery(ctx context.Context, query string, args []interface{}, limit int) (*driver.QueryResult, error) {
-	if d.db == nil {
-		return nil, fmt.Errorf("mysql: not connected")
-	}
-
-	if limit <= 0 {
-		limit = 1000
-	}
-
-	start := time.Now()
-
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	rows, err := d.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("查询超时")
-		}
-		return nil, fmt.Errorf("执行查询失败: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	cols, err := rows.Columns()
-	if err != nil {
-		return nil, fmt.Errorf("获取列信息失败: %w", err)
-	}
-
-	resultRows := make([]map[string]interface{}, 0, limit)
-	rowCount := 0
-	for rows.Next() {
-		if rowCount >= limit {
-			break
-		}
-
-		values := make([]interface{}, len(cols))
-		valuePtrs := make([]interface{}, len(cols))
-		for i := range values {
-			valuePtrs[i] = &values[i]
-		}
-
-		if err := rows.Scan(valuePtrs...); err != nil {
-			return nil, fmt.Errorf("读取数据失败: %w", err)
-		}
-
-		row := make(map[string]interface{})
-		for i, col := range cols {
-			val := values[i]
-			if b, ok := val.([]byte); ok {
-				row[col] = string(b)
-			} else {
-				row[col] = val
-			}
-		}
-		resultRows = append(resultRows, row)
-		rowCount++
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("遍历结果失败: %w", err)
-	}
-
-	elapsed := time.Since(start).Milliseconds()
-
-	return &driver.QueryResult{
-		Columns:       cols,
-		Rows:          resultRows,
-		Total:         int64(len(resultRows)),
-		ExecutionTime: elapsed,
-	}, nil
+	return sqlrows.Query(ctx, d.db, "mysql", query, args, limit)
 }
 
 // ExecuteStatement executes a single DML/DDL statement.

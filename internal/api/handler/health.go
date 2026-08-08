@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/platform/metrics"
 )
@@ -25,7 +24,6 @@ type HealthHandler struct {
 	version string
 
 	// Optional dependencies for readiness checks
-	connMgr *connpool.Manager
 	poolMgr *driver.PoolManager
 	mu      sync.RWMutex
 }
@@ -37,13 +35,6 @@ func NewHealthHandler(db *sql.DB) *HealthHandler {
 		started: time.Now(),
 		version: "1.0.0",
 	}
-}
-
-// SetConnPoolManager sets the connection pool manager for readiness checks.
-func (h *HealthHandler) SetConnPoolManager(mgr *connpool.Manager) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.connMgr = mgr
 }
 
 // SetPoolManager sets the driver PoolManager for readiness checks.

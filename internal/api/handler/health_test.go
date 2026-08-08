@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/platform/metrics"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
@@ -252,44 +251,5 @@ func TestHealthHandler_Readyz_DBError(t *testing.T) {
 	}
 	if resp.Checks["platform_db"] == "" || resp.Checks["platform_db"] == "ok" {
 		t.Errorf("platform_db check should indicate error, got %q", resp.Checks["platform_db"])
-	}
-}
-
-func TestHealthHandler_Readyz_WithConnPoolManager(t *testing.T) {
-	database := testutil.NewDB(t)
-
-	h := NewHealthHandler(database.DB)
-
-	// Set an empty connection pool manager (no external pools)
-	mgr := connpool.NewManager()
-	h.SetConnPoolManager(mgr)
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	if err := h.Readyz(c); err != nil {
-		t.Fatalf("handler error: %v", err)
-	}
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
-	}
-
-	var resp HealthResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-
-	if resp.Checks["platform_db"] != "ok" {
-		t.Errorf("platform_db = %q, want ok", resp.Checks["platform_db"])
-	}
-	// The blanket "datasources" entry is gone. It came from walking connection
-	// maps that no production code fills, so it was permanently "ok" whatever
-	// the targets were doing; pooled connections are now reported one by one,
-	// and an empty pool reports none.
-	if _, ok := resp.Checks["datasources"]; ok {
-		t.Error("the unconditional datasources check is back")
 	}
 }
