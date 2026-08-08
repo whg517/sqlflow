@@ -161,7 +161,6 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	reportSvc := audit.NewReportService(database)
 
 	// Comment / Git
-	commentSvc := ticket.NewCommentService(database)
 	gitSvc := ops.NewGitService(database)
 
 	// SLA（ticket 依赖它，它依赖 notify）
@@ -212,6 +211,11 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 		EncryptionKey:  cfg.EncryptionKey,
 		ApprovalEngine: approvalEngine,
 	})
+
+	// After ticketSvc, because comment reads are authorized behind the same
+	// boundary a ticket read is — the thread is no less sensitive than the
+	// ticket it hangs off.
+	commentSvc := ticket.NewCommentService(database, ticketSvc)
 
 	// A ticket left in EXECUTING by a crashed process is unreachable: it cannot
 	// be cancelled, cannot be executed, and nothing else looks at it again.

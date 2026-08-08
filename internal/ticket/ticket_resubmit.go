@@ -136,10 +136,15 @@ func (s *Service) ResubmitTicket(ctx context.Context, ticketID, submitterID int6
 	s.populateTicketNames(ctx, t)
 
 	// Re-run policy matching on the new revision, outside the transaction:
-	// ApplyPolicy writes, and the single-connection pool cannot serve it while
-	// the transaction is open. Matching failure leaves the ticket in SUBMITTED
-	// for manual review, same as ticket creation.
-	s.applyApprovalPolicy(ctx, t)
+	// ApplyPolicy writes, and the transaction is already committed.
+	//
+	// A failure is returned rather than swallowed, for the same reason as at
+	// creation — SUBMITTED has no exit. The difference is that the ticket
+	// already existed, so it is left as it is rather than deleted; the caller
+	// learns the resubmission did not take.
+	if err := s.applyApprovalPolicy(ctx, t); err != nil {
+		return nil, err
+	}
 
 	return t, nil
 }

@@ -42,7 +42,7 @@ func (h *CommentHandler) ListComments(c echo.Context) error {
 		return resp.BadRequest(c, "无效的工单ID")
 	}
 
-	comments, err := h.commentSvc.ListComments(c.Request().Context(), orderID)
+	comments, err := h.commentSvc.ListComments(c.Request().Context(), orderID, httpx.UserID(c), httpx.Role(c))
 	if err != nil {
 		log.Printf("ListComments failed: %v", err)
 		return resp.InternalError(c, "获取评论失败")

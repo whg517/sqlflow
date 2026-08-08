@@ -29,11 +29,22 @@ var (
 type CommentService struct {
 	database *db.DB
 	client   *ent.Client
+	tickets  TicketReader
+}
+
+// TicketReader answers whether an actor may see a ticket at all.
+//
+// Declared on the consuming side because it is the only thing the comment
+// boundary needs, and because the answer has to be the same one ticket reads
+// already give — a comment thread is no less sensitive than the ticket it
+// hangs off.
+type TicketReader interface {
+	GetTicketForActor(ctx context.Context, id, userID int64, role string) (*model.Ticket, error)
 }
 
 // NewCommentService creates a new CommentService.
-func NewCommentService(database *db.DB) *CommentService {
-	return &CommentService{database: database, client: database.Client()}
+func NewCommentService(database *db.DB, tickets TicketReader) *CommentService {
+	return &CommentService{database: database, client: database.Client(), tickets: tickets}
 }
 
 // CreateComment adds a new comment to a ticket.
@@ -88,7 +99,18 @@ func (s *CommentService) CreateComment(ctx context.Context, orderID, userID int6
 }
 
 // ListComments retrieves all comments for a ticket ordered by created_at.
-func (s *CommentService) ListComments(ctx context.Context, orderID int64) ([]model.Comment, error) {
+func (s *CommentService) ListComments(ctx context.Context, orderID, userID int64, role string) ([]model.Comment, error) {
+	// The same boundary the ticket itself is read behind.
+	//
+	// This used to take only a ticket id, so it could not express the check even
+	// if someone wanted it — and it had none. Any authenticated user could read
+	// any ticket's discussion.
+	if s.tickets != nil {
+		if _, err := s.tickets.GetTicketForActor(ctx, orderID, userID, role); err != nil {
+			return nil, err
+		}
+	}
+
 	comments, err := s.client.Comment.Query().
 		Where(comment.OrderID(orderID)).
 		Order(comment.ByCreatedAt()).

@@ -46,7 +46,7 @@ func setupCommentHandlerTest(t *testing.T) (*echo.Echo, *CommentService, *Commen
 	}
 
 	wrapped, _ := db.WrapSQL(database.DB)
-	commentSvc := NewCommentService(wrapped)
+	commentSvc := NewCommentService(wrapped, nil)
 	handler := NewCommentHandler(commentSvc)
 	e := echo.New()
 

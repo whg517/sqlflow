@@ -291,7 +291,7 @@ func (h *ApprovalHandler) GetApprovalChain(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "无效的工单ID"})
 	}
 
-	detail, err := h.engine.GetApprovalChainDetail(c.Request().Context(), ticketID)
+	detail, err := h.engine.GetApprovalChainDetail(c.Request().Context(), ticketID, httpx.UserID(c), httpx.Role(c))
 	if err != nil {
 		log.Printf("GetApprovalChain failed: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -337,7 +337,7 @@ func (h *ApprovalHandler) GetApprovalHistory(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "无效的工单ID"})
 	}
 
-	records, err := h.engine.GetApprovalHistory(c.Request().Context(), ticketID)
+	records, err := h.engine.GetApprovalHistory(c.Request().Context(), ticketID, httpx.UserID(c), httpx.Role(c))
 	if err != nil {
 		log.Printf("GetApprovalHistory failed: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})

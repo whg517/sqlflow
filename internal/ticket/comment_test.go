@@ -32,7 +32,7 @@ func setupCommentTest(t *testing.T) (*sql.DB, int64, int64) {
 
 func TestCommentService_CreateComment(t *testing.T) {
 	testDB, userID, ticketID := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 	ctx := context.Background()
 
 	comment, err := svc.CreateComment(ctx, ticketID, userID, "Nice work!", 0)
@@ -58,7 +58,7 @@ func TestCommentService_CreateComment(t *testing.T) {
 
 func TestCommentService_CreateComment_EmptyContent(t *testing.T) {
 	testDB, userID, ticketID := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 
 	_, err := svc.CreateComment(context.Background(), ticketID, userID, "", 0)
 	if err != ErrCommentContentEmpty {
@@ -73,7 +73,7 @@ func TestCommentService_CreateComment_EmptyContent(t *testing.T) {
 
 func TestCommentService_CreateComment_NonexistentTicket(t *testing.T) {
 	testDB, userID, _ := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 
 	_, err := svc.CreateComment(context.Background(), 99999, userID, "Hello", 0)
 	if err != ErrOrderNotFound {
@@ -83,7 +83,7 @@ func TestCommentService_CreateComment_NonexistentTicket(t *testing.T) {
 
 func TestCommentService_CreateComment_ReplyToComment(t *testing.T) {
 	testDB, userID, ticketID := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 	ctx := context.Background()
 
 	// Create parent comment
@@ -104,7 +104,7 @@ func TestCommentService_CreateComment_ReplyToComment(t *testing.T) {
 
 func TestCommentService_CreateComment_ReplyToNonexistentComment(t *testing.T) {
 	testDB, userID, ticketID := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 
 	_, err := svc.CreateComment(context.Background(), ticketID, userID, "Reply", 99999)
 	if err != ErrCommentNotFound {
@@ -114,7 +114,7 @@ func TestCommentService_CreateComment_ReplyToNonexistentComment(t *testing.T) {
 
 func TestCommentService_ListComments(t *testing.T) {
 	testDB, userID, ticketID := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 	ctx := context.Background()
 
 	// Create multiple comments
@@ -125,7 +125,7 @@ func TestCommentService_ListComments(t *testing.T) {
 		}
 	}
 
-	comments, err := svc.ListComments(ctx, ticketID)
+	comments, err := svc.ListComments(ctx, ticketID, 0, "admin")
 	if err != nil {
 		t.Fatalf("ListComments: %v", err)
 	}
@@ -141,9 +141,9 @@ func TestCommentService_ListComments(t *testing.T) {
 
 func TestCommentService_ListComments_Empty(t *testing.T) {
 	testDB, _, ticketID := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 
-	comments, err := svc.ListComments(context.Background(), ticketID)
+	comments, err := svc.ListComments(context.Background(), ticketID, 0, "admin")
 	if err != nil {
 		t.Fatalf("ListComments: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestCommentService_ListComments_Empty(t *testing.T) {
 
 func TestCommentService_DeleteComment_AsOwner(t *testing.T) {
 	testDB, userID, ticketID := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 	ctx := context.Background()
 
 	comment, err := svc.CreateComment(ctx, ticketID, userID, "To delete", 0)
@@ -168,7 +168,7 @@ func TestCommentService_DeleteComment_AsOwner(t *testing.T) {
 	}
 
 	// Verify deleted
-	comments, _ := svc.ListComments(ctx, ticketID)
+	comments, _ := svc.ListComments(ctx, ticketID, 0, "admin")
 	if len(comments) != 0 {
 		t.Errorf("expected 0 comments after delete, got %d", len(comments))
 	}
@@ -176,7 +176,7 @@ func TestCommentService_DeleteComment_AsOwner(t *testing.T) {
 
 func TestCommentService_DeleteComment_AsAdmin(t *testing.T) {
 	testDB, userID, ticketID := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 	ctx := context.Background()
 
 	comment, err := svc.CreateComment(ctx, ticketID, userID, "Admin delete", 0)
@@ -193,7 +193,7 @@ func TestCommentService_DeleteComment_AsAdmin(t *testing.T) {
 
 func TestCommentService_DeleteComment_AsDBA(t *testing.T) {
 	testDB, userID, ticketID := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 	ctx := context.Background()
 
 	comment, err := svc.CreateComment(ctx, ticketID, userID, "DBA delete", 0)
@@ -209,7 +209,7 @@ func TestCommentService_DeleteComment_AsDBA(t *testing.T) {
 
 func TestCommentService_DeleteComment_NotOwner(t *testing.T) {
 	testDB, userID, ticketID := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 	ctx := context.Background()
 
 	comment, err := svc.CreateComment(ctx, ticketID, userID, "Protected", 0)
@@ -226,7 +226,7 @@ func TestCommentService_DeleteComment_NotOwner(t *testing.T) {
 
 func TestCommentService_DeleteComment_NotFound(t *testing.T) {
 	testDB, userID, _ := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 
 	err := svc.DeleteComment(context.Background(), 99999, userID, "admin")
 	if err != ErrCommentNotFound {
@@ -236,7 +236,7 @@ func TestCommentService_DeleteComment_NotFound(t *testing.T) {
 
 func TestCommentService_DeleteComment_WithReplies(t *testing.T) {
 	testDB, userID, ticketID := setupCommentTest(t)
-	svc := NewCommentService(testutil.WrapSQL(t, testDB))
+	svc := NewCommentService(testutil.WrapSQL(t, testDB), nil)
 	ctx := context.Background()
 
 	// Create parent and reply
@@ -255,7 +255,7 @@ func TestCommentService_DeleteComment_WithReplies(t *testing.T) {
 		t.Fatalf("DeleteComment with replies: %v", err)
 	}
 
-	comments, _ := svc.ListComments(ctx, ticketID)
+	comments, _ := svc.ListComments(ctx, ticketID, 0, "admin")
 	if len(comments) != 0 {
 		t.Errorf("expected 0 comments after deleting parent with reply, got %d", len(comments))
 	}

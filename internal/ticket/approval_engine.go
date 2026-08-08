@@ -529,7 +529,17 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 }
 
 // GetApprovalHistory returns all approval records for a ticket.
-func (e *ApprovalEngine) GetApprovalHistory(ctx context.Context, ticketID int64) ([]model.ApprovalRecord, error) {
+func (e *ApprovalEngine) GetApprovalHistory(ctx context.Context, ticketID, userID int64, role string) ([]model.ApprovalRecord, error) {
+	if err := e.mayReadTicket(ctx, ticketID, userID, role); err != nil {
+		return nil, err
+	}
+	return e.approvalRecords(ctx, ticketID)
+}
+
+// approvalRecords reads the records without authorizing, for callers that have
+// already crossed the boundary.
+func (e *ApprovalEngine) approvalRecords(ctx context.Context, ticketID int64) ([]model.ApprovalRecord, error) {
+
 	records, err := e.client.ApprovalRecord.Query().
 		Where(entApprovalRecord.TicketIDEQ(ticketID)).
 		Order(ent.Asc(entApprovalRecord.FieldStage), ent.Asc(entApprovalRecord.FieldID)).
@@ -631,4 +641,25 @@ func int64PtrValue(v *int64) int64 {
 		return 0
 	}
 	return *v
+}
+
+// mayReadTicket applies the ticket's own read boundary to what hangs off it.
+//
+// The chain and its history describe who decided a change and why, and they
+// were readable by anyone authenticated while the ticket itself was not. The
+// rule is GetTicketForActor's, restated here rather than imported because the
+// engine has no Service — a cross-reference the other direction would be a
+// cycle.
+func (e *ApprovalEngine) mayReadTicket(ctx context.Context, ticketID, userID int64, role string) error {
+	if role == "admin" || role == "dba" {
+		return nil
+	}
+	tk, err := e.client.Ticket.Get(ctx, int(ticketID))
+	if err != nil {
+		return fmt.Errorf("查询工单失败: %w", err)
+	}
+	if tk.SubmitterID == userID || tk.ReviewerID == userID {
+		return nil
+	}
+	return ErrNoPermission
 }

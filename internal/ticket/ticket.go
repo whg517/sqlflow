@@ -30,6 +30,11 @@ var (
 	// ErrInvalidStatusTransition indicates an invalid state transition.
 	ErrInvalidStatusTransition = errors.New("无效的工单状态变更")
 	// ErrTicketAlreadyProcessed indicates the ticket has already been processed.
+	// ErrNoApprovalPolicy means nothing routes this ticket, so no one can act on
+	// it. Refused at creation: SUBMITTED has no exit but cancel, and a ticket
+	// nobody can approve, execute or reopen is worse than one that was never
+	// created.
+	ErrNoApprovalPolicy = errors.New("没有匹配的审批策略，工单无法进入审批流程，请联系管理员配置策略")
 	// ErrSelfApproval means the actor deciding this ticket is the one who
 	// submitted it. Separating author from approver is the platform's reason for
 	// existing, so it is refused on every decision path rather than left to a
@@ -332,7 +337,15 @@ func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitter
 	}
 	s.populateTicketNames(ctx, t)
 
-	s.applyApprovalPolicy(ctx, t)
+	// A ticket nothing routes cannot be acted on, so it is refused rather than
+	// created. The row is already written at this point; deleting it keeps the
+	// refusal honest — the submitter is told no, and there is no ticket.
+	if err := s.applyApprovalPolicy(ctx, t); err != nil {
+		if delErr := s.client.Ticket.DeleteOneID(int(t.ID)).Exec(ctx); delErr != nil {
+			log.Printf("ticket: discard unroutable ticket %d: %v", t.ID, delErr)
+		}
+		return nil, err
+	}
 
 	// Send notification for ticket creation
 	if s.notifySvc != nil {
@@ -349,23 +362,30 @@ func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitter
 // therefore a new risk level, so it must be routed through policy matching
 // again rather than inheriting the previous revision's approval chain.
 //
-// Matching or application failure is logged, not returned: the ticket stays in
-// SUBMITTED for manual review rather than being rejected outright.
-func (s *Service) applyApprovalPolicy(ctx context.Context, t *model.Ticket) {
+// A failure is returned, not logged and swallowed.
+//
+// It used to be swallowed, on the stated theory that the ticket "stays in
+// SUBMITTED for manual review". There is no manual-review route: the only
+// writer of SUBMITTED's two outgoing edges is ApplyPolicy — the thing that just
+// failed — and every other entrance refuses a ticket that is not
+// PENDING_APPROVAL. So the ticket was unreviewable, unexecutable and
+// unreopenable, and cancel was the only move left. Refusing tells the submitter
+// immediately, while nothing has been promised to anyone.
+func (s *Service) applyApprovalPolicy(ctx context.Context, t *model.Ticket) error {
 	if s.approvalEngine == nil {
-		return
+		return nil
 	}
 
 	policy, err := s.approvalEngine.MatchPolicy(ctx, t)
 	if err != nil {
 		log.Printf("ticket: match approval policy failed for ticket %d: %v", t.ID, err)
-		return
+		return ErrNoApprovalPolicy
 	}
 
 	result, err := s.approvalEngine.ApplyPolicy(ctx, t.ID, policy, t.SubmitterID)
 	if err != nil {
 		log.Printf("ticket: apply approval policy failed for ticket %d: %v", t.ID, err)
-		return
+		return fmt.Errorf("应用审批策略失败: %w", err)
 	}
 
 	if result.AutoApproved {
@@ -375,6 +395,7 @@ func (s *Service) applyApprovalPolicy(ctx context.Context, t *model.Ticket) {
 	}
 	log.Printf("ticket: approval policy applied for ticket %d, auto_approved=%v, policy_id=%d",
 		t.ID, result.AutoApproved, result.PolicyID)
+	return nil
 }
 
 // GetTicket retrieves a ticket by ID with populated user names.

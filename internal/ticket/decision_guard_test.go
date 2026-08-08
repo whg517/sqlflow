@@ -22,12 +22,7 @@ func decisionFixture(t *testing.T, submitterRole string) (*Service, int64, int64
 	submitter := testutil.SeedUser(t, svc.database.DB, "decider_submitter", submitterRole)
 	dsID := testutil.SeedDatasource(t, svc.database.DB, "decision-ds")
 
-	tk, err := svc.CreateTicket(context.Background(), submitter, submitterRole, dsID,
-		testutil.DatasourceDatabase, "ALTER TABLE t ADD c INT", "decision probe")
-	if err != nil {
-		t.Fatalf("CreateTicket: %v", err)
-	}
-
+	// The policy first: creation is refused when nothing routes the ticket.
 	// A two-stage chain whose first stage belongs to a role nobody in these
 	// tests holds by accident.
 	chain, err := json.Marshal([]ApprovalChainStage{{Role: "security"}, {Role: "dba"}})
@@ -38,6 +33,12 @@ func decisionFixture(t *testing.T, submitterRole string) (*Service, int64, int64
 		"{}", string(chain), false, "", true, 100)
 	if err != nil {
 		t.Fatalf("CreatePolicy: %v", err)
+	}
+
+	tk, err := svc.CreateTicket(context.Background(), submitter, submitterRole, dsID,
+		testutil.DatasourceDatabase, "ALTER TABLE t ADD c INT", "decision probe")
+	if err != nil {
+		t.Fatalf("CreateTicket: %v", err)
 	}
 
 	// Put it where a decision is possible, under that chain.

@@ -165,7 +165,11 @@ type ApprovalChainDetail struct {
 }
 
 // GetApprovalChainDetail returns the full approval chain detail for a ticket.
-func (e *ApprovalEngine) GetApprovalChainDetail(ctx context.Context, ticketID int64) (*ApprovalChainDetail, error) {
+func (e *ApprovalEngine) GetApprovalChainDetail(ctx context.Context, ticketID, userID int64, role string) (*ApprovalChainDetail, error) {
+	if err := e.mayReadTicket(ctx, ticketID, userID, role); err != nil {
+		return nil, err
+	}
+
 	tk, err := e.client.Ticket.Get(ctx, int(ticketID))
 	if err != nil {
 		return nil, fmt.Errorf("查询工单失败: %w", err)
@@ -199,8 +203,9 @@ func (e *ApprovalEngine) GetApprovalChainDetail(ctx context.Context, ticketID in
 		return detail, nil
 	}
 
-	// Get approval records for this ticket
-	records, _ := e.GetApprovalHistory(ctx, ticketID)
+	// Get approval records for this ticket. The caller's read has already been
+	// authorized above, so this reads them directly rather than re-asking.
+	records, _ := e.approvalRecords(ctx, ticketID)
 
 	stages := make([]ApprovalStageDetail, 0, len(chain))
 	for i, stage := range chain {
