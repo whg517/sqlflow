@@ -24,13 +24,15 @@
 | 0.1 | 修复密码分享协议，可选地在修复前临时禁用密码分享/公开分享 | REV-P0-001 | **已完成** | 未验证请求不返回结果；密码、过期、撤销回归通过 |
 | 0.2 | 新增“当前用户可访问数据源”接口，修复页面错误态 | REV-P0-002 | 实现完成，验证方式待定 | Developer/DBA 可选择授权数据源，凭据和管理字段不可见 |
 | 0.3 | 统一 Casbin 元组和通配语义，新增授权 ADR | REV-P0-003 | **已完成** | 空库种子角色矩阵与服务端授权测试通过 |
-| 0.4 | 查询入口拒绝或完整验证多语句 | REV-P0-004 | 待实施（07-31 复核：未开始） | 写语句拼接被拒绝；`WHERE name = 'a;b'` 可正常执行；含 `$$` 函数体的 PG 工单完整执行 |
+| 0.4 | 查询入口拒绝或完整验证多语句 | REV-P0-004 | **已完成**（2026-08-08） | 写语句拼接被拒绝；`WHERE name = 'a;b'` 可正常执行；含 `$$` 函数体的 PG 工单完整执行 |
 | 0.5 | 分离开发与生产 Compose，移除固定 root 暴露 | REV-P0-005 | 部分完成（07-31 复核） | 生产模板无示例库外露和已知凭据 |
 | 0.6 | 建立一致性备份与恢复最小闭环 | REV-P0-006 | **已完成** | 备份走 `pg_dump`；`TestBackupRestoreRoundTrip` 每次 CI 都把备份还原进独立库并核对行数、内置角色、检索函数与序列 |
 
 0.5 已完成部分：`MYSQL_ROOT_PASSWORD` 改为必填，不再提供固定示例密码。剩余：默认发布 `3306`、示例库仍以 root 运行且是 `sqlflow` 的启动依赖、未用 Compose `profiles` 分离开发与生产模板。
 
-0.4 的范围需扩大到工单执行路径：`splitStatements` 与解析器同源缺陷，会切碎 PostgreSQL 的 `$$` 函数体并导致 DDL 部分执行。两处应共用同一个语句分词器。
+0.4 已完成内容（2026-08-08）：语句边界归驱动（`StatementSplitter`），分析端与执行端消费同一个 `ticketPlan`，`strings.Split(sql, ";")` 已删除。MySQL/SQLite 用手写词法扫描器（vendored 的 pingcap/parser 拒绝 `ALTER TABLE ... RENAME COLUMN`、CTE、窗口函数，拿它当分词器会让普通变更工单提不了）；PostgreSQL 用 `pgquery.SplitWithParser`，`$$` 与 `BEGIN ATOMIC` 函数体不再被切碎。回归见 `internal/platform/sqlparser/split_test.go` 与 `internal/ticket/ticket_statement_split_test.go`。
+
+同期补上一处相关缺口：切分器把 `/*!nnnnn ... */` 当代码扫描（服务器会执行它），而定级器的 `normalizeSQL` 曾把它连同普通注释一起删掉，于是 `/*!50000 DROP TABLE users */` 评 OTHER/medium 而 MySQL 照常执行 DROP。见 `internal/ticket/grading_test.go`。
 
 阶段出口：
 
@@ -47,13 +49,13 @@
 | 顺序 | 工作流 | 工作包 | 关联问题 | 状态 |
 |---|---|---|---|---|
 | 1.1 | 调度 | 单一 CAS 状态机；调度器先读完 ID 再执行 | REV-P1-003 | **已完成**（2026-07-31） |
-| 1.2 | 调度 | 执行租约与崩溃恢复；排查全仓库同类嵌套读写模式 | REV-P1-003、015 | 待实施 |
+| 1.2 | 调度 | 执行租约与崩溃恢复；排查全仓库同类嵌套读写模式 | REV-P1-003、015 | **已完成**（2026-08-08） |
 | 1.3 | 工单 | 补齐 `sql_hash` 读取路径使审批后 SQL 篡改检测生效；收敛重复的工单列清单 | REV-P1-017 | **已完成**（2026-07-31） |
 | 1.4 | 工单 | 服务端无条件重算风险；审批/驳回/重提事务化 + CAS；重提走完整分析链并刷新 `sql_type`/`affected_tables` | REV-P1-006、007 | **已完成**（2026-07-31） |
-| 1.4b | 工单 | 审批记录与状态迁移纳入同一事务 | REV-P1-007 余项 | 待实施 |
-| 1.5 | 运行时 | 独立 `data_dir` 配置与启动期可写检查；TLS/非 TLS 统一生命周期；查询超时与行数上限提为配置并在 Service 层统一施加 | REV-P1-008、011、013 | 待实施 |
-| 1.6 | 授权 | 补齐剩余路由的 Token Scope；工单创建增加数据源级门禁；菜单按服务端能力矩阵渲染 | REV-P1-002、012、014 | 部分完成 |
-| 1.7 | 多数据源 | 用 Driver Capability 驱动表单与执行路径 | REV-P1-009 | 待实施 |
+| 1.4b | 工单 | 审批记录与状态迁移纳入同一事务 | REV-P1-007 余项 | **已完成**（2026-08-08） |
+| 1.5 | 运行时 | 独立 `data_dir` 配置与启动期可写检查；TLS/非 TLS 统一生命周期；查询超时与行数上限提为配置并在 Service 层统一施加 | REV-P1-008、011、013 | 部分完成（前两项已完成 2026-08-08；超时/行数上限待实施） |
+| 1.6 | 授权 | 补齐剩余路由的 Token Scope；工单创建增加数据源级门禁；菜单按服务端能力矩阵渲染 | REV-P1-002、012、014 | 部分完成（数据源级门禁已完成；分享路由 Scope 已补；菜单渲染待实施） |
+| 1.7 | 多数据源 | 用 Driver Capability 驱动表单与执行路径 | REV-P1-009 | **已完成**（2026-08-08） |
 | 1.8 | API/UX | 统一领域错误映射 | REV-P1-010 | 部分完成 |
 | — | 授权 | 统一临时权限、资源所有权与私有模板可见性 | REV-P1-001、004、005 | **已完成** |
 
@@ -62,6 +64,16 @@
 1.3 已完成内容：工单列清单收敛为 `ticketColumns` 常量并补入 `sql_hash`，`GetTicket`/`ListTickets` 统一引用；重提时清空哈希；`ListTickets` 的扫描失败不再被静默吞掉。回归见 `internal/ticket/ticket_sql_hash_test.go`（6 个用例）。撤销修复后重跑可复现"篡改语句真实到达目标库"。
 
 1.1 与 1.3 共享同一根因——工单列清单在多处手工重复（DEBT-07）。该模式已消除，后续新增工单字段只需改动一处。
+
+1.2 已完成内容（2026-08-08）：`tickets` 增加 `lease_owner` / `lease_expires_at`，认领与租约在同一条语句里落库——分两步会留下"崩溃时工单在 EXECUTING 但没有可过期的租约"这一窗口，正是本机制要消除的那种卡死。`ReclaimExpiredExecutions` 在启动时与每个调度周期回收过期租约，把工单置为 FAILED 并留审计与原因。**回收到 FAILED 而不是退回 APPROVED**：没有任何一方知道语句是否已经到达目标库，重跑一条已经生效的 DDL 比让人来看一眼更糟。回归见 `internal/ticket/lease_test.go`（4 个用例，含"活着的租约不得被回收"）。
+
+REV-P1-015（SQLite 单连接下的嵌套读写）随 ADR-0009 迁移到 PostgreSQL 后失效：`internal/db` 的连接池为 25，不再存在"读游标占住唯一连接"的前提。
+
+1.5 已完成部分（2026-08-08）：`data_dir` 是独立配置项，导出目录在启动期创建并做可写探测，失败即 fail fast——`os.MkdirAll` 的错误此前被 `_ =` 丢弃，故障要等到用户点击导出才暴露。TLS 与非 TLS 共用同一套启动/关闭路径：`main` 只决定退出码，其余在 `run` 里，因为 `log.Fatalf` 会 `os.Exit` 而 `os.Exit` 不跑 defer——两个分支此前都以 Fatalf 收尾，于是一次干净的 SIGTERM 关闭仍会跳过 `container.Close()` 与 `database.Close()`，调度器不停、连接池不排空；而优雅关闭本身让 `StartTLS` 返回 `http.ErrServerClosed`，又撞进同一个 Fatalf，成功的关闭得到退出码 1。Echo Server 现在配了 Read/Write/Idle 超时（此前只有 HTTP→HTTPS 重定向监听器有）。剩余：查询超时与行数上限仍是包内常量。
+
+1.4b 已完成内容（2026-08-08）：`ProcessApproval` 的状态迁移与审批记录写入收进同一事务。此前是两条独立语句，中间失败会留下一张已决策但没有决策记录的工单，而审批链视图正是读这些记录的。
+
+1.7 已完成内容（2026-08-08）：`ConfigSchema() []ConfigField` 进入 `Driver` 接口（与 `QueryForm()` 同级，强制而非可选），`GET /api/datasource-types` 在任何数据源存在之前就把连接表单的字段、校验与载荷归属交给驱动声明。前端表单从 1321 行降到 916 行、0 个按类型名的分支、15 个测试；`eslint.config.js` 的 `noDatasourceTypeBranching` 是 `internal/arch` 那条规则的前端另一半。见 [ADR-0011](adr/0011-optional-interfaces-as-driver-capabilities.md)。
 
 1.4 已完成内容：`risk_level` 与 `ai_review_result` 从创建请求与 `CreateTicket` 签名中移除，风险由 `RiskEvaluator` 无条件派生；新增基于 ent 谓词式 `Update()` 的 `casTicketStatus`，审批/驳回/重提/多阶段审批全部改为 CAS；重提在单事务内完成快照与迁移，并复用 `applyApprovalPolicy` 重跑完整分析链。补齐了 1.3 遗漏的缺口——自动审批与多阶段末阶段审批此前不写 `sql_hash`，现在所有进入 `APPROVED` 的路径都固定哈希。回归见 `internal/ticket/ticket_governance_test.go`（6 个用例）与 `TestTicketHandler_CreateTicket_IgnoresClientRiskLevel`。
 

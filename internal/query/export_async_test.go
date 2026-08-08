@@ -31,7 +31,10 @@ func TestExportAsyncService_CreateAndRetrieve(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
 	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
-	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	asyncSvc, asyncErr := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	if asyncErr != nil {
+		t.Fatalf("NewAsyncExportService: %v", asyncErr)
+	}
 	defer asyncSvc.Close()
 
 	// Insert a test user
@@ -88,7 +91,10 @@ func TestExportAsyncService_ListTasks(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
 	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
-	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	asyncSvc, asyncErr := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	if asyncErr != nil {
+		t.Fatalf("NewAsyncExportService: %v", asyncErr)
+	}
 	defer asyncSvc.Close()
 
 	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')")
@@ -128,7 +134,10 @@ func TestExportAsyncService_PermissionDenied(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
 	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
-	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	asyncSvc, asyncErr := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	if asyncErr != nil {
+		t.Fatalf("NewAsyncExportService: %v", asyncErr)
+	}
 	defer asyncSvc.Close()
 
 	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('dev', 'hash', 'developer')")
@@ -153,7 +162,10 @@ func TestExportAsyncService_TicketFileIsScopedToSubmitter(t *testing.T) {
 	database := testutil.WrapSQL(t, db)
 	auditSvc := audit.NewService(database, 0, 0)
 	exportSvc := newExportServiceForTest(t, database, auditSvc)
-	asyncSvc := NewAsyncExportService(database, exportSvc, auditSvc, dataDir)
+	asyncSvc, asyncErr := NewAsyncExportService(database, exportSvc, auditSvc, dataDir)
+	if asyncErr != nil {
+		t.Fatalf("NewAsyncExportService: %v", asyncErr)
+	}
 	defer asyncSvc.Close()
 
 	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')")
@@ -216,7 +228,10 @@ func TestExportAsyncService_DownloadFile(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
 	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
-	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	asyncSvc, asyncErr := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	if asyncErr != nil {
+		t.Fatalf("NewAsyncExportService: %v", asyncErr)
+	}
 	defer asyncSvc.Close()
 
 	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')")
@@ -269,7 +284,10 @@ func TestExportAsyncService_NotFound(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
 	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
-	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	asyncSvc, asyncErr := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	if asyncErr != nil {
+		t.Fatalf("NewAsyncExportService: %v", asyncErr)
+	}
 	defer asyncSvc.Close()
 
 	_, err := asyncSvc.GetTask(context.Background(), 99999, 1)
@@ -292,7 +310,10 @@ func TestExportAsyncService_CleanupExpiredFiles(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
 	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
-	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	asyncSvc, asyncErr := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	if asyncErr != nil {
+		t.Fatalf("NewAsyncExportService: %v", asyncErr)
+	}
 	defer asyncSvc.Close()
 
 	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')")

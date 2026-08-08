@@ -53,9 +53,26 @@ type AsyncExportService struct {
 }
 
 // NewAsyncExportService creates a new AsyncExportService.
-func NewAsyncExportService(database *db.DB, exportSvc *ExportService, auditSvc auditlog.Writer, dataDir string) *AsyncExportService {
+//
+// It fails rather than continuing without a usable export directory. The
+// MkdirAll error used to be discarded, so a bad path or a read-only volume
+// surfaced as a broken download the first time a user asked for one — long
+// after startup, to someone with no way to act on it. A process that cannot
+// write where it is configured to write has not started successfully.
+func NewAsyncExportService(database *db.DB, exportSvc *ExportService, auditSvc auditlog.Writer, dataDir string) (*AsyncExportService, error) {
 	dir := filepath.Join(dataDir, ExportDir)
-	_ = os.MkdirAll(dir, 0755)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("创建导出目录 %s 失败: %w", dir, err)
+	}
+	// Creatable is not the same as writable: the directory may already exist
+	// with the wrong owner, which MkdirAll reports as success.
+	probe, err := os.CreateTemp(dir, ".writable-*")
+	if err != nil {
+		return nil, fmt.Errorf("导出目录 %s 不可写: %w", dir, err)
+	}
+	probeName := probe.Name()
+	_ = probe.Close()
+	_ = os.Remove(probeName)
 
 	svc := &AsyncExportService{
 		database:    database,
@@ -72,7 +89,7 @@ func NewAsyncExportService(database *db.DB, exportSvc *ExportService, auditSvc a
 	// Start background cleanup goroutine
 	go svc.cleanupLoop()
 
-	return svc
+	return svc, nil
 }
 
 // Close stops the background cleanup goroutine.

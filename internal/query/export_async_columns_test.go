@@ -49,7 +49,10 @@ func TestAsyncExcelExportHonorsTheColumnSelection(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
 	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
-	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	asyncSvc, asyncErr := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	if asyncErr != nil {
+		t.Fatalf("NewAsyncExportService: %v", asyncErr)
+	}
 	defer asyncSvc.Close()
 
 	if _, err := db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')"); err != nil {
@@ -106,7 +109,10 @@ func TestAsyncExcelExportWithoutSelectionKeepsEveryColumn(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
 	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
-	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	asyncSvc, asyncErr := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	if asyncErr != nil {
+		t.Fatalf("NewAsyncExportService: %v", asyncErr)
+	}
 	defer asyncSvc.Close()
 
 	if _, err := db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')"); err != nil {

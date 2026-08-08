@@ -443,15 +443,28 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 		}
 	}
 
-	applied, err := applyTransition(ctx, e.client.Ticket, ticketID, now, tr)
+	// The move and the record it accounts for are one unit.
+	//
+	// They were two statements: the ticket advanced, then the approval record
+	// was written. A failure in between left a decided ticket with no record of
+	// who decided it, and the chain view reads those records — so the history
+	// would show a stage nobody walked while the ticket sat approved. The
+	// compare-and-swap keeps its meaning inside the transaction: a losing
+	// caller still writes nothing.
+	tx, err := e.client.Tx(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("更新工单审批状态失败: %w", err)
-	}
-	if !applied {
-		return nil, ErrApprovalStageConflict
+		return nil, fmt.Errorf("开启审批事务失败: %w", err)
 	}
 
-	savedRecord, err := e.client.ApprovalRecord.Create().
+	applied, err := applyTransition(ctx, tx.Ticket, ticketID, now, tr)
+	if err != nil {
+		return nil, rollbackOn(tx, fmt.Errorf("更新工单审批状态失败: %w", err))
+	}
+	if !applied {
+		return nil, rollbackOn(tx, ErrApprovalStageConflict)
+	}
+
+	savedRecord, err := tx.ApprovalRecord.Create().
 		SetTicketID(ticketID).
 		SetPolicyID(policyID).
 		SetStage(currentStage).
@@ -464,7 +477,11 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 		SetCreatedAt(now).
 		Save(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("写入审批记录失败: %w", err)
+		return nil, rollbackOn(tx, fmt.Errorf("写入审批记录失败: %w", err))
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交审批事务失败: %w", err)
 	}
 	recordID := int64(savedRecord.ID)
 
