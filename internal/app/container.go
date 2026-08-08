@@ -144,7 +144,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	})
 
 	// QueryService 依赖 ds/perm/audit + 连接池
-	querySvc := query.NewService(database, dsSvc, historySvc, permSvc, auditSvc, cfg.EncryptionKey, poolMgr)
+	querySvc := query.NewService(database, dsSvc, historySvc, permSvc, auditSvc, cfg.EncryptionKey, poolMgr, queryLimits(cfg))
 
 	// MaskRule / PermissionRequest
 	maskRuleSvc := security.NewMaskService(database, permSvc, auditSvc)
@@ -173,7 +173,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	// The query service resolves which datasource, database and tables a
 	// published result came from, so the share path can look up the same mask
 	// rules the query path applied.
-	shareSvc := query.NewShareService(database, cfg.JWT.Secret, querySvc, auditSvc)
+	shareSvc := query.NewShareService(database, cfg.JWT.Secret, querySvc, auditSvc, queryLimits(cfg))
 	vitalsSvc := ops.NewWebVitalsService(database)
 
 	// OIDC（依赖 auth）
@@ -296,5 +296,19 @@ func (c *Container) Close() {
 	}
 	if c.ConnMgr != nil {
 		c.ConnMgr.Close()
+	}
+}
+
+// queryLimits translates the operator's config into the query service's bounds.
+//
+// A translation rather than the same struct in both places: config is what the
+// deployment writes, Limits is what the service enforces, and the service must
+// not have to import a config package to be constructed in a test.
+func queryLimits(cfg *config.Config) query.Limits {
+	return query.Limits{
+		Timeout:       cfg.Query.Timeout,
+		MaxRows:       cfg.Query.MaxRows,
+		ExportMaxRows: cfg.Query.ExportMaxRows,
+		ShareMaxRows:  cfg.Query.ShareMaxRows,
 	}
 }

@@ -106,13 +106,20 @@ const DatasourceDatabase = "appdb"
 // that actually connect.
 func SeedDatasource(t *testing.T, conn *sql.DB, name string) int64 {
 	t.Helper()
+	return SeedDatasourceOfType(t, conn, name, "mysql")
+}
+
+// SeedDatasourceOfType is SeedDatasource for a caller that cares which driver
+// the row names — a test that registers a double, for instance.
+func SeedDatasourceOfType(t *testing.T, conn *sql.DB, name, dsType string) int64 {
+	t.Helper()
 	var id int64
 	if err := conn.QueryRow(
 		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, status, created_at, updated_at)
-		 VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', $2, 'active', now(), now()) RETURNING id`,
-		name, DatasourceDatabase,
+		 VALUES ($1, $2, 'localhost', 3306, 'root', '', $3, 'active', now(), now()) RETURNING id`,
+		name, dsType, DatasourceDatabase,
 	).Scan(&id); err != nil {
-		t.Fatalf("testutil: seed datasource %s: %v", name, err)
+		t.Fatalf("testutil: seed %s datasource %s: %v", dsType, name, err)
 	}
 	return id
 }

@@ -38,7 +38,6 @@ var (
 )
 
 const (
-	shareMaxRows         = 10000
 	shareMaxExpiry       = 7 * 24 * time.Hour
 	shareAccessTokenTTL  = 15 * time.Minute
 	shareAccessTokenType = "v1"
@@ -64,6 +63,7 @@ type ShareScopeResolver interface {
 
 // ShareService handles shared query results.
 type ShareService struct {
+	limits       Limits
 	database     *db.DB
 	client       *ent.Client
 	accessSecret []byte
@@ -72,8 +72,9 @@ type ShareService struct {
 }
 
 // NewShareService creates a new ShareService.
-func NewShareService(database *db.DB, accessSecret string, scope ShareScopeResolver, auditSvc auditlog.Writer) *ShareService {
+func NewShareService(database *db.DB, accessSecret string, scope ShareScopeResolver, auditSvc auditlog.Writer, limits Limits) *ShareService {
 	return &ShareService{
+		limits:       limits.withDefaults(),
 		database:     database,
 		client:       database.Client(),
 		accessSecret: []byte(accessSecret),
@@ -93,7 +94,7 @@ func generateToken() (string, error) {
 
 // CreateShare creates a new shared result link.
 func (s *ShareService) CreateShare(ctx context.Context, req *CreateShareRequest) (*model.SharedResult, error) {
-	if len(req.Rows) > shareMaxRows {
+	if len(req.Rows) > s.limits.ShareMaxRows {
 		return nil, ErrShareRowLimit
 	}
 

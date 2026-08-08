@@ -11,6 +11,7 @@ import (
 	"github.com/whg517/sqlflow/internal/audit"
 	"github.com/whg517/sqlflow/internal/connpool"
 	"github.com/whg517/sqlflow/internal/datasource"
+	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
@@ -79,8 +80,22 @@ func setupQueryService(t *testing.T) (*Service, *sql.DB) {
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
 
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager())
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 	return qs, testDB
+}
+
+// newQueryServiceWithLimits builds a service whose bounds the caller chooses,
+// so a test can assert on a limit without waiting out the production one.
+func newQueryServiceWithLimits(t *testing.T, testDB *db.DB, limits Limits) *Service {
+	t.Helper()
+	seedCasbinRules(t, testDB.DB)
+	dsSvc := datasource.NewService(testDB, testutil.EncryptionKey, connpool.NewManager(), nil, auditlog.Discard)
+	permSvc, err := security.NewService(testDB)
+	if err != nil {
+		t.Fatalf("create permission service: %v", err)
+	}
+	return NewService(testDB, dsSvc, NewHistoryService(testDB), permSvc,
+		auditlog.Discard, testutil.EncryptionKey, driver.NewPoolManager(), limits)
 }
 
 // seedQueryDatasource inserts an active mysql datasource and returns its ID.
@@ -213,7 +228,10 @@ func TestErrors(t *testing.T) {
 		{"forbidden", ErrSQLOperationForbidden, "该操作需要提交工单，仅允许 SELECT 查询"},
 		{"high_risk", ErrSQLHighRisk, "高风险操作被拦截，请提交工单"},
 		{"blocked", ErrSQLBlocked, "SQL操作被拦截"},
-		{"timeout", ErrSQLTimeout, "查询超时（30秒）"},
+		// No duration in the text: the timeout is configurable now, and a message
+		// that names 30 seconds would be wrong for every deployment that sets
+		// anything else.
+		{"timeout", ErrSQLTimeout, "查询超时"},
 		{"empty", ErrEmptySQL, "SQL 不能为空"},
 		{"ds_type", datasource.ErrDatasourceType, "不支持的数据源类型"},
 	}
@@ -438,7 +456,7 @@ func TestExecuteQuery_PermissionDenied(t *testing.T) {
 	// "restricted" role has NO select permission on users table
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager())
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
 	_, err = qs.ExecuteQuery(ctx, 1, "user1", "restricted", dsID, "testdb", "SELECT * FROM users", "mysql")
 	// Permission denied or connection error are both acceptable outcomes
@@ -465,7 +483,7 @@ func TestExecuteQuery_AdminHasWildcardPermission(t *testing.T) {
 
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager())
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
 	// Should pass permission check but fail at connection stage (no real MySQL)
 	_, err = qs.ExecuteQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT * FROM users", "mysql")
@@ -521,7 +539,7 @@ func TestApplyDesensitization_WithRules(t *testing.T) {
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager())
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
 	result := &QueryResult{
 		Columns: []string{"id", "phone"},
@@ -572,7 +590,7 @@ func TestApplyDesensitization_BypassPermission(t *testing.T) {
 
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager())
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
 	result := &QueryResult{
 		Columns: []string{"id", "phone"},
@@ -631,7 +649,7 @@ func TestApplyDesensitization_MultipleMaskTypes(t *testing.T) {
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager())
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
 	result := &QueryResult{
 		Columns: []string{"phone", "email", "name", "id_card"},
@@ -695,7 +713,7 @@ func TestApplyDesensitization_WildcardTableRule(t *testing.T) {
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager())
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
 	result := &QueryResult{
 		Columns: []string{"id", "secret_field"},
@@ -735,7 +753,7 @@ func TestApplyDesensitization_NoMatchTable(t *testing.T) {
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager())
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
 	result := &QueryResult{
 		Columns: []string{"id", "phone"},
@@ -818,7 +836,7 @@ func TestApplyDesensitization_FieldNotInRow(t *testing.T) {
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager())
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
 	result := &QueryResult{
 		Columns: []string{"id", "name"},
@@ -861,7 +879,7 @@ func TestLoadMaskRules(t *testing.T) {
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager())
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
 	rules, err := loadMaskRules(ctx, qs.client, dsID, "testdb", []string{"users"})
 	if err != nil {
@@ -926,7 +944,7 @@ func TestExecuteQuery_AuditOnFailure(t *testing.T) {
 
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager())
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
 
 	_, err = qs.ExecuteQuery(ctx, userID, "audit-user", "admin", dsID, "testdb", "SELECT 1", "mysql")
 	if err == nil {

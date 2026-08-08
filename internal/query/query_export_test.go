@@ -46,7 +46,7 @@ func setupExportService(t *testing.T) (*Service, *sql.DB) {
 	}
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr)
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr, Limits{})
 	return qs, testDB
 }
 
@@ -73,12 +73,6 @@ func exportCtx(t *testing.T) (context.Context, context.CancelFunc) {
 // Existing constant tests (preserved)
 // ---------------------------------------------------------------------------
 
-func TestExportRowLimit(t *testing.T) {
-	if exportRowLimit != 10000 {
-		t.Errorf("exportRowLimit = %d, want 10000", exportRowLimit)
-	}
-}
-
 func TestErrExportRowLimit(t *testing.T) {
 	want := "导出数据超过10000行上限，请添加 LIMIT 条件缩小范围"
 	if ErrExportRowLimit.Error() != want {
@@ -86,14 +80,25 @@ func TestErrExportRowLimit(t *testing.T) {
 	}
 }
 
-func TestExportConstants(t *testing.T) {
+// TestDefaultLimitsMatchWhatWasCompiledIn keeps making these configurable from
+// silently changing them.
+//
+// The values were constants until they became config; a deployment that sets
+// nothing must still get the behavior it had, so the defaults are the contract
+// rather than an implementation detail. Asserting them against the literals
+// they replaced is the only version of this test that can fail — the old one
+// compared a constant to itself.
+func TestDefaultLimitsMatchWhatWasCompiledIn(t *testing.T) {
+	got := Limits{}.withDefaults()
+
 	tests := []struct {
 		name string
 		got  int
 		want int
 	}{
-		{"defaultRowLimit", defaultRowLimit, 1000},
-		{"exportRowLimit", exportRowLimit, 10000},
+		{"MaxRows", got.MaxRows, 1000},
+		{"ExportMaxRows", got.ExportMaxRows, 10000},
+		{"ShareMaxRows", got.ShareMaxRows, 10000},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -101,6 +106,9 @@ func TestExportConstants(t *testing.T) {
 				t.Errorf("%s = %d, want %d", tt.name, tt.got, tt.want)
 			}
 		})
+	}
+	if got.Timeout != 30*time.Second {
+		t.Errorf("Timeout = %v, want 30s", got.Timeout)
 	}
 }
 
@@ -170,7 +178,7 @@ func TestExportQuery_PasswordDecryptError(t *testing.T) {
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, "wrong-key-that-is-32-bytes-long!!", poolMgr)
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, "wrong-key-that-is-32-bytes-long!!", poolMgr, Limits{})
 
 	ctx, cancel := exportCtx(t)
 	defer cancel()
@@ -308,7 +316,7 @@ func TestExportQuery_Success(t *testing.T) {
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr)
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr, Limits{})
 
 	// Also add select policy for admin on this datasource domain
 	seedPolicy(t, testDB, permSvc, "admin", fmt.Sprintf("ds_%d", dsID), "*", "select")
@@ -349,7 +357,7 @@ func TestExportQuery_SuccessWithDesensitization(t *testing.T) {
 
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr)
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr, Limits{})
 
 	// Add a mask rule for this datasource
 	now := time.Now()
@@ -392,7 +400,7 @@ func TestExportQuery_EmptyResult(t *testing.T) {
 
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr)
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr, Limits{})
 
 	// Query the users table (empty in the injected SQLite) with an impossible condition
 	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb",
@@ -420,7 +428,7 @@ func TestExportQuery_RowLimitExceeded(t *testing.T) {
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr)
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr, Limits{})
 
 	ctx, cancel := exportCtx(t)
 	defer cancel()
@@ -437,7 +445,7 @@ func TestExportQuery_RowLimitExceeded(t *testing.T) {
 
 	// Build 10001 rows to exceed the export limit
 	rows := sqlmock.NewRows([]string{"id"})
-	for i := 0; i < exportRowLimit+1; i++ {
+	for i := 0; i < defaultExportMaxRows+1; i++ {
 		rows.AddRow(i)
 	}
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
@@ -470,7 +478,7 @@ func TestExportQuery_AuditOnSuccess(t *testing.T) {
 
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr)
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr, Limits{})
 
 	userID := seedUser(t, testDB, "export-user", "admin")
 
@@ -507,7 +515,7 @@ func TestExportQuery_AuditOnFailure(t *testing.T) {
 
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr)
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr, Limits{})
 
 	userID := seedUser(t, testDB, "export-fail-user", "admin")
 
@@ -552,7 +560,7 @@ func TestExportQuery_DefaultDBType(t *testing.T) {
 
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr)
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr, Limits{})
 
 	// Pass empty dbType — should default to datasource type (mysql)
 	result, err := qs.ExportQuery(ctx, 1, "user1", "admin", dsID, "testdb", "SELECT 1 AS id", "")
@@ -576,7 +584,7 @@ func TestExportQuery_PermissionDenied(t *testing.T) {
 	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
 	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
-	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr)
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr, Limits{})
 
 	ctx, cancel := exportCtx(t)
 	defer cancel()

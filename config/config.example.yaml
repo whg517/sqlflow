@@ -87,4 +87,13 @@ metrics:
   enabled: false           # 是否启用 /metrics 端点
   port: 9090              # Metrics HTTP 端口（通过 docker-compose 暴露）
 
+# 单次查询的资源上限。全部可省略，省略即用括号里的默认值——
+# 这些默认值就是它们成为配置项之前写死在代码里的数。
+# 超时同时覆盖建连与执行：用户等的是这两段的和，连接池被占用的也是这两段。
+query:
+  timeout: 30s            # (30s) 查询超时，含建连
+  max_rows: 1000          # (1000) 交互式查询返回行数上限
+  export_max_rows: 10000  # (10000) 导出行数上限
+  share_max_rows: 10000   # (10000) 分享结果行数上限
+
 query_history_max: 200

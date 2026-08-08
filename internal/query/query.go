@@ -25,16 +25,11 @@ import (
 	"github.com/whg517/sqlflow/internal/security"
 )
 
-const (
-	defaultRowLimit = 1000
-	queryTimeout    = 30 * time.Second
-)
-
 var (
 	ErrSQLOperationForbidden  = errors.New("该操作需要提交工单，仅允许 SELECT 查询")
 	ErrSQLHighRisk            = errors.New("高风险操作被拦截，请提交工单")
 	ErrSQLBlocked             = errors.New("SQL操作被拦截")
-	ErrSQLTimeout             = errors.New("查询超时（30秒）")
+	ErrSQLTimeout             = errors.New("查询超时")
 	ErrEmptySQL               = errors.New("SQL 不能为空")
 	ErrQueryParamsUnsupported = errors.New("当前数据源不支持参数化查询")
 	ErrInternalDatasourceOnly = errors.New("SQLFlow 元数据库仅允许管理员访问")
@@ -76,6 +71,7 @@ type QueryResult struct {
 
 // Service handles SQL query execution logic.
 type Service struct {
+	limits        Limits
 	database      *db.DB
 	client        *ent.Client
 	dsSvc         *datasource.Service
@@ -87,8 +83,9 @@ type Service struct {
 }
 
 // NewService creates a new Service.
-func NewService(database *db.DB, dsSvc *datasource.Service, historySvc *HistoryService, permSvc *security.Service, auditSvc auditlog.Writer, encryptionKey string, poolMgr *driver.PoolManager) *Service {
+func NewService(database *db.DB, dsSvc *datasource.Service, historySvc *HistoryService, permSvc *security.Service, auditSvc auditlog.Writer, encryptionKey string, poolMgr *driver.PoolManager, limits Limits) *Service {
 	return &Service{
+		limits:        limits.withDefaults(),
 		database:      database,
 		client:        database.Client(),
 		dsSvc:         dsSvc,
@@ -215,8 +212,19 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 	// exactly the queries an operator most wants to see.
 	var result *QueryResult
 
-	// Bound the connection attempt; the driver bounds the execution itself.
-	drvCtx, drvCancel := context.WithTimeout(ctx, queryTimeout)
+	// One deadline over connecting and executing both.
+	//
+	// It used to cover only the connection, on the stated theory that "the
+	// driver bounds the execution itself". Three of the five do not: PostgreSQL
+	// sets no query deadline, and MySQL's Timeout is the dial timeout, which
+	// says nothing about a query already in flight. So a slow query ran until
+	// the client hung up, holding a pooled connection — and the DeadlineExceeded
+	// branch below could never fire, because the context it tested was the
+	// caller's, which has no deadline of its own.
+	//
+	// Connect and execute share one budget rather than getting one each because
+	// the sum is what the user waits and what the pool is occupied for.
+	drvCtx, drvCancel := context.WithTimeout(ctx, s.limits.Timeout)
 	defer drvCancel()
 	d, connErr := s.poolMgr.Get(drvCtx, cfg)
 	if connErr != nil {
@@ -225,7 +233,7 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 		err = ErrSQLTimeout
 	} else {
 		var drvResult *driver.QueryResult
-		drvResult, err = executeDriverQuery(ctx, d, sqlContent, queryParams, defaultRowLimit)
+		drvResult, err = executeDriverQuery(drvCtx, d, sqlContent, queryParams, s.limits.MaxRows)
 		switch {
 		case err == nil:
 			result = &QueryResult{
@@ -237,7 +245,7 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 				AffectedRows:  drvResult.AffectedRows,
 				Aggregations:  drvResult.Aggregations,
 			}
-		case ctx.Err() == context.DeadlineExceeded:
+		case drvCtx.Err() == context.DeadlineExceeded:
 			err = ErrSQLTimeout
 		}
 	}

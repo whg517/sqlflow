@@ -22,7 +22,7 @@ func setupShareTest(t *testing.T) (*echo.Echo, *ShareService, *ShareHandler, int
 	t.Helper()
 	d := testutil.NewDB(t)
 
-	shareSvc := NewShareService(d, "handler-share-test-secret-at-least-32-bytes", stubShareScope{}, auditlog.Discard)
+	shareSvc := NewShareService(d, "handler-share-test-secret-at-least-32-bytes", stubShareScope{}, auditlog.Discard, Limits{})
 	h := NewShareHandler(shareSvc)
 	e := echo.New()
 

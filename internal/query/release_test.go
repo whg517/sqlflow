@@ -61,8 +61,7 @@ func newReleaseFixture(t *testing.T) *releaseFixture {
 		t.Fatalf("permission service: %v", err)
 	}
 	svc := NewService(wrap, dsSvc, NewHistoryService(wrap), permSvc,
-		audit.NewService(wrap, 0, 0), testutil.EncryptionKey, poolMgr)
-
+		audit.NewService(wrap, 0, 0), testutil.EncryptionKey, poolMgr, Limits{})
 	if _, err := testDB.Exec(
 		`CREATE TABLE people (id INT, phone TEXT)`); err != nil {
 		t.Fatalf("create target table: %v", err)
@@ -198,7 +197,7 @@ func TestShare_MasksOnRead(t *testing.T) {
 	f := newReleaseFixture(t)
 	f.maskPhoneOn(t)
 
-	shareSvc := NewShareService(f.wrap, "share-secret-at-least-32-bytes-long", f.svc, auditlog.Discard)
+	shareSvc := NewShareService(f.wrap, "share-secret-at-least-32-bytes-long", f.svc, auditlog.Discard, Limits{})
 
 	created, err := shareSvc.CreateShare(context.Background(), &CreateShareRequest{
 		UserID: 1, Username: "user1", Role: "developer",
@@ -239,7 +238,7 @@ func TestShare_MasksOnRead(t *testing.T) {
 func TestShare_SummaryIsServerDerived(t *testing.T) {
 	f := newReleaseFixture(t)
 
-	shareSvc := NewShareService(f.wrap, "share-secret-at-least-32-bytes-long", f.svc, auditlog.Discard)
+	shareSvc := NewShareService(f.wrap, "share-secret-at-least-32-bytes-long", f.svc, auditlog.Discard, Limits{})
 	raw := "SELECT id, phone FROM people WHERE phone = '13812345678' /* " +
 		strings.Repeat("x", 300) + " */"
 
@@ -282,7 +281,7 @@ func TestShare_RefusesATableTheActorCannotRead(t *testing.T) {
 	// loads its rules into memory when the service is constructed, so a DELETE
 	// afterwards leaves the decision unchanged — the first version of this test
 	// did exactly that and passed against a caller who was still permitted.
-	shareSvc := NewShareService(f.wrap, "share-secret-at-least-32-bytes-long", f.svc, auditlog.Discard)
+	shareSvc := NewShareService(f.wrap, "share-secret-at-least-32-bytes-long", f.svc, auditlog.Discard, Limits{})
 	_, err := shareSvc.CreateShare(context.Background(), &CreateShareRequest{
 		UserID: 1, Username: "user1", Role: "guest",
 		Columns:      []string{"id", "phone"},

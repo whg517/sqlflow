@@ -19,8 +19,7 @@ func setupShareTestDB(t *testing.T) *sql.DB {
 
 func TestShareService_CreateAndGet(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
-
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard, Limits{})
 	req := &CreateShareRequest{
 		UserID:   1,
 		Username: "testuser",
@@ -68,8 +67,7 @@ func TestShareService_CreateAndGet(t *testing.T) {
 
 func TestShareService_ExpiredShare(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
-
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard, Limits{})
 	req := &CreateShareRequest{
 		UserID:   1,
 		Username: "testuser",
@@ -95,8 +93,7 @@ func TestShareService_ExpiredShare(t *testing.T) {
 
 func TestShareService_PasswordProtection(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
-
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard, Limits{})
 	req := &CreateShareRequest{
 		UserID:       1,
 		Username:     "testuser",
@@ -202,8 +199,7 @@ func TestShareService_PasswordProtection(t *testing.T) {
 
 func TestShareService_Revoke(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
-
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard, Limits{})
 	req := &CreateShareRequest{
 		UserID:       1,
 		Username:     "testuser",
@@ -238,8 +234,7 @@ func TestShareService_Revoke(t *testing.T) {
 
 func TestShareService_VerifyRejectsExpiredAndRevokedShares(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
-
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard, Limits{})
 	expired, err := svc.CreateShare(t.Context(), &CreateShareRequest{
 		UserID:       1,
 		Username:     "testuser",
@@ -280,9 +275,8 @@ func TestShareService_VerifyRejectsExpiredAndRevokedShares(t *testing.T) {
 
 func TestShareService_RowLimit(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
-
-	rows := make([]map[string]interface{}, shareMaxRows+1)
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard, Limits{})
+	rows := make([]map[string]interface{}, defaultShareMaxRows+1)
 	for i := range rows {
 		rows[i] = map[string]interface{}{"id": i}
 	}
@@ -305,8 +299,7 @@ func TestShareService_RowLimit(t *testing.T) {
 
 func TestShareService_TokenUniqueness(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
-
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard, Limits{})
 	req := &CreateShareRequest{
 		UserID:       1,
 		Username:     "testuser",

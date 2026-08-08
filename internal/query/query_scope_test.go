@@ -66,7 +66,7 @@ func newScopeFixture(t *testing.T) *scopeFixture {
 
 	historySvc := NewHistoryService(testutil.WrapSQL(t, metaDB))
 	auditSvc := audit.NewService(testutil.WrapSQL(t, metaDB), 0, 0)
-	svc := NewService(testutil.WrapSQL(t, metaDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr)
+	svc := NewService(testutil.WrapSQL(t, metaDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, poolMgr, Limits{})
 
 	return &scopeFixture{svc: svc, dsID: dsID, metaDB: metaDB}
 }

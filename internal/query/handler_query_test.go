@@ -41,7 +41,7 @@ func setupQueryTest(t *testing.T) (*echo.Echo, *Service, *HistoryService, *datas
 	// that's OK for handler-level tests that don't reach the permission check.
 	auditSvc := audit.NewService(database, 10, 5*time.Second)
 
-	querySvc := NewService(database, dsSvc, historySvc, permSvc, auditSvc, encKey, driver.NewPoolManager())
+	querySvc := NewService(database, dsSvc, historySvc, permSvc, auditSvc, encKey, driver.NewPoolManager(), Limits{})
 	handler := NewHandler(querySvc, historySvc)
 
 	e := echo.New()
@@ -532,7 +532,7 @@ func TestQueryHandler_DeleteHistory_Success(t *testing.T) {
 	historyID := seedQueryHistory(t, database, userID, ds.ID, "SELECT 1")
 
 	historySvc2 := NewHistoryService(database)
-	querySvc2 := NewService(database, dsSvc2, historySvc2, nil, auditlog.Discard, encKey, driver.NewPoolManager())
+	querySvc2 := NewService(database, dsSvc2, historySvc2, nil, auditlog.Discard, encKey, driver.NewPoolManager(), Limits{})
 	h2 := NewHandler(querySvc2, historySvc2)
 	e := echo.New()
 
@@ -621,7 +621,7 @@ func TestQueryHandler_DeleteHistory_WrongUser(t *testing.T) {
 	historyID := seedQueryHistory(t, database, userOwner, ds.ID, "SELECT 1")
 
 	historySvc := NewHistoryService(database)
-	querySvc := NewService(database, dsSvc, historySvc, nil, auditlog.Discard, encKey, driver.NewPoolManager())
+	querySvc := NewService(database, dsSvc, historySvc, nil, auditlog.Discard, encKey, driver.NewPoolManager(), Limits{})
 	h := NewHandler(querySvc, historySvc)
 	e := echo.New()
 
@@ -655,7 +655,7 @@ func TestQueryHandler_ClearHistory_Success(t *testing.T) {
 	connMgr := connpool.NewManager()
 	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
 	historySvc := NewHistoryService(database)
-	querySvc := NewService(database, dsSvc, historySvc, nil, auditlog.Discard, encKey, driver.NewPoolManager())
+	querySvc := NewService(database, dsSvc, historySvc, nil, auditlog.Discard, encKey, driver.NewPoolManager(), Limits{})
 	h := NewHandler(querySvc, historySvc)
 	e := echo.New()
 
@@ -1053,7 +1053,7 @@ func TestQueryHandler_ClearHistory_Error(t *testing.T) {
 	connMgr := connpool.NewManager()
 	dsSvc := datasource.NewService(database, encKey, connMgr, nil, auditlog.Discard)
 	historySvc := NewHistoryService(database)
-	querySvc := NewService(database, dsSvc, historySvc, nil, auditlog.Discard, encKey, driver.NewPoolManager())
+	querySvc := NewService(database, dsSvc, historySvc, nil, auditlog.Discard, encKey, driver.NewPoolManager(), Limits{})
 	h := NewHandler(querySvc, historySvc)
 	e := echo.New()
 

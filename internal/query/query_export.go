@@ -12,8 +12,6 @@ import (
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
 )
 
-const exportRowLimit = 10000
-
 // ErrExportRowLimit indicates the export result exceeds the maximum allowed rows.
 var ErrExportRowLimit = errors.New("导出数据超过10000行上限，请添加 LIMIT 条件缩小范围")
 
@@ -113,7 +111,13 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 	// export that never reached the datasource still leaves an audit record.
 	var result *QueryResult
 
-	d, connErr := s.poolMgr.Get(ctx, cfg)
+	// Bounded like the interactive path, and for the same reason: an export
+	// reads from the same datasources through the same pool, so an unbounded one
+	// holds a connection exactly as long as an unbounded query does.
+	drvCtx, drvCancel := context.WithTimeout(ctx, s.limits.Timeout)
+	defer drvCancel()
+
+	d, connErr := s.poolMgr.Get(drvCtx, cfg)
 	if connErr != nil {
 		// Map to the same retryable error the query path uses, so the handler
 		// answers 400 rather than 500 for an unreachable datasource.
@@ -121,7 +125,7 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 	} else {
 		// Fetch one row beyond the limit so the caller can detect overflow.
 		var drvResult *driver.QueryResult
-		drvResult, err = executeDriverQuery(ctx, d, sqlContent, queryParams, exportRowLimit+1)
+		drvResult, err = executeDriverQuery(drvCtx, d, sqlContent, queryParams, s.limits.ExportMaxRows+1)
 		if err == nil {
 			result = &QueryResult{
 				Shape:         drvResult.Shape,
@@ -150,7 +154,7 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 	}
 
 	// Check row limit
-	if result.Total > int64(exportRowLimit) {
+	if result.Total > int64(s.limits.ExportMaxRows) {
 		s.auditSvc.Write(ctx, auditlog.Record{
 			UserID:       userID,
 			Action:       "export_failed",

@@ -20,6 +20,7 @@ type Config struct {
 	OIDC            OIDCConfig    `mapstructure:"oidc"`
 	Backup          BackupConfig  `mapstructure:"backup"`
 	Metrics         MetricsConfig `mapstructure:"metrics"`
+	Query           QueryConfig   `mapstructure:"query"`
 	QueryHistoryMax int           `mapstructure:"query_history_max"`
 	EncryptionKey   string        `mapstructure:"encryption_key"`
 }
@@ -105,6 +106,22 @@ type MetricsConfig struct {
 	Port    int  `mapstructure:"port"`
 }
 
+// QueryConfig bounds what a single query may consume.
+//
+// These are the operator's numbers, not the driver's: how long a user may hold
+// a connection and how much they may pull back is a platform policy that has to
+// read the same for every data source. Left to the drivers it did not — three
+// of five imposed no execution deadline at all.
+//
+// Every field may be omitted; the query service substitutes the values that
+// were previously compiled in, so an existing config keeps its behavior.
+type QueryConfig struct {
+	Timeout       time.Duration `mapstructure:"timeout"`
+	MaxRows       int           `mapstructure:"max_rows"`
+	ExportMaxRows int           `mapstructure:"export_max_rows"`
+	ShareMaxRows  int           `mapstructure:"share_max_rows"`
+}
+
 // BackupConfig holds database backup configuration.
 type BackupConfig struct {
 	Enabled  bool          `mapstructure:"enabled"`
@@ -156,6 +173,11 @@ var envBindings = map[string]string{
 	// Metrics
 	"metrics.enabled": "SQLFLOW_METRICS_ENABLED",
 	"metrics.port":    "SQLFLOW_METRICS_PORT",
+	// Query
+	"query.timeout":         "SQLFLOW_QUERY_TIMEOUT",
+	"query.max_rows":        "SQLFLOW_QUERY_MAX_ROWS",
+	"query.export_max_rows": "SQLFLOW_QUERY_EXPORT_MAX_ROWS",
+	"query.share_max_rows":  "SQLFLOW_QUERY_SHARE_MAX_ROWS",
 	// Top-level
 	"query_history_max": "SQLFLOW_QUERY_HISTORY_MAX",
 	"encryption_key":    "SQLFLOW_ENCRYPTION_KEY",
