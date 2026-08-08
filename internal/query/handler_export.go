@@ -28,6 +28,19 @@ func NewExportHandler(exportSvc *ExportService, exportAsyncSvc *AsyncExportServi
 	return &ExportHandler{exportSvc: exportSvc, exportAsyncSvc: exportAsyncSvc}
 }
 
+// requestActor reads the caller's identity out of the authenticated context.
+//
+// Every export entry point builds its actor here and nowhere else, so the
+// identity an export is authorized and scoped by always comes from the token
+// the middleware validated — never from a bindable request field.
+func requestActor(c echo.Context) ExportActor {
+	return ExportActor{
+		UserID:   httpx.UserID(c),
+		Username: httpx.Username(c),
+		Role:     httpx.Role(c),
+	}
+}
+
 type exportAuditRequest struct {
 	UserID       string `query:"user_id"`
 	Action       string `query:"action"`
@@ -55,9 +68,7 @@ type exportAuditRequest struct {
 // @Failure 403 {object} resp.ErrorResponse "无权限"
 // @Router /export/audit [get]
 func (h *ExportHandler) ExportAuditLogs(c echo.Context) error {
-	userID := httpx.UserID(c)
-	username := httpx.Username(c)
-	role := httpx.Role(c)
+	actor := requestActor(c)
 
 	var req exportAuditRequest
 	if err := c.Bind(&req); err != nil {
@@ -89,14 +100,14 @@ func (h *ExportHandler) ExportAuditLogs(c echo.Context) error {
 	forceAsync := req.Async == "1"
 
 	if forceAsync {
-		return h.createAsyncExport(c, userID, username, role, "audit", filters, exportFormat, columnsMap)
+		return h.createAsyncExport(c, actor, "audit", filters, exportFormat, columnsMap)
 	}
 
 	// Validate: check permission + row count
-	total, err := h.exportSvc.ValidateExport(c.Request().Context(), role, ExportTypeAudit, filters)
+	total, err := h.exportSvc.ValidateExport(c.Request().Context(), actor, ExportTypeAudit, filters)
 	if err != nil {
 		if err == ErrExportExceedsLimit {
-			return h.createAsyncExport(c, userID, username, role, "audit", filters, exportFormat, columnsMap)
+			return h.createAsyncExport(c, actor, "audit", filters, exportFormat, columnsMap)
 		}
 		switch err {
 		case ErrExportNoPermission:
@@ -110,9 +121,9 @@ func (h *ExportHandler) ExportAuditLogs(c echo.Context) error {
 	// Stream response based on format
 	switch exportFormat {
 	case ExportFormatExcel:
-		return h.streamAuditExcelResponse(c, userID, username, filters, columnsMap, total)
+		return h.streamAuditExcelResponse(c, actor, filters, columnsMap, total)
 	default:
-		return h.streamAuditCSVResponse(c, userID, username, filters, total)
+		return h.streamAuditCSVResponse(c, actor, filters, total)
 	}
 }
 
@@ -140,9 +151,7 @@ type exportTicketRequest struct {
 // @Failure 400 {object} resp.ErrorResponse "参数错误"
 // @Router /export/tickets [get]
 func (h *ExportHandler) ExportTickets(c echo.Context) error {
-	userID := httpx.UserID(c)
-	username := httpx.Username(c)
-	role := httpx.Role(c)
+	actor := requestActor(c)
 
 	var req exportTicketRequest
 	if err := c.Bind(&req); err != nil {
@@ -172,14 +181,14 @@ func (h *ExportHandler) ExportTickets(c echo.Context) error {
 	forceAsync := req.Async == "1"
 
 	if forceAsync {
-		return h.createAsyncExport(c, userID, username, role, "ticket", filters, exportFormat, columnsMap)
+		return h.createAsyncExport(c, actor, "ticket", filters, exportFormat, columnsMap)
 	}
 
 	// Validate: check permission + row count
-	total, err := h.exportSvc.ValidateExport(c.Request().Context(), role, ExportTypeTicket, filters)
+	total, err := h.exportSvc.ValidateExport(c.Request().Context(), actor, ExportTypeTicket, filters)
 	if err != nil {
 		if err == ErrExportExceedsLimit {
-			return h.createAsyncExport(c, userID, username, role, "ticket", filters, exportFormat, columnsMap)
+			return h.createAsyncExport(c, actor, "ticket", filters, exportFormat, columnsMap)
 		}
 		switch err {
 		case ErrExportNoPermission:
@@ -193,21 +202,21 @@ func (h *ExportHandler) ExportTickets(c echo.Context) error {
 	// Stream response based on format
 	switch exportFormat {
 	case ExportFormatExcel:
-		return h.streamTicketExcelResponse(c, userID, username, filters, columnsMap, total)
+		return h.streamTicketExcelResponse(c, actor, filters, columnsMap, total)
 	default:
-		return h.streamTicketCSVResponse(c, userID, username, filters, total)
+		return h.streamTicketCSVResponse(c, actor, filters, total)
 	}
 }
 
 // streamAuditCSVResponse writes streaming CSV response for audit logs.
-func (h *ExportHandler) streamAuditCSVResponse(c echo.Context, userID int64, username string, filters AuditExportFilters, total int64) error {
+func (h *ExportHandler) streamAuditCSVResponse(c echo.Context, actor ExportActor, filters AuditExportFilters, total int64) error {
 	filename := fmt.Sprintf("audit_logs_%s.csv", time.Now().Format("2006-01-02"))
 	setStreamingCSVHeaders(c, filename, total)
 
 	// Write BOM
 	c.Response().Write([]byte{0xEF, 0xBB, 0xBF})
 
-	written, err := h.exportSvc.StreamExportAuditLogs(c.Request().Context(), c.Response(), username, filters)
+	written, err := h.exportSvc.StreamExportAuditLogs(c.Request().Context(), c.Response(), actor, filters)
 	if err != nil {
 		log.Printf("StreamExportAuditLogs error after %d rows: %v", written, err)
 		return nil // headers already sent
@@ -215,67 +224,67 @@ func (h *ExportHandler) streamAuditCSVResponse(c echo.Context, userID int64, use
 
 	// Write watermark
 	fmt.Fprintf(c.Response(), "\n# 导出水印: 导出人=%s | 导出时间=%s | 仅限内部使用\n",
-		username,
+		actor.Username,
 		time.Now().Format("2006-01-02 15:04:05 MST"),
 	)
 
 	// Record audit log
-	h.exportSvc.WriteAuditExportLog(c.Request().Context(), userID, written)
+	h.exportSvc.WriteAuditExportLog(c.Request().Context(), actor.UserID, written)
 
 	return nil
 }
 
 // streamAuditExcelResponse writes streaming Excel (.xlsx) response for audit logs.
-func (h *ExportHandler) streamAuditExcelResponse(c echo.Context, userID int64, username string, filters AuditExportFilters, columns map[string]int, total int64) error {
+func (h *ExportHandler) streamAuditExcelResponse(c echo.Context, actor ExportActor, filters AuditExportFilters, columns map[string]int, total int64) error {
 	filename := fmt.Sprintf("audit_logs_%s.xlsx", time.Now().Format("2006-01-02"))
 	setStreamingExcelHeaders(c, filename, total)
 
-	written, err := h.exportSvc.StreamExportAuditLogsExcel(c.Request().Context(), c.Response(), username, filters, columns)
+	written, err := h.exportSvc.StreamExportAuditLogsExcel(c.Request().Context(), c.Response(), actor, filters, columns)
 	if err != nil {
 		log.Printf("StreamExportAuditLogsExcel error after %d rows: %v", written, err)
 		return nil // headers already sent
 	}
 
-	h.exportSvc.WriteAuditExportLog(c.Request().Context(), userID, written)
+	h.exportSvc.WriteAuditExportLog(c.Request().Context(), actor.UserID, written)
 
 	return nil
 }
 
 // streamTicketCSVResponse writes streaming CSV response for tickets.
-func (h *ExportHandler) streamTicketCSVResponse(c echo.Context, userID int64, username string, filters TicketExportFilters, total int64) error {
+func (h *ExportHandler) streamTicketCSVResponse(c echo.Context, actor ExportActor, filters TicketExportFilters, total int64) error {
 	filename := fmt.Sprintf("tickets_%s.csv", time.Now().Format("2006-01-02"))
 	setStreamingCSVHeaders(c, filename, total)
 
 	c.Response().Write([]byte{0xEF, 0xBB, 0xBF})
 
-	written, err := h.exportSvc.StreamExportTickets(c.Request().Context(), c.Response(), username, filters)
+	written, err := h.exportSvc.StreamExportTickets(c.Request().Context(), c.Response(), actor, filters)
 	if err != nil {
 		log.Printf("StreamExportTickets error after %d rows: %v", written, err)
 		return nil
 	}
 
 	fmt.Fprintf(c.Response(), "\n# 导出水印: 导出人=%s | 导出时间=%s | 仅限内部使用\n",
-		username,
+		actor.Username,
 		time.Now().Format("2006-01-02 15:04:05 MST"),
 	)
 
-	h.exportSvc.WriteTicketExportLog(c.Request().Context(), userID, written)
+	h.exportSvc.WriteTicketExportLog(c.Request().Context(), actor.UserID, written)
 
 	return nil
 }
 
 // streamTicketExcelResponse writes streaming Excel (.xlsx) response for tickets.
-func (h *ExportHandler) streamTicketExcelResponse(c echo.Context, userID int64, username string, filters TicketExportFilters, columns map[string]int, total int64) error {
+func (h *ExportHandler) streamTicketExcelResponse(c echo.Context, actor ExportActor, filters TicketExportFilters, columns map[string]int, total int64) error {
 	filename := fmt.Sprintf("tickets_%s.xlsx", time.Now().Format("2006-01-02"))
 	setStreamingExcelHeaders(c, filename, total)
 
-	written, err := h.exportSvc.StreamExportTicketsExcel(c.Request().Context(), c.Response(), username, filters, columns)
+	written, err := h.exportSvc.StreamExportTicketsExcel(c.Request().Context(), c.Response(), actor, filters, columns)
 	if err != nil {
 		log.Printf("StreamExportTicketsExcel error after %d rows: %v", written, err)
 		return nil
 	}
 
-	h.exportSvc.WriteTicketExportLog(c.Request().Context(), userID, written)
+	h.exportSvc.WriteTicketExportLog(c.Request().Context(), actor.UserID, written)
 
 	return nil
 }
@@ -303,7 +312,7 @@ func setStreamingExcelHeaders(c echo.Context, filename string, totalRows int64) 
 }
 
 // createAsyncExport creates an async export task and returns 202 with task info.
-func (h *ExportHandler) createAsyncExport(c echo.Context, userID int64, username, role, exportType string, filters interface{}, exportFormat ExportFormat, columns map[string]int) error {
+func (h *ExportHandler) createAsyncExport(c echo.Context, actor ExportActor, exportType string, filters interface{}, exportFormat ExportFormat, columns map[string]int) error {
 	if h.exportAsyncSvc == nil {
 		return resp.InternalError(c, "异步导出服务未启用")
 	}
@@ -313,7 +322,7 @@ func (h *ExportHandler) createAsyncExport(c echo.Context, userID int64, username
 		return resp.BadRequest(c, "序列化筛选参数失败")
 	}
 
-	task, err := h.exportAsyncSvc.CreateAsyncExport(c.Request().Context(), userID, username, role, exportType, string(filtersJSON), string(exportFormat), columns)
+	task, err := h.exportAsyncSvc.CreateAsyncExport(c.Request().Context(), actor, exportType, string(filtersJSON), string(exportFormat), columns)
 	if err != nil {
 		switch err {
 		case ErrExportNoPermission:
@@ -410,18 +419,18 @@ func (h *ExportHandler) ListExportTasks(c echo.Context) error {
 // @Failure 404 {object} resp.ErrorResponse "文件不存在"
 // @Router /export/tasks/{id}/download [get]
 func (h *ExportHandler) DownloadExportFile(c echo.Context) error {
-	userID := httpx.UserID(c)
-
 	taskID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resp.BadRequest(c, "无效的任务ID")
 	}
 
-	reader, filename, err := h.exportAsyncSvc.DownloadFile(c.Request().Context(), taskID, userID)
+	reader, filename, err := h.exportAsyncSvc.DownloadFile(c.Request().Context(), taskID, requestActor(c))
 	if err != nil {
 		switch err {
 		case ErrExportNotFound:
 			return resp.NotFound(c, "导出任务不存在")
+		case ErrExportNoPermission:
+			return resp.Forbidden(c, "没有导出权限")
 		case ErrExportNotReady:
 			return resp.BadRequest(c, "导出任务尚未完成，请稍后再试")
 		case ErrExportFileGone:

@@ -241,7 +241,11 @@ func NewRouter(c *app.Container) *echo.Echo {
 	adminGroup.POST("/api/permission-requests/:id/revoke", permReqHandler.RevokeRequest)
 	adminGroup.POST("/api/permission-requests/expire", permReqHandler.ExpireOverdue)
 
-	// Export routes — audit export requires admin/dba; ticket export requires auth
+	// Export routes. Ticket export sits on authGroup because it is open to every
+	// authenticated user — but only over their own tickets. The row boundary is
+	// the service's (query.ExportService.ticketExportPredicates), not this
+	// group's: a middleware here could only answer "may you call this", and the
+	// question that matters is "whose rows do you get".
 	auditAdminGroup.GET("/api/export/audit", exportHandler.ExportAuditLogs)
 	authGroup.GET("/api/export/tickets", exportHandler.ExportTickets)
 	// Async export task management (authenticated users)

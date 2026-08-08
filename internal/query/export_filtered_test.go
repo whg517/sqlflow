@@ -21,7 +21,7 @@ import (
 func TestExportAuditLogsWithFilters(t *testing.T) {
 	database := testutil.NewDB(t)
 	auditSvc := audit.NewService(database, 0, 0)
-	svc := NewExportService(database, auditSvc)
+	svc := newExportServiceForTest(t, database, auditSvc)
 
 	seedAuditLogs(t, database.DB, 6)
 
@@ -29,7 +29,7 @@ func TestExportAuditLogsWithFilters(t *testing.T) {
 	filters := AuditExportFilters{UserID: "1"}
 
 	t.Run("count", func(t *testing.T) {
-		total, err := svc.countAuditLogs(t.Context(), filters)
+		total, err := svc.countAuditLogs(t.Context(), adminActor, filters)
 		if err != nil {
 			t.Fatalf("countAuditLogs: %v", err)
 		}
@@ -40,7 +40,7 @@ func TestExportAuditLogsWithFilters(t *testing.T) {
 
 	t.Run("csv", func(t *testing.T) {
 		var buf bytes.Buffer
-		written, err := svc.StreamExportAuditLogs(t.Context(), &buf, "admin", filters)
+		written, err := svc.StreamExportAuditLogs(t.Context(), &buf, adminActor, filters)
 		if err != nil {
 			t.Fatalf("StreamExportAuditLogs: %v", err)
 		}
@@ -51,7 +51,7 @@ func TestExportAuditLogsWithFilters(t *testing.T) {
 
 	t.Run("excel", func(t *testing.T) {
 		var buf bytes.Buffer
-		written, err := svc.StreamExportAuditLogsExcel(t.Context(), &buf, "admin", filters, nil)
+		written, err := svc.StreamExportAuditLogsExcel(t.Context(), &buf, adminActor, filters, nil)
 		if err != nil {
 			t.Fatalf("StreamExportAuditLogsExcel: %v", err)
 		}
@@ -81,11 +81,11 @@ func TestExportAuditLogsWithFilters(t *testing.T) {
 func TestExportAuditLogsKeywordIsNotAPattern(t *testing.T) {
 	database := testutil.NewDB(t)
 	auditSvc := audit.NewService(database, 0, 0)
-	svc := NewExportService(database, auditSvc)
+	svc := newExportServiceForTest(t, database, auditSvc)
 
 	seedAuditLogs(t, database.DB, 6)
 
-	total, err := svc.countAuditLogs(t.Context(), AuditExportFilters{Keyword: "%"})
+	total, err := svc.countAuditLogs(t.Context(), adminActor, AuditExportFilters{Keyword: "%"})
 	if err != nil {
 		t.Fatalf("countAuditLogs: %v", err)
 	}
@@ -98,13 +98,13 @@ func TestExportAuditLogsKeywordIsNotAPattern(t *testing.T) {
 func TestExportTicketsWithFilters(t *testing.T) {
 	database := testutil.NewDB(t)
 	auditSvc := audit.NewService(database, 0, 0)
-	svc := NewExportService(database, auditSvc)
+	svc := newExportServiceForTest(t, database, auditSvc)
 
 	seedTickets(t, database.DB, 6)
 
 	filters := TicketExportFilters{Status: "SUBMITTED"}
 
-	total, err := svc.countTickets(t.Context(), filters)
+	total, err := svc.countTickets(t.Context(), adminActor, filters)
 	if err != nil {
 		t.Fatalf("countTickets: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestExportTicketsWithFilters(t *testing.T) {
 	}
 
 	var csvBuf bytes.Buffer
-	csvWritten, err := svc.StreamExportTickets(t.Context(), &csvBuf, "admin", filters)
+	csvWritten, err := svc.StreamExportTickets(t.Context(), &csvBuf, adminActor, filters)
 	if err != nil {
 		t.Fatalf("StreamExportTickets: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestExportTicketsWithFilters(t *testing.T) {
 	}
 
 	var xlsxBuf bytes.Buffer
-	xlsxWritten, err := svc.StreamExportTicketsExcel(t.Context(), &xlsxBuf, "admin", filters, nil)
+	xlsxWritten, err := svc.StreamExportTicketsExcel(t.Context(), &xlsxBuf, adminActor, filters, nil)
 	if err != nil {
 		t.Fatalf("StreamExportTicketsExcel: %v", err)
 	}

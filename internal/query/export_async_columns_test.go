@@ -48,7 +48,7 @@ func waitForExportFile(t *testing.T, path string) {
 func TestAsyncExcelExportHonorsTheColumnSelection(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	exportSvc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
@@ -66,7 +66,7 @@ func TestAsyncExcelExportHonorsTheColumnSelection(t *testing.T) {
 		t.Fatalf("ValidateExportColumns: %v", err)
 	}
 
-	task, err := asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin",
+	task, err := asyncSvc.CreateAsyncExport(context.Background(), adminActor,
 		"audit", string(filtersJSON), "xlsx", chosen)
 	if err != nil {
 		t.Fatalf("CreateAsyncExport: %v", err)
@@ -105,7 +105,7 @@ func TestAsyncExcelExportHonorsTheColumnSelection(t *testing.T) {
 func TestAsyncExcelExportWithoutSelectionKeepsEveryColumn(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	exportSvc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
@@ -115,7 +115,7 @@ func TestAsyncExcelExportWithoutSelectionKeepsEveryColumn(t *testing.T) {
 	auditSvc.Write(context.Background(), auditlog.Record{UserID: 1, Action: "query_execute"})
 
 	filtersJSON, _ := json.Marshal(AuditExportFilters{})
-	task, err := asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin",
+	task, err := asyncSvc.CreateAsyncExport(context.Background(), adminActor,
 		"audit", string(filtersJSON), "xlsx", nil)
 	if err != nil {
 		t.Fatalf("CreateAsyncExport: %v", err)

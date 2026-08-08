@@ -17,7 +17,7 @@ import (
 // Uses excelize StreamWriter for low-memory streaming.
 // columns selects specific columns; nil means all columns.
 // Returns total rows written.
-func (s *ExportService) StreamExportAuditLogsExcel(ctx context.Context, w io.Writer, username string, filters AuditExportFilters, columns map[string]int) (int64, error) {
+func (s *ExportService) StreamExportAuditLogsExcel(ctx context.Context, w io.Writer, actor ExportActor, filters AuditExportFilters, columns map[string]int) (int64, error) {
 	f := excelize.NewFile()
 	defer func() {
 		_ = f.Close()
@@ -61,7 +61,7 @@ func (s *ExportService) StreamExportAuditLogsExcel(ctx context.Context, w io.Wri
 		return 0, fmt.Errorf("写入 Excel 表头失败: %w", err)
 	}
 
-	rows, err := s.fetchAuditExportRows(ctx, filters)
+	rows, err := s.fetchAuditExportRows(ctx, actor, filters)
 	if err != nil {
 		return 0, err
 	}
@@ -109,7 +109,7 @@ func (s *ExportService) StreamExportAuditLogsExcel(ctx context.Context, w io.Wri
 // StreamExportTicketsExcel streams tickets as Excel (.xlsx) to the given writer.
 // columns selects specific columns; nil means all columns.
 // Returns total rows written.
-func (s *ExportService) StreamExportTicketsExcel(ctx context.Context, w io.Writer, username string, filters TicketExportFilters, columns map[string]int) (int64, error) {
+func (s *ExportService) StreamExportTicketsExcel(ctx context.Context, w io.Writer, actor ExportActor, filters TicketExportFilters, columns map[string]int) (int64, error) {
 	f := excelize.NewFile()
 	defer func() {
 		_ = f.Close()
@@ -151,7 +151,7 @@ func (s *ExportService) StreamExportTicketsExcel(ctx context.Context, w io.Write
 	}
 
 	// Query data
-	rows, err := s.fetchTicketExportRows(ctx, filters)
+	rows, err := s.fetchTicketExportRows(ctx, actor, filters)
 	if err != nil {
 		return 0, err
 	}

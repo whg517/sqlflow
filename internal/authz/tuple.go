@@ -8,7 +8,10 @@ import (
 )
 
 const (
-	Wildcard               = "*"
+	Wildcard = "*"
+	// SystemDomain is the domain for platform-management decisions — the ones
+	// that are not about any particular datasource.
+	SystemDomain           = "system"
 	datasourceDomainPrefix = "ds_"
 	userSubjectPrefix      = "user:"
 )
@@ -90,8 +93,8 @@ func NormalizeDomain(dom string) (string, error) {
 	if dom == Wildcard {
 		return Wildcard, nil
 	}
-	if dom == "system" {
-		return "system", nil
+	if dom == SystemDomain {
+		return SystemDomain, nil
 	}
 	rawID := dom
 	if strings.HasPrefix(dom, datasourceDomainPrefix) {

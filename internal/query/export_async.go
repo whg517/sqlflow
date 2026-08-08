@@ -90,17 +90,21 @@ func (s *AsyncExportService) Close() {
 // a task across a restart. It used to stop at the handler, so an export that
 // crossed the sync row limit and switched to this path silently widened back
 // to every column.
-func (s *AsyncExportService) CreateAsyncExport(ctx context.Context, userID int64, username, role, exportType string, filtersJSON string, fileFormat string, columns map[string]int) (*model.ExportTask, error) {
-	if !s.exportSvc.hasExportPermission(role, ExportType(exportType)) {
-		return nil, ErrExportNoPermission
+//
+// actor travels the same way, and for the same reason: the worker needs it to
+// scope the rows it reads. recoverPendingTasks fails anything left in flight by
+// a restart, so no resumed task can arrive without one.
+func (s *AsyncExportService) CreateAsyncExport(ctx context.Context, actor ExportActor, exportType string, filtersJSON string, fileFormat string, columns map[string]int) (*model.ExportTask, error) {
+	if err := s.exportSvc.authorizeExportRequest(ctx, actor, ExportType(exportType)); err != nil {
+		return nil, err
 	}
 
 	filename := generateExportFilename(exportType, fileFormat)
 	filePath := filepath.Join(s.exportDir, filename)
 
 	saved, err := s.client.ExportTask.Create().
-		SetUserID(userID).
-		SetUsername(username).
+		SetUserID(actor.UserID).
+		SetUsername(actor.Username).
 		SetExportType(exportType).
 		SetStatus(string(model.ExportTaskStatusPending)).
 		SetFilename(filename).
@@ -113,8 +117,8 @@ func (s *AsyncExportService) CreateAsyncExport(ctx context.Context, userID int64
 
 	task := &model.ExportTask{
 		ID:          int64(saved.ID),
-		UserID:      userID,
-		Username:    username,
+		UserID:      actor.UserID,
+		Username:    actor.Username,
 		ExportType:  exportType,
 		Status:      model.ExportTaskStatusPending,
 		Filename:    filename,
@@ -126,7 +130,7 @@ func (s *AsyncExportService) CreateAsyncExport(ctx context.Context, userID int64
 	s.tasks.Store(task.ID, task)
 
 	// Launch async export in goroutine
-	go s.executeExport(task, username, fileFormat, columns)
+	go s.executeExport(task, actor, fileFormat, columns)
 
 	return task, nil
 }
@@ -192,9 +196,19 @@ func (s *AsyncExportService) ListTasks(ctx context.Context, userID int64) ([]mod
 }
 
 // DownloadFile returns the file content for a completed export task.
-func (s *AsyncExportService) DownloadFile(ctx context.Context, taskID int64, userID int64) (io.ReadCloser, string, error) {
-	task, err := s.GetTask(ctx, taskID, userID)
+//
+// Two boundaries meet here. GetTask restricts the task row to its owner, and the
+// rows inside the file are the ones that owner could see when the worker wrote
+// it — a file is a snapshot, so nothing at download time can narrow it further.
+// What the re-authorization below does add is revocation: an actor whose export
+// grant was withdrawn after the file was generated no longer gets to pull it.
+func (s *AsyncExportService) DownloadFile(ctx context.Context, taskID int64, actor ExportActor) (io.ReadCloser, string, error) {
+	task, err := s.GetTask(ctx, taskID, actor.UserID)
 	if err != nil {
+		return nil, "", err
+	}
+
+	if err := s.exportSvc.authorizeExportRequest(ctx, actor, ExportType(task.ExportType)); err != nil {
 		return nil, "", err
 	}
 
@@ -215,10 +229,11 @@ func (s *AsyncExportService) DownloadFile(ctx context.Context, taskID int64, use
 
 // executeExport runs the actual export in a background goroutine.
 //
-// It takes no role: CreateAsyncExport has already checked hasExportPermission,
-// and a second copy of that decision here would be a second place to get it
-// wrong.
-func (s *AsyncExportService) executeExport(task *model.ExportTask, username, fileFormat string, columns map[string]int) {
+// It carries the actor rather than just a name: the streams below derive their
+// row boundary from it. The worker used to take only a username and so wrote
+// whatever the unscoped query returned, which turned a request the handler had
+// narrowed into a file containing everyone's rows.
+func (s *AsyncExportService) executeExport(task *model.ExportTask, actor ExportActor, fileFormat string, columns map[string]int) {
 	ctx := context.Background()
 
 	// Mark as processing
@@ -245,17 +260,17 @@ func (s *AsyncExportService) executeExport(task *model.ExportTask, username, fil
 		var filters AuditExportFilters
 		_ = json.Unmarshal([]byte(task.FiltersJSON), &filters)
 		if fileFormat == string(ExportFormatExcel) {
-			totalRows, err = s.exportSvc.StreamExportAuditLogsExcel(ctx, f, username, filters, columns)
+			totalRows, err = s.exportSvc.StreamExportAuditLogsExcel(ctx, f, actor, filters, columns)
 		} else {
-			totalRows, err = s.exportSvc.StreamExportAuditLogs(ctx, f, username, filters)
+			totalRows, err = s.exportSvc.StreamExportAuditLogs(ctx, f, actor, filters)
 		}
 	case ExportTypeTicket:
 		var filters TicketExportFilters
 		_ = json.Unmarshal([]byte(task.FiltersJSON), &filters)
 		if fileFormat == string(ExportFormatExcel) {
-			totalRows, err = s.exportSvc.StreamExportTicketsExcel(ctx, f, username, filters, columns)
+			totalRows, err = s.exportSvc.StreamExportTicketsExcel(ctx, f, actor, filters, columns)
 		} else {
-			totalRows, err = s.exportSvc.StreamExportTickets(ctx, f, username, filters)
+			totalRows, err = s.exportSvc.StreamExportTickets(ctx, f, actor, filters)
 		}
 	default:
 		err = ErrExportTypeInvalid
@@ -270,7 +285,7 @@ func (s *AsyncExportService) executeExport(task *model.ExportTask, username, fil
 
 	// Write watermark
 	_, _ = fmt.Fprintf(f, "\n# 导出水印: 导出人=%s | 导出时间=%s | 仅限内部使用\n",
-		username,
+		actor.Username,
 		time.Now().Format("2006-01-02 15:04:05 MST"),
 	)
 

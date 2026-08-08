@@ -117,7 +117,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 
 	historySvc := query.NewHistoryService(database)
 	auditSvc := audit.NewService(database, 0, 0)
-	exportSvc := query.NewExportService(database, auditSvc)
+	exportSvc := query.NewExportService(database, permSvc, auditSvc)
 	exportAsyncSvc := query.NewAsyncExportService(database, exportSvc, auditSvc, cfg.DB.DataDir)
 
 	dsSvc := datasource.NewService(database, cfg.EncryptionKey, connMgr, poolMgr, auditSvc)

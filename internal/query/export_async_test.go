@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,7 +30,7 @@ func newExportAsyncTestDB(t *testing.T) (*sql.DB, string) {
 func TestExportAsyncService_CreateAndRetrieve(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	exportSvc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
@@ -47,7 +48,7 @@ func TestExportAsyncService_CreateAndRetrieve(t *testing.T) {
 	filters := AuditExportFilters{}
 	filtersJSON, _ := json.Marshal(filters)
 
-	task, err := asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin", "audit", string(filtersJSON), "csv", nil)
+	task, err := asyncSvc.CreateAsyncExport(context.Background(), adminActor, "audit", string(filtersJSON), "csv", nil)
 	if err != nil {
 		t.Fatalf("CreateAsyncExport: %v", err)
 	}
@@ -86,7 +87,7 @@ func TestExportAsyncService_CreateAndRetrieve(t *testing.T) {
 func TestExportAsyncService_ListTasks(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	exportSvc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
@@ -103,7 +104,7 @@ func TestExportAsyncService_ListTasks(t *testing.T) {
 
 	// Create a task
 	filtersJSON, _ := json.Marshal(AuditExportFilters{})
-	_, err = asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin", "audit", string(filtersJSON), "csv", nil)
+	_, err = asyncSvc.CreateAsyncExport(context.Background(), adminActor, "audit", string(filtersJSON), "csv", nil)
 	if err != nil {
 		t.Fatalf("CreateAsyncExport: %v", err)
 	}
@@ -126,23 +127,95 @@ func TestExportAsyncService_ListTasks(t *testing.T) {
 func TestExportAsyncService_PermissionDenied(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	exportSvc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
 	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('dev', 'hash', 'developer')")
 
 	filtersJSON, _ := json.Marshal(AuditExportFilters{})
-	_, err := asyncSvc.CreateAsyncExport(context.Background(), 2, "dev", "developer", "audit", string(filtersJSON), "csv", nil)
+	_, err := asyncSvc.CreateAsyncExport(context.Background(), ExportActor{UserID: 2, Username: "dev", Role: "developer"}, "audit", string(filtersJSON), "csv", nil)
 	if err != ErrExportNoPermission {
 		t.Errorf("expected ErrExportNoPermission, got %v", err)
+	}
+}
+
+// TestExportAsyncService_TicketFileIsScopedToSubmitter checks the file on disk,
+// not the request that asked for it.
+//
+// The async path used to check a role string at creation and then hand the
+// worker nothing but a username, so the worker read every ticket regardless of
+// who asked. The download route could not save it: that route authorizes the
+// task row's owner, and the owner is exactly the person who would be reading
+// everyone else's rows out of their own file.
+func TestExportAsyncService_TicketFileIsScopedToSubmitter(t *testing.T) {
+	db, dataDir := newExportAsyncTestDB(t)
+	database := testutil.WrapSQL(t, db)
+	auditSvc := audit.NewService(database, 0, 0)
+	exportSvc := newExportServiceForTest(t, database, auditSvc)
+	asyncSvc := NewAsyncExportService(database, exportSvc, auditSvc, dataDir)
+	defer asyncSvc.Close()
+
+	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')")
+	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('dev', 'hash', 'developer')")
+
+	insertTicket := func(submitterID int, marker string) {
+		t.Helper()
+		if _, err := db.Exec(
+			`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, created_at, updated_at)
+			 VALUES ($1, 1, 'appdb', $2, $3, 'mysql', 'why', 'SUBMITTED', 'low', now(), now())`,
+			submitterID, "ALTER TABLE t ADD COLUMN "+marker+" INT", marker,
+		); err != nil {
+			t.Fatalf("insert ticket %s: %v", marker, err)
+		}
+	}
+	insertTicket(1, "admin_only_col")
+	insertTicket(2, "dev_own_col")
+
+	dev := ExportActor{UserID: 2, Username: "dev", Role: "developer"}
+	filtersJSON, _ := json.Marshal(TicketExportFilters{})
+
+	task, err := asyncSvc.CreateAsyncExport(context.Background(), dev, "ticket", string(filtersJSON), "csv", nil)
+	if err != nil {
+		t.Fatalf("CreateAsyncExport: %v", err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	for {
+		retrieved, err := asyncSvc.GetTask(context.Background(), task.ID, dev.UserID)
+		if err != nil {
+			t.Fatalf("GetTask: %v", err)
+		}
+		if retrieved.Status == "completed" {
+			break
+		}
+		if retrieved.Status == "failed" {
+			t.Fatalf("export failed: %s", retrieved.ErrorMsg)
+		}
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for async export to complete")
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+
+	content, err := os.ReadFile(task.FilePath)
+	if err != nil {
+		t.Fatalf("read export file: %v", err)
+	}
+	body := string(content)
+	if !strings.Contains(body, "dev_own_col") {
+		t.Errorf("export file missing the developer's own ticket:\n%s", body)
+	}
+	if strings.Contains(body, "admin_only_col") {
+		t.Errorf("export file leaked another submitter's ticket:\n%s", body)
 	}
 }
 
 func TestExportAsyncService_DownloadFile(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	exportSvc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
@@ -155,7 +228,7 @@ func TestExportAsyncService_DownloadFile(t *testing.T) {
 	})
 
 	filtersJSON, _ := json.Marshal(AuditExportFilters{})
-	task, err := asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin", "audit", string(filtersJSON), "csv", nil)
+	task, err := asyncSvc.CreateAsyncExport(context.Background(), adminActor, "audit", string(filtersJSON), "csv", nil)
 	if err != nil {
 		t.Fatalf("CreateAsyncExport: %v", err)
 	}
@@ -175,7 +248,7 @@ func TestExportAsyncService_DownloadFile(t *testing.T) {
 	}
 
 	// Download the file
-	reader, filename, err := asyncSvc.DownloadFile(context.Background(), task.ID, 1)
+	reader, filename, err := asyncSvc.DownloadFile(context.Background(), task.ID, adminActor)
 	if err != nil {
 		t.Fatalf("DownloadFile: %v", err)
 	}
@@ -195,7 +268,7 @@ func TestExportAsyncService_DownloadFile(t *testing.T) {
 func TestExportAsyncService_NotFound(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	exportSvc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
@@ -218,7 +291,7 @@ func TestGenerateExportFilename(t *testing.T) {
 func TestExportAsyncService_CleanupExpiredFiles(t *testing.T) {
 	db, dataDir := newExportAsyncTestDB(t)
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	exportSvc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 	asyncSvc := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
 	defer asyncSvc.Close()
 
@@ -231,7 +304,7 @@ func TestExportAsyncService_CleanupExpiredFiles(t *testing.T) {
 	})
 
 	filtersJSON, _ := json.Marshal(AuditExportFilters{})
-	task, _ := asyncSvc.CreateAsyncExport(context.Background(), 1, "admin", "admin", "audit", string(filtersJSON), "csv", nil)
+	task, _ := asyncSvc.CreateAsyncExport(context.Background(), adminActor, "audit", string(filtersJSON), "csv", nil)
 
 	// Wait for completion
 	deadline := time.After(5 * time.Second)

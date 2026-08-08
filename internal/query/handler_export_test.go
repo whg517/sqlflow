@@ -11,12 +11,13 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/audit"
+	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // setupExportTest creates a fresh Echo, DB, AuditService, ExportService, and ExportHandler for testing.
-func setupExportTest(t *testing.T) (*echo.Echo, *audit.Service, *ExportService, *AsyncExportService, *ExportHandler) {
+func setupExportTest(t *testing.T) (*echo.Echo, *audit.Service, *ExportService, *AsyncExportService, *ExportHandler, *db.DB) {
 	t.Helper()
 
 	database := testutil.NewDB(t)
@@ -32,18 +33,18 @@ func setupExportTest(t *testing.T) (*echo.Echo, *audit.Service, *ExportService, 
 	}
 
 	auditSvc := audit.NewService(database, 0, 0)
-	exportSvc := NewExportService(database, auditSvc)
+	exportSvc := newExportServiceForTest(t, database, auditSvc)
 	exportAsyncSvc := NewAsyncExportService(database, exportSvc, auditSvc, t.TempDir())
 	t.Cleanup(func() { exportAsyncSvc.Close() })
 	handler := NewExportHandler(exportSvc, exportAsyncSvc)
 
 	e := echo.New()
-	return e, auditSvc, exportSvc, exportAsyncSvc, handler
+	return e, auditSvc, exportSvc, exportAsyncSvc, handler, database
 }
 
 // setContextUser sets the user context values (simulating JWT middleware).
 func TestExportHandler_ExportAuditLogs_Admin(t *testing.T) {
-	e, auditSvc, _, _, h := setupExportTest(t)
+	e, auditSvc, _, _, h, _ := setupExportTest(t)
 
 	// Seed 5 audit logs
 	for i := 0; i < 5; i++ {
@@ -93,7 +94,7 @@ func TestExportHandler_ExportAuditLogs_Admin(t *testing.T) {
 }
 
 func TestExportHandler_ExportAuditLogs_DeveloperDenied(t *testing.T) {
-	e, _, _, _, h := setupExportTest(t)
+	e, _, _, _, h, _ := setupExportTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export/audit", nil)
 	rec := httptest.NewRecorder()
@@ -120,7 +121,7 @@ func TestExportHandler_ExportAuditLogs_DeveloperDenied(t *testing.T) {
 }
 
 func TestExportHandler_ExportAuditLogs_ExceedsLimit(t *testing.T) {
-	e, auditSvc, _, _, h := setupExportTest(t)
+	e, auditSvc, _, _, h, _ := setupExportTest(t)
 
 	// Seed more than 10000 records
 	for i := 0; i < ExportMaxRows+1; i++ {
@@ -160,7 +161,7 @@ func TestExportHandler_ExportAuditLogs_ExceedsLimit(t *testing.T) {
 }
 
 func TestExportHandler_ExportTickets_DeveloperAllowed(t *testing.T) {
-	e, _, _, _, h := setupExportTest(t)
+	e, _, _, _, h, _ := setupExportTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export/tickets", nil)
 	rec := httptest.NewRecorder()
@@ -184,8 +185,86 @@ func TestExportHandler_ExportTickets_DeveloperAllowed(t *testing.T) {
 	}
 }
 
+// seedTicketFor inserts one ticket owned by the given submitter and returns the
+// SQL text that identifies it in an export.
+func seedTicketFor(t *testing.T, database *db.DB, submitterID int64, marker string) string {
+	t.Helper()
+	sqlContent := "ALTER TABLE t ADD COLUMN " + marker + " INT"
+	_, err := database.Exec(
+		`INSERT INTO tickets (submitter_id, datasource_id, database, sql_content, sql_summary, db_type, change_reason, status, risk_level, created_at, updated_at)
+		 VALUES ($1, 1, 'appdb', $2, $3, 'mysql', $4, 'SUBMITTED', 'low', now(), now())`,
+		submitterID, sqlContent, marker, "reason "+marker,
+	)
+	if err != nil {
+		t.Fatalf("insert ticket for submitter %d: %v", submitterID, err)
+	}
+	return sqlContent
+}
+
+// TestExportHandler_ExportTickets_DeveloperSeesOnlyOwn is the regression test for
+// a horizontal privilege escalation: the export path used to answer "may this
+// role export tickets?" with an unconditional yes and then apply no owner
+// predicate, so any authenticated developer could download every ticket in the
+// system — SQL, change reason, submitter and reviewer identity included.
+//
+// The ticket list endpoint has always restricted a non-governance role to its
+// own tickets. Export is a second entrance to the same rows and must draw the
+// same boundary.
+func TestExportHandler_ExportTickets_DeveloperSeesOnlyOwn(t *testing.T) {
+	e, _, _, _, h, database := setupExportTest(t)
+
+	adminSQL := seedTicketFor(t, database, 1, "admin_secret_col")
+	devSQL := seedTicketFor(t, database, 2, "dev_own_col")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export/tickets", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	testutil.SetContextUser(c, 2, "developer", "developer")
+
+	if err := h.ExportTickets(c); err != nil {
+		t.Fatalf("ExportTickets: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, devSQL) {
+		t.Errorf("developer's own ticket missing from export; body=%s", body)
+	}
+	if strings.Contains(body, adminSQL) {
+		t.Errorf("export leaked another user's ticket SQL %q; body=%s", adminSQL, body)
+	}
+}
+
+// TestExportHandler_ExportTickets_GovernanceSeesAll pins the other half of the
+// boundary: narrowing the export must not blind the roles whose job is to see
+// every ticket.
+func TestExportHandler_ExportTickets_GovernanceSeesAll(t *testing.T) {
+	e, _, _, _, h, database := setupExportTest(t)
+
+	adminSQL := seedTicketFor(t, database, 1, "admin_own_col")
+	devSQL := seedTicketFor(t, database, 2, "dev_other_col")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export/tickets", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	testutil.SetContextUser(c, 1, "admin", "admin")
+
+	if err := h.ExportTickets(c); err != nil {
+		t.Fatalf("ExportTickets: %v", err)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{adminSQL, devSQL} {
+		if !strings.Contains(body, want) {
+			t.Errorf("admin export missing ticket %q; body=%s", want, body)
+		}
+	}
+}
+
 func TestExportHandler_ExportTickets_Watermark(t *testing.T) {
-	e, _, _, _, h := setupExportTest(t)
+	e, _, _, _, h, _ := setupExportTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export/tickets", nil)
 	rec := httptest.NewRecorder()
@@ -208,7 +287,7 @@ func TestExportHandler_ExportTickets_Watermark(t *testing.T) {
 
 // Ensure ExportHandler doesn't leak resources
 func TestExportHandler_ContextTimeout(t *testing.T) {
-	e, _, _, _, h := setupExportTest(t)
+	e, _, _, _, h, _ := setupExportTest(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()

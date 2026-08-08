@@ -14,12 +14,12 @@ func TestStreamExportAuditLogsExcel_Basic(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	svc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	svc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 
 	seedAuditLogs(t, db, 5)
 
 	var buf bytes.Buffer
-	written, err := svc.StreamExportAuditLogsExcel(context.Background(), &buf, "admin", AuditExportFilters{}, nil)
+	written, err := svc.StreamExportAuditLogsExcel(context.Background(), &buf, adminActor, AuditExportFilters{}, nil)
 	if err != nil {
 		t.Fatalf("StreamExportAuditLogsExcel: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestStreamExportAuditLogsExcel_WithColumnSelection(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	svc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	svc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 
 	seedAuditLogs(t, db, 3)
 
@@ -72,7 +72,7 @@ func TestStreamExportAuditLogsExcel_WithColumnSelection(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	written, err := svc.StreamExportAuditLogsExcel(context.Background(), &buf, "admin", AuditExportFilters{}, columns)
+	written, err := svc.StreamExportAuditLogsExcel(context.Background(), &buf, adminActor, AuditExportFilters{}, columns)
 	if err != nil {
 		t.Fatalf("StreamExportAuditLogsExcel with columns: %v", err)
 	}
@@ -111,12 +111,12 @@ func TestStreamExportTicketsExcel_Basic(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	svc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	svc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 
 	seedTickets(t, db, 4)
 
 	var buf bytes.Buffer
-	written, err := svc.StreamExportTicketsExcel(context.Background(), &buf, "admin", TicketExportFilters{}, nil)
+	written, err := svc.StreamExportTicketsExcel(context.Background(), &buf, adminActor, TicketExportFilters{}, nil)
 	if err != nil {
 		t.Fatalf("StreamExportTicketsExcel: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestStreamExportTicketsExcel_WithColumnSelection(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	svc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	svc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 
 	seedTickets(t, db, 2)
 
@@ -162,7 +162,7 @@ func TestStreamExportTicketsExcel_WithColumnSelection(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	written, err := svc.StreamExportTicketsExcel(context.Background(), &buf, "admin", TicketExportFilters{}, columns)
+	written, err := svc.StreamExportTicketsExcel(context.Background(), &buf, adminActor, TicketExportFilters{}, columns)
 	if err != nil {
 		t.Fatalf("StreamExportTicketsExcel with columns: %v", err)
 	}
@@ -193,10 +193,10 @@ func TestStreamExportAuditLogsExcel_Empty(t *testing.T) {
 	db := newExportTestDB(t)
 	defer db.Close()
 	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
-	svc := NewExportService(testutil.WrapSQL(t, db), auditSvc)
+	svc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
 
 	var buf bytes.Buffer
-	written, err := svc.StreamExportAuditLogsExcel(context.Background(), &buf, "admin", AuditExportFilters{}, nil)
+	written, err := svc.StreamExportAuditLogsExcel(context.Background(), &buf, adminActor, AuditExportFilters{}, nil)
 	if err != nil {
 		t.Fatalf("StreamExportAuditLogsExcel empty: %v", err)
 	}
