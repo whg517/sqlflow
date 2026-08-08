@@ -376,3 +376,8 @@ func buildDSN(cfg *driver.Config) (string, error) {
 	c.TLSConfig = tlsParam
 	return c.FormatDSN(), nil
 }
+
+// ConfigSchema declares what a MySQL connection is made of.
+func (d *MySQLDriver) ConfigSchema() []driver.ConfigField {
+	return driver.SQLHostSchema("3306", "默认数据库", "数据库名（可选）")
+}

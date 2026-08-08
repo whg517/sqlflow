@@ -401,6 +401,24 @@ func (h *Handler) GetDatasourceCapabilities(c echo.Context) error {
 	return resp.OK(c, desc)
 }
 
+// ListDatasourceTypes handles GET /api/datasource-types.
+//
+// @Summary 列出可用的数据源类型及其连接表单
+// @Description 返回每种已注册数据源类型的连接字段声明，供前端渲染表单
+// @Tags 数据源
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} resp.SuccessResponse "获取成功"
+// @Router /datasource-types [get]
+func (h *Handler) ListDatasourceTypes(c echo.Context) error {
+	types, err := driver.DatasourceTypes()
+	if err != nil {
+		log.Printf("ListDatasourceTypes failed: %v", err)
+		return resp.InternalError(c, "获取数据源类型失败")
+	}
+	return resp.OK(c, types)
+}
+
 // GetDatasource handles GET /api/datasources/:id (admin).
 //
 // @Summary 获取数据源详情

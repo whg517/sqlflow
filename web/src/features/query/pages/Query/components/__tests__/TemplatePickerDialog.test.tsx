@@ -7,6 +7,13 @@ const mocks = vi.hoisted(() => ({
   listTemplates: vi.fn(),
   renderTemplate: vi.fn(),
   toastSuccess: vi.fn(),
+  fetchDatasourceTypes: vi.fn(),
+}));
+
+// Whether a template can be opened is now the driver's answer — query_form ===
+// "sql" — rather than a list of type names kept in the component.
+vi.mock("@/shared/datasource/types", () => ({
+  fetchDatasourceTypes: mocks.fetchDatasourceTypes,
 }));
 
 vi.mock("@/features/query/api/sql-template", () => ({
@@ -39,6 +46,10 @@ const template = {
 describe("TemplatePickerDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.fetchDatasourceTypes.mockResolvedValue([
+      { type: "mysql", query_form: "sql", fields: [], placeholder_style: "positional" },
+      { type: "mongodb", query_form: "document", fields: [], placeholder_style: "none" },
+    ]);
     const firstTab = useQueryStore.getState().tabs[0];
     useQueryStore.setState({
       tabs: [firstTab],

@@ -34,7 +34,16 @@ const allowedFeatureEdges = {
   },
 }
 
-const featureNames = ['audit', 'datasource', 'iam', 'notify', 'ops', 'query', 'security', 'ticket']
+// The directories that actually exist under src/features.
+//
+// It used to also list 'datasource' and 'notify', neither of which has ever had
+// a directory: datasource management lives in ops/pages/Settings and the notify
+// UI in ops/pages/Settings/IntegrationsTab, which is why two of the four
+// registered edges are "the settings page carries X". A name here with no
+// directory generates boundary rules for a feature that cannot import anything,
+// so it silently protects nothing — the Go side rejects a stale
+// allowedDomainEdges entry for the same reason.
+const featureNames = ['audit', 'iam', 'ops', 'query', 'security', 'ticket']
 
 // One override per feature: everything under features/<name> may import from
 // @/shared and from its declared partners, and nothing else under @/features.
@@ -53,6 +62,44 @@ const featureBoundaries = featureNames.map((feature) => ({
     }],
   },
 }))
+
+// Data source type names. The UI must not branch on them.
+//
+// docs/ARCHITECTURE.md has said so for a while and nothing checked it: the
+// datasource form branched on type name 28 times. internal/arch enforces the
+// same rule on the Go side with TestPlatformDoesNotBranchOnDatasourceType, and
+// this is its front-end half.
+//
+// Yes, this list is itself a hardcoded registry — the same shape the rule
+// forbids. It is the one place that is allowed to have it, because a checker
+// needs to know what it is looking for; the Go guard has exactly the same
+// property. Adding a driver means adding a line here and nowhere else.
+const datasourceTypeNames = ['mysql', 'postgresql', 'sqlite', 'mongodb', 'elasticsearch']
+
+const noDatasourceTypeBranching = {
+  // api/ is exempt: naming a type in a request or response type definition is
+  // describing the wire, not branching on it.
+  files: ['src/features/**/pages/**/*.{ts,tsx}', 'src/features/**/components/**/*.{ts,tsx}'],
+  ignores: [
+    '**/__tests__/**',
+    // The one allowed lookup table. A legend needs to know the names, the same
+    // way this rule does; nothing in it decides behaviour.
+    'src/shared/datasource/typePresentation.ts',
+  ],
+  rules: {
+    'no-restricted-syntax': ['error', ...datasourceTypeNames.flatMap((name) => [
+      {
+        selector: `BinaryExpression[operator=/^[!=]==?$/] > Literal[value="${name}"]`,
+        message: `不要按数据源类型名分支（"${name}"）：改读驱动声明的能力/表单 schema。` +
+          `见 GET /api/datasource-types 与 queryModes.ts。`,
+      },
+      {
+        selector: `SwitchCase > Literal[value="${name}"]`,
+        message: `不要按数据源类型名 switch（"${name}"）：改读驱动声明。`,
+      },
+    ])],
+  },
+}
 
 export default defineConfig([
   globalIgnores(['dist', 'node_modules', 'playwright-report']),
@@ -81,4 +128,5 @@ export default defineConfig([
     },
   },
   ...featureBoundaries,
+  noDatasourceTypeBranching,
 ])

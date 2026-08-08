@@ -372,3 +372,30 @@ func (d *PostgreSQLDriver) Parse(query string) (*driver.ParseResult, error) {
 
 	return pr, nil
 }
+
+// ConfigSchema declares what a PostgreSQL connection is made of.
+//
+// It adds the two settings only this driver has: the TLS mode and the schema
+// its DSN pins. Both are columns, which predates the rule against per-driver
+// columns; declaring them as extra_config here would be tidier and wrong, since
+// the request struct reads them from the top level.
+func (d *PostgreSQLDriver) ConfigSchema() []driver.ConfigField {
+	schema := driver.SQLHostSchema("5432", "数据库", "数据库名（可选）")
+	return append(schema,
+		driver.ConfigField{
+			Name: "sslmode", Label: "SSL 模式", Kind: driver.FieldSelect,
+			Default: "prefer", Storage: driver.StorageColumn,
+			Options: []driver.ConfigOption{
+				{Value: "disable", Label: "disable"},
+				{Value: "prefer", Label: "prefer"},
+				{Value: "require", Label: "require"},
+				{Value: "verify-ca", Label: "verify-ca"},
+				{Value: "verify-full", Label: "verify-full"},
+			},
+		},
+		driver.ConfigField{
+			Name: "schema_name", Label: "Schema", Kind: driver.FieldText,
+			Default: "public", Placeholder: "public", Storage: driver.StorageColumn,
+		},
+	)
+}

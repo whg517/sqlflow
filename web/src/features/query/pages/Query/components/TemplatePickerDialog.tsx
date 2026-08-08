@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  fetchDatasourceTypes,
+  type DatasourceType,
+} from "@/shared/datasource/types";
+import { datasourceLabel } from "@/shared/datasource/typePresentation";
 import { Braces, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/shared/components/ui/badge";
@@ -31,13 +36,15 @@ interface TemplatePickerDialogProps {
 // modes read their own fields (mongoFilter, esQueryBody), so a MongoDB or
 // Elasticsearch template would open into an empty editor. Until the store
 // routes a template payload by query form, those types stay preview-only.
-function isUsableQueryTemplate(template: SQLTemplate): boolean {
-  return (
-    (template.db_type === "mysql" ||
-      template.db_type === "postgresql" ||
-      template.db_type === "sqlite") &&
-    /^(select|with)\b/i.test(template.sql_content.trim())
-  );
+// The condition is the query form, which is what the comment above always
+// described — it just used to be spelled as three type names, so a fourth
+// SQL-form driver would have been excluded for no reason anyone could see.
+function isUsableQueryTemplate(
+  template: SQLTemplate,
+  types: DatasourceType[],
+): boolean {
+  const form = types.find((t) => t.type === template.db_type)?.query_form;
+  return form === "sql" && /^(select|with)\b/i.test(template.sql_content.trim());
 }
 
 export default function TemplatePickerDialog({
@@ -52,6 +59,12 @@ export default function TemplatePickerDialog({
   const [loading, setLoading] = useState(false);
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState("");
+  // Which types speak SQL is the drivers' answer, not a list kept here.
+  const [types, setTypes] = useState<DatasourceType[]>([]);
+
+  useEffect(() => {
+    fetchDatasourceTypes().then(setTypes).catch(() => setTypes([]));
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -92,7 +105,7 @@ export default function TemplatePickerDialog({
   const params = selected ? parseParamsJSON(selected.params_json) : [];
 
   const selectTemplate = (template: SQLTemplate) => {
-    if (!isUsableQueryTemplate(template)) return;
+    if (!isUsableQueryTemplate(template, types)) return;
     const initialValues: Record<string, string> = {};
     for (const param of parseParamsJSON(template.params_json)) {
       if (param.default !== "") {
@@ -184,7 +197,7 @@ export default function TemplatePickerDialog({
               ) : (
                 <div className="space-y-1 p-2">
                   {filteredTemplates.map((template) => {
-                    const usable = isUsableQueryTemplate(template);
+                    const usable = isUsableQueryTemplate(template, types);
                     const active = selected?.id === template.id;
                     return (
                       <button
@@ -208,11 +221,7 @@ export default function TemplatePickerDialog({
                             </div>
                           </div>
                           <Badge variant="outline" className="shrink-0 text-[10px]">
-                            {template.db_type === "postgresql"
-                              ? "PostgreSQL"
-                              : template.db_type === "mysql"
-                                ? "MySQL"
-                                : template.db_type}
+                            {datasourceLabel(template.db_type)}
                           </Badge>
                         </div>
                         <div className="mt-2 flex items-center gap-2 text-[10px] text-[var(--text-muted)]">

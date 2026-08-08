@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { datasourceDot } from "@/shared/datasource/typePresentation";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
@@ -133,7 +134,7 @@ export default function TicketNewPage() {
                     <SelectItem key={ds.id} value={String(ds.id)}>
                       <span className="flex items-center gap-2">
                         <span
-                          className={`inline-block h-1.5 w-1.5 rounded-full ${ds.type === "mysql" ? "bg-blue-400" : "bg-green-400"}`}
+                          className={`inline-block h-1.5 w-1.5 rounded-full ${datasourceDot(ds.type)}`}
                         />
                         {ds.name}
                         <span className="text-[var(--text-muted)]">

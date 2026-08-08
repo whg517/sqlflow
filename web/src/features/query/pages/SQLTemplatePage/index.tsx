@@ -1,4 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  fetchDatasourceTypes,
+  placeholderToken,
+  type DatasourceType,
+} from "@/shared/datasource/types";
+import { datasourceLabel } from "@/shared/datasource/typePresentation";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -225,6 +231,17 @@ function TemplateFormDialog({
 
 // --- Render Preview Dialog ---
 
+// The driver declarations, fetched once for the page. The template UI needs to
+// know a placeholder syntax and a query form, and both are the driver's answer
+// rather than something to infer from the type name.
+function useDatasourceTypes(): DatasourceType[] {
+  const [types, setTypes] = useState<DatasourceType[]>([]);
+  useEffect(() => {
+    fetchDatasourceTypes().then(setTypes).catch(() => setTypes([]));
+  }, []);
+  return types;
+}
+
 function RenderDialog({
   template,
   onClose,
@@ -234,6 +251,9 @@ function RenderDialog({
 }) {
   const navigate = useNavigate();
   const openTemplateAsTab = useQueryStore((state) => state.openTemplateAsTab);
+  const types = useDatasourceTypes();
+  const dialect = types.find((t) => t.type === template.db_type);
+  const queryForm = dialect?.query_form ?? "sql";
   const params = parseParamsJSON(template.params_json);
   const [values, setValues] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {};
@@ -368,8 +388,8 @@ function RenderDialog({
             </Button>
             {!canUseInQuery && (
               <span className="text-xs text-[var(--text-muted)]">
-                {template.db_type === "mongodb"
-                  ? "MongoDB 模板当前支持渲染预览和复制"
+                {queryForm === "document"
+                  ? `${datasourceLabel(template.db_type)} 模板当前支持渲染预览和复制`
                   : "变更类模板请复制 SQL 后通过工单提交"}
               </span>
             )}
@@ -416,9 +436,10 @@ function RenderDialog({
                         variant="outline"
                         className="border-[var(--border-default)] font-mono text-xs"
                       >
-                        {template.db_type === "postgresql"
-                          ? `$${i + 1}`
-                          : `?`}
+                        {placeholderToken(
+                          dialect?.placeholder_style ?? "positional",
+                          i + 1,
+                        )}
                         = {String(v)}
                       </Badge>
                     ))}
@@ -426,7 +447,7 @@ function RenderDialog({
                 </div>
               )}
 
-              {template.db_type === "mongodb" && (
+              {queryForm === "document" && (
                 <div className="space-y-1.5">
                   <h4 className="text-sm font-medium text-[var(--text-primary)]">
                     MongoDB JSON

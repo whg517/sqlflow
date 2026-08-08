@@ -17,8 +17,11 @@ type mockDriver struct {
 	typ string
 }
 
-func (m *mockDriver) Type() string                                          { return m.typ }
-func (m *mockDriver) QueryForm() driver.QueryForm                           { return driver.QueryFormSQL }
+func (m *mockDriver) Type() string                { return m.typ }
+func (m *mockDriver) QueryForm() driver.QueryForm { return driver.QueryFormSQL }
+
+// ConfigSchema satisfies Driver; the form is not what this double is for.
+func (m *mockDriver) ConfigSchema() []driver.ConfigField                    { return nil }
 func (m *mockDriver) Connect(ctx context.Context, cfg *driver.Config) error { return nil }
 func (m *mockDriver) Close() error                                          { return nil }
 func (m *mockDriver) Ping(ctx context.Context) error                        { return nil }

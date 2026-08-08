@@ -69,6 +69,7 @@ cd web && npx tsc -b && npm run test
 | 能做什么 | 可选接口（类型断言） | 能不能做 |
 | 查询形态 | `QueryForm() QueryForm` | 查询怎么写（`sql`/`document`/`dsl`） |
 | 结果形态 | `QueryResult.Shape` | 结果怎么读（`table`/`documents`/`aggregation`） |
+| 连接配置 | `ConfigSchema() []ConfigField` | 连一个它需要什么（前端据此渲染表单） |
 
 **能力全部由可选接口表达，没有能力位。** `MetadataBrowser`、`StatementExecutor`、
 `ParameterizedQueryExecutor`、`ParameterBinder`、`QueryExplainer`、`ConfigValidator`、
@@ -124,7 +125,16 @@ var (
 都不该改。如果你发现必须改，说明抽象漏了一个轴——先讨论再动手。
 
 前端读 `GET /api/datasources/:id/capabilities` 决定编辑器、可用操作与渲染器，
-见 `web/src/features/query/pages/Query/queryModes.ts`。
+见 `web/src/features/query/pages/Query/queryModes.ts`；读
+`GET /api/datasource-types` 渲染数据源连接表单（字段、校验、载荷落在
+列还是 `extra_config`，全由驱动声明）。
+
+**前端同样不得按类型名分支**，由 `eslint.config.js` 的 `noDatasourceTypeBranching`
+强制——这是 `internal/arch` 那条规则的前端另一半。它曾只写在
+`docs/ARCHITECTURE.md` 里而无人检查：数据源表单违反了 28 次，还持有后端早已
+删除的 5 个 `es_*` 字段，加一个驱动要在一个 1321 行的组件里改约十处，否则那个
+类型根本选不出来。唯一豁免是 `web/src/shared/datasource/typePresentation.ts`
+（标签与配色），它不决定任何行为。
 
 ## 目录
 

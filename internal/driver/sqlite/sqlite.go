@@ -275,3 +275,15 @@ func (d *Driver) Parse(query string) (*driver.ParseResult, error) {
 		Warnings:    result.Warnings,
 	}, nil
 }
+
+// ConfigSchema declares what a SQLite connection is made of: a file path.
+//
+// No host, no port, no credentials. The form used to reach that shape by
+// excluding SQLite from three other blocks.
+func (d *Driver) ConfigSchema() []driver.ConfigField {
+	return []driver.ConfigField{{
+		Name: "database", Label: "SQLite 文件路径", Kind: driver.FieldText,
+		Required: true, Placeholder: "/absolute/path/to/database.db",
+		Storage: driver.StorageColumn,
+	}}
+}

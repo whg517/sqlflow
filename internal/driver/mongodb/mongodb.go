@@ -643,3 +643,13 @@ func successResult(stmt string, affected int64, ms int64) *driver.StatementResul
 		DurationMs:   ms,
 	}
 }
+
+// ConfigSchema declares what a MongoDB connection is made of.
+//
+// Same shape as the SQL drivers: the host field also accepts a full
+// mongodb:// or mongodb+srv:// URI, which is what extractURI looks for first.
+func (d *MongoDBDriver) ConfigSchema() []driver.ConfigField {
+	schema := driver.SQLHostSchema("27017", "默认数据库", "数据库名（可选）")
+	schema[0].Placeholder = "IP、域名，或完整 mongodb:// URI"
+	return schema
+}

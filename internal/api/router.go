@@ -99,6 +99,7 @@ func NewRouter(c *app.Container) *echo.Echo {
 	authGroup.PUT("/api/auth/password", userHandler.ChangePassword)
 
 	// Datasource discovery and metadata: authenticated users can access safe summaries.
+	authGroup.GET("/api/datasource-types", dsHandler.ListDatasourceTypes, middleware.RequireScope("read:datasource"))
 	authGroup.GET("/api/datasources/available", dsHandler.ListAvailableDatasources, middleware.RequireScope("read:datasource"))
 	authGroup.GET("/api/datasources/:id/capabilities", dsHandler.GetDatasourceCapabilities, middleware.RequireScope("read:datasource"))
 	authGroup.GET("/api/datasources/:id/tables", dsHandler.GetTables, middleware.RequireScope("read:datasource"))

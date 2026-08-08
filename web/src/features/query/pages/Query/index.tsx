@@ -43,6 +43,7 @@ import ResizableSplit from "./components/ResizableSplit";
 import AIReviewCard from "./components/AIReviewCard";
 import TicketSubmitSheet from "./components/TicketSubmitSheet";
 import ExplainPanel from "./components/ExplainPanel";
+import { datasourceDot } from "@/shared/datasource/typePresentation";
 import ShareButton from "./components/ShareButton";
 import ShareListPanel from "./components/ShareListPanel";
 import TemplatePickerDialog from "./components/TemplatePickerDialog";
@@ -168,7 +169,10 @@ export default function QueryPage() {
     }
     const datasourceId = activeTab.datasourceId;
 
-    if (activeTab.datasourceType === "elasticsearch") {
+    // The driver says whether this data source speaks a DSL; the page does not
+    // recognise it by name. isES comes from the same capabilities response the
+    // editor and the renderer already use.
+    if (isES) {
       void fetchESIndices(datasourceId)
         .then((indices) => {
           if (!cancelled) {
@@ -204,7 +208,7 @@ export default function QueryPage() {
     };
   }, [
     activeTab?.datasourceId,
-    activeTab?.datasourceType,
+    isES,
     fetchTables,
   ]);
 
@@ -418,7 +422,7 @@ export default function QueryPage() {
               >
                 <span className="flex items-center gap-2">
                   <span
-                    className={`inline-block h-1.5 w-1.5 rounded-full ${ds.type === "mysql" ? "bg-blue-400" : ds.type === "elasticsearch" ? "bg-orange-400" : "bg-green-400"}`}
+                    className={`inline-block h-1.5 w-1.5 rounded-full ${datasourceDot(ds.type)}`}
                   />
                   {ds.name}
                   <span className="text-[var(--text-muted)]">({ds.type})</span>

@@ -120,6 +120,21 @@ type Driver interface {
 	// QueryForm declares how read queries are composed for this data source.
 	QueryForm() QueryForm
 
+	// ConfigSchema declares the inputs this driver needs to connect.
+	//
+	// It is the fourth axis, alongside capability, query form and result shape:
+	// what a connection to this data source is made of. Without it the UI had to
+	// know, and it did — the datasource form branched on type name twenty-eight
+	// times and carried five Elasticsearch-specific fields that the server had
+	// already collapsed into extra_config. Adding a driver meant editing a
+	// 1321-line React component in about ten places, or the type simply could
+	// not be selected.
+	//
+	// Mandatory rather than optional for the same reason QueryForm is: every
+	// data source has an answer, and a default supplied by the platform would be
+	// the platform guessing at something only the driver knows.
+	ConfigSchema() []ConfigField
+
 	// Connect establishes a connection using the provided config.
 	Connect(ctx context.Context, cfg *Config) error
 

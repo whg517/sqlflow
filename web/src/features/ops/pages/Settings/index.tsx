@@ -58,6 +58,19 @@ import SLATab from "./SLATab";
 import ApprovalPoliciesTab from "./ApprovalPoliciesTab";
 import IntegrationsTab from "./IntegrationsTab";
 import { listSensitiveTables } from "@/features/security/api/maskRule";
+import {
+  fetchDatasourceTypes,
+  type DatasourceType,
+} from "@/shared/datasource/types";
+import DatasourceFormFields from "./DatasourceFormFields";
+import {
+  buildPayload,
+  describeAddress,
+  initialValues,
+  validate as validateForm,
+  valuesFromDatasource,
+  type FormValues,
+} from "./datasourceForm";
 
 // --- Types ---
 
@@ -156,33 +169,20 @@ function validateName(v: string): string | null {
   return null;
 }
 
-function validateHost(v: string): string | null {
-  if (!v.trim()) return "请输入主机地址";
-  return null;
-}
-
-function validatePort(v: string): string | null {
-  const n = Number(v);
-  if (!v || isNaN(n)) return "请输入端口号";
-  if (n < 1 || n > 65535 || !Number.isInteger(n)) return "端口范围 1-65535";
-  return null;
-}
-
 function datasourceAddress(ds: DataSourceItem): string {
-  if (ds.type === "sqlite") return ds.database || "—";
-  if (ds.type === "elasticsearch") return esConfig(ds).urls || "—";
-  return `${ds.host}:${ds.port}`;
+  return describeAddress(ds as unknown as Record<string, unknown>);
 }
 
 function datasourceDatabase(ds: DataSourceItem): string {
-  if (ds.type === "sqlite") {
-    const parts = ds.database.split(/[\\/]/).filter(Boolean);
-    return parts.at(-1) || ds.database || "—";
+  // The last path segment for a file, the index pattern for a search engine,
+  // the database otherwise — all read off the row rather than off the type.
+  const database = ds.database ?? "";
+  if (/[\\/]/.test(database)) {
+    return database.split(/[\\/]/).filter(Boolean).at(-1) || database;
   }
-  if (ds.type === "elasticsearch") {
-    return esConfig(ds).indexPattern || "全部索引";
-  }
-  return ds.database || "—";
+  const pattern = esConfig(ds).indexPattern;
+  if (database === "" && pattern !== "") return pattern;
+  return database || "—";
 }
 
 async function copyDatasourceAddress(ds: DataSourceItem): Promise<void> {
@@ -214,24 +214,16 @@ function DataSourceTab() {
   // Dialog
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({
+  // The form holds a name, a chosen type, and whatever that type's schema says
+  // it needs. It used to hold fifteen named fields, five of them Elasticsearch's
+  // — long after the server collapsed those into extra_config.
+  const [types, setTypes] = useState<DatasourceType[]>([]);
+  const [form, setForm] = useState<{ name: string; type: string }>({
     name: "",
-    type: "mysql",
-    host: "",
-    port: "3306",
-    username: "",
-    password: "",
-    database: "",
-    sslmode: "",
-    schema_name: "",
-    max_open: "10",
-    // ES fields
-    es_urls: "",
-    es_auth_type: "basic",
-    es_api_key: "",
-    es_index_pattern: "",
-    es_verify_certs: true,
+    type: "",
   });
+  const [values, setValues] = useState<FormValues>({});
+  const selectedType = types.find((t) => t.type === form.type);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [connectionTest, setConnectionTest] =
@@ -287,27 +279,22 @@ function DataSourceTab() {
 
   if (!inited && !loading) fetchSources();
 
+  // The registry is the server's to know. The form used to hold the list twice
+  // — one hardcoded option per type and a default-port map — so a registered
+  // driver it had not been told about could not be selected.
+  useEffect(() => {
+    fetchDatasourceTypes()
+      .then(setTypes)
+      .catch(() => toast.error("获取数据源类型失败"));
+  }, []);
+
   // --- Handlers ---
 
   function openAdd() {
     setEditingId(null);
-    setForm({
-      name: "",
-      type: "mysql",
-      host: "",
-      port: "3306",
-      username: "",
-      password: "",
-      database: "",
-      sslmode: "",
-      schema_name: "",
-      max_open: "10",
-      es_urls: "",
-      es_auth_type: "basic",
-      es_api_key: "",
-      es_index_pattern: "",
-      es_verify_certs: true,
-    });
+    const first = types[0];
+    setForm({ name: "", type: first?.type ?? "" });
+    setValues(initialValues(first));
     setErrors({});
     setConnectionTest({ status: "idle", message: "", fingerprint: "" });
     setDialogOpen(true);
@@ -315,52 +302,24 @@ function DataSourceTab() {
 
   function openEdit(ds: DataSourceItem) {
     setEditingId(ds.id);
-    setForm({
-      name: ds.name,
-      type: ds.type,
-      host: ds.host,
-      port: String(ds.port),
-      username: ds.username,
-      password: "",
-      database: ds.database || "",
-      sslmode: ds.sslmode || "prefer",
-      schema_name: ds.schema_name || "public",
-      max_open: String(ds.max_open || 10),
-      es_urls: esConfig(ds).urls,
-      es_auth_type: esConfig(ds).authType,
-      es_api_key: "",
-      es_index_pattern: esConfig(ds).indexPattern,
-      es_verify_certs: esConfig(ds).verifyCerts,
-    });
+    setForm({ name: ds.name, type: ds.type });
+    setValues(
+      valuesFromDatasource(
+        types.find((t) => t.type === ds.type),
+        ds as unknown as Record<string, unknown>,
+      ),
+    );
     setErrors({});
     setConnectionTest({ status: "idle", message: "", fingerprint: "" });
     setDialogOpen(true);
   }
 
   function handleTypeChange(type: string) {
-    const defaultPorts: Record<string, string> = {
-      mysql: "3306",
-      postgresql: "5432",
-      mongodb: "27017",
-      sqlite: "",
-      elasticsearch: "",
-    };
-    setForm((current) => ({
-      ...current,
-      type,
-      host: "",
-      port: defaultPorts[type] ?? "",
-      username: "",
-      password: "",
-      database: "",
-      sslmode: type === "postgresql" ? "prefer" : "",
-      schema_name: type === "postgresql" ? "public" : "",
-      es_urls: "",
-      es_auth_type: "basic",
-      es_api_key: "",
-      es_index_pattern: "",
-      es_verify_certs: true,
-    }));
+    // Switching type replaces the whole value set, because the fields are the
+    // new driver's. The old version cleared fifteen named fields by hand and
+    // seeded the port from a map keyed on type name.
+    setForm((current) => ({ ...current, type }));
+    setValues(initialValues(types.find((t) => t.type === type)));
     setErrors({});
     setConnectionTest({ status: "idle", message: "", fingerprint: "" });
   }
@@ -371,96 +330,13 @@ function DataSourceTab() {
       const n = validateName(form.name);
       if (n) errs.name = n;
     }
-    if (form.type === "sqlite") {
-      if (!form.database.trim()) errs.database = "请输入 SQLite 文件路径";
-    } else if (form.type === "elasticsearch") {
-      if (!form.es_urls.trim()) errs.es_urls = "请输入 Elasticsearch 节点地址";
-      if (form.es_auth_type === "basic" && !form.username.trim()) {
-        errs.username = "请输入用户名";
-      }
-      if (
-        !editingId &&
-        form.es_auth_type === "basic" &&
-        !form.password
-      ) {
-        errs.password = "请输入密码";
-      }
-      if (
-        !editingId &&
-        form.es_auth_type === "api_key" &&
-        !form.es_api_key
-      ) {
-        errs.es_api_key = "请输入 API Key";
-      }
-    } else {
-      const h = validateHost(form.host);
-      if (h) errs.host = h;
-      const p = validatePort(form.port);
-      if (p) errs.port = p;
-    }
-    if (
-      form.type !== "sqlite" &&
-      form.type !== "elasticsearch" &&
-      !form.username.trim()
-    ) {
-      errs.username = "请输入用户名";
-    }
-    if (
-      !editingId &&
-      !form.password &&
-      form.type !== "elasticsearch" &&
-      form.type !== "sqlite"
-    ) {
-      errs.password = "请输入密码";
-    }
+    Object.assign(errs, validateForm(selectedType, values, editingId !== null));
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
 
   function buildDatasourcePayload(): Record<string, unknown> {
-    const body: Record<string, unknown> = {
-      name: form.name.trim(),
-      type: form.type,
-    };
-    if (form.type === "sqlite") {
-      body.database = form.database.trim();
-      body.max_open = 1;
-    } else if (form.type === "elasticsearch") {
-      // Settings go into extra_config; the API key does not. It is a credential,
-      // stored encrypted, and extra_config holds what was written verbatim.
-      const extra: Record<string, unknown> = {
-        urls: form.es_urls
-          .split(",")
-          .map((u) => u.trim())
-          .filter(Boolean),
-        auth_type: form.es_auth_type,
-        verify_certs: form.es_verify_certs,
-      };
-      if (form.es_index_pattern) {
-        extra.index_pattern = form.es_index_pattern.trim();
-      }
-      body.extra_config = extra;
-      body.username =
-        form.es_auth_type === "basic" ? form.username.trim() : "";
-      if (form.es_auth_type === "basic" && form.password) {
-        body.password = form.password;
-      }
-      if (form.es_auth_type === "api_key" && form.es_api_key) {
-        body.es_api_key = form.es_api_key;
-      }
-    } else {
-      body.host = form.host.trim();
-      body.port = Number(form.port);
-      body.username = form.username.trim();
-      if (form.password) body.password = form.password;
-      body.database = form.database.trim();
-      body.max_open = Number(form.max_open) || 10;
-      if (form.type === "postgresql") {
-        body.sslmode = form.sslmode;
-        body.schema_name = form.schema_name.trim() || "public";
-      }
-    }
-    return body;
+    return buildPayload(selectedType, values, form.name);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -707,11 +583,10 @@ function DataSourceTab() {
                     <TableCell className="max-w-52">
                       <span
                         className="block truncate font-mono text-xs text-[var(--text-secondary)]"
-                        title={
-                          ds.type === "sqlite"
-                            ? ds.database
-                            : datasourceDatabase(ds)
-                        }
+                        // The tooltip shows the full value the cell truncates,
+                        // whatever that value happens to be — the special case
+                        // for SQLite was just "show the whole path".
+                        title={ds.database || datasourceDatabase(ds)}
                       >
                         {datasourceDatabase(ds)}
                       </span>
@@ -852,11 +727,14 @@ function DataSourceTab() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mysql">MySQL</SelectItem>
-                    <SelectItem value="postgresql">PostgreSQL</SelectItem>
-                    <SelectItem value="sqlite">SQLite（只读）</SelectItem>
-                    <SelectItem value="mongodb">MongoDB</SelectItem>
-                    <SelectItem value="elasticsearch">Elasticsearch</SelectItem>
+                    {/* The registry is the server's. This list used to be five hardcoded
+                        entries, so a registered driver the form had not been told about
+                        could not be selected at all. */}
+                    {types.map((t) => (
+                      <SelectItem key={t.type} value={t.type}>
+                        {t.type}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {editingId && (
@@ -866,302 +744,19 @@ function DataSourceTab() {
                 )}
               </div>
             </div>
-            {["mysql", "postgresql", "mongodb"].includes(form.type) && <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-1.5">
-                <Label className="text-[var(--text-secondary)]">主机</Label>
-                <Input
-                  value={form.host}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, host: e.target.value }))
-                  }
-                  placeholder="IP 或域名"
-                  className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
-                />
-                {errors.host && (
-                  <p className="text-xs text-red-400">{errors.host}</p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[var(--text-secondary)]">端口</Label>
-                <Input
-                  type="number"
-                  value={form.port}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, port: e.target.value }))
-                  }
-                  placeholder="1-65535"
-                  className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
-                />
-                {errors.port && (
-                  <p className="text-xs text-red-400">{errors.port}</p>
-                )}
-              </div>
-            </div>}
-            {["mysql", "postgresql", "mongodb"].includes(form.type) && <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-1.5">
-                <Label className="text-[var(--text-secondary)]">用户名</Label>
-                <Input
-                  value={form.username}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, username: e.target.value }))
-                  }
-                  placeholder="数据库用户名"
-                  className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
-                />
-                {errors.username && (
-                  <p className="text-xs text-red-400">{errors.username}</p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[var(--text-secondary)]">
-                  密码{" "}
-                  {editingId && (
-                    <span className="font-normal text-[var(--text-muted)]">
-                      (留空不修改)
-                    </span>
-                  )}
-                </Label>
-                <Input
-                  type="password"
-                  value={form.password}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, password: e.target.value }))
-                  }
-                  placeholder={editingId ? "留空不修改" : "数据库密码"}
-                  className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
-                />
-                {errors.password && (
-                  <p className="text-xs text-red-400">{errors.password}</p>
-                )}
-              </div>
-            </div>}
-            {form.type !== "elasticsearch" && (
-            <div className="space-y-1.5">
-              <Label className="text-[var(--text-secondary)]">
-                {form.type === "sqlite"
-                  ? "SQLite 文件路径"
-                  : form.type === "postgresql"
-                    ? "数据库"
-                    : "默认数据库"}
-              </Label>
-              <Input
-                value={form.database}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, database: e.target.value }))
-                }
-                placeholder={
-                  form.type === "sqlite"
-                    ? "/absolute/path/to/database.db"
-                    : "数据库名（可选）"
-                }
-                className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
-              />
-              {errors.database && (
-                <p className="text-xs text-red-400">{errors.database}</p>
-              )}
-            </div>
-            )}
-            {form.type === "postgresql" && (
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-1.5">
-                  <Label className="text-[var(--text-secondary)]">
-                    SSL 模式
-                  </Label>
-                  <Select
-                    value={form.sslmode}
-                    onValueChange={(v) =>
-                      setForm((f) => ({ ...f, sslmode: v }))
-                    }
-                  >
-                    <SelectTrigger className="border-[var(--border-default)] bg-[var(--bg-elevated)]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="disable">disable</SelectItem>
-                      <SelectItem value="prefer">prefer</SelectItem>
-                      <SelectItem value="require">require</SelectItem>
-                      <SelectItem value="verify-ca">verify-ca</SelectItem>
-                      <SelectItem value="verify-full">verify-full</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[var(--text-secondary)]">
-                    Schema
-                  </Label>
-                  <Input
-                    value={form.schema_name}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        schema_name: e.target.value,
-                      }))
-                    }
-                    placeholder="public"
-                    className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
-                  />
-                </div>
-              </div>
-            )}
-            {["mysql", "postgresql", "mongodb"].includes(form.type) && (
-            <div className="space-y-1.5">
-              <Label className="text-[var(--text-secondary)]">最大连接数</Label>
-              <Input
-                type="number"
-                value={form.max_open}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, max_open: e.target.value }))
-                }
-                className="w-32 border-[var(--border-default)] bg-[var(--bg-elevated)]"
-              />
-            </div>
-            )}
-
-            {/* Elasticsearch specific fields */}
-            {form.type === "elasticsearch" && (
-              <div className="space-y-3 rounded-lg border border-orange-500/20 bg-orange-500/5 p-3">
-                <div className="text-xs font-medium text-orange-400">
-                  Elasticsearch 配置
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[var(--text-secondary)]">
-                    节点地址
-                  </Label>
-                  <Input
-                    value={form.es_urls}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, es_urls: e.target.value }))
-                    }
-                    placeholder="https://es1.example.com:9200, https://es2.example.com:9200"
-                    className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
-                  />
-                  {errors.es_urls && (
-                    <p className="text-xs text-red-400">{errors.es_urls}</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[var(--text-secondary)]">
-                    认证方式
-                  </Label>
-                  <Select
-                    value={form.es_auth_type}
-                    onValueChange={(v) =>
-                      setForm((f) => ({ ...f, es_auth_type: v }))
-                    }
-                  >
-                    <SelectTrigger className="border-[var(--border-default)] bg-[var(--bg-elevated)]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="basic">Basic Auth</SelectItem>
-                      <SelectItem value="api_key">API Key</SelectItem>
-                      <SelectItem value="none">无认证</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {form.es_auth_type === "basic" && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-[var(--text-secondary)]">
-                        用户名
-                      </Label>
-                      <Input
-                        value={form.username}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            username: e.target.value,
-                          }))
-                        }
-                        placeholder="Elasticsearch 用户名"
-                        className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
-                      />
-                      {errors.username && (
-                        <p className="text-xs text-red-400">{errors.username}</p>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[var(--text-secondary)]">
-                        密码{" "}
-                        {editingId && (
-                          <span className="font-normal text-[var(--text-muted)]">
-                            (留空不修改)
-                          </span>
-                        )}
-                      </Label>
-                      <Input
-                        type="password"
-                        value={form.password}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            password: e.target.value,
-                          }))
-                        }
-                        placeholder={editingId ? "留空不修改" : "密码"}
-                        className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
-                      />
-                      {errors.password && (
-                        <p className="text-xs text-red-400">{errors.password}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {form.es_auth_type === "api_key" && (
-                  <div className="space-y-1.5">
-                    <Label className="text-[var(--text-secondary)]">
-                      API Key
-                    </Label>
-                    <Input
-                      type="password"
-                      value={form.es_api_key}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          es_api_key: e.target.value,
-                        }))
-                      }
-                      placeholder={editingId ? "留空不修改" : "API Key"}
-                      className="border-[var(--border-default)] bg-[var(--bg-elevated)]"
-                    />
-                    {errors.es_api_key && (
-                      <p className="text-xs text-red-400">
-                        {errors.es_api_key}
-                      </p>
-                    )}
-                  </div>
-                )}
-                <div className="space-y-1.5">
-                  <Label className="text-[var(--text-secondary)]">
-                    默认索引模式
-                  </Label>
-                  <Input
-                    value={form.es_index_pattern}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        es_index_pattern: e.target.value,
-                      }))
-                    }
-                    placeholder="logs-* (可选)"
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-                  <input
-                    type="checkbox"
-                    checked={form.es_verify_certs}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        es_verify_certs: e.target.checked,
-                      }))
-                    }
-                  />
-                  验证 SSL 证书
-                </label>
-              </div>
-            )}
-
+            {/* Whatever the selected driver says it needs. This was six blocks
+                of markup gated by comparisons against the type name, plus five
+                Elasticsearch fields the server had already collapsed into
+                extra_config. */}
+            <DatasourceFormFields
+              type={selectedType}
+              values={values}
+              errors={errors}
+              editing={editingId !== null}
+              onChange={(name, value) =>
+                setValues((current) => ({ ...current, [name]: value }))
+              }
+            />
             {activeConnectionTest.status !== "idle" && (
               <div
                 className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm ${

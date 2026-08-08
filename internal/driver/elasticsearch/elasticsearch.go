@@ -732,3 +732,55 @@ func toFloat64(v interface{}) (float64, bool) {
 		return 0, false
 	}
 }
+
+// ConfigSchema declares what an Elasticsearch connection is made of.
+//
+// Every setting except the credentials lands in extra_config, which is where
+// the server has kept them since the five dedicated columns were removed. The
+// form carried those five as named fields long after the columns were gone, and
+// showed or hid them by comparing the type name to "elasticsearch" in six
+// places; the auth-type condition below is what replaces that.
+func (d *ESDriver) ConfigSchema() []driver.ConfigField {
+	basicOrKey := func(values ...string) *driver.FieldCondition {
+		return &driver.FieldCondition{Field: "auth_type", Equals: values}
+	}
+
+	return []driver.ConfigField{
+		{
+			Name: "urls", Label: "节点地址", Kind: driver.FieldText, Required: true,
+			Placeholder: "https://es1.example.com:9200, https://es2.example.com:9200",
+			Help:        "多个地址用逗号分隔",
+			Storage:     driver.StorageExtra,
+		},
+		{
+			Name: "auth_type", Label: "认证方式", Kind: driver.FieldSelect,
+			Default: "basic", Storage: driver.StorageExtra,
+			Options: []driver.ConfigOption{
+				{Value: "basic", Label: "Basic Auth"},
+				{Value: "api_key", Label: "API Key"},
+				{Value: "none", Label: "无认证"},
+			},
+		},
+		{
+			Name: "username", Label: "用户名", Kind: driver.FieldText, Required: true,
+			Storage: driver.StorageColumn, ShowWhen: basicOrKey("basic"),
+		},
+		{
+			Name: "password", Label: "密码", Kind: driver.FieldPassword, Required: true,
+			Storage: driver.StorageColumn, Secret: true, ShowWhen: basicOrKey("basic"),
+		},
+		{
+			Name: "es_api_key", Label: "API Key", Kind: driver.FieldPassword, Required: true,
+			Storage: driver.StorageColumn, Secret: true, ShowWhen: basicOrKey("api_key"),
+		},
+		{
+			Name: "index_pattern", Label: "索引模式", Kind: driver.FieldText,
+			Placeholder: "logs-*（留空表示全部索引）", Storage: driver.StorageExtra,
+		},
+		{
+			Name: "verify_certs", Label: "校验证书", Kind: driver.FieldSwitch,
+			Default: "true", Storage: driver.StorageExtra,
+			Help: "关闭后 TLS 证书不再校验，仅用于自签名环境",
+		},
+	}
+}

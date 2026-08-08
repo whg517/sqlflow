@@ -18,6 +18,11 @@ type clickhouseish struct{ driver.Driver }
 func (clickhouseish) Type() string                { return "clickhouseish" }
 func (clickhouseish) QueryForm() driver.QueryForm { return driver.QueryFormSQL }
 
+// ConfigSchema is spelled out rather than inherited from the embedded nil
+// driver.Driver, which would satisfy the interface at compile time and panic
+// the moment anything walked the registry.
+func (clickhouseish) ConfigSchema() []driver.ConfigField { return nil }
+
 // DecodeConfig reads the keys this driver understands, and nothing else knows.
 func (clickhouseish) DecodeConfig(cfg *driver.Config, extra map[string]any) error {
 	if v, ok := extra["cluster"].(string); ok {
