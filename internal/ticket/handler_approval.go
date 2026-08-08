@@ -98,16 +98,20 @@ func (h *ApprovalHandler) CreatePolicy(c echo.Context) error {
 	return c.JSON(http.StatusCreated, policy)
 }
 
+// updatePolicyRequest is all-pointer so an omitted field stays omitted.
+//
+// With plain fields, every partial update the UI sends — the enable toggle, the
+// reorder arrows — arrived with the rest of the policy zeroed and overwrote it.
 type updatePolicyRequest struct {
-	Name               string `json:"name"`
-	Description        string `json:"description"`
-	Enabled            bool   `json:"enabled"`
-	Priority           int    `json:"priority"`
-	Conditions         string `json:"conditions"`
-	ApprovalChain      string `json:"approval_chain"`
-	AutoApproveEnabled bool   `json:"auto_approve_enabled"`
-	AutoApproveReason  string `json:"auto_approve_reason"`
-	IsDefault          bool   `json:"is_default"`
+	Name               *string `json:"name"`
+	Description        *string `json:"description"`
+	Enabled            *bool   `json:"enabled"`
+	Priority           *int    `json:"priority"`
+	Conditions         *string `json:"conditions"`
+	ApprovalChain      *string `json:"approval_chain"`
+	AutoApproveEnabled *bool   `json:"auto_approve_enabled"`
+	AutoApproveReason  *string `json:"auto_approve_reason"`
+	IsDefault          *bool   `json:"is_default"`
 }
 
 // UpdatePolicy handles PUT /api/admin/approval-policies/:id.
@@ -122,28 +126,29 @@ func (h *ApprovalHandler) UpdatePolicy(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "请求格式错误"})
 	}
 
-	// Validate conditions JSON
-	if err := ValidateConditions(req.Conditions); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	// Only what the caller named is validated. Validating an omitted field would
+	// reject every partial update, which is precisely what used to happen.
+	if req.Conditions != nil {
+		if err := ValidateConditions(*req.Conditions); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+	}
+	if req.ApprovalChain != nil {
+		if err := h.validateApprovalChain(c.Request().Context(), *req.ApprovalChain); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
 	}
 
-	// Validate approval chain JSON
-	if err := h.validateApprovalChain(c.Request().Context(), req.ApprovalChain); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-	}
-
-	policy, err := h.engine.UpdatePolicy(
-		c.Request().Context(), id,
-		req.Name, req.Description, req.Enabled, req.Priority,
-		req.Conditions, req.ApprovalChain,
-		req.AutoApproveEnabled, req.AutoApproveReason, req.IsDefault,
-	)
+	// A conversion, not a field-by-field copy: the two structs differ only in
+	// json tags, so the compiler checks they stay in step. A field added to one
+	// and not the other stops building rather than silently going unapplied.
+	policy, err := h.engine.UpdatePolicy(c.Request().Context(), id, PolicyUpdate(req))
 	if err != nil {
 		log.Printf("UpdatePolicy failed: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
-	h.writeAuditLog(c, "approval_policy_update", "更新审批策略: "+req.Name)
+	h.writeAuditLog(c, "approval_policy_update", "更新审批策略: "+policy.Name)
 	return c.JSON(http.StatusOK, policy)
 }
 

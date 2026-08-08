@@ -134,20 +134,58 @@ func (e *ApprovalEngine) ListPolicies(ctx context.Context) ([]model.ApprovalPoli
 }
 
 // UpdatePolicy updates an existing policy.
-func (e *ApprovalEngine) UpdatePolicy(ctx context.Context, id int64, name, description string, enabled bool, priority int, conditions, approvalChain string, autoApproveEnabled bool, autoApproveReason string, isDefault bool) (*model.ApprovalPolicy, error) {
-	_, err := e.client.ApprovalPolicy.UpdateOneID(int(id)).
-		SetName(name).
-		SetDescription(description).
-		SetEnabled(enabled).
-		SetPriority(priority).
-		SetConditions(conditions).
-		SetApprovalChain(approvalChain).
-		SetAutoApproveEnabled(autoApproveEnabled).
-		SetAutoApproveReason(autoApproveReason).
-		SetIsDefault(isDefault).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
+// PolicyUpdate names the fields a caller wants changed.
+//
+// Pointers, so that "not mentioned" and "set to the zero value" are different
+// things. They were the same thing before, and every partial update in the
+// admin screen wrote zeros over the rest of the policy: the enable toggle and
+// the reorder arrows blanked the approval chain and were rejected outright, and
+// the edit sheet — which never sends is_default — silently cleared the default
+// policy on every save.
+type PolicyUpdate struct {
+	Name               *string
+	Description        *string
+	Enabled            *bool
+	Priority           *int
+	Conditions         *string
+	ApprovalChain      *string
+	AutoApproveEnabled *bool
+	AutoApproveReason  *string
+	IsDefault          *bool
+}
+
+// UpdatePolicy applies only the fields the caller named.
+func (e *ApprovalEngine) UpdatePolicy(ctx context.Context, id int64, upd PolicyUpdate) (*model.ApprovalPolicy, error) {
+	q := e.client.ApprovalPolicy.UpdateOneID(int(id)).SetUpdatedAt(time.Now())
+	if upd.Name != nil {
+		q = q.SetName(*upd.Name)
+	}
+	if upd.Description != nil {
+		q = q.SetDescription(*upd.Description)
+	}
+	if upd.Enabled != nil {
+		q = q.SetEnabled(*upd.Enabled)
+	}
+	if upd.Priority != nil {
+		q = q.SetPriority(*upd.Priority)
+	}
+	if upd.Conditions != nil {
+		q = q.SetConditions(*upd.Conditions)
+	}
+	if upd.ApprovalChain != nil {
+		q = q.SetApprovalChain(*upd.ApprovalChain)
+	}
+	if upd.AutoApproveEnabled != nil {
+		q = q.SetAutoApproveEnabled(*upd.AutoApproveEnabled)
+	}
+	if upd.AutoApproveReason != nil {
+		q = q.SetAutoApproveReason(*upd.AutoApproveReason)
+	}
+	if upd.IsDefault != nil {
+		q = q.SetIsDefault(*upd.IsDefault)
+	}
+
+	if _, err := q.Save(ctx); err != nil {
 		return nil, fmt.Errorf("更新策略失败: %w", err)
 	}
 	return e.GetPolicy(ctx, id)
