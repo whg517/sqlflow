@@ -198,6 +198,12 @@ docs/                需求、架构、ADR、评审、路线图
   工单提不了）；PostgreSQL 用 `pgquery.SplitWithParser`（scanner 会切碎
   `BEGIN ATOMIC` 函数体）。`/*!nnnnn ... */` 按代码扫描，不按注释——服务器会执行
   里面的内容。读不懂的语句体一律拒绝：无法定级不等于无害。
+  **切分器与定级器必须对同一构造给出同一答案。** 切分器把 `/*!nnnnn ... */` 当代码，
+  而 `sql_analyzer.go` 的 `normalizeSQL` 曾把它和普通注释一起删掉，于是
+  `/*!50000 DROP TABLE users */` 归一化成空串、评 OTHER/medium，而 MySQL 照常执行
+  DROP（裸 `DROP TABLE users` 是 critical）。风险决定审批策略，所以这是客户端在
+  影响自己的审批路径。现在 `normalizeSQL` 解包而不是剥离它——版本号不是 SQL，
+  原样留着会让首关键字变成 `50000`。
 
 ## 约定
 

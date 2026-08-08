@@ -126,14 +126,33 @@ func (a *SQLAnalyzer) Analyze(sql string) *SQLAnalysis {
 	return result
 }
 
-// normalizeSQL collapses whitespace and removes comments.
+var (
+	// executableCommentRegex matches MySQL's /*!nnnnn ... */ form, whose contents
+	// the server executes.
+	executableCommentRegex = regexp.MustCompile(`(?s)/\*!\d*(.*?)\*/`)
+	lineCommentRegex       = regexp.MustCompile(`--[^\n]*`)
+	blockCommentRegex      = regexp.MustCompile(`(?s)/\*.*?\*/`)
+	whitespaceRegex        = regexp.MustCompile(`\s+`)
+)
+
+// normalizeSQL collapses whitespace and removes comments — except the one kind
+// that is not a comment.
+//
+// MySQL executes what is inside /*!nnnnn ... */, which is why the splitter in
+// internal/platform/sqlparser scans it as code and says so. This function
+// stripped it along with everything else, so `/*!50000 DROP TABLE users */`
+// normalized to the empty string, fell through to the OTHER branch and scored
+// medium — while the statement ran. The splitter and the grader read the same
+// construct two different ways, and only one of them was right.
+//
+// Unwrapping rather than keeping it verbatim is deliberate: the version prefix
+// is not SQL, and leaving it in place would put `50000` where the first keyword
+// should be.
 func normalizeSQL(sql string) string {
-	// Remove single-line comments
-	s := regexp.MustCompile(`--[^\n]*`).ReplaceAllString(sql, " ")
-	// Remove multi-line comments
-	s = regexp.MustCompile(`/\*.*?\*/`).ReplaceAllString(s, " ")
-	// Collapse whitespace
-	s = regexp.MustCompile(`\s+`).ReplaceAllString(s, " ")
+	s := executableCommentRegex.ReplaceAllString(sql, " $1 ")
+	s = lineCommentRegex.ReplaceAllString(s, " ")
+	s = blockCommentRegex.ReplaceAllString(s, " ")
+	s = whitespaceRegex.ReplaceAllString(s, " ")
 	return strings.TrimSpace(s)
 }
 

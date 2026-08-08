@@ -344,8 +344,19 @@ func (h *Handler) ExportQuery(c echo.Context) error {
 	}
 }
 
-// csvEscape escapes a value for CSV format.
+// csvEscape prepares a value for a hand-written CSV cell.
+//
+// Two separate jobs, and this used to do only the first. Quoting keeps a comma
+// or a newline from ending the field; escapeCSVFormula keeps a spreadsheet from
+// treating the cell as a formula. The audit and ticket exports in this same
+// package already did the second — writeCSV, which serves the query result grid
+// and therefore the widest attacker-controlled surface of the three, did not, so
+// a value written into the target database landed in the downloaded file live.
+//
+// Order matters: prefix first, then quote, or the apostrophe ends up inside the
+// quotes for a cell that also needs them.
 func csvEscape(s string) string {
+	s = escapeCSVFormula(s)
 	if strings.Contains(s, ",") || strings.Contains(s, "\"") || strings.Contains(s, "\n") || strings.Contains(s, "\r") {
 		return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
 	}

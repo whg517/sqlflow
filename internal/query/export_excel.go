@@ -196,24 +196,29 @@ func (s *ExportService) StreamExportTicketsExcel(ctx context.Context, w io.Write
 // ---------------------------------------------------------------------------
 
 // buildAuditExcelRow builds a row of cell values for audit log export.
-// All string values are escaped via escapeExcelFormula to prevent formula injection.
+//
+// Every text cell is escaped, not just the SQL. The comment here used to claim
+// that while only SQLContent and SQLSummary went through escapeExcelFormula —
+// two of sixteen columns — leaving the username, the error message, the AI
+// review result and the IP address live. Numeric columns are formatted rather
+// than escaped: a leading apostrophe on an id would turn it into text.
 func buildAuditExcelRow(a *auditCSVRow, colIndices []int) []interface{} {
 	allValues := []interface{}{
 		fmt.Sprintf("%d", a.ID),
 		formatTimeValue(a.CreatedAt),
-		a.Username,
-		a.Action,
+		escapeExcelFormula(a.Username),
+		escapeExcelFormula(a.Action),
 		fmt.Sprintf("%d", a.DatasourceID),
-		a.Database,
+		escapeExcelFormula(a.Database),
 		escapeExcelFormula(a.SQLContent),
 		escapeExcelFormula(a.SQLSummary),
 		fmt.Sprintf("%d", a.ResultRows),
 		fmt.Sprintf("%d", a.AffectedRows),
 		fmt.Sprintf("%d", a.ExecutionTimeMs),
-		a.ErrorMessage,
-		a.DesensitizedFields,
-		a.IPAddress,
-		a.AIReviewResult,
+		escapeExcelFormula(a.ErrorMessage),
+		escapeExcelFormula(a.DesensitizedFields),
+		escapeExcelFormula(a.IPAddress),
+		escapeExcelFormula(a.AIReviewResult),
 		fmt.Sprintf("%d", a.TicketID),
 	}
 
@@ -232,18 +237,18 @@ func buildAuditExcelRow(a *auditCSVRow, colIndices []int) []interface{} {
 func buildTicketExcelRow(t *ticketCSVRow, colIndices []int) []interface{} {
 	allValues := []interface{}{
 		fmt.Sprintf("%d", t.ID),
-		t.SubmitterName,
+		escapeExcelFormula(t.SubmitterName),
 		fmt.Sprintf("%d", t.SubmitterID),
 		fmt.Sprintf("%d", t.DatasourceID),
-		t.Database,
+		escapeExcelFormula(t.Database),
 		escapeExcelFormula(t.SQLContent),
 		escapeExcelFormula(t.SQLSummary),
-		t.DBType,
-		t.ChangeReason,
-		t.Status,
-		t.RiskLevel,
-		t.ReviewerName,
-		t.ReviewComment,
+		escapeExcelFormula(t.DBType),
+		escapeExcelFormula(t.ChangeReason),
+		escapeExcelFormula(t.Status),
+		escapeExcelFormula(t.RiskLevel),
+		escapeExcelFormula(t.ReviewerName),
+		escapeExcelFormula(t.ReviewComment),
 		formatOptionalTime(t.ScheduledAt),
 		formatOptionalTime(t.ExecutedAt),
 		formatTimeValue(t.CreatedAt),

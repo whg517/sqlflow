@@ -262,8 +262,20 @@ func (s *SLAService) CheckSLA(ctx context.Context) error {
 			continue
 		}
 
+		// Measure against the deadline the platform stored, not against
+		// created_at.
+		//
+		// The two disagreed, always. SetSLADeadline anchors at now+timeout and its
+		// only caller is a ten-minute ticker, so the stored deadline was set later
+		// than the clock this loop used — and the gap was unbounded after a
+		// resubmission, because RejectTicket clears the deadline while
+		// ResubmitTicket keeps the original created_at. A resubmitted ticket was
+		// therefore instantly past 100%, auto-rejected on the next pass, while the
+		// detail view read time_remaining_seconds off the deadline and showed
+		// nearly a full window left. Deriving the percentage from the deadline
+		// makes the decision and the display the same number by construction.
 		totalDuration := time.Duration(cfg.TimeoutMinutes) * time.Minute
-		elapsed := now.Sub(t.CreatedAt)
+		elapsed := totalDuration - time.Until(*t.SLADeadline)
 		percent := float64(elapsed) / float64(totalDuration) * 100
 
 		// Lookup approver name
