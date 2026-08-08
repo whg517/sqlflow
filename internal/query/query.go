@@ -99,19 +99,18 @@ func NewService(database *db.DB, dsSvc *datasource.Service, historySvc *HistoryS
 func executeDriverQuery(
 	ctx context.Context,
 	d driver.Driver,
-	database,
 	query string,
 	args []interface{},
 	limit int,
 ) (*driver.QueryResult, error) {
 	if len(args) == 0 {
-		return d.ExecuteQuery(ctx, database, query, limit)
+		return d.ExecuteQuery(ctx, query, limit)
 	}
 	parameterized, ok := d.(driver.ParameterizedQueryExecutor)
 	if !ok {
 		return nil, ErrQueryParamsUnsupported
 	}
-	return parameterized.ExecuteQueryWithArgs(ctx, database, query, args, limit)
+	return parameterized.ExecuteQueryWithArgs(ctx, query, args, limit)
 }
 
 // ExecuteQuery executes a SQL query on the specified datasource.
@@ -176,6 +175,26 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 		}
 	}
 
+	// Settle which database this query runs in before anything consumes the
+	// answer. The scope is the datasource's — the pool keys on datasource ID and
+	// the DSN pins the database — so a request naming another one is refused
+	// rather than honored in name only. It used to be honored in name only in
+	// the worst possible place: the driver dropped it, while loadMaskRules below
+	// used it to decide which rules to load.
+	scope, err := datasource.ResolveQueryScope(ds.Database, database)
+	if err != nil {
+		s.auditSvc.Write(ctx, auditlog.Record{
+			UserID:       userID,
+			Action:       "query_failed",
+			DatasourceID: datasourceID,
+			Database:     ds.Database,
+			SQLContent:   sqlContent,
+			SQLSummary:   auditlog.Summarize(sqlContent),
+			ErrorMessage: err.Error(),
+		})
+		return nil, err
+	}
+
 	queryStart := time.Now()
 
 	if s.poolMgr == nil {
@@ -201,17 +220,8 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 		// 让 handler 返回 400（客户端可重试）而非 500。
 		err = ErrSQLTimeout
 	} else {
-		// Pass the requested scope through as-is. What an empty scope means is
-		// the driver's business: SQL connections are already bound to a database
-		// by the DSN, MongoDB falls back to its configured database, and
-		// Elasticsearch to its configured index pattern.
-		dbName := database
-		if dbName == "" {
-			dbName = ds.Database
-		}
-
 		var drvResult *driver.QueryResult
-		drvResult, err = executeDriverQuery(ctx, d, dbName, sqlContent, queryParams, defaultRowLimit)
+		drvResult, err = executeDriverQuery(ctx, d, sqlContent, queryParams, defaultRowLimit)
 		switch {
 		case err == nil:
 			result = &QueryResult{
@@ -239,7 +249,7 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 			UserID:          userID,
 			Action:          "query_failed",
 			DatasourceID:    datasourceID,
-			Database:        database,
+			Database:        scope,
 			SQLContent:      sqlContent,
 			SQLSummary:      auditlog.Summarize(sqlContent),
 			ErrorMessage:    err.Error(),
@@ -251,12 +261,12 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 		return nil, err
 	}
 
-	if err := s.refuseUnmaskableShape(ctx, result.Shape, userID, role, datasourceID, database, parseResult.Targets); err != nil {
+	if err := s.refuseUnmaskableShape(ctx, result.Shape, userID, role, datasourceID, scope, parseResult.Targets); err != nil {
 		return nil, err
 	}
 
 	// Apply desensitization
-	desensitized, maskedFields := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, database, parseResult.Targets)
+	desensitized, maskedFields := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, scope, parseResult.Targets)
 	result.Desensitized = desensitized
 	result.DesensitizedFields = maskedFields
 	result.Warnings = parseResult.Warnings
@@ -270,7 +280,7 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 	history := &model.QueryHistory{
 		UserID:        userID,
 		DatasourceID:  datasourceID,
-		Database:      database,
+		Database:      scope,
 		SQLContent:    sqlContent,
 		ParamsJSON:    string(paramsJSON),
 		SQLSummary:    summary,
@@ -290,7 +300,7 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 		UserID:             userID,
 		Action:             "query",
 		DatasourceID:       datasourceID,
-		Database:           database,
+		Database:           scope,
 		SQLContent:         sqlContent,
 		SQLSummary:         summary,
 		ResultRows:         result.Total,
@@ -557,13 +567,11 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 		}
 	}
 
-	// Get database name
-	dbName := database
-	if dbName == "" {
-		dbName = ds.Database
-		if dbName == "" {
-			dbName = "information_schema"
-		}
+	// A plan is produced by the same connection that would run the query, so it
+	// answers for the same scope and is held to the same rule.
+	scope, err := datasource.ResolveQueryScope(ds.Database, database)
+	if err != nil {
+		return nil, err
 	}
 
 	if s.poolMgr == nil {
@@ -585,7 +593,7 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 	if !ok {
 		return nil, ErrExplainNotSupported
 	}
-	drvResult, err := explainer.ExplainQuery(ctx, dbName, explainSQL, queryParams)
+	drvResult, err := explainer.ExplainQuery(ctx, explainSQL, queryParams)
 	if err != nil {
 		return nil, fmt.Errorf("执行 EXPLAIN 失败: %w", err)
 	}
@@ -607,7 +615,7 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 		UserID:       userID,
 		Action:       "explain",
 		DatasourceID: datasourceID,
-		Database:     database,
+		Database:     scope,
 		SQLContent:   sqlContent,
 		SQLSummary:   auditlog.Summarize(sqlContent),
 	})

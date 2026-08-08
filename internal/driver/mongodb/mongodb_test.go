@@ -114,10 +114,10 @@ func TestMongoDBDriver_NotConnected(t *testing.T) {
 	if _, err := d.GetColumns(context.TODO(), "mydb", "mycoll"); err == nil {
 		t.Error("GetColumns() should fail when not connected")
 	}
-	if _, err := d.ExecuteQuery(context.TODO(), "mydb", `{"operation":"find","collection":"c"}`, 10); err == nil {
+	if _, err := d.ExecuteQuery(context.TODO(), `{"operation":"find","collection":"c"}`, 10); err == nil {
 		t.Error("ExecuteQuery() should fail when not connected")
 	}
-	if _, err := d.ExecuteStatement(context.TODO(), "mydb", `{"operation":"insert","collection":"c","document":{}}`); err == nil {
+	if _, err := d.ExecuteStatement(context.TODO(), `{"operation":"insert","collection":"c","document":{}}`); err == nil {
 		t.Error("ExecuteStatement() should fail when not connected")
 	}
 }
@@ -308,19 +308,17 @@ func TestMongoDBDriver_Connect_NoURI(t *testing.T) {
 	}
 }
 
-func TestMongoDBDriver_ExecuteQuery_NoDatabase(t *testing.T) {
-	d := &MongoDBDriver{}
-	_, err := d.ExecuteQuery(context.TODO(), "", `{"operation":"find","collection":"c"}`, 10)
-	if err == nil {
-		t.Error("ExecuteQuery() should fail without database")
-	}
-}
-
 func TestMongoDBDriver_ExecuteStatement_InvalidJSON(t *testing.T) {
-	d := &MongoDBDriver{}
-	_, err := d.ExecuteStatement(context.TODO(), "mydb", "not json")
+	// A client and a scope are both needed to reach the parser: without them the
+	// "not connected" and "no database" guards answer first, and the test would
+	// pass while proving nothing about the command body.
+	d := NewWithClient(newUnconnectedClient(t), "mydb")
+	_, err := d.(driver.StatementExecutor).ExecuteStatement(context.TODO(), "not json")
 	if err == nil {
-		t.Error("ExecuteStatement() should fail for invalid JSON")
+		t.Fatal("ExecuteStatement() should fail for invalid JSON")
+	}
+	if !strings.Contains(err.Error(), "parse mongodb command") {
+		t.Errorf("error = %v, want it to name the parse failure", err)
 	}
 }
 

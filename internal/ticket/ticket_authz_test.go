@@ -3,6 +3,8 @@ package ticket
 import (
 	"database/sql"
 	"testing"
+
+	"github.com/whg517/sqlflow/internal/testutil"
 )
 
 // seedGatedDatasource creates a datasource with an explicit status and extra
@@ -13,8 +15,8 @@ func seedGatedDatasource(t *testing.T, testDB *sql.DB, name, dsType, status, ext
 	if err := testDB.QueryRow(
 		`INSERT INTO datasources (name, type, host, port, username, password_encrypted,
 		 database, status, extra_config, created_at, updated_at)
-		 VALUES ($1, $2, 'localhost', 5432, 'u', '', 'app', $3, $4, now(), now()) RETURNING id`,
-		name, dsType, status, extra,
+		 VALUES ($1, $2, 'localhost', 5432, 'u', '', $3, $4, $5, now(), now()) RETURNING id`,
+		name, dsType, testutil.DatasourceDatabase, status, extra,
 	).Scan(&id); err != nil {
 		t.Fatalf("seed %s: %v", name, err)
 	}
@@ -37,7 +39,7 @@ func TestCreateTicketRefusesTheInternalDatasource(t *testing.T) {
 	userID := seedTestUser(t, testDB, "dev", "developer")
 	dsID := seedGatedDatasource(t, testDB, "SQLFlow 元数据库", "postgresql", "active", `{"system":true}`)
 
-	_, err := svc.CreateTicket(t.Context(), userID, "developer", dsID, "sqlflow",
+	_, err := svc.CreateTicket(t.Context(), userID, "developer", dsID, testutil.DatasourceDatabase,
 		"DROP TABLE tickets", "需求")
 	if err == nil {
 		t.Fatal("a developer filed a ticket against the platform metadata database")
@@ -52,7 +54,7 @@ func TestCreateTicketAllowsAdminOnTheInternalDatasource(t *testing.T) {
 	userID := seedTestUser(t, testDB, "root", "admin")
 	dsID := seedGatedDatasource(t, testDB, "SQLFlow 元数据库", "postgresql", "active", `{"system":true}`)
 
-	if _, err := svc.CreateTicket(t.Context(), userID, "admin", dsID, "sqlflow",
+	if _, err := svc.CreateTicket(t.Context(), userID, "admin", dsID, testutil.DatasourceDatabase,
 		"UPDATE tickets SET status = 'DONE' WHERE id = 1", "需求"); err != nil {
 		t.Fatalf("an admin was refused: %v", err)
 	}
@@ -66,7 +68,7 @@ func TestCreateTicketRefusesADisabledDatasource(t *testing.T) {
 	userID := seedTestUser(t, testDB, "dev", "developer")
 	dsID := seedGatedDatasource(t, testDB, "retired", "mysql", "disabled", "")
 
-	if _, err := svc.CreateTicket(t.Context(), userID, "developer", dsID, "app",
+	if _, err := svc.CreateTicket(t.Context(), userID, "developer", dsID, testutil.DatasourceDatabase,
 		"DELETE FROM users WHERE id = 1", "需求"); err == nil {
 		t.Error("a ticket was filed against a disabled datasource")
 	}
@@ -100,7 +102,7 @@ func TestCreateTicketIsReachableForAReadOnlyDeveloper(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := svc.CreateTicket(t.Context(), userID, "developer", tt.ds, "app", tt.sql, "需求"); err != nil {
+			if _, err := svc.CreateTicket(t.Context(), userID, "developer", tt.ds, testutil.DatasourceDatabase, tt.sql, "需求"); err != nil {
 				t.Errorf("a read-only developer could not file the ticket the workflow exists for: %v", err)
 			}
 		})

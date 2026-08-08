@@ -32,8 +32,8 @@ func createTestDatasourceForSLA(t *testing.T, ctx context.Context, d *sql.DB) in
 	t.Helper()
 	var id int64
 	if err := d.QueryRowContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		"test-ds", "mysql", "localhost", 3306, "root", "encrypted").Scan(&id); err != nil {
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+		"test-ds", "mysql", "localhost", 3306, "root", "encrypted", testutil.DatasourceDatabase).Scan(&id); err != nil {
 		t.Fatalf("create datasource: %v", err)
 	}
 	return id

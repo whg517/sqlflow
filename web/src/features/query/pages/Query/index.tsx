@@ -400,12 +400,7 @@ export default function QueryPage() {
               toast.error(`该模板需要 ${activeTab.datasourceType} 数据源`);
               return;
             }
-            updateTabDatasource(
-              activeTab.id,
-              Number(v),
-              ds?.type === "mysql" ? activeTab.database : activeTab.database,
-              ds?.type ?? "",
-            );
+            updateTabDatasource(activeTab.id, Number(v), "", ds?.type ?? "");
           }}
         >
           <SelectTrigger className="h-8 w-48 border-[var(--border-default)] bg-[var(--bg-elevated)] text-sm">
@@ -436,20 +431,16 @@ export default function QueryPage() {
           <span className="text-xs text-amber-400">{datasourceLoadError}</span>
         )}
 
-        <input
-          type="text"
-          value={activeTab?.database ?? ""}
-          onChange={(e) =>
-            updateTabDatasource(
-              activeTab.id,
-              activeTab.datasourceId,
-              e.target.value,
-              activeTab.datasourceType,
-            )
-          }
-          placeholder={queryMode.databasePlaceholder}
-          className="h-8 w-36 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] px-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]"
-        />
+        {/*
+         * There is no database input here. The box that stood here was free
+         * text and its value travelled as the query's scope: the driver
+         * discarded it while it still narrowed the mask-rule lookup, so typing
+         * a database no rule was scoped to returned unmasked rows. A datasource
+         * is connected to one database and the server derives the scope from
+         * that row, so there is nothing here for a user to decide. A tab
+         * restored from history still carries the database that history
+         * recorded, which is the same one.
+         */}
 
         {/* DB type indicator */}
         {isMongo && (

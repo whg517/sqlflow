@@ -422,7 +422,7 @@ func (d *ESDriver) GetColumns(ctx context.Context, database, index string) ([]dr
 
 // ExecuteQuery executes a search or count query against an Elasticsearch index.
 // The query string is a JSON body: {"index": "my-index-*", "operation": "search|count", "body": {"query": {...}}}
-func (d *ESDriver) ExecuteQuery(ctx context.Context, database string, query string, limit int) (*driver.QueryResult, error) {
+func (d *ESDriver) ExecuteQuery(ctx context.Context, query string, limit int) (*driver.QueryResult, error) {
 	if d.client == nil {
 		return nil, fmt.Errorf("elasticsearch: not connected")
 	}

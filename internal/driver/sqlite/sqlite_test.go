@@ -45,7 +45,7 @@ func TestDriverReadOnlyMetadataAndQuery(t *testing.T) {
 		t.Fatalf("columns = %#v", columns)
 	}
 
-	result, err := d.ExecuteQuery(context.Background(), "", "SELECT name FROM users", 10)
+	result, err := d.ExecuteQuery(context.Background(), "SELECT name FROM users", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestDriverReadOnlyMetadataAndQuery(t *testing.T) {
 		t.Fatalf("result = %#v", result)
 	}
 
-	if _, err := d.ExecuteQuery(context.Background(), "", "DELETE FROM users", 10); err == nil {
+	if _, err := d.ExecuteQuery(context.Background(), "DELETE FROM users", 10); err == nil {
 		t.Fatal("expected query-only connection to reject writes")
 	}
 }

@@ -96,12 +96,12 @@ func TestPostgreSQLDriver_NotConnected(t *testing.T) {
 		t.Error("GetColumns() should fail when not connected")
 	}
 
-	_, err = d.ExecuteQuery(context.TODO(), "public", "SELECT 1", 10)
+	_, err = d.ExecuteQuery(context.TODO(), "SELECT 1", 10)
 	if err == nil {
 		t.Error("ExecuteQuery() should fail when not connected")
 	}
 
-	_, err = d.ExecuteStatement(context.TODO(), "public", "SELECT 1")
+	_, err = d.ExecuteStatement(context.TODO(), "SELECT 1")
 	if err == nil {
 		t.Error("ExecuteStatement() should fail when not connected")
 	}
@@ -135,7 +135,7 @@ func TestPostgreSQLDriver_ExecuteQueryWithArgs(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("Alice"))
 
 	d := &PostgreSQLDriver{db: database}
-	result, err := d.ExecuteQueryWithArgs(context.Background(), "app", query, []interface{}{"42"}, 10)
+	result, err := d.ExecuteQueryWithArgs(context.Background(), query, []interface{}{"42"}, 10)
 	if err != nil {
 		t.Fatalf("ExecuteQueryWithArgs: %v", err)
 	}

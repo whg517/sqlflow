@@ -23,9 +23,10 @@ import (
 // datasource password so that executeSQL can decrypt it.
 const ticketExecTestKey = "0123456789abcdef"
 
-// ticketExecDatabase is the logical database name shared by the test tickets
-// and the injected target connection. connpool keys its pool by
-// (datasource id, host, port, database), so the two must agree.
+// ticketExecDatabase is the database the test datasource is configured for.
+//
+// The tickets must name the same one: a ticket's scope is the datasource's, so
+// one naming another database is refused before it reaches the executor.
 const ticketExecDatabase = "app"
 
 // setupTicketExecTest wires a Service that can actually execute a ticket.
@@ -48,9 +49,9 @@ func setupTicketExecTest(t *testing.T) (platform *db.DB, ticketSvc *Service, tar
 	}
 	var dsID int64
 	if err := platform.QueryRow(
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-		"test-ds", "mysql", "127.0.0.1", 3306, "root", encPassword, "active",
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, status)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+		"test-ds", "mysql", "127.0.0.1", 3306, "root", encPassword, ticketExecDatabase, "active",
 	).Scan(&dsID); err != nil {
 		t.Fatalf("insert datasource: %v", err)
 	}

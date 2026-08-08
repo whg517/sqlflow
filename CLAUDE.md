@@ -73,6 +73,18 @@ Mongo/ES 声明为假但两者都做得到——照 `CapExport` 执行会拒掉�
 **不要再引入运行时声明的能力位。** 如果新能力是「有没有这个方法」，用可选接口 +
 编译期断言；如果它是「平台对这个数据源的判断」，那它不属于驱动。
 
+**查询作用域属于数据源行，不是请求参数。** 连接池只按数据源 ID 建键，DSN 在
+Connect 时就钉死了库，`internal/` 里没有任何地方发 `USE` 或 `SET search_path`——
+所以执行方法（`ExecuteQuery`/`ExecuteQueryWithArgs`/`ExplainQuery`/
+`ExecuteStatement(s)`）**不接受 database 参数**。曾经接受：三个驱动收下就扔，ES 从不读，
+只有 MongoDB 认；而同一个未经校验的自由文本又去筛脱敏规则
+（`loadMaskRules`），于是在工作台数据库输入框里随便敲一个名字，就会把真正那个库的
+规则全部筛掉、明文返回——违反不变量 4。作用域由
+`datasource.ResolveQueryScope(ds.Database, requested)` 统一裁决：请求空值取数据源
+的库，请求别的库直接拒绝（而不是静默改写——否则调用者以为自己读的是 A，审计也跟着
+撒谎）。脱敏、审计、查询历史、工单记录一律用它的返回值。表/集合/索引这类**每次查询
+都会变的目标仍在查询体里**，由 Casbin 与脱敏规则按名字校验。
+
 **每个驱动必须写编译期断言**（`internal/driver/*/`）：
 
 ```go

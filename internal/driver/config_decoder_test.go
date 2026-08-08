@@ -41,7 +41,7 @@ func (clickhouseish) Parse(string) (*driver.ParseResult, error) {
 	return &driver.ParseResult{Operation: driver.OpSelect}, nil
 }
 
-func (clickhouseish) ExecuteQuery(context.Context, string, string, int) (*driver.QueryResult, error) {
+func (clickhouseish) ExecuteQuery(context.Context, string, int) (*driver.QueryResult, error) {
 	return nil, nil
 }
 

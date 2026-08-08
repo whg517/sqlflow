@@ -34,7 +34,7 @@ func newStubES(t *testing.T, body string) *ESDriver {
 
 func executeStub(t *testing.T, d *ESDriver, query string) *driver.QueryResult {
 	t.Helper()
-	res, err := d.ExecuteQuery(context.Background(), "", query, 100)
+	res, err := d.ExecuteQuery(context.Background(), query, 100)
 	if err != nil {
 		t.Fatalf("ExecuteQuery: %v", err)
 	}

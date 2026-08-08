@@ -28,8 +28,8 @@ func setupCommentHandlerTest(t *testing.T) (*echo.Echo, *CommentService, *Commen
 	userID, _ := userRes.LastInsertId()
 
 	// Insert a test datasource
-	dsRes, err := database.Exec("INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-		"test-ds", "mysql", "10.0.0.1", 3306, "root", "enc", "active")
+	dsRes, err := database.Exec("INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+		"test-ds", "mysql", "10.0.0.1", 3306, "root", "enc", testutil.DatasourceDatabase, "active")
 	if err != nil {
 		t.Fatalf("insert datasource: %v", err)
 	}

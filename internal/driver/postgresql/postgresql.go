@@ -227,12 +227,12 @@ func (d *PostgreSQLDriver) GetColumns(ctx context.Context, database, table strin
 }
 
 // ExecuteQuery executes a read-only SQL query.
-func (d *PostgreSQLDriver) ExecuteQuery(ctx context.Context, database string, query string, limit int) (*driver.QueryResult, error) {
+func (d *PostgreSQLDriver) ExecuteQuery(ctx context.Context, query string, limit int) (*driver.QueryResult, error) {
 	return d.executeQuery(ctx, query, nil, limit)
 }
 
 // ExecuteQueryWithArgs executes a read-only SQL query with bound parameters.
-func (d *PostgreSQLDriver) ExecuteQueryWithArgs(ctx context.Context, database string, query string, args []interface{}, limit int) (*driver.QueryResult, error) {
+func (d *PostgreSQLDriver) ExecuteQueryWithArgs(ctx context.Context, query string, args []interface{}, limit int) (*driver.QueryResult, error) {
 	return d.executeQuery(ctx, query, args, limit)
 }
 
@@ -308,7 +308,7 @@ func (d *PostgreSQLDriver) executeQuery(ctx context.Context, query string, args 
 }
 
 // ExecuteStatement executes a single DML/DDL statement.
-func (d *PostgreSQLDriver) ExecuteStatement(ctx context.Context, database string, stmt string) (*driver.StatementResult, error) {
+func (d *PostgreSQLDriver) ExecuteStatement(ctx context.Context, stmt string) (*driver.StatementResult, error) {
 	if d.db == nil {
 		return nil, fmt.Errorf("postgresql: not connected")
 	}
@@ -336,7 +336,7 @@ func (d *PostgreSQLDriver) ExecuteStatement(ctx context.Context, database string
 // ExecuteStatements 在单个事务中批量执行多条语句（PostgreSQL 事务性 DDL）。
 // 任一语句失败立即停止并回滚，已成功执行的语句标记为 "rolled_back"。
 // 所有语句包在单个事务中，任一语句失败即回滚（PostgreSQL 的 DDL 可回滚）。
-func (d *PostgreSQLDriver) ExecuteStatements(ctx context.Context, database string, statements []string) ([]driver.StatementResult, error) {
+func (d *PostgreSQLDriver) ExecuteStatements(ctx context.Context, statements []string) ([]driver.StatementResult, error) {
 	if d.db == nil {
 		return nil, fmt.Errorf("postgresql: not connected")
 	}
@@ -413,7 +413,7 @@ func (d *PostgreSQLDriver) ExecuteStatements(ctx context.Context, database strin
 // per plan node, a different shape from MySQL's step table. Keeping that
 // difference inside the driver is what lets the service stop asking which
 // engine it is talking to.
-func (d *PostgreSQLDriver) ExplainQuery(ctx context.Context, database string, query string, args []interface{}) (*driver.QueryResult, error) {
+func (d *PostgreSQLDriver) ExplainQuery(ctx context.Context, query string, args []interface{}) (*driver.QueryResult, error) {
 	return d.executeQuery(ctx, "EXPLAIN "+query, args, explainRowLimit)
 }
 

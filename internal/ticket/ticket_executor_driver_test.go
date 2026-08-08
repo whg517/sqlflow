@@ -39,13 +39,13 @@ func (m *testExecDriver) ListTables(ctx context.Context, db string) ([]driver.Ta
 func (m *testExecDriver) GetColumns(ctx context.Context, db, tbl string) ([]driver.ColumnInfo, error) {
 	return nil, nil
 }
-func (m *testExecDriver) ExecuteQuery(ctx context.Context, db, q string, l int) (*driver.QueryResult, error) {
+func (m *testExecDriver) ExecuteQuery(ctx context.Context, q string, l int) (*driver.QueryResult, error) {
 	return nil, nil
 }
-func (m *testExecDriver) ExecuteStatement(ctx context.Context, db, stmt string) (*driver.StatementResult, error) {
+func (m *testExecDriver) ExecuteStatement(ctx context.Context, stmt string) (*driver.StatementResult, error) {
 	return nil, nil
 }
-func (m *testExecDriver) ExecuteStatements(ctx context.Context, db string, statements []string) ([]driver.StatementResult, error) {
+func (m *testExecDriver) ExecuteStatements(ctx context.Context, statements []string) ([]driver.StatementResult, error) {
 	m.stmts = statements
 	if m.mockErr != nil {
 		// 模拟 PG 事务：首错时返回已执行结果（含 rolled_back 标记）

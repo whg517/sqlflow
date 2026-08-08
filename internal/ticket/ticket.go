@@ -284,7 +284,18 @@ func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitter
 		return nil, ErrTicketDatasourceRequired
 	}
 
-	dbType, err := s.checkDatasourceAccess(ctx, datasourceID, submitterRole)
+	target, err := s.checkDatasourceAccess(ctx, datasourceID, submitterRole)
+	if err != nil {
+		return nil, err
+	}
+
+	// A ticket records the scope its change will land in, so it may only record
+	// one the executor can reach. The field is free text on the submit form and
+	// nothing checked it: a ticket could name prod while the datasource's
+	// connection was pinned to staging, and the approver would read prod. The
+	// scope is the datasource's; naming another is refused here rather than
+	// discovered at execution.
+	scope, err := datasource.ResolveQueryScope(target.database, database)
 	if err != nil {
 		return nil, err
 	}
@@ -296,13 +307,13 @@ func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitter
 	// The grade used to come from the first keyword while the executor split on
 	// ';', so prefixing a DROP with "SELECT 1;" moved the ticket from critical to
 	// low and it still ran the DROP.
-	plan, err := planTicketSQL(dbType, sqlContent)
+	plan, err := planTicketSQL(target.dbType, sqlContent)
 	if err != nil {
 		s.auditSvc.Write(ctx, auditlog.Record{
 			UserID:       submitterID,
 			Action:       "ticket_create_rejected",
 			DatasourceID: datasourceID,
-			Database:     database,
+			Database:     scope,
 			SQLContent:   sqlContent,
 			SQLSummary:   summary,
 			ErrorMessage: err.Error(),
@@ -317,10 +328,10 @@ func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitter
 	saved, err := s.client.Ticket.Create().
 		SetSubmitterID(submitterID).
 		SetDatasourceID(datasourceID).
-		SetDatabase(database).
+		SetDatabase(scope).
 		SetSQLContent(sqlContent).
 		SetSQLSummary(summary).
-		SetDbType(dbType).
+		SetDbType(target.dbType).
 		SetChangeReason(changeReason).
 		SetStatus(string(model.TicketStatusSubmitted)).
 		SetRiskLevel(riskLevel).
@@ -346,10 +357,10 @@ func (s *Service) CreateTicket(ctx context.Context, submitterID int64, submitter
 		ID:             id,
 		SubmitterID:    submitterID,
 		DatasourceID:   datasourceID,
-		Database:       database,
+		Database:       scope,
 		SQLContent:     sqlContent,
 		SQLSummary:     summary,
-		DBType:         dbType,
+		DBType:         target.dbType,
 		ChangeReason:   changeReason,
 		Status:         model.TicketStatusSubmitted,
 		RiskLevel:      riskLevel,
@@ -1067,8 +1078,21 @@ func queryFormOf(dsType string) driver.QueryForm {
 	return d.QueryForm()
 }
 
+// ticketTarget holds the server-owned facts about the datasource a ticket is
+// filed against.
+//
+// Both are server-owned for the same reason: each one selects which checks run
+// or where the change lands, so neither may come from the submitter.
+type ticketTarget struct {
+	// dbType selects the parser, the risk grade and the collection-level check.
+	dbType string
+	// database is the datasource's own database — the only scope its connection
+	// can reach.
+	database string
+}
+
 // checkDatasourceAccess decides whether this submitter may file against this
-// datasource at all, and returns its driver type.
+// datasource at all, and returns the target's server-owned facts.
 //
 // These are the gates ExecuteQuery already applies. The ticket path applied
 // none of them, so a developer could file DROP TABLE tickets against SQLFlow's
@@ -1081,21 +1105,21 @@ func queryFormOf(dsType string) driver.QueryForm {
 // files a ticket precisely because they lack it; that is the workflow. The
 // approval step is the control for what may be done inside a datasource the
 // submitter is allowed to use.
-func (s *Service) checkDatasourceAccess(ctx context.Context, datasourceID int64, role string) (string, error) {
+func (s *Service) checkDatasourceAccess(ctx context.Context, datasourceID int64, role string) (ticketTarget, error) {
 	ds, err := s.client.DataSource.Get(ctx, int(datasourceID))
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return "", ErrTicketDatasourceNotFound
+			return ticketTarget{}, ErrTicketDatasourceNotFound
 		}
-		return "", fmt.Errorf("读取数据源失败: %w", err)
+		return ticketTarget{}, fmt.Errorf("读取数据源失败: %w", err)
 	}
 	if ds.Status == "disabled" {
-		return "", ErrTicketDatasourceDisabled
+		return ticketTarget{}, ErrTicketDatasourceDisabled
 	}
 	if isInternalDatasource(ds.ExtraConfig) && role != "admin" {
-		return "", ErrTicketInternalDatasource
+		return ticketTarget{}, ErrTicketInternalDatasource
 	}
-	return ds.Type, nil
+	return ticketTarget{dbType: ds.Type, database: ds.Database}, nil
 }
 
 // isInternalDatasource reports whether the row is SQLFlow's own metadata

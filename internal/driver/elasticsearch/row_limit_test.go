@@ -122,7 +122,7 @@ func TestExecuteQueryHonorsTheRowLimit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rec, d := newSearchRecorder(t, 50)
 
-			result, err := d.ExecuteQuery(t.Context(), "", tt.query, tt.limit)
+			result, err := d.ExecuteQuery(t.Context(), tt.query, tt.limit)
 			if err != nil {
 				t.Fatalf("ExecuteQuery: %v", err)
 			}
@@ -153,7 +153,7 @@ func TestExecuteQueryTruncatesAnOverlongResponse(t *testing.T) {
 	// The recorder returns min(hits, size); ask for more than the limit by
 	// bypassing size entirely is not possible, so assert the returned rows
 	// against the limit that was sent.
-	result, err := d.ExecuteQuery(t.Context(), "", `{"index":"logs","body":{"query":{"match_all":{}}}}`, 5)
+	result, err := d.ExecuteQuery(t.Context(), `{"index":"logs","body":{"query":{"match_all":{}}}}`, 5)
 	if err != nil {
 		t.Fatalf("ExecuteQuery: %v", err)
 	}

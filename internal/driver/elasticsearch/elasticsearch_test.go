@@ -123,14 +123,14 @@ func TestESDriver_NotConnected(t *testing.T) {
 	if _, err := d.GetColumns(context.TODO(), "", "test"); err == nil {
 		t.Error("GetColumns() should fail when not connected")
 	}
-	if _, err := d.ExecuteQuery(context.TODO(), "", `{"index":"test","body":{"query":{"match_all":{}}}}`, 10); err == nil {
+	if _, err := d.ExecuteQuery(context.TODO(), `{"index":"test","body":{"query":{"match_all":{}}}}`, 10); err == nil {
 		t.Error("ExecuteQuery() should fail when not connected")
 	}
 }
 
 func TestESDriver_ExecuteQuery_InvalidJSON(t *testing.T) {
 	d := &ESDriver{}
-	_, err := d.ExecuteQuery(context.TODO(), "", "not json", 10)
+	_, err := d.ExecuteQuery(context.TODO(), "not json", 10)
 	if err == nil {
 		t.Error("ExecuteQuery should fail for invalid JSON")
 	}
@@ -138,7 +138,7 @@ func TestESDriver_ExecuteQuery_InvalidJSON(t *testing.T) {
 
 func TestESDriver_ExecuteQuery_NoIndex(t *testing.T) {
 	d := &ESDriver{}
-	_, err := d.ExecuteQuery(context.TODO(), "", `{"body":{"query":{"match_all":{}}}}`, 10)
+	_, err := d.ExecuteQuery(context.TODO(), `{"body":{"query":{"match_all":{}}}}`, 10)
 	if err == nil {
 		t.Error("ExecuteQuery should fail without index")
 	}

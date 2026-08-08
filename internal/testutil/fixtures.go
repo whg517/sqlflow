@@ -90,6 +90,15 @@ func SeedUser(t *testing.T, conn *sql.DB, username, role string) int64 {
 	return id
 }
 
+// DatasourceDatabase is the database every seeded datasource is configured for.
+//
+// It is named rather than inlined because the platform derives a query's or a
+// ticket's scope from this column and refuses a request naming anything else. A
+// fixture with no database models a datasource nothing can be executed against,
+// which is why the seeders below all set one; a test that passes a different
+// name is testing the refusal, not the workflow.
+const DatasourceDatabase = "appdb"
+
 // SeedDatasource inserts an active MySQL datasource and returns its ID.
 //
 // The connection details are placeholders: this exists for tests that need a
@@ -99,9 +108,9 @@ func SeedDatasource(t *testing.T, conn *sql.DB, name string) int64 {
 	t.Helper()
 	var id int64
 	if err := conn.QueryRow(
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at)
-		 VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active', now(), now()) RETURNING id`,
-		name,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, status, created_at, updated_at)
+		 VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', $2, 'active', now(), now()) RETURNING id`,
+		name, DatasourceDatabase,
 	).Scan(&id); err != nil {
 		t.Fatalf("testutil: seed datasource %s: %v", name, err)
 	}

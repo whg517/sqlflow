@@ -23,7 +23,7 @@ func TestExecuteQuery_ScansRowsAndColumns(t *testing.T) {
 	)
 
 	d := NewWithDB(db)
-	res, err := d.ExecuteQuery(context.Background(), "testdb", "SELECT 1 AS id, 'hello' AS name", 100)
+	res, err := d.ExecuteQuery(context.Background(), "SELECT 1 AS id, 'hello' AS name", 100)
 	if err != nil {
 		t.Fatalf("ExecuteQuery: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestExecuteQuery_EmptyResultIsNotAnError(t *testing.T) {
 
 	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
-	res, err := NewWithDB(db).ExecuteQuery(context.Background(), "testdb", "SELECT 1 WHERE 1=0", 100)
+	res, err := NewWithDB(db).ExecuteQuery(context.Background(), "SELECT 1 WHERE 1=0", 100)
 	if err != nil {
 		t.Fatalf("ExecuteQuery: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestExecuteQuery_StopsAtRowLimit(t *testing.T) {
 	}
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
 
-	res, err := NewWithDB(db).ExecuteQuery(context.Background(), "testdb", "SELECT n FROM t", 3)
+	res, err := NewWithDB(db).ExecuteQuery(context.Background(), "SELECT n FROM t", 3)
 	if err != nil {
 		t.Fatalf("ExecuteQuery: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestExecuteQuery_StopsAtRowLimit(t *testing.T) {
 
 func TestExecuteQuery_NotConnected(t *testing.T) {
 	d := NewWithDB(nil)
-	if _, err := d.ExecuteQuery(context.Background(), "db", "SELECT 1", 10); err == nil {
+	if _, err := d.ExecuteQuery(context.Background(), "SELECT 1", 10); err == nil {
 		t.Fatal("expected an error when the driver has no connection")
 	}
 }

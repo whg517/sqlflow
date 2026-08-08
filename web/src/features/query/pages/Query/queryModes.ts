@@ -18,8 +18,6 @@ export type BuildOutcome =
 
 export interface QueryMode {
   form: QueryForm;
-  /** Placeholder for the database/index input in the toolbar. */
-  databasePlaceholder: string;
   /**
    * Turn the tab's editor state into the `sql` field of an execute request.
    * Every payload still travels as a string because that is the wire contract;
@@ -30,7 +28,6 @@ export interface QueryMode {
 
 const sqlMode: QueryMode = {
   form: "sql",
-  databasePlaceholder: "数据库名",
   build(tab) {
     const sql = tab.sql.trim();
     if (!sql) {
@@ -42,7 +39,6 @@ const sqlMode: QueryMode = {
 
 const documentMode: QueryMode = {
   form: "document",
-  databasePlaceholder: "Database",
   build(tab) {
     if (tab.mongoOperation === "update") {
       return { ok: false, error: "MongoDB update 操作需要通过变更工单提交" };
@@ -84,7 +80,6 @@ const documentMode: QueryMode = {
 
 const dslMode: QueryMode = {
   form: "dsl",
-  databasePlaceholder: "Index Pattern",
   build(tab) {
     const index = tab.esIndexPattern.trim();
     if (!index) {

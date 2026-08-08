@@ -101,6 +101,10 @@ func (h *Handler) ExecuteQuery(c echo.Context) error {
 			return resp.BadRequest(c, "数据源不存在")
 		case errors.Is(err, datasource.ErrDatasourceDisabled):
 			return resp.BadRequest(c, "数据源已禁用")
+		case errors.Is(err, datasource.ErrDatabaseScopeMismatch):
+			// The message names both databases, so it is passed through rather
+			// than replaced: the caller has to know which one is reachable.
+			return resp.BadRequest(c, err.Error())
 		case errors.Is(err, ErrSQLOperationForbidden):
 			return resp.Forbidden(c, "该操作需要提交工单，仅允许 SELECT 查询")
 		case errors.Is(err, ErrSQLHighRisk):
@@ -151,6 +155,8 @@ func (h *Handler) ExplainQuery(c echo.Context) error {
 			return resp.BadRequest(c, "EXPLAIN 仅支持 SELECT 语句")
 		case errors.Is(err, ErrExplainNotSupported):
 			return resp.BadRequest(c, "EXPLAIN 仅支持 MySQL 数据源")
+		case errors.Is(err, datasource.ErrDatabaseScopeMismatch):
+			return resp.BadRequest(c, err.Error())
 		case errors.Is(err, ErrSQLTimeout):
 			return resp.BadRequest(c, "查询超时（30秒）")
 		case errors.Is(err, ErrEmptySQL):
@@ -302,6 +308,10 @@ func (h *Handler) ExportQuery(c echo.Context) error {
 			return resp.BadRequest(c, "数据源不存在")
 		case errors.Is(err, datasource.ErrDatasourceDisabled):
 			return resp.BadRequest(c, "数据源已禁用")
+		case errors.Is(err, datasource.ErrDatabaseScopeMismatch):
+			// The message names both databases, so it is passed through rather
+			// than replaced: the caller has to know which one is reachable.
+			return resp.BadRequest(c, err.Error())
 		case errors.Is(err, ErrSQLOperationForbidden):
 			return resp.Forbidden(c, "该操作需要提交工单，仅允许 SELECT 查询")
 		case errors.Is(err, ErrSQLHighRisk):

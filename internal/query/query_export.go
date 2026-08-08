@@ -83,6 +83,23 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 		}
 	}
 
+	// Export reads the same rows through the same connection, so it resolves the
+	// scope the same way — and must, because it shares loadMaskRules with the
+	// query path and therefore shared the bypass.
+	scope, err := datasource.ResolveQueryScope(ds.Database, database)
+	if err != nil {
+		s.auditSvc.Write(ctx, auditlog.Record{
+			UserID:       userID,
+			Action:       "export_failed",
+			DatasourceID: datasourceID,
+			Database:     ds.Database,
+			SQLContent:   sqlContent,
+			SQLSummary:   auditlog.Summarize(sqlContent),
+			ErrorMessage: err.Error(),
+		})
+		return nil, err
+	}
+
 	// Build pool config from datasource (legacy fallback)
 	if s.poolMgr == nil {
 		return nil, ErrQueryUnavailable
@@ -102,16 +119,9 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 		// answers 400 rather than 500 for an unreachable datasource.
 		err = ErrSQLTimeout
 	} else {
-		// The driver decides what an empty scope means; substituting a default
-		// here once made MySQL export from the server's own catalog.
-		dbName := database
-		if dbName == "" {
-			dbName = ds.Database
-		}
-
 		// Fetch one row beyond the limit so the caller can detect overflow.
 		var drvResult *driver.QueryResult
-		drvResult, err = executeDriverQuery(ctx, d, dbName, sqlContent, queryParams, exportRowLimit+1)
+		drvResult, err = executeDriverQuery(ctx, d, sqlContent, queryParams, exportRowLimit+1)
 		if err == nil {
 			result = &QueryResult{
 				Shape:         drvResult.Shape,
@@ -130,7 +140,7 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 			UserID:          userID,
 			Action:          "export_failed",
 			DatasourceID:    datasourceID,
-			Database:        database,
+			Database:        scope,
 			SQLContent:      sqlContent,
 			SQLSummary:      auditlog.Summarize(sqlContent),
 			ErrorMessage:    err.Error(),
@@ -145,7 +155,7 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 			UserID:       userID,
 			Action:       "export_failed",
 			DatasourceID: datasourceID,
-			Database:     database,
+			Database:     scope,
 			SQLContent:   sqlContent,
 			SQLSummary:   auditlog.Summarize(sqlContent),
 			ResultRows:   result.Total,
@@ -156,12 +166,12 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 	// Export is a second entrance to the same data, so it consults the same
 	// decision about shapes the masker cannot process. Without this an
 	// aggregation exported over a protected target would ship unmasked.
-	if err := s.refuseUnmaskableShape(ctx, result.Shape, userID, role, datasourceID, database, parseResult.Targets); err != nil {
+	if err := s.refuseUnmaskableShape(ctx, result.Shape, userID, role, datasourceID, scope, parseResult.Targets); err != nil {
 		s.auditSvc.Write(ctx, auditlog.Record{
 			UserID:       userID,
 			Action:       "export_failed",
 			DatasourceID: datasourceID,
-			Database:     database,
+			Database:     scope,
 			SQLContent:   sqlContent,
 			SQLSummary:   auditlog.Summarize(sqlContent),
 			ErrorMessage: err.Error(),
@@ -170,7 +180,7 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 	}
 
 	// Apply desensitization
-	desensitized, maskedFields := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, database, parseResult.Targets)
+	desensitized, maskedFields := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, scope, parseResult.Targets)
 	result.Desensitized = desensitized
 	result.DesensitizedFields = maskedFields
 
@@ -180,7 +190,7 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 		UserID:             userID,
 		Action:             "export",
 		DatasourceID:       datasourceID,
-		Database:           database,
+		Database:           scope,
 		SQLContent:         sqlContent,
 		SQLSummary:         summary,
 		ResultRows:         result.Total,

@@ -41,11 +41,11 @@ func (s *Service) ResubmitTicket(ctx context.Context, ticketID, submitterID int6
 	// A resubmission re-enters the queue, so it re-enters through the same
 	// gates: the datasource may have been disabled, or the submitter's role
 	// changed, since the ticket was first filed.
-	dbType, err := s.checkDatasourceAccess(ctx, t.DatasourceID, submitterRole)
+	target, err := s.checkDatasourceAccess(ctx, t.DatasourceID, submitterRole)
 	if err != nil {
 		return nil, err
 	}
-	plan, err := planTicketSQL(dbType, sqlContent)
+	plan, err := planTicketSQL(target.dbType, sqlContent)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrTicketSQLUnanalyzable, err)
 	}

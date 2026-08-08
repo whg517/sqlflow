@@ -130,7 +130,21 @@ type Driver interface {
 	Ping(ctx context.Context) error
 
 	// ExecuteQuery executes a read-only query and returns results.
-	ExecuteQuery(ctx context.Context, database string, query string, limit int) (*QueryResult, error)
+	//
+	// There is no database parameter, because there is nothing a driver could
+	// do with one. The pool keys on datasource ID alone, the DSN pins the
+	// database at Connect, and nothing in the platform issues USE or SET
+	// search_path — so a driver's scope is settled before the first query and
+	// cannot be moved by a caller. Three of the five drivers took the argument
+	// and discarded it; a fourth never read it.
+	//
+	// It was not merely useless. The same caller-supplied string narrowed the
+	// mask-rule lookup in internal/query, so naming a database no rule was
+	// scoped to dropped every rule protecting the one the rows actually came
+	// from. A parameter drivers cannot honor is worse than no parameter: it
+	// invites callers to treat an unvalidated string as the query's scope.
+	// Callers that need to know the scope read it off the datasource row.
+	ExecuteQuery(ctx context.Context, query string, limit int) (*QueryResult, error)
 
 	// Parse analyzes a query string and returns operation metadata.
 	Parse(query string) (*ParseResult, error)
@@ -182,7 +196,11 @@ type MetadataBrowser interface {
 // optional interface the compiler decides, and the stubs are gone.
 type StatementExecutor interface {
 	// ExecuteStatement executes a single DML/DDL statement.
-	ExecuteStatement(ctx context.Context, database string, stmt string) (*StatementResult, error)
+	//
+	// Like ExecuteQuery it takes no database: the scope came from the ticket's
+	// free-text field, which the SQL drivers discarded, so an approver's record
+	// could state a scope the executor was never able to apply.
+	ExecuteStatement(ctx context.Context, stmt string) (*StatementResult, error)
 
 	// ExecuteStatements executes multiple DML/DDL statements in a batch.
 	//
@@ -194,7 +212,7 @@ type StatementExecutor interface {
 	//   - MongoDB: 不支持批量（仅单条），实现降级为循环调用 ExecuteStatement
 	//
 	// 工单执行路径完全依赖此方法：事务语义归驱动所有，Service 不再按类型区分。
-	ExecuteStatements(ctx context.Context, database string, statements []string) ([]StatementResult, error)
+	ExecuteStatements(ctx context.Context, statements []string) ([]StatementResult, error)
 }
 
 // ParameterBinder is implemented by drivers that bind parameter values instead
@@ -276,7 +294,8 @@ func ValidateConfigFor(typeName string, cfg *Config) error {
 // system can check it. Describe() reports it via Descriptor.Explain.
 type QueryExplainer interface {
 	// ExplainQuery returns the driver-native query plan rows for a read query.
-	ExplainQuery(ctx context.Context, database string, query string, args []interface{}) (*QueryResult, error)
+	// The scope is the connection's, as it is for ExecuteQuery.
+	ExplainQuery(ctx context.Context, query string, args []interface{}) (*QueryResult, error)
 }
 
 // ParameterizedQueryExecutor is implemented by SQL drivers that can bind
@@ -284,7 +303,6 @@ type QueryExplainer interface {
 type ParameterizedQueryExecutor interface {
 	ExecuteQueryWithArgs(
 		ctx context.Context,
-		database string,
 		query string,
 		args []interface{},
 		limit int,

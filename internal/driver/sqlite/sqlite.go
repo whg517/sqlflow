@@ -187,11 +187,11 @@ func (d *Driver) GetColumns(ctx context.Context, _, table string) ([]driver.Colu
 	return columns, rows.Err()
 }
 
-func (d *Driver) ExecuteQuery(ctx context.Context, _ string, query string, limit int) (*driver.QueryResult, error) {
+func (d *Driver) ExecuteQuery(ctx context.Context, query string, limit int) (*driver.QueryResult, error) {
 	return d.executeQuery(ctx, query, nil, limit)
 }
 
-func (d *Driver) ExecuteQueryWithArgs(ctx context.Context, _ string, query string, args []interface{}, limit int) (*driver.QueryResult, error) {
+func (d *Driver) ExecuteQueryWithArgs(ctx context.Context, query string, args []interface{}, limit int) (*driver.QueryResult, error) {
 	return d.executeQuery(ctx, query, args, limit)
 }
 

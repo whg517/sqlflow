@@ -209,12 +209,12 @@ func (d *MySQLDriver) GetColumns(ctx context.Context, database, table string) ([
 }
 
 // ExecuteQuery executes a read-only SQL query.
-func (d *MySQLDriver) ExecuteQuery(ctx context.Context, database string, query string, limit int) (*driver.QueryResult, error) {
+func (d *MySQLDriver) ExecuteQuery(ctx context.Context, query string, limit int) (*driver.QueryResult, error) {
 	return d.executeQuery(ctx, query, nil, limit)
 }
 
 // ExecuteQueryWithArgs executes a read-only SQL query with bound parameters.
-func (d *MySQLDriver) ExecuteQueryWithArgs(ctx context.Context, database string, query string, args []interface{}, limit int) (*driver.QueryResult, error) {
+func (d *MySQLDriver) ExecuteQueryWithArgs(ctx context.Context, query string, args []interface{}, limit int) (*driver.QueryResult, error) {
 	return d.executeQuery(ctx, query, args, limit)
 }
 
@@ -290,7 +290,7 @@ func (d *MySQLDriver) executeQuery(ctx context.Context, query string, args []int
 }
 
 // ExecuteStatement executes a single DML/DDL statement.
-func (d *MySQLDriver) ExecuteStatement(ctx context.Context, database string, stmt string) (*driver.StatementResult, error) {
+func (d *MySQLDriver) ExecuteStatement(ctx context.Context, stmt string) (*driver.StatementResult, error) {
 	if d.db == nil {
 		return nil, fmt.Errorf("mysql: not connected")
 	}
@@ -318,7 +318,7 @@ func (d *MySQLDriver) ExecuteStatement(ctx context.Context, database string, stm
 // ExecuteStatements 逐条 auto-commit 执行多条语句（MySQL DDL 非事务性，无法回滚）。
 // 任一语句失败后继续执行剩余语句（与 service.executeSQL 的 MySQL 路径一致），
 // 首个错误通过返回值 error 传递，但所有语句的结果都会收集到 results 中。
-func (d *MySQLDriver) ExecuteStatements(ctx context.Context, database string, statements []string) ([]driver.StatementResult, error) {
+func (d *MySQLDriver) ExecuteStatements(ctx context.Context, statements []string) ([]driver.StatementResult, error) {
 	if d.db == nil {
 		return nil, fmt.Errorf("mysql: not connected")
 	}
@@ -363,7 +363,7 @@ func (d *MySQLDriver) ExecuteStatements(ctx context.Context, database string, st
 //
 // The driver owns the EXPLAIN dialect: MySQL prefixes the statement and returns
 // one row per access step, which is not how every SQL engine reports a plan.
-func (d *MySQLDriver) ExplainQuery(ctx context.Context, database string, query string, args []interface{}) (*driver.QueryResult, error) {
+func (d *MySQLDriver) ExplainQuery(ctx context.Context, query string, args []interface{}) (*driver.QueryResult, error) {
 	return d.executeQuery(ctx, "EXPLAIN "+query, args, explainRowLimit)
 }
 

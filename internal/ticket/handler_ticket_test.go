@@ -62,8 +62,8 @@ func seedTicketTestDatasource(t *testing.T, database *db.DB, name string) int64 
 	ctx := testutil.ContextWithTimeout(t)
 	var id int64
 	if err := database.QueryRowContext(ctx,
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', 'active') RETURNING id`,
-		name,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, status) VALUES ($1, 'mysql', 'localhost', 3306, 'root', '', $2, 'active') RETURNING id`,
+		name, testutil.DatasourceDatabase,
 	).Scan(&id); err != nil {
 		t.Fatalf("seed datasource %q: %v", name, err)
 	}
@@ -111,9 +111,9 @@ func TestTicketHandler_CreateTicket_IgnoresClientRiskLevel(t *testing.T) {
 	dsID := seedTicketTestDatasource(t, database, "test-ds")
 
 	body := fmt.Sprintf(
-		`{"datasource_id":%d,"database":"mydb","sql":"DROP TABLE users","db_type":"mysql",`+
+		`{"datasource_id":%d,"database":%q,"sql":"DROP TABLE users","db_type":"mysql",`+
 			`"change_reason":"cleanup","risk_level":"low","ai_review_result":"{\"verdict\":\"safe\"}"}`,
-		dsID)
+		dsID, testutil.DatasourceDatabase)
 	req := httptest.NewRequest(http.MethodPost, "/api/tickets", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -152,7 +152,7 @@ func TestTicketHandler_CreateTicket_Success(t *testing.T) {
 	userID := seedTicketTestUser(t, database, "dev1", "developer")
 	dsID := seedTicketTestDatasource(t, database, "test-ds")
 
-	body := fmt.Sprintf(`{"datasource_id":%d,"database":"mydb","sql":"ALTER TABLE users ADD COLUMN phone VARCHAR(20)","db_type":"mysql","change_reason":"add phone","risk_level":"medium","ai_review_result":"{}"}`, dsID)
+	body := fmt.Sprintf(`{"datasource_id":%d,"database":%q,"sql":"ALTER TABLE users ADD COLUMN phone VARCHAR(20)","db_type":"mysql","change_reason":"add phone","risk_level":"medium","ai_review_result":"{}"}`, dsID, testutil.DatasourceDatabase)
 	req := httptest.NewRequest(http.MethodPost, "/api/tickets", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1264,7 +1264,7 @@ func TestTicketHandler_FullWorkflow(t *testing.T) {
 	dsID := seedTicketTestDatasource(t, database, "test-ds")
 
 	// Step 1: Create ticket
-	createBody := fmt.Sprintf(`{"datasource_id":%d,"database":"mydb","sql":"ALTER TABLE users ADD COLUMN phone VARCHAR(20)","db_type":"mysql","change_reason":"add phone","risk_level":"medium"}`, dsID)
+	createBody := fmt.Sprintf(`{"datasource_id":%d,"database":%q,"sql":"ALTER TABLE users ADD COLUMN phone VARCHAR(20)","db_type":"mysql","change_reason":"add phone","risk_level":"medium"}`, dsID, testutil.DatasourceDatabase)
 	req := httptest.NewRequest(http.MethodPost, "/api/tickets", strings.NewReader(createBody))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1489,5 +1489,33 @@ func TestTicketHandler_CancelSchedule_NotScheduled(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+// TestTicketHandler_ForeignDatabaseIsAClientError keeps the refusal legible on
+// the submit form, which is where the free-text database field lives.
+func TestTicketHandler_ForeignDatabaseIsAClientError(t *testing.T) {
+	e, h, database := setupTicketHandlerTest(t)
+	userID := seedTicketTestUser(t, database, "dev1", "developer")
+	dsID := seedTicketTestDatasource(t, database, "scope-ds")
+
+	body := fmt.Sprintf(
+		`{"datasource_id":%d,"database":"elsewhere","sql":"ALTER TABLE t ADD c INT","change_reason":"test"}`,
+		dsID)
+	req := httptest.NewRequest(http.MethodPost, "/api/tickets", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	setTicketAuthContext(c, userID, "dev1", "developer")
+
+	if err := h.CreateTicket(c); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), testutil.DatasourceDatabase) {
+		t.Errorf("body = %s, want it to name the reachable database %q",
+			rec.Body.String(), testutil.DatasourceDatabase)
 	}
 }

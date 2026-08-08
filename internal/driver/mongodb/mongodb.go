@@ -31,6 +31,17 @@ type Document = map[string]interface{}
 // MongoDBDriver implements driver.Driver for MongoDB.
 type MongoDBDriver struct {
 	client *mongo.Client
+
+	// database is the datasource's database, captured at Connect.
+	//
+	// MongoDB was the one driver that honored the caller's database argument,
+	// which made it the reason the argument existed while the SQL drivers threw
+	// it away. Reading the scope off the connection instead puts every driver on
+	// the same footing, and it also closes a hole of its own: Casbin scopes a
+	// grant to (datasource, collection) with no room for a database, so a caller
+	// who could name any database on the server got the same decision for
+	// prod.users as for scratch.users.
+	database string
 }
 
 // Compile-time proof of the contracts this driver claims.
@@ -105,7 +116,26 @@ func (d *MongoDBDriver) Connect(ctx context.Context, cfg *driver.Config) error {
 	}
 
 	d.client = client
+	d.database = scopeOf(cfg, uri)
 	return nil
+}
+
+// scopeOf resolves the database this connection is bound to.
+//
+// The datasource column wins; a URI's path is the fallback because a datasource
+// configured by pasting "mongodb://host/app" carries its database only there,
+// and refusing to read it would make such a datasource unqueryable. An empty
+// result is not an error here: metadata browsing works without a database, so
+// the demand for one belongs to the methods that need it.
+func scopeOf(cfg *driver.Config, uri string) string {
+	if cfg.Database != "" {
+		return cfg.Database
+	}
+	u, err := url.Parse(uri)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(u.Path, "/")
 }
 
 // Close releases the connection.
@@ -143,6 +173,11 @@ func (d *MongoDBDriver) ListDatabases(ctx context.Context) ([]string, error) {
 }
 
 // ListTables returns collections for the given database.
+//
+// Its database argument is not the execution scope: browsing answers "what is
+// in X" for any X the credentials can see, which is why ListDatabases exists
+// beside it. Reading rows is the narrower question, and that one the connection
+// already answers.
 func (d *MongoDBDriver) ListTables(ctx context.Context, database string) ([]driver.TableInfo, error) {
 	if d.client == nil {
 		return nil, fmt.Errorf("mongodb: not connected")
@@ -209,12 +244,12 @@ func (d *MongoDBDriver) GetColumns(ctx context.Context, database, table string) 
 
 // ExecuteQuery executes a read-only query (find or aggregate).
 // The query string is a JSON body in the MongoDB command format.
-func (d *MongoDBDriver) ExecuteQuery(ctx context.Context, database string, query string, limit int) (*driver.QueryResult, error) {
+func (d *MongoDBDriver) ExecuteQuery(ctx context.Context, query string, limit int) (*driver.QueryResult, error) {
 	if d.client == nil {
 		return nil, fmt.Errorf("mongodb: not connected")
 	}
-	if database == "" {
-		return nil, fmt.Errorf("mongodb: database name is required")
+	if d.database == "" {
+		return nil, fmt.Errorf("mongodb: 数据源未配置数据库")
 	}
 
 	if limit <= 0 {
@@ -232,7 +267,7 @@ func (d *MongoDBDriver) ExecuteQuery(ctx context.Context, database string, query
 		return nil, fmt.Errorf("mongodb: collection name is required")
 	}
 
-	collection := d.client.Database(database).Collection(coll)
+	collection := d.client.Database(d.database).Collection(coll)
 
 	queryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -333,12 +368,12 @@ func (d *MongoDBDriver) ExecuteQuery(ctx context.Context, database string, query
 
 // ExecuteStatement executes a single DML statement (insert, update, delete).
 // The stmt string is a JSON body in the MongoDB command format.
-func (d *MongoDBDriver) ExecuteStatement(ctx context.Context, database string, stmt string) (*driver.StatementResult, error) {
+func (d *MongoDBDriver) ExecuteStatement(ctx context.Context, stmt string) (*driver.StatementResult, error) {
 	if d.client == nil {
 		return nil, fmt.Errorf("mongodb: not connected")
 	}
-	if database == "" {
-		return nil, fmt.Errorf("mongodb: database name is required")
+	if d.database == "" {
+		return nil, fmt.Errorf("mongodb: 数据源未配置数据库")
 	}
 
 	mongoResult, err := sqlparser.ParseMongo(stmt)
@@ -351,7 +386,7 @@ func (d *MongoDBDriver) ExecuteStatement(ctx context.Context, database string, s
 		return nil, fmt.Errorf("mongodb: collection name is required")
 	}
 
-	collection := d.client.Database(database).Collection(coll)
+	collection := d.client.Database(d.database).Collection(coll)
 	start := time.Now()
 
 	execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -411,7 +446,7 @@ func (d *MongoDBDriver) ExecuteStatement(ctx context.Context, database string, s
 // ExecuteStatements 逐条执行多条 MongoDB 命令（MongoDB 无跨文档事务语义，逐条独立执行）。
 // 任一语句失败后继续执行剩余语句，首错通过 error 返回。
 // 降级实现：MongoDB 无跨命令事务，逐条调用 ExecuteStatement。
-func (d *MongoDBDriver) ExecuteStatements(ctx context.Context, database string, statements []string) ([]driver.StatementResult, error) {
+func (d *MongoDBDriver) ExecuteStatements(ctx context.Context, statements []string) ([]driver.StatementResult, error) {
 	if d.client == nil {
 		return nil, fmt.Errorf("mongodb: not connected")
 	}
@@ -424,7 +459,7 @@ func (d *MongoDBDriver) ExecuteStatements(ctx context.Context, database string, 
 		if stmt == "" {
 			continue
 		}
-		r, err := d.ExecuteStatement(ctx, database, stmt)
+		r, err := d.ExecuteStatement(ctx, stmt)
 		if r != nil {
 			results = append(results, *r)
 		}

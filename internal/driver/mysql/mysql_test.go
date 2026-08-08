@@ -126,11 +126,11 @@ func TestMySQLDriver_NotConnected(t *testing.T) {
 		t.Error("GetColumns should fail when not connected")
 	}
 
-	if _, err := d.ExecuteQuery(context.TODO(), "test", "SELECT 1", 10); err == nil {
+	if _, err := d.ExecuteQuery(context.TODO(), "SELECT 1", 10); err == nil {
 		t.Error("ExecuteQuery should fail when not connected")
 	}
 
-	if _, err := d.ExecuteStatement(context.TODO(), "test", "INSERT INTO t VALUES (1)"); err == nil {
+	if _, err := d.ExecuteStatement(context.TODO(), "INSERT INTO t VALUES (1)"); err == nil {
 		t.Error("ExecuteStatement should fail when not connected")
 	}
 }
@@ -148,7 +148,7 @@ func TestMySQLDriver_ExecuteQueryWithArgs(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("Alice"))
 
 	d := &MySQLDriver{db: database}
-	result, err := d.ExecuteQueryWithArgs(context.Background(), "app", query, []interface{}{"42"}, 10)
+	result, err := d.ExecuteQueryWithArgs(context.Background(), query, []interface{}{"42"}, 10)
 	if err != nil {
 		t.Fatalf("ExecuteQueryWithArgs: %v", err)
 	}

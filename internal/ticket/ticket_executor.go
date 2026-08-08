@@ -46,7 +46,17 @@ func convertDriverResults(drvResults []driver.StatementResult) []statementResult
 // always the same, and when they are not — a datasource retyped between
 // approval and execution — the body must be cut the way the approver's grade
 // was computed, or the two disagree again in a new place.
+//
+// database is the scope the ticket was filed against, and it is verified rather
+// than used: the connection's scope is the datasource's, so a ticket naming
+// another database describes a change the executor cannot make where the
+// approver was told it would happen. Running it anyway against whatever the DSN
+// points at is the failure mode this refuses.
 func (s *Service) executeSQL(ctx context.Context, ds *model.DataSource, dbType, database, sqlContent string) ([]statementResult, error) {
+	if _, err := datasource.ResolveQueryScope(ds.Database, database); err != nil {
+		return nil, err
+	}
+
 	secrets, err := datasource.DecryptSecrets(ds, s.encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("解密数据源凭据失败: %w", err)
@@ -87,7 +97,7 @@ func (s *Service) executeSQL(ctx context.Context, ds *model.DataSource, dbType, 
 	// PostgreSQL rolls the batch back, MySQL auto-commits each DDL statement,
 	// MongoDB applies commands one by one. ExecuteStatements documents that
 	// contract; this function must not re-implement it per type.
-	drvResults, err := executor.ExecuteStatements(ctx, database, plan.Statements)
+	drvResults, err := executor.ExecuteStatements(ctx, plan.Statements)
 	// A failure still carries the results of whatever already ran, including
 	// any rolled_back markers, so they are returned either way.
 	return convertDriverResults(drvResults), err

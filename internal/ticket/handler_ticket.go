@@ -1,12 +1,14 @@
 package ticket
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/platform/httpx"
 	"github.com/whg517/sqlflow/internal/resp"
 )
@@ -71,6 +73,12 @@ func (h *Handler) CreateTicket(c echo.Context) error {
 		req.ChangeReason,
 	)
 	if err != nil {
+		// The scope mismatch is matched with errors.Is because it is wrapped:
+		// the message names the database the datasource is actually connected
+		// to, which is the whole answer the submitter needs.
+		if errors.Is(err, datasource.ErrDatabaseScopeMismatch) {
+			return resp.BadRequest(c, err.Error())
+		}
 		switch err {
 		case ErrTicketSQLRequired:
 			return resp.BadRequest(c, err.Error())

@@ -33,7 +33,7 @@ func TestApplyPolicy_ConcurrentIsSingleWinner(t *testing.T) {
 
 	svc := New(Deps{DB: d})
 	tk, err := svc.CreateTicket(context.Background(), uid, "developer", dsID,
-		"appdb", "ALTER TABLE t ADD c INT", "cas probe")
+		testutil.DatasourceDatabase, "ALTER TABLE t ADD c INT", "cas probe")
 	if err != nil {
 		t.Fatalf("CreateTicket: %v", err)
 	}

@@ -17,9 +17,9 @@ func seedTypedDatasource(t *testing.T, testDB *sql.DB, name, dsType string) int6
 	t.Helper()
 	var id int64
 	if err := testDB.QueryRow(
-		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, status, created_at, updated_at)
-		 VALUES ($1, $2, 'localhost', 27017, 'root', '', 'active', now(), now()) RETURNING id`,
-		name, dsType,
+		`INSERT INTO datasources (name, type, host, port, username, password_encrypted, database, status, created_at, updated_at)
+		 VALUES ($1, $2, 'localhost', 27017, 'root', '', $3, 'active', now(), now()) RETURNING id`,
+		name, dsType, testutil.DatasourceDatabase,
 	).Scan(&id); err != nil {
 		t.Fatalf("seed %s datasource: %v", dsType, err)
 	}
@@ -60,7 +60,7 @@ func TestCreateTicketRecordsDatasourceType(t *testing.T) {
 				sqlContent = `{"operation":"update","collection":"t","filter":{"id":2},"update":{"$set":{"x":1}}}`
 			}
 
-			tk, err := svc.CreateTicket(t.Context(), userID, "admin", dsID, "app", sqlContent, "变更需求")
+			tk, err := svc.CreateTicket(t.Context(), userID, "admin", dsID, testutil.DatasourceDatabase, sqlContent, "变更需求")
 			if err != nil {
 				t.Fatalf("CreateTicket: %v", err)
 			}
@@ -78,7 +78,7 @@ func TestCreateTicketRejectsUnknownDatasource(t *testing.T) {
 	svc, testDB := newTicketServiceWithDatasources(t)
 	userID := seedTestUser(t, testDB, "dev-ghost", "developer")
 
-	if _, err := svc.CreateTicket(t.Context(), userID, "developer", 99999, "app", "SELECT 1", "变更需求"); err == nil {
+	if _, err := svc.CreateTicket(t.Context(), userID, "developer", 99999, testutil.DatasourceDatabase, "SELECT 1", "变更需求"); err == nil {
 		t.Error("a ticket was created against a datasource that does not exist")
 	}
 }

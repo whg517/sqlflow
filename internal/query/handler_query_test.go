@@ -1152,3 +1152,52 @@ func TestWriteExportJSON_EmptyResult(t *testing.T) {
 		t.Errorf("len(rows) = %d, want 0", len(rows))
 	}
 }
+
+// TestQueryHandler_ForeignDatabaseIsAClientError keeps the refusal legible.
+//
+// Naming a database the datasource is not connected to is a mistake the caller
+// can fix, so it must not fall through to the 500 branch — an operator reading
+// "查询执行失败" learns nothing, and the workbench would show the same.
+func TestQueryHandler_ForeignDatabaseIsAClientError(t *testing.T) {
+	e, _, _, dsSvc, h, database := setupQueryTest(t)
+	userID := seedTestUser(t, database, "dev1", "developer")
+	ds := seedTestDatasource(t, dsSvc, "scope-ds") // Database: "testdb"
+
+	endpoints := []struct {
+		name    string
+		path    string
+		body    string
+		invoke  func(echo.Context) error
+		wantMsg string
+	}{
+		{"execute", "/api/query/execute",
+			fmt.Sprintf(`{"datasource_id":%d,"database":"elsewhere","sql":"SELECT 1"}`, ds.ID),
+			h.ExecuteQuery, "testdb"},
+		{"explain", "/api/query/explain",
+			fmt.Sprintf(`{"datasource_id":%d,"database":"elsewhere","sql":"SELECT 1"}`, ds.ID),
+			h.ExplainQuery, "testdb"},
+		{"export", "/api/query/export",
+			fmt.Sprintf(`{"datasource_id":%d,"database":"elsewhere","sql":"SELECT 1","format":"csv"}`, ds.ID),
+			h.ExportQuery, "testdb"},
+	}
+
+	for _, tt := range endpoints {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			setQueryAuthContext(c, userID, "dev1", "admin")
+
+			if err := tt.invoke(c); err != nil {
+				t.Fatalf("handler error: %v", err)
+			}
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), tt.wantMsg) {
+				t.Errorf("body = %s, want it to name the reachable database %q", rec.Body.String(), tt.wantMsg)
+			}
+		})
+	}
+}
