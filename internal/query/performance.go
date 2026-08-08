@@ -61,7 +61,7 @@ type PerformanceStats struct {
 }
 
 // ListSlowQueries returns paginated slow queries with optional filters.
-func (s *HistoryService) ListSlowQueries(ctx context.Context, params SlowQueryParams) ([]model.QueryHistory, int, error) {
+func (s *HistoryService) ListSlowQueries(ctx context.Context, actor ExportActor, params SlowQueryParams) ([]model.QueryHistory, int, error) {
 	p := sqlutil.ParsePagination(params.Page, params.PageSize)
 
 	threshold := params.Threshold
@@ -71,6 +71,19 @@ func (s *HistoryService) ListSlowQueries(ctx context.Context, params SlowQueryPa
 
 	q := s.client.QueryHistory.Query().
 		Where(entqueryhistory.ExecutionTimeGTE(threshold))
+
+	// The owner predicate the sibling entrance already applies.
+	//
+	// This read used to have none, while ListHistory scoped the same table to
+	// the caller — and query_history carries SQLContent verbatim, so every
+	// other user's statement text was readable by anyone authenticated.
+	wide, err := s.mayReadEveryHistory(ctx, actor)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !wide {
+		q = q.Where(entqueryhistory.UserIDEQ(actor.UserID))
+	}
 	if params.DatasourceID > 0 {
 		q = q.Where(entqueryhistory.DatasourceIDEQ(params.DatasourceID))
 	}
@@ -142,12 +155,23 @@ func parseDayStart(v string) (time.Time, bool) {
 }
 
 // GetPerformanceStats returns aggregated performance statistics for the given number of days.
-func (s *HistoryService) GetPerformanceStats(ctx context.Context, days int) (*PerformanceStats, error) {
+func (s *HistoryService) GetPerformanceStats(ctx context.Context, actor ExportActor, days int) (*PerformanceStats, error) {
 	if days <= 0 {
 		days = 7
 	}
 	since := time.Now().AddDate(0, 0, -days)
 	inWindow := s.client.QueryHistory.Query().Where(entqueryhistory.CreatedAtGTE(since))
+
+	// Same boundary as the list. The counts are milder than statement text, but
+	// topSlowQueries below returns SQLSummary, and one entrance answering a
+	// narrower question than its sibling is how the two drifted apart.
+	wide, err := s.mayReadEveryHistory(ctx, actor)
+	if err != nil {
+		return nil, err
+	}
+	if !wide {
+		inWindow = inWindow.Where(entqueryhistory.UserIDEQ(actor.UserID))
+	}
 
 	totalQueries, err := inWindow.Clone().Count(ctx)
 	if err != nil {
@@ -180,7 +204,7 @@ func (s *HistoryService) GetPerformanceStats(ctx context.Context, days int) (*Pe
 		}
 	}
 
-	dailyTrend, err := s.dailyPerformanceTrend(ctx, since)
+	dailyTrend, err := s.dailyPerformanceTrend(ctx, actor, wide, since)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +212,7 @@ func (s *HistoryService) GetPerformanceStats(ctx context.Context, days int) (*Pe
 	if err != nil {
 		return nil, err
 	}
-	topSlow, err := s.topSlowQueries(ctx, since)
+	topSlow, err := s.topSlowQueries(ctx, actor, wide, since)
 	if err != nil {
 		return nil, err
 	}
@@ -205,18 +229,26 @@ func (s *HistoryService) GetPerformanceStats(ctx context.Context, days int) (*Pe
 }
 
 // dailyPerformanceTrend buckets the window by day.
-func (s *HistoryService) dailyPerformanceTrend(ctx context.Context, since time.Time) ([]DailyTrend, error) {
+func (s *HistoryService) dailyPerformanceTrend(ctx context.Context, actor ExportActor, wide bool, since time.Time) ([]DailyTrend, error) {
 	var rows []DailyTrend
-	err := s.client.QueryHistory.Query().
-		Where(entqueryhistory.CreatedAtGTE(since)).
+	q := s.client.QueryHistory.Query().Where(entqueryhistory.CreatedAtGTE(since))
+	if !wide {
+		q = q.Where(entqueryhistory.UserIDEQ(actor.UserID))
+	}
+	err := q.
 		Modify(func(sel *entsql.Selector) {
 			day := "to_char(" + sel.C(entqueryhistory.FieldCreatedAt) + ", 'YYYY-MM-DD')"
 			exec := sel.C(entqueryhistory.FieldExecutionTime)
+			// The shared threshold, not a literal. The constant's own comment
+			// said it was shared with the statistics query "so the two could not
+			// disagree"; two of the three call sites converged and this one kept
+			// its 1000, which is the drift the comment describes.
+			slow := fmt.Sprintf("COUNT(*) FILTER (WHERE %s >= %d)", exec, defaultSlowQueryThresholdMs)
 			sel.Select().AppendSelect(
 				entsql.As(day, "date"),
 				entsql.As("COUNT(*)", "count"),
 				entsql.As("CAST(COALESCE(AVG("+exec+"), 0) AS BIGINT)", "avg_time"),
-				entsql.As("COUNT(*) FILTER (WHERE "+exec+" >= 1000)", "slow_count"),
+				entsql.As(slow, "slow_count"),
 			).GroupBy(day).OrderBy("date")
 		}).
 		Scan(ctx, &rows)
@@ -251,10 +283,13 @@ func (s *HistoryService) datasourcePerformance(ctx context.Context, since time.T
 }
 
 // topSlowQueries returns the slowest statements in the window.
-func (s *HistoryService) topSlowQueries(ctx context.Context, since time.Time) ([]TopSlowQuery, error) {
+func (s *HistoryService) topSlowQueries(ctx context.Context, actor ExportActor, wide bool, since time.Time) ([]TopSlowQuery, error) {
 	var rows []TopSlowQuery
-	err := s.client.QueryHistory.Query().
-		Where(entqueryhistory.CreatedAtGTE(since)).
+	q := s.client.QueryHistory.Query().Where(entqueryhistory.CreatedAtGTE(since))
+	if !wide {
+		q = q.Where(entqueryhistory.UserIDEQ(actor.UserID))
+	}
+	err := q.
 		Modify(func(sel *entsql.Selector) {
 			ds := entsql.Table(entdatasource.Table).As("ds")
 			sel.LeftJoin(ds).On(sel.C(entqueryhistory.FieldDatasourceID), ds.C(entdatasource.FieldID))

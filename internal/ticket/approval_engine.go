@@ -364,6 +364,13 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 	if err != nil {
 		return nil, fmt.Errorf("查询工单失败: %w", err)
 	}
+	// The engine is a decision door too, and it had no self-approval check
+	// either. Checking here rather than only in the Service wrappers is what
+	// makes it hold for /engine-approve, which reaches this directly.
+	if tk.SubmitterID == approverID {
+		return nil, ErrSelfApproval
+	}
+
 	currentStage := tk.CurrentStage
 	totalStages := tk.TotalStages
 	var policyID int64

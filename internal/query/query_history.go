@@ -11,6 +11,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/whg517/sqlflow/internal/db"
 
+	"github.com/whg517/sqlflow/internal/authz"
 	"github.com/whg517/sqlflow/internal/db/ent"
 	entqueryhistory "github.com/whg517/sqlflow/internal/db/ent/queryhistory"
 	"github.com/whg517/sqlflow/internal/model"
@@ -23,11 +24,52 @@ const maxHistoryPerUser = 200
 type HistoryService struct {
 	database *db.DB
 	client   *ent.Client
+
+	// permSvc answers whether an actor may see beyond their own rows.
+	//
+	// A nil value narrows every read to the caller, which is the safe end of
+	// this decision: without a policy engine there is no way to establish a
+	// platform-wide grant, and granting by default is the defect this field
+	// exists to close.
+	permSvc ActorEnforcer
+}
+
+// ActorEnforcer answers whether an actor holds a grant.
+//
+// Declared here rather than taking security.Service whole, because this is the
+// only method the history boundary needs.
+type ActorEnforcer interface {
+	EnforceActor(ctx context.Context, userID int64, role, domain, object, action string) (bool, error)
 }
 
 // NewHistoryService creates a new HistoryService.
 func NewHistoryService(database *db.DB) *HistoryService {
 	return &HistoryService{database: database, client: database.Client()}
+}
+
+// NewHistoryServiceWithPerms creates a HistoryService that can widen a read
+// beyond the caller's own rows when the actor holds the platform grant.
+func NewHistoryServiceWithPerms(database *db.DB, permSvc ActorEnforcer) *HistoryService {
+	return &HistoryService{database: database, client: database.Client(), permSvc: permSvc}
+}
+
+// mayReadEveryHistory reports whether this actor holds the platform-wide view.
+//
+// The alternative — the one this replaced — was for the slow-query entrance to
+// simply apply no owner predicate, while the sibling entrance ListHistory
+// scoped to the caller. Both read query_history, and it carries SQLContent
+// verbatim: statement text with its WHERE-clause literals in it. Making the
+// wide view a grant means widening it takes a policy rather than an omission.
+func (s *HistoryService) mayReadEveryHistory(ctx context.Context, actor ExportActor) (bool, error) {
+	if s.permSvc == nil {
+		return false, nil
+	}
+	allowed, err := s.permSvc.EnforceActor(ctx, actor.UserID, actor.Role,
+		authz.SystemDomain, "query_history", "view")
+	if err != nil {
+		return false, fmt.Errorf("查询历史权限校验失败: %w", err)
+	}
+	return allowed, nil
 }
 
 // CreateHistory inserts a new query history record and auto-cleans old records.

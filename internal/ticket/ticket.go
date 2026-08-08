@@ -30,6 +30,11 @@ var (
 	// ErrInvalidStatusTransition indicates an invalid state transition.
 	ErrInvalidStatusTransition = errors.New("无效的工单状态变更")
 	// ErrTicketAlreadyProcessed indicates the ticket has already been processed.
+	// ErrSelfApproval means the actor deciding this ticket is the one who
+	// submitted it. Separating author from approver is the platform's reason for
+	// existing, so it is refused on every decision path rather than left to a
+	// policy that might not be configured.
+	ErrSelfApproval = errors.New("不能审批自己提交的工单")
 	// ErrTicketExecutionConflict means another actor moved the ticket out of
 	// EXECUTING while this execution was running — the reclaim sweep, in
 	// practice. The outcome of this run was not recorded.
@@ -494,6 +499,10 @@ func (s *Service) ApproveTicket(ctx context.Context, ticketID, reviewerID int64,
 		return nil, err
 	}
 
+	if err := refuseSelfDecision(t, reviewerID); err != nil {
+		return nil, err
+	}
+
 	if reviewerRole != "admin" && reviewerRole != "dba" {
 		return nil, ErrNoPermission
 	}
@@ -613,12 +622,27 @@ func (s *Service) RejectTicket(ctx context.Context, ticketID, reviewerID int64, 
 		return nil, err
 	}
 
+	if err := refuseSelfDecision(t, reviewerID); err != nil {
+		return nil, err
+	}
+
 	if reviewerRole != "admin" && reviewerRole != "dba" {
 		return nil, ErrNoPermission
 	}
 
 	if t.Status != model.TicketStatusPendingApproval {
 		return nil, ErrInvalidStatusTransition
+	}
+
+	// A rejection ends a ticket as finally as an approval does, so it goes
+	// through the chain for the same reason ApproveTicket does.
+	//
+	// This route did not: any admin or dba could reject outright and clear
+	// current_stage/total_stages, which made every stage role a chain declared
+	// bypassable from one side. A two-stage chain [security, dba] was enforced
+	// on the way to APPROVED and ignored on the way to REJECTED.
+	if t.TotalStages > 0 {
+		return s.rejectThroughChain(ctx, t, reviewerID, reviewerRole, reason)
 	}
 
 	now := time.Now()
@@ -1180,4 +1204,43 @@ func (s *Service) concludeExecution(
 		return ErrTicketExecutionConflict
 	}
 	return nil
+}
+
+// refuseSelfDecision keeps the author of a change out of its approval.
+//
+// Neither decision path checked this. A submitter who also holds dba, or one
+// whose own role happens to name a chain stage, could approve their own
+// high-risk change — which is the single thing the ticket workflow exists to
+// prevent. It is a rule rather than a policy knob because a policy that is not
+// configured is a rule that does not apply.
+func refuseSelfDecision(t *model.Ticket, actorID int64) error {
+	if t.SubmitterID == actorID {
+		return ErrSelfApproval
+	}
+	return nil
+}
+
+// rejectThroughChain hands a chained ticket's rejection to the engine, which is
+// the only thing that knows which role owns the current stage.
+func (s *Service) rejectThroughChain(ctx context.Context, t *model.Ticket, reviewerID int64, reviewerRole, reason string) (*model.Ticket, error) {
+	if s.approvalEngine == nil {
+		return nil, ErrApprovalEngineUnavailable
+	}
+	if _, err := s.approvalEngine.ProcessApproval(ctx, t.ID, reviewerID, reviewerRole, "rejected", reason); err != nil {
+		return nil, err
+	}
+
+	updated, err := s.GetTicket(ctx, t.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	s.auditSvc.Write(ctx, auditlog.Record{
+		UserID:     reviewerID,
+		Action:     "ticket_reject",
+		SQLContent: updated.SQLContent,
+		SQLSummary: updated.SQLSummary,
+		TicketID:   updated.ID,
+	})
+	return updated, nil
 }

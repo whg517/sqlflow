@@ -194,11 +194,16 @@ func TestIntegration_PermissionChecks(t *testing.T) {
 	adminID := testutil.SeedUser(t, testDB, "admin_perm", "admin")
 	dsID := testutil.SeedDatasource(t, testDB, "perm-db")
 
+	// A second developer: the approver must not be the submitter, which is now
+	// refused for its own reason, so reusing devID would stop exercising the
+	// role gate this subtest is named for.
+	otherDevID := testutil.SeedUser(t, testDB, "dev_perm2", "developer")
+
 	t.Run("developer_cannot_approve", func(t *testing.T) {
 		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, "developer", dsID, testutil.DatasourceDatabase, "ALTER TABLE t ADD c INT", "test")
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 
-		_, err := ticketSvc.ApproveTicket(context.Background(), ticket.ID, devID, "developer", "ok")
+		_, err := ticketSvc.ApproveTicket(context.Background(), ticket.ID, otherDevID, "developer", "ok")
 		if err != ErrNoPermission {
 			t.Errorf("developer approve: error = %v, want ErrNoPermission", err)
 		}
@@ -208,7 +213,7 @@ func TestIntegration_PermissionChecks(t *testing.T) {
 		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, "developer", dsID, testutil.DatasourceDatabase, "ALTER TABLE t ADD c INT", "test")
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 
-		_, err := ticketSvc.RejectTicket(context.Background(), ticket.ID, devID, "developer", "bad")
+		_, err := ticketSvc.RejectTicket(context.Background(), ticket.ID, otherDevID, "developer", "bad")
 		if err != ErrNoPermission {
 			t.Errorf("developer reject: error = %v, want ErrNoPermission", err)
 		}

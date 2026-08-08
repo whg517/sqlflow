@@ -220,16 +220,19 @@ func (s *ExportService) countTickets(ctx context.Context, actor ExportActor, fil
 // StreamExportAuditLogs streams audit logs as CSV to the given writer.
 // The caller is responsible for writing the BOM header before calling this.
 // Returns total rows written.
-func (s *ExportService) StreamExportAuditLogs(ctx context.Context, w io.Writer, actor ExportActor, filters AuditExportFilters) (int64, error) {
+func (s *ExportService) StreamExportAuditLogs(ctx context.Context, w io.Writer, actor ExportActor, filters AuditExportFilters, columns map[string]int) (int64, error) {
 	csvW := csv.NewWriter(w)
 	defer csvW.Flush()
 
-	// Write CSV header
-	_ = csvW.Write([]string{
-		"ID", "时间", "用户", "操作", "数据源ID", "数据库",
-		"SQL内容", "SQL摘要", "返回行数", "影响行数", "耗时(ms)",
-		"错误信息", "脱敏字段", "IP地址", "AI评审", "工单ID",
-	})
+	// Header and cells are selected by the same index list.
+	//
+	// The header used to be a second literal copy of auditColumnNames and the
+	// rows were written out in full, so a caller that asked for three columns
+	// got sixteen. The Excel writer already honored the selection; carrying it
+	// here is what makes the format an output detail rather than a difference
+	// in what the export contains.
+	colIndices := sortColumnIndices(columns, len(auditColumnNames))
+	_ = csvW.Write(selectStrings(auditColumnNames, colIndices))
 
 	rows, err := s.fetchAuditExportRows(ctx, actor, filters)
 	if err != nil {
@@ -249,7 +252,7 @@ func (s *ExportService) StreamExportAuditLogs(ctx context.Context, w io.Writer, 
 			createdAtStr = a.CreatedAt.Format("2006-01-02 15:04:05")
 		}
 
-		_ = csvW.Write([]string{
+		_ = csvW.Write(selectStrings([]string{
 			fmt.Sprintf("%d", a.ID),
 			createdAtStr,
 			escapeCSVFormula(a.Username),
@@ -266,7 +269,7 @@ func (s *ExportService) StreamExportAuditLogs(ctx context.Context, w io.Writer, 
 			escapeCSVFormula(a.IPAddress),
 			escapeCSVFormula(a.AIReviewResult),
 			fmt.Sprintf("%d", a.TicketID),
-		})
+		}, colIndices))
 		written++
 
 		if written%ExportStreamFlushInterval == 0 {
@@ -279,16 +282,12 @@ func (s *ExportService) StreamExportAuditLogs(ctx context.Context, w io.Writer, 
 
 // StreamExportTickets streams tickets as CSV to the given writer.
 // The caller is responsible for writing the BOM header before calling this.
-func (s *ExportService) StreamExportTickets(ctx context.Context, w io.Writer, actor ExportActor, filters TicketExportFilters) (int64, error) {
+func (s *ExportService) StreamExportTickets(ctx context.Context, w io.Writer, actor ExportActor, filters TicketExportFilters, columns map[string]int) (int64, error) {
 	csvW := csv.NewWriter(w)
 	defer csvW.Flush()
 
-	_ = csvW.Write([]string{
-		"ID", "提交人", "提交人ID", "数据源ID", "数据库",
-		"SQL内容", "SQL摘要", "数据库类型", "变更原因",
-		"状态", "风险等级", "审批人", "审批意见",
-		"定时执行时间", "实际执行时间", "创建时间", "更新时间",
-	})
+	colIndices := sortColumnIndices(columns, len(ticketColumnNames))
+	_ = csvW.Write(selectStrings(ticketColumnNames, colIndices))
 
 	rows, err := s.fetchTicketExportRows(ctx, actor, filters)
 	if err != nil {
@@ -306,7 +305,7 @@ func (s *ExportService) StreamExportTickets(ctx context.Context, w io.Writer, ac
 		scheduledAtStr := formatOptionalTime(t.ScheduledAt)
 		executedAtStr := formatOptionalTime(t.ExecutedAt)
 
-		_ = csvW.Write([]string{
+		_ = csvW.Write(selectStrings([]string{
 			fmt.Sprintf("%d", t.ID),
 			escapeCSVFormula(t.SubmitterName),
 			fmt.Sprintf("%d", t.SubmitterID),
@@ -324,7 +323,7 @@ func (s *ExportService) StreamExportTickets(ctx context.Context, w io.Writer, ac
 			executedAtStr,
 			t.CreatedAt.Format("2006-01-02 15:04:05"),
 			t.UpdatedAt.Format("2006-01-02 15:04:05"),
-		})
+		}, colIndices))
 		written++
 
 		if written%ExportStreamFlushInterval == 0 {
@@ -357,7 +356,7 @@ func (s *ExportService) ExportAuditLogs(ctx context.Context, actor ExportActor, 
 	var buf strings.Builder
 	buf.Write([]byte{0xEF, 0xBB, 0xBF}) // BOM
 
-	written, err := s.StreamExportAuditLogs(ctx, &buf, actor, filters)
+	written, err := s.StreamExportAuditLogs(ctx, &buf, actor, filters, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -401,7 +400,7 @@ func (s *ExportService) ExportTickets(ctx context.Context, actor ExportActor, fi
 	var buf strings.Builder
 	buf.Write([]byte{0xEF, 0xBB, 0xBF}) // BOM
 
-	written, err := s.StreamExportTickets(ctx, &buf, actor, filters)
+	written, err := s.StreamExportTickets(ctx, &buf, actor, filters, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -322,11 +322,16 @@ func TestApproveTicket(t *testing.T) {
 	adminID := seedTestUser(t, testDB, "admin1", "admin")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
+	// A second developer, because the approver must not be the submitter — that
+	// is refused for its own reason now, and using the submitter here would
+	// leave the role gate untested.
+	otherDevID := seedTestUser(t, testDB, "dev2", "developer")
+
 	t.Run("developer cannot approve", func(t *testing.T) {
 		// Create ticket and set it to PENDING_APPROVAL manually
 		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
 
-		_, err := svc.ApproveTicket(context.Background(), ticket.ID, devID, "developer", "ok")
+		_, err := svc.ApproveTicket(context.Background(), ticket.ID, otherDevID, "developer", "ok")
 		if err != ErrNoPermission {
 			t.Errorf("ApproveTicket() error = %v, want ErrNoPermission", err)
 		}
@@ -390,6 +395,10 @@ func TestRejectTicket(t *testing.T) {
 	testDB := setupTicketTestDB(t)
 	svc := New(Deps{DB: testutil.WrapSQL(t, testDB), Audit: auditlog.Discard})
 	devID := seedTestUser(t, testDB, "dev1", "developer")
+	// A second developer: the decider must not be the submitter, which is
+	// refused for its own reason, so reusing devID would leave the role gate
+	// this subtest is named for untested.
+	otherDevID := seedTestUser(t, testDB, "dev2", "developer")
 	dbaID := seedTestUser(t, testDB, "dba1", "dba")
 	dsID := seedTestDatasource(t, testDB, "test-mysql")
 
@@ -420,7 +429,7 @@ func TestRejectTicket(t *testing.T) {
 	t.Run("developer cannot reject", func(t *testing.T) {
 		ticket := createTicketAtStatus(t, testDB, svc, devID, dsID, model.TicketStatusPendingApproval)
 
-		_, err := svc.RejectTicket(context.Background(), ticket.ID, devID, "developer", "no good")
+		_, err := svc.RejectTicket(context.Background(), ticket.ID, otherDevID, "developer", "no good")
 		if err != ErrNoPermission {
 			t.Errorf("RejectTicket() error = %v, want ErrNoPermission", err)
 		}

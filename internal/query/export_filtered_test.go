@@ -40,7 +40,7 @@ func TestExportAuditLogsWithFilters(t *testing.T) {
 
 	t.Run("csv", func(t *testing.T) {
 		var buf bytes.Buffer
-		written, err := svc.StreamExportAuditLogs(t.Context(), &buf, adminActor, filters)
+		written, err := svc.StreamExportAuditLogs(t.Context(), &buf, adminActor, filters, nil)
 		if err != nil {
 			t.Fatalf("StreamExportAuditLogs: %v", err)
 		}
@@ -113,7 +113,7 @@ func TestExportTicketsWithFilters(t *testing.T) {
 	}
 
 	var csvBuf bytes.Buffer
-	csvWritten, err := svc.StreamExportTickets(t.Context(), &csvBuf, adminActor, filters)
+	csvWritten, err := svc.StreamExportTickets(t.Context(), &csvBuf, adminActor, filters, nil)
 	if err != nil {
 		t.Fatalf("StreamExportTickets: %v", err)
 	}

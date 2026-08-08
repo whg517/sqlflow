@@ -127,8 +127,8 @@ func NewRouter(c *app.Container) *echo.Echo {
 	authGroup.DELETE("/api/query/share/:id", shareHandler.RevokeShare, middleware.RequireScope("execute:query"))
 
 	// Performance analysis (authenticated users)
-	authGroup.GET("/api/query/performance/slow", performanceHandler.ListSlowQueries)
-	authGroup.GET("/api/query/performance/stats", performanceHandler.GetPerformanceStats)
+	authGroup.GET("/api/query/performance/slow", performanceHandler.ListSlowQueries, middleware.RequireScope("read:query"))
+	authGroup.GET("/api/query/performance/stats", performanceHandler.GetPerformanceStats, middleware.RequireScope("read:query"))
 
 	// Ticket routes (authenticated users can create/list/view; approve/reject/execute restricted by role)
 	authGroup.POST("/api/tickets", ticketHandler.CreateTicket, middleware.RequireScope("write:ticket"))

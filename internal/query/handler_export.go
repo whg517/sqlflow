@@ -123,7 +123,7 @@ func (h *ExportHandler) ExportAuditLogs(c echo.Context) error {
 	case ExportFormatExcel:
 		return h.streamAuditExcelResponse(c, actor, filters, columnsMap, total)
 	default:
-		return h.streamAuditCSVResponse(c, actor, filters, total)
+		return h.streamAuditCSVResponse(c, actor, filters, columnsMap, total)
 	}
 }
 
@@ -204,19 +204,19 @@ func (h *ExportHandler) ExportTickets(c echo.Context) error {
 	case ExportFormatExcel:
 		return h.streamTicketExcelResponse(c, actor, filters, columnsMap, total)
 	default:
-		return h.streamTicketCSVResponse(c, actor, filters, total)
+		return h.streamTicketCSVResponse(c, actor, filters, columnsMap, total)
 	}
 }
 
 // streamAuditCSVResponse writes streaming CSV response for audit logs.
-func (h *ExportHandler) streamAuditCSVResponse(c echo.Context, actor ExportActor, filters AuditExportFilters, total int64) error {
+func (h *ExportHandler) streamAuditCSVResponse(c echo.Context, actor ExportActor, filters AuditExportFilters, columns map[string]int, total int64) error {
 	filename := fmt.Sprintf("audit_logs_%s.csv", time.Now().Format("2006-01-02"))
 	setStreamingCSVHeaders(c, filename, total)
 
 	// Write BOM
 	c.Response().Write([]byte{0xEF, 0xBB, 0xBF})
 
-	written, err := h.exportSvc.StreamExportAuditLogs(c.Request().Context(), c.Response(), actor, filters)
+	written, err := h.exportSvc.StreamExportAuditLogs(c.Request().Context(), c.Response(), actor, filters, columns)
 	if err != nil {
 		log.Printf("StreamExportAuditLogs error after %d rows: %v", written, err)
 		return nil // headers already sent
@@ -251,13 +251,13 @@ func (h *ExportHandler) streamAuditExcelResponse(c echo.Context, actor ExportAct
 }
 
 // streamTicketCSVResponse writes streaming CSV response for tickets.
-func (h *ExportHandler) streamTicketCSVResponse(c echo.Context, actor ExportActor, filters TicketExportFilters, total int64) error {
+func (h *ExportHandler) streamTicketCSVResponse(c echo.Context, actor ExportActor, filters TicketExportFilters, columns map[string]int, total int64) error {
 	filename := fmt.Sprintf("tickets_%s.csv", time.Now().Format("2006-01-02"))
 	setStreamingCSVHeaders(c, filename, total)
 
 	c.Response().Write([]byte{0xEF, 0xBB, 0xBF})
 
-	written, err := h.exportSvc.StreamExportTickets(c.Request().Context(), c.Response(), actor, filters)
+	written, err := h.exportSvc.StreamExportTickets(c.Request().Context(), c.Response(), actor, filters, columns)
 	if err != nil {
 		log.Printf("StreamExportTickets error after %d rows: %v", written, err)
 		return nil

@@ -88,3 +88,22 @@ func ValidateExportColumns(columns []string, exportType ExportType) (map[string]
 	}
 	return result, nil
 }
+
+// selectStrings narrows a full row to the requested columns.
+//
+// A nil index list means every column, which is what an export that names no
+// columns asks for. Sharing it between the header and the cells is the point:
+// they used to be written independently, and the header was a second literal
+// copy of the column-name list.
+func selectStrings(all []string, colIndices []int) []string {
+	if colIndices == nil {
+		return all
+	}
+	out := make([]string, 0, len(colIndices))
+	for _, idx := range colIndices {
+		if idx >= 0 && idx < len(all) {
+			out = append(out, all[idx])
+		}
+	}
+	return out
+}

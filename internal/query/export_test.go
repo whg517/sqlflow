@@ -192,7 +192,7 @@ func TestExportService_TicketExportIsScopedToSubmitter(t *testing.T) {
 	}
 
 	var buf strings.Builder
-	written, err := svc.StreamExportTickets(context.Background(), &buf, dev, TicketExportFilters{})
+	written, err := svc.StreamExportTickets(context.Background(), &buf, dev, TicketExportFilters{}, nil)
 	if err != nil {
 		t.Fatalf("StreamExportTickets: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestExportService_AuditExportRefusesWithoutGrant(t *testing.T) {
 	seedAuditLogs(t, database.DB, 3)
 
 	var buf strings.Builder
-	_, err := svc.StreamExportAuditLogs(context.Background(), &buf, developerActor, AuditExportFilters{})
+	_, err := svc.StreamExportAuditLogs(context.Background(), &buf, developerActor, AuditExportFilters{}, nil)
 	if err != ErrExportNoPermission {
 		t.Fatalf("StreamExportAuditLogs as developer = %v, want ErrExportNoPermission", err)
 	}
@@ -488,7 +488,7 @@ func TestStreamExportAuditLogs_CSVOutput(t *testing.T) {
 
 	var buf strings.Builder
 	buf.Write([]byte{0xEF, 0xBB, 0xBF})
-	_, err = exportSvc.StreamExportAuditLogs(context.Background(), &buf, ExportActor{UserID: 1, Username: "alice", Role: "admin"}, AuditExportFilters{})
+	_, err = exportSvc.StreamExportAuditLogs(context.Background(), &buf, ExportActor{UserID: 1, Username: "alice", Role: "admin"}, AuditExportFilters{}, nil)
 	if err != nil {
 		t.Fatalf("StreamExportAuditLogs: %v", err)
 	}
@@ -512,7 +512,7 @@ func TestExportService_StreamExportAuditLogs(t *testing.T) {
 	var buf strings.Builder
 	buf.Write([]byte{0xEF, 0xBB, 0xBF})
 
-	written, err := svc.StreamExportAuditLogs(context.Background(), &buf, adminActor, AuditExportFilters{})
+	written, err := svc.StreamExportAuditLogs(context.Background(), &buf, adminActor, AuditExportFilters{}, nil)
 	if err != nil {
 		t.Fatalf("StreamExportAuditLogs: %v", err)
 	}
@@ -541,7 +541,7 @@ func TestExportService_StreamExportTickets(t *testing.T) {
 	var buf strings.Builder
 	buf.Write([]byte{0xEF, 0xBB, 0xBF})
 
-	written, err := svc.StreamExportTickets(context.Background(), &buf, adminActor, TicketExportFilters{})
+	written, err := svc.StreamExportTickets(context.Background(), &buf, adminActor, TicketExportFilters{}, nil)
 	if err != nil {
 		t.Fatalf("StreamExportTickets: %v", err)
 	}
@@ -649,7 +649,7 @@ func TestExportService_StreamExport_ContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately
 
 	var buf strings.Builder
-	_, err := svc.StreamExportAuditLogs(ctx, &buf, adminActor, AuditExportFilters{})
+	_, err := svc.StreamExportAuditLogs(ctx, &buf, adminActor, AuditExportFilters{}, nil)
 	if err == nil {
 		t.Error("expected error from cancelled context")
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/platform/httpx"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
@@ -26,6 +27,7 @@ func TestPerformanceHandler_ListSlowQueries_Empty(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/query/performance/slow", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+	asSeededOwner(c)
 	if err := h.ListSlowQueries(c); err != nil {
 		t.Fatalf("ListSlowQueries: %v", err)
 	}
@@ -66,6 +68,7 @@ func TestPerformanceHandler_ListSlowQueries_DefaultThreshold(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/query/performance/slow", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+	asSeededOwner(c)
 	if err := h.ListSlowQueries(c); err != nil {
 		t.Fatalf("ListSlowQueries: %v", err)
 	}
@@ -83,6 +86,7 @@ func TestPerformanceHandler_ListSlowQueries_DefaultThreshold(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/api/query/performance/slow?threshold=10", nil)
 	rec = httptest.NewRecorder()
 	c = e.NewContext(req, rec)
+	asSeededOwner(c)
 	if err := h.ListSlowQueries(c); err != nil {
 		t.Fatalf("ListSlowQueries(threshold=10): %v", err)
 	}
@@ -100,6 +104,7 @@ func TestPerformanceHandler_GetPerformanceStats_DefaultDays(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/query/performance/stats", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+	asSeededOwner(c)
 	if err := h.GetPerformanceStats(c); err != nil {
 		t.Fatalf("GetPerformanceStats: %v", err)
 	}
@@ -121,10 +126,23 @@ func TestPerformanceHandler_GetPerformanceStats_CustomDays(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/query/performance/stats?days=30", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+	asSeededOwner(c)
 	if err := h.GetPerformanceStats(c); err != nil {
 		t.Fatalf("GetPerformanceStats: %v", err)
 	}
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
+}
+
+// asSeededOwner authenticates the request as the user these fixtures record
+// their history under.
+//
+// The slow-query read is scoped to the caller now, so a context with no
+// identity reads zero rows — and every assertion here about thresholds and
+// windows would pass for the wrong reason.
+func asSeededOwner(c echo.Context) {
+	c.Set(httpx.ContextKeyUserID, int64(1))
+	c.Set(httpx.ContextKeyUsername, "perf_owner")
+	c.Set(httpx.ContextKeyRole, "developer")
 }

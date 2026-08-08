@@ -571,6 +571,9 @@ func TestTicketHandler_ApproveTicket_NoPermission(t *testing.T) {
 	e, h, database := setupTicketHandlerTest(t)
 	devID := seedTicketTestUser(t, database, "dev1", "developer")
 	dsID := seedTicketTestDatasource(t, database, "test-ds")
+	// The approver must not be the submitter — that is its own refusal now, and
+	// reusing devID would stop this exercising the role gate it is named for.
+	otherDevID := seedTicketTestUser(t, database, "dev2", "developer")
 
 	ticketID := createTicketViaDB(t, database, devID, dsID, "ALTER TABLE t ADD c INT")
 	setTicketStatusDB(t, database, ticketID, model.TicketStatusPendingApproval)
@@ -582,7 +585,7 @@ func TestTicketHandler_ApproveTicket_NoPermission(t *testing.T) {
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
 	c.SetParamValues(fmt.Sprintf("%d", ticketID))
-	setTicketAuthContext(c, devID, "dev1", "developer")
+	setTicketAuthContext(c, otherDevID, "dev2", "developer")
 
 	if err := h.ApproveTicket(c); err != nil {
 		t.Fatalf("handler error: %v", err)
@@ -730,6 +733,9 @@ func TestTicketHandler_RejectTicket_NoPermission(t *testing.T) {
 	e, h, database := setupTicketHandlerTest(t)
 	devID := seedTicketTestUser(t, database, "dev1", "developer")
 	dsID := seedTicketTestDatasource(t, database, "test-ds")
+	// The approver must not be the submitter — that is its own refusal now, and
+	// reusing devID would stop this exercising the role gate it is named for.
+	otherDevID := seedTicketTestUser(t, database, "dev2", "developer")
 
 	ticketID := createTicketViaDB(t, database, devID, dsID, "DELETE FROM users")
 	setTicketStatusDB(t, database, ticketID, model.TicketStatusPendingApproval)
@@ -741,7 +747,7 @@ func TestTicketHandler_RejectTicket_NoPermission(t *testing.T) {
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
 	c.SetParamValues(fmt.Sprintf("%d", ticketID))
-	setTicketAuthContext(c, devID, "dev1", "developer")
+	setTicketAuthContext(c, otherDevID, "dev2", "developer")
 
 	if err := h.RejectTicket(c); err != nil {
 		t.Fatalf("handler error: %v", err)

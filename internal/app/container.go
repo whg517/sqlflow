@@ -115,7 +115,7 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 		return nil, err
 	}
 
-	historySvc := query.NewHistoryService(database)
+	historySvc := query.NewHistoryServiceWithPerms(database, permSvc)
 	auditSvc := audit.NewService(database, 0, 0)
 	exportSvc := query.NewExportService(database, permSvc, auditSvc)
 	exportAsyncSvc, err := query.NewAsyncExportService(database, exportSvc, auditSvc, cfg.DB.DataDir)

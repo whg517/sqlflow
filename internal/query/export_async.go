@@ -279,7 +279,7 @@ func (s *AsyncExportService) executeExport(task *model.ExportTask, actor ExportA
 		if fileFormat == string(ExportFormatExcel) {
 			totalRows, err = s.exportSvc.StreamExportAuditLogsExcel(ctx, f, actor, filters, columns)
 		} else {
-			totalRows, err = s.exportSvc.StreamExportAuditLogs(ctx, f, actor, filters)
+			totalRows, err = s.exportSvc.StreamExportAuditLogs(ctx, f, actor, filters, columns)
 		}
 	case ExportTypeTicket:
 		var filters TicketExportFilters
@@ -287,7 +287,7 @@ func (s *AsyncExportService) executeExport(task *model.ExportTask, actor ExportA
 		if fileFormat == string(ExportFormatExcel) {
 			totalRows, err = s.exportSvc.StreamExportTicketsExcel(ctx, f, actor, filters, columns)
 		} else {
-			totalRows, err = s.exportSvc.StreamExportTickets(ctx, f, actor, filters)
+			totalRows, err = s.exportSvc.StreamExportTickets(ctx, f, actor, filters, columns)
 		}
 	default:
 		err = ErrExportTypeInvalid

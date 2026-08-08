@@ -38,7 +38,7 @@ func TestPerformanceService_ListSlowQueries(t *testing.T) {
 	}
 
 	t.Run("default_threshold_1000ms", func(t *testing.T) {
-		list, total, err := svc.ListSlowQueries(context.Background(), SlowQueryParams{
+		list, total, err := svc.ListSlowQueries(context.Background(), perfActor(userID), SlowQueryParams{
 			Threshold: 1000, Page: 1, PageSize: 10,
 		})
 		if err != nil {
@@ -57,7 +57,7 @@ func TestPerformanceService_ListSlowQueries(t *testing.T) {
 	})
 
 	t.Run("custom_threshold_500ms", func(t *testing.T) {
-		_, total, err := svc.ListSlowQueries(context.Background(), SlowQueryParams{
+		_, total, err := svc.ListSlowQueries(context.Background(), perfActor(userID), SlowQueryParams{
 			Threshold: 500, Page: 1, PageSize: 10,
 		})
 		if err != nil {
@@ -69,7 +69,7 @@ func TestPerformanceService_ListSlowQueries(t *testing.T) {
 	})
 
 	t.Run("filter_by_datasource", func(t *testing.T) {
-		_, total, err := svc.ListSlowQueries(context.Background(), SlowQueryParams{
+		_, total, err := svc.ListSlowQueries(context.Background(), perfActor(userID), SlowQueryParams{
 			Threshold: 1000, Page: 1, PageSize: 10, DatasourceID: dsID,
 		})
 		if err != nil {
@@ -81,7 +81,7 @@ func TestPerformanceService_ListSlowQueries(t *testing.T) {
 	})
 
 	t.Run("filter_by_nonexistent_datasource", func(t *testing.T) {
-		_, total, err := svc.ListSlowQueries(context.Background(), SlowQueryParams{
+		_, total, err := svc.ListSlowQueries(context.Background(), perfActor(userID), SlowQueryParams{
 			Threshold: 1000, Page: 1, PageSize: 10, DatasourceID: 99999,
 		})
 		if err != nil {
@@ -93,7 +93,7 @@ func TestPerformanceService_ListSlowQueries(t *testing.T) {
 	})
 
 	t.Run("pagination", func(t *testing.T) {
-		list, total, err := svc.ListSlowQueries(context.Background(), SlowQueryParams{
+		list, total, err := svc.ListSlowQueries(context.Background(), perfActor(userID), SlowQueryParams{
 			Threshold: 1000, Page: 1, PageSize: 2,
 		})
 		if err != nil {
@@ -108,7 +108,7 @@ func TestPerformanceService_ListSlowQueries(t *testing.T) {
 	})
 
 	t.Run("empty_result", func(t *testing.T) {
-		list, total, err := svc.ListSlowQueries(context.Background(), SlowQueryParams{
+		list, total, err := svc.ListSlowQueries(context.Background(), perfActor(userID), SlowQueryParams{
 			Threshold: 10000, Page: 1, PageSize: 10,
 		})
 		if err != nil {
@@ -153,7 +153,7 @@ func TestPerformanceService_GetPerformanceStats(t *testing.T) {
 		}
 	}
 
-	stats, err := svc.GetPerformanceStats(context.Background(), 7)
+	stats, err := svc.GetPerformanceStats(context.Background(), perfActor(userID), 7)
 	if err != nil {
 		t.Fatalf("GetPerformanceStats: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestPerformanceService_EmptyStats(t *testing.T) {
 	svc := NewHistoryService(testutil.WrapSQL(t, testDB))
 
 	// No data seeded
-	stats, err := svc.GetPerformanceStats(context.Background(), 7)
+	stats, err := svc.GetPerformanceStats(context.Background(), perfActor(1), 7)
 	if err != nil {
 		t.Fatalf("GetPerformanceStats: %v", err)
 	}
@@ -221,4 +221,13 @@ func TestPerformanceService_EmptyStats(t *testing.T) {
 	if stats.SlowQueryRate != 0 {
 		t.Errorf("SlowQueryRate = %.2f, want 0", stats.SlowQueryRate)
 	}
+}
+
+// perfActor is the user these fixtures record their history as.
+//
+// Passing the owner keeps the assertions about thresholds and windows about
+// thresholds and windows: with the owner predicate now applied, a zero actor
+// would make every one of them read zero rows and pass for the wrong reason.
+func perfActor(userID int64) ExportActor {
+	return ExportActor{UserID: userID, Username: "perf_user", Role: "developer"}
 }

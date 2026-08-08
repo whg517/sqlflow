@@ -54,7 +54,7 @@ func (h *PerformanceHandler) ListSlowQueries(c echo.Context) error {
 		EndDate:      c.QueryParam("end_date"),
 	}
 
-	list, total, err := h.historySvc.ListSlowQueries(c.Request().Context(), params)
+	list, total, err := h.historySvc.ListSlowQueries(c.Request().Context(), requestActor(c), params)
 	if err != nil {
 		log.Printf("ListSlowQueries failed: %v", err)
 		return resp.InternalError(c, "获取慢查询列表失败")
@@ -83,7 +83,7 @@ func (h *PerformanceHandler) GetPerformanceStats(c echo.Context) error {
 		days = 7
 	}
 
-	stats, err := h.historySvc.GetPerformanceStats(c.Request().Context(), days)
+	stats, err := h.historySvc.GetPerformanceStats(c.Request().Context(), requestActor(c), days)
 	if err != nil {
 		log.Printf("GetPerformanceStats failed: %v", err)
 		return resp.InternalError(c, "获取性能统计失败")
