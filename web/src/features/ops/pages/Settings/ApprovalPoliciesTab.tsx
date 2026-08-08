@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   Plus,
   Pencil,
@@ -61,8 +61,10 @@ import {
   parseApprovalChain,
   stringifyApprovalChain,
   getRoleLabel,
+  fetchConditionSchema,
   type ApprovalPolicy,
   type ApprovalStage,
+  type ConditionFieldDescriptor,
 } from "@/features/ticket/api/approval";
 
 // --- Condition Builder ---
@@ -73,15 +75,39 @@ interface ConditionRow {
   value: string;
 }
 
-const CONDITION_FIELDS = [
-  { value: "risk_level", label: "风险等级", operators: ["equals", "not_equals", "in"], valueOptions: ["HIGH", "MODERATE", "LOW"] },
-  { value: "sql_type", label: "SQL 类型", operators: ["equals", "not_equals", "in"], valueOptions: ["DDL", "DML", "SELECT"] },
-  { value: "environment", label: "环境", operators: ["equals", "not_equals"], valueOptions: ["dev", "staging", "prod"] },
-  { value: "database", label: "目标数据库", operators: ["equals", "not_equals", "in", "contains"], valueOptions: undefined },
-  { value: "affected_tables", label: "影响表", operators: ["equals", "not_equals", "in", "contains"], valueOptions: undefined },
-  { value: "affected_rows", label: "影响行数", operators: ["gt", "gte", "lt", "lte", "equals"] },
-  { value: "submitter_role", label: "提交人角色", operators: ["equals", "not_equals"], valueOptions: ["admin", "dba", "developer"] },
-];
+// The condition language is declared by the server, not restated here.
+//
+// This table used to be hard-coded: seven fields of which three had no
+// implementation at all (environment, affected_tables, affected_rows — a ticket
+// carries no environment for anything to compare), operators the matcher never
+// had (equals, contains, gt…), and risk values it has never used
+// (HIGH/MODERATE/LOW against low/medium/high/critical). Every condition built
+// from it was rejected by the server. Rendering from ConditionSchema is the
+// same move ConfigSchema() []ConfigField already made for datasource forms.
+const OPERATOR_LABELS: Record<string, string> = {
+  in: "属于",
+  not_in: "不属于",
+};
+
+/**
+ * Serialize the builder's rows into the language the server parses.
+ *
+ * An empty set becomes `{}` — the explicit "match everything" the server
+ * accepts. It must not become `{logic, conditions: []}`, which the server
+ * refuses precisely because a half-filled form is not a request to match all.
+ */
+function serializeConditions(rows: ConditionRow[], logic: "and" | "or"): string {
+  const filtered = rows.filter((r) => r.field && r.value);
+  if (filtered.length === 0) return "{}";
+  return JSON.stringify({
+    logic: logic.toUpperCase(),
+    conditions: filtered.map((r) => ({
+      field: r.field,
+      operator: r.operator,
+      values: [r.value],
+    })),
+  });
+}
 
 function ConditionBuilder({
   conditionsJson,
@@ -90,14 +116,21 @@ function ConditionBuilder({
   conditionsJson: string;
   onChange: (json: string) => void;
 }) {
+  const [schema, setSchema] = useState<ConditionFieldDescriptor[]>([]);
+  useEffect(() => {
+    fetchConditionSchema()
+      .then(setSchema)
+      .catch(() => setSchema([]));
+  }, []);
+
   const initialConditions = useMemo(() => {
     try {
       const parsed = JSON.parse(conditionsJson);
       if (parsed.conditions && Array.isArray(parsed.conditions)) {
         return parsed.conditions.map((c: Record<string, string>) => ({
           field: c.field || "risk_level",
-          operator: c.operator || "equals",
-          value: c.value || "",
+          operator: c.operator || "in",
+          value: Array.isArray(c.values) ? String(c.values[0] ?? "") : "",
         }));
       }
       return [];
@@ -126,8 +159,8 @@ function ConditionBuilder({
         setConditions(
           parsed.conditions.map((c: Record<string, string>) => ({
             field: c.field || "risk_level",
-            operator: c.operator || "equals",
-            value: c.value || "",
+            operator: c.operator || "in",
+            value: Array.isArray(c.values) ? String(c.values[0] ?? "") : "",
           })),
         );
         if (parsed.logic === "or") setLogic("or");
@@ -141,43 +174,21 @@ function ConditionBuilder({
 
   function updateConditions(rows: ConditionRow[]) {
     setConditions(rows);
-    const filtered = rows.filter((r) => r.field && r.value);
-    if (filtered.length === 0) {
-      onChange("{}");
-    } else {
-      onChange(
-        JSON.stringify({
-          logic,
-          conditions: filtered.map((r) => ({
-            field: r.field,
-            operator: r.operator,
-            value: r.value,
-          })),
-        }),
-      );
-    }
+    onChange(serializeConditions(rows, logic));
   }
 
   function toggleLogic() {
     const next = logic === "and" ? "or" : "and";
     setLogic(next);
-    const filtered = conditions.filter((r) => r.field && r.value);
-    if (filtered.length > 0) {
-      onChange(
-        JSON.stringify({
-          logic: next,
-          conditions: filtered.map((r) => ({
-            field: r.field,
-            operator: r.operator,
-            value: r.value,
-          })),
-        }),
-      );
-    }
+    onChange(serializeConditions(conditions, next));
   }
 
   function addCondition() {
-    updateConditions([...conditions, { field: "risk_level", operator: "equals", value: "" }]);
+    const first = schema[0];
+    updateConditions([
+      ...conditions,
+      { field: first?.field ?? "risk_level", operator: first?.operators[0] ?? "in", value: "" },
+    ]);
   }
 
   function removeCondition(idx: number) {
@@ -190,7 +201,7 @@ function ConditionBuilder({
     updateConditions(next);
   }
 
-  const fieldConfig = (f: string) => CONDITION_FIELDS.find((c) => c.value === f);
+  const fieldConfig = (f: string) => schema.find((c) => c.field === f);
 
   return (
     <div className="space-y-2">
@@ -211,8 +222,8 @@ function ConditionBuilder({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {CONDITION_FIELDS.map((f) => (
-                  <SelectItem key={f.value} value={f.value}>
+                {schema.map((f) => (
+                  <SelectItem key={f.field} value={f.field}>
                     {f.label}
                   </SelectItem>
                 ))}
@@ -227,31 +238,15 @@ function ConditionBuilder({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(cfg?.operators ?? ["equals"]).map((op) => (
+                {(cfg?.operators ?? ["in"]).map((op) => (
                   <SelectItem key={op} value={op}>
-                    {op === "equals"
-                      ? "等于"
-                      : op === "not_equals"
-                        ? "不等于"
-                        : op === "in"
-                          ? "属于"
-                          : op === "contains"
-                            ? "包含"
-                            : op === "gt"
-                              ? ">"
-                              : op === "gte"
-                                ? "≥"
-                                : op === "lt"
-                                  ? "<"
-                                  : op === "lte"
-                                    ? "≤"
-                                    : op}
+                    {OPERATOR_LABELS[op] ?? op}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
-            {cfg?.valueOptions ? (
+            {cfg?.values && cfg.values.length > 0 ? (
               <Select
                 value={row.value}
                 onValueChange={(v) => updateRow(idx, "value", v)}
@@ -260,7 +255,7 @@ function ConditionBuilder({
                   <SelectValue placeholder="选择值" />
                 </SelectTrigger>
                 <SelectContent>
-                  {cfg.valueOptions.map((v) => (
+                  {cfg.values.map((v) => (
                     <SelectItem key={v} value={v}>
                       {v}
                     </SelectItem>
@@ -800,7 +795,7 @@ export default function ApprovalPoliciesTab() {
       return parsed.conditions
         .map(
           (c: Record<string, string>) =>
-            `${CONDITION_FIELDS.find((f) => f.value === c.field)?.label ?? c.field} ${c.operator === "equals" ? "=" : c.operator === "not_equals" ? "≠" : "∈"} ${c.value}`,
+            `${c.field} ${c.operator === "not_in" ? "∉" : "∈"} ${Array.isArray(c.values) ? c.values.join("、") : ""}`,
         )
         .join(" ∧ ");
     } catch {

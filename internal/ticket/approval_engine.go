@@ -46,14 +46,6 @@ func NewApprovalEngine(database *db.DB, notifySvc *notify.Service) *ApprovalEngi
 	return &ApprovalEngine{database: database, client: database.Client(), notifySvc: notifySvc}
 }
 
-// PolicyCondition defines matching criteria for a policy.
-type PolicyCondition struct {
-	RiskLevels   []string `json:"risk_levels,omitempty"`
-	SQLTypes     []string `json:"sql_types,omitempty"`
-	Environments []string `json:"environments,omitempty"`
-	Databases    []string `json:"databases,omitempty"`
-}
-
 // ApprovalChainStage defines a single stage in the approval chain.
 type ApprovalChainStage struct {
 	Role                  string `json:"role"`
@@ -231,39 +223,17 @@ func (e *ApprovalEngine) MatchPolicy(ctx context.Context, ticket *model.Ticket) 
 }
 
 func (e *ApprovalEngine) policyMatches(policy *model.ApprovalPolicy, ticket *model.Ticket) bool {
-	var cond PolicyCondition
-	if err := json.Unmarshal([]byte(policy.Conditions), &cond); err != nil {
-		log.Printf("approval_engine: parse conditions for policy %d: %v", policy.ID, err)
+	cond, err := ParseCondition(policy.Conditions)
+	if err != nil {
+		// A stored condition that no longer parses must not match. It used to:
+		// unmarshalling into the flat struct silently produced an all-empty
+		// value, and all-empty meant match-all — so a condition the platform
+		// could not read selected every ticket, and an auto-approving policy
+		// carrying one approved every ticket.
+		log.Printf("approval_engine: policy %d has an unreadable condition, skipping it: %v", policy.ID, err)
 		return false
 	}
-
-	// Empty conditions = match all
-	if len(cond.RiskLevels) == 0 && len(cond.SQLTypes) == 0 && len(cond.Environments) == 0 && len(cond.Databases) == 0 {
-		return true
-	}
-
-	// Risk level match
-	if len(cond.RiskLevels) > 0 && !containsAny(cond.RiskLevels, ticket.RiskLevel) {
-		return false
-	}
-
-	// SQL type match — ticket.SQLType populated by sql_analyzer on creation
-	if len(cond.SQLTypes) > 0 {
-		sqlType := ticket.SQLType
-		if sqlType == "" {
-			sqlType = "OTHER"
-		}
-		if !containsAny(cond.SQLTypes, sqlType) {
-			return false
-		}
-	}
-
-	// Database match
-	if len(cond.Databases) > 0 && !containsAny(cond.Databases, ticket.Database) {
-		return false
-	}
-
-	return true
+	return cond.Matches(ticket)
 }
 
 // --- Approval Execution ---

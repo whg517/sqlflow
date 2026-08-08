@@ -305,6 +305,7 @@ func NewRouter(c *app.Container) *echo.Echo {
 	settingsAdminGroup.POST("/api/admin/approval-policies", approvalHandler.CreatePolicy)
 	settingsAdminGroup.PUT("/api/admin/approval-policies/reorder", approvalHandler.ReorderPolicies)
 	settingsAdminGroup.GET("/api/admin/approval-policies/approvers", approvalHandler.GetApprovers)
+	settingsAdminGroup.GET("/api/admin/approval-policies/condition-schema", approvalHandler.GetConditionSchema)
 	settingsAdminGroup.GET("/api/admin/approval-policies/:id", approvalHandler.GetPolicy)
 	settingsAdminGroup.PUT("/api/admin/approval-policies/:id", approvalHandler.UpdatePolicy)
 	settingsAdminGroup.DELETE("/api/admin/approval-policies/:id", approvalHandler.DeletePolicy)

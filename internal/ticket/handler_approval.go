@@ -74,7 +74,9 @@ func (h *ApprovalHandler) CreatePolicy(c echo.Context) error {
 	}
 
 	// Validate conditions JSON
-	if err := ValidateConditions(req.Conditions); err != nil {
+	// Parsing is the validation: what survives is exactly what the matcher will
+	// read, so there is no second grammar to drift from this one.
+	if _, err := ParseCondition(req.Conditions); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
@@ -129,7 +131,7 @@ func (h *ApprovalHandler) UpdatePolicy(c echo.Context) error {
 	// Only what the caller named is validated. Validating an omitted field would
 	// reject every partial update, which is precisely what used to happen.
 	if req.Conditions != nil {
-		if err := ValidateConditions(*req.Conditions); err != nil {
+		if _, err := ParseCondition(*req.Conditions); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 	}
@@ -411,4 +413,16 @@ func trimSpace(s string) string {
 		s = s[:len(s)-1]
 	}
 	return s
+}
+
+// GetConditionSchema handles GET /api/admin/approval-policies/condition-schema.
+//
+// The server declares the condition language and the form renders from it. The
+// form used to hard-code its own vocabulary — different field keys, different
+// operator names, and risk values (HIGH/MODERATE/LOW) the server has never
+// used — which is how it came to emit conditions the server always rejected.
+func (h *ApprovalHandler) GetConditionSchema(c echo.Context) error {
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"fields": ConditionSchema(),
+	})
 }

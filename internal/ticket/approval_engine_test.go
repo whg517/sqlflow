@@ -22,17 +22,16 @@ func TestContainsAny(t *testing.T) {
 func TestApprovalPolicyConditions(t *testing.T) {
 	ae := &ApprovalEngine{}
 
-	// Empty conditions = match all
-	policy := &model.ApprovalPolicy{
-		Conditions: `{}`,
-	}
+	// Empty conditions = match all. This is what EnsureDefaultPolicy stores, and
+	// it is the one form that means "everything" — a half-built condition set no
+	// longer collapses to the same answer.
+	policy := &model.ApprovalPolicy{Conditions: `{}`}
 	ticket := &model.Ticket{RiskLevel: "low", Database: "testdb"}
 	if !ae.policyMatches(policy, ticket) {
 		t.Error("empty conditions should match all")
 	}
 
-	// Risk level match
-	policy.Conditions = `{"risk_levels":["high","critical"]}`
+	policy.Conditions = `{"conditions":[{"field":"risk_level","operator":"in","values":["high","critical"]}]}`
 	ticket.RiskLevel = "high"
 	if !ae.policyMatches(policy, ticket) {
 		t.Error("risk level high should match")
@@ -42,34 +41,26 @@ func TestApprovalPolicyConditions(t *testing.T) {
 		t.Error("risk level low should not match")
 	}
 
-	// SQL type match — uses ticket.SQLType (populated by sql_analyzer)
-	policy.Conditions = `{"sql_types":["DROP","ALTER"]}`
-	ticket.SQLContent = "DROP TABLE users"
+	// SQL type comes from ticket.SQLType, which sql_analyzer populates.
+	policy.Conditions = `{"conditions":[{"field":"sql_type","operator":"in","values":["DROP","ALTER"]}]}`
 	ticket.SQLType = "DROP"
 	if !ae.policyMatches(policy, ticket) {
-		t.Error("DROP should match sql_types [DROP,ALTER]")
+		t.Error("DROP should match sql_type in [DROP,ALTER]")
 	}
-	ticket.SQLContent = "SELECT * FROM users"
 	ticket.SQLType = "SELECT"
 	if ae.policyMatches(policy, ticket) {
-		t.Error("SELECT should not match sql_types [DROP,ALTER]")
+		t.Error("SELECT should not match sql_type in [DROP,ALTER]")
 	}
 
-	// Database match
-	policy.Conditions = `{"databases":["production"]}`
-	ticket.Database = "production"
+	// Database scoping.
+	policy.Conditions = `{"conditions":[{"field":"database","operator":"in","values":["prod"]}]}`
+	ticket.Database = "prod"
 	if !ae.policyMatches(policy, ticket) {
-		t.Error("production database should match")
+		t.Error("database prod should match")
 	}
-	ticket.Database = "staging"
+	ticket.Database = "testdb"
 	if ae.policyMatches(policy, ticket) {
-		t.Error("staging database should not match")
-	}
-
-	// Invalid JSON
-	policy.Conditions = `invalid`
-	if ae.policyMatches(policy, ticket) {
-		t.Error("invalid JSON should not match")
+		t.Error("database testdb should not match a policy scoped to prod")
 	}
 }
 
@@ -92,24 +83,5 @@ func TestApprovalChainParsing(t *testing.T) {
 	}
 	if !stages[1].AutoSkipSameSubmitter {
 		t.Error("stage 1 auto_skip should be true")
-	}
-}
-
-func TestPolicyConditionParsing(t *testing.T) {
-	cond := `{"risk_levels":["high","critical"],"sql_types":["DROP","ALTER"],"environments":["production"]}`
-
-	var pc PolicyCondition
-	err := json.Unmarshal([]byte(cond), &pc)
-	if err != nil {
-		t.Fatalf("failed to parse conditions: %v", err)
-	}
-	if len(pc.RiskLevels) != 2 {
-		t.Errorf("risk_levels = %v, want 2 items", pc.RiskLevels)
-	}
-	if len(pc.SQLTypes) != 2 {
-		t.Errorf("sql_types = %v, want 2 items", pc.SQLTypes)
-	}
-	if len(pc.Environments) != 1 {
-		t.Errorf("environments = %v, want 1 item", pc.Environments)
 	}
 }

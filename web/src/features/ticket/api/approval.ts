@@ -218,3 +218,26 @@ export function getRoleLabel(role: string): string {
       return role;
   }
 }
+
+/** One field the server's approval-condition language accepts. */
+export interface ConditionFieldDescriptor {
+  field: string;
+  label: string;
+  operators: string[];
+  /** Closed value set, or absent when the field is open. */
+  values?: string[];
+}
+
+/**
+ * Fetch the condition language the server implements.
+ *
+ * The form used to hard-code its own vocabulary and every non-empty condition
+ * it produced was rejected, because the server read a different shape entirely.
+ * Asking removes the second source of truth.
+ */
+export async function fetchConditionSchema(): Promise<ConditionFieldDescriptor[]> {
+  const res = await api.get<{ fields: ConditionFieldDescriptor[] }>(
+    "/admin/approval-policies/condition-schema",
+  );
+  return res.fields ?? [];
+}
