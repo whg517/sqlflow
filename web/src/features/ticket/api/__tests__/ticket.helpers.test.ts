@@ -17,12 +17,13 @@ describe("Ticket API Helpers", () => {
   describe("getStatusLabel", () => {
     it.each([
       ["SUBMITTED", "已提交"],
-      ["AI_REVIEWED", "AI 已评审"],
       ["PENDING_APPROVAL", "待审批"],
       ["APPROVED", "已通过"],
+      ["SCHEDULED", "待定时执行"],
       ["REJECTED", "已拒绝"],
       ["EXECUTING", "执行中"],
       ["DONE", "已完成"],
+      ["FAILED", "执行失败"],
       ["CANCELLED", "已取消"],
     ] as [TicketStatus, string][])("maps %s to %s", (status, expected) => {
       expect(getStatusLabel(status)).toBe(expected);
@@ -45,12 +46,13 @@ describe("Ticket API Helpers", () => {
     it("each status has a unique color class", () => {
       const statuses: TicketStatus[] = [
         "SUBMITTED",
-        "AI_REVIEWED",
         "PENDING_APPROVAL",
         "APPROVED",
+        "SCHEDULED",
         "REJECTED",
         "EXECUTING",
         "DONE",
+        "FAILED",
         "CANCELLED",
       ];
       const colors = statuses.map((s) => getStatusColor(s));

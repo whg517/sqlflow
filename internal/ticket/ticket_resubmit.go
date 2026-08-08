@@ -81,9 +81,10 @@ func (s *Service) ResubmitTicket(ctx context.Context, ticketID, submitterID int6
 		return nil, rollbackOn(tx, fmt.Errorf("保存历史版本失败: %w", err))
 	}
 
-	swapped, err := casTicketStatus(ctx, tx.Ticket, ticketID,
-		model.TicketStatusRejected, model.TicketStatusSubmitted, now,
-		func(u *ent.TicketUpdate) *ent.TicketUpdate {
+	swapped, err := applyTransition(ctx, tx.Ticket, ticketID, now, transition{
+		From: []model.TicketStatus{model.TicketStatusRejected},
+		To:   model.TicketStatusSubmitted,
+		Extra: func(u *ent.TicketUpdate) *ent.TicketUpdate {
 			return u.SetSQLContent(sqlContent).
 				SetSQLSummary(summary).
 				SetChangeReason(changeReason).
@@ -99,7 +100,7 @@ func (s *Service) ResubmitTicket(ctx context.Context, ticketID, submitterID int6
 				SetSQLHash("").
 				SetRevision(newRevision)
 		},
-	)
+	})
 	if err != nil {
 		return nil, rollbackOn(tx, fmt.Errorf("重提工单失败: %w", err))
 	}

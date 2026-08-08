@@ -33,9 +33,17 @@ cd web && npx tsc -b && npm run test
 
 1. **服务端是授权的唯一裁决者。** 前端隐藏菜单、禁用按钮只是体验优化。每个入口
    都要独立鉴权，不能依赖上游已经查过。
-2. **状态迁移只能用 CAS。** 工单状态的每次变更都是
-   `Update().Where(id, 期望状态)` 并检查影响行数。读-改-写曾让 4 个并发审批
-   同时成功。
+2. **工单状态只有一个写入口：`internal/ticket/transition.go` 的 `applyTransition`。**
+   它做三件裸 `Update` 做不到的事：拒绝 `validTransitions` 未声明的边、以 CAS 落库、
+   必要时把审批阶段与状态放进同一条谓词。读-改-写曾让 4 个并发审批同时成功；
+   后来这条规则只写在注释里，于是 5 处生命周期写入绕开了它——取消工单会返回 200
+   并写下 `ticket_cancel` 审计，而语句照常执行、状态在执行结束时被改回 DONE。
+   `internal/arch` 的 `TestTicketStatusHasOneWriter` 把「绕开」变成构建失败；
+   只改其他列（如 SLA 截止时间）的更新不受限制，因为那不是状态迁移。
+   **`validTransitions` 是实现而不是描述**：它曾零生产调用方，同时缺三条真实的边
+   （`SUBMITTED→PENDING_APPROVAL`、`SUBMITTED→APPROVED`、`SCHEDULED→APPROVED`），
+   还声明着一个从未被写入的 `AI_REVIEWED`。同一个包里两个测试对
+   `SUBMITTED→APPROVED` 断言相反且都通过，因为其中一个只是拿表验自己。
 3. **失败路径也要写审计。** 连接失败、权限拒绝、执行出错都必须留下记录——
    查不到的那些查询恰恰是运维最需要的证据。
 4. **脱敏不能被绕过。** 查询、导出、分享共用同一套规则。无法施加脱敏的结果形态

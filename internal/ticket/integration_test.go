@@ -945,28 +945,37 @@ func TestIntegration_StateMachineCompleteness(t *testing.T) {
 	_ = testutil.SeedUser(t, testDB, "sm_dba", "dba")
 	dsID := testutil.SeedDatasource(t, testDB, "sm-db")
 
-	t.Run("submitted_to_ai_reviewed", func(t *testing.T) {
+	// A new ticket leaves SUBMITTED by exactly one of these two edges, chosen by
+	// the approval policy that matched. Both were missing from the table while
+	// ApplyPolicy walked them daily, and an AI_REVIEWED stage that nothing has
+	// ever written sat in their place.
+	t.Run("submitted_to_pending_approval", func(t *testing.T) {
 		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, "developer", dsID, testutil.DatasourceDatabase, "ALTER TABLE t ADD c INT", "test")
-		if !CanTransition(model.TicketStatusSubmitted, model.TicketStatusAIReviewed) {
-			t.Error("SUBMITTED -> AI_REVIEWED should be valid")
-		}
-		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusAIReviewed)
-		got, _ := ticketSvc.GetTicket(context.Background(), ticket.ID)
-		if got.Status != model.TicketStatusAIReviewed {
-			t.Errorf("status = %s, want AI_REVIEWED", got.Status)
-		}
-	})
-
-	t.Run("ai_reviewed_to_pending_approval", func(t *testing.T) {
-		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, "developer", dsID, testutil.DatasourceDatabase, "ALTER TABLE t ADD c INT", "test")
-		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusAIReviewed)
-		if !CanTransition(model.TicketStatusAIReviewed, model.TicketStatusPendingApproval) {
-			t.Error("AI_REVIEWED -> PENDING_APPROVAL should be valid")
+		if !CanTransition(model.TicketStatusSubmitted, model.TicketStatusPendingApproval) {
+			t.Error("SUBMITTED -> PENDING_APPROVAL should be valid")
 		}
 		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusPendingApproval)
 		got, _ := ticketSvc.GetTicket(context.Background(), ticket.ID)
 		if got.Status != model.TicketStatusPendingApproval {
 			t.Errorf("status = %s, want PENDING_APPROVAL", got.Status)
+		}
+	})
+
+	t.Run("submitted_to_approved_by_auto_approval", func(t *testing.T) {
+		ticket, _ := ticketSvc.CreateTicket(context.Background(), devID, "developer", dsID, testutil.DatasourceDatabase, "ALTER TABLE t ADD c INT", "test")
+		if !CanTransition(model.TicketStatusSubmitted, model.TicketStatusApproved) {
+			t.Error("SUBMITTED -> APPROVED should be valid: an auto-approving policy takes it")
+		}
+		setIntegrationTicketStatus(t, testDB, ticket.ID, model.TicketStatusApproved)
+		got, _ := ticketSvc.GetTicket(context.Background(), ticket.ID)
+		if got.Status != model.TicketStatusApproved {
+			t.Errorf("status = %s, want APPROVED", got.Status)
+		}
+	})
+
+	t.Run("scheduled_back_to_approved", func(t *testing.T) {
+		if !CanTransition(model.TicketStatusScheduled, model.TicketStatusApproved) {
+			t.Error("SCHEDULED -> APPROVED should be valid: CancelSchedule takes it")
 		}
 	})
 
@@ -1009,15 +1018,17 @@ func TestIntegration_StateMachineCompleteness(t *testing.T) {
 	t.Run("terminal_states_no_transitions", func(t *testing.T) {
 		terminals := []model.TicketStatus{
 			model.TicketStatusDone,
+			model.TicketStatusFailed,
 			model.TicketStatusCancelled,
 		}
 		allStatuses := []model.TicketStatus{
 			model.TicketStatusSubmitted,
-			model.TicketStatusAIReviewed,
 			model.TicketStatusPendingApproval,
 			model.TicketStatusApproved,
+			model.TicketStatusScheduled,
 			model.TicketStatusExecuting,
 			model.TicketStatusDone,
+			model.TicketStatusFailed,
 			model.TicketStatusRejected,
 			model.TicketStatusCancelled,
 		}

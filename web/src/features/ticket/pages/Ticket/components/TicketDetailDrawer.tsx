@@ -196,7 +196,7 @@ export default function TicketDetailDrawer({
   const canResubmit = isSubmitter && status === "REJECTED";
   const canCancel =
     (isSubmitter || isDBA) &&
-    ["SUBMITTED", "AI_REVIEWED", "PENDING_APPROVAL", "APPROVED"].includes(
+    ["SUBMITTED", "PENDING_APPROVAL", "APPROVED", "SCHEDULED"].includes(
       status ?? "",
     );
   const canExecute = (isSubmitter || isDBA) && status === "APPROVED";

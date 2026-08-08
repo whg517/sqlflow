@@ -24,7 +24,6 @@ vi.mock("@/features/ticket/api/ticket", () => ({
   getStatusLabel: (status: string) => {
     const map: Record<string, string> = {
       SUBMITTED: "已提交",
-      AI_REVIEWED: "AI 已评审",
       PENDING_APPROVAL: "待审批",
       APPROVED: "已通过",
       REJECTED: "已拒绝",

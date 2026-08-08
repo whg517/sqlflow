@@ -558,15 +558,21 @@ func TestStateMachine(t *testing.T) {
 			from model.TicketStatus
 			to   model.TicketStatus
 		}{
-			{model.TicketStatusSubmitted, model.TicketStatusAIReviewed},
+			// ApplyPolicy takes one of these two out of SUBMITTED, depending on
+			// whether the matched policy auto-approves.
+			{model.TicketStatusSubmitted, model.TicketStatusPendingApproval},
+			{model.TicketStatusSubmitted, model.TicketStatusApproved},
 			{model.TicketStatusSubmitted, model.TicketStatusCancelled},
-			{model.TicketStatusAIReviewed, model.TicketStatusPendingApproval},
-			{model.TicketStatusAIReviewed, model.TicketStatusCancelled},
 			{model.TicketStatusPendingApproval, model.TicketStatusApproved},
 			{model.TicketStatusPendingApproval, model.TicketStatusRejected},
 			{model.TicketStatusPendingApproval, model.TicketStatusCancelled},
 			{model.TicketStatusApproved, model.TicketStatusExecuting},
+			{model.TicketStatusApproved, model.TicketStatusScheduled},
 			{model.TicketStatusApproved, model.TicketStatusCancelled},
+			{model.TicketStatusScheduled, model.TicketStatusExecuting},
+			// CancelSchedule returns a scheduled ticket to APPROVED.
+			{model.TicketStatusScheduled, model.TicketStatusApproved},
+			{model.TicketStatusScheduled, model.TicketStatusCancelled},
 			{model.TicketStatusExecuting, model.TicketStatusDone},
 			{model.TicketStatusExecuting, model.TicketStatusFailed},
 			{model.TicketStatusRejected, model.TicketStatusSubmitted},
@@ -586,14 +592,16 @@ func TestStateMachine(t *testing.T) {
 			from model.TicketStatus
 			to   model.TicketStatus
 		}{
-			{model.TicketStatusSubmitted, model.TicketStatusApproved},
 			{model.TicketStatusSubmitted, model.TicketStatusDone},
 			{model.TicketStatusSubmitted, model.TicketStatusRejected},
 			{model.TicketStatusApproved, model.TicketStatusSubmitted},
 			{model.TicketStatusDone, model.TicketStatusSubmitted},
 			{model.TicketStatusDone, model.TicketStatusCancelled},
+			{model.TicketStatusFailed, model.TicketStatusSubmitted},
 			{model.TicketStatusRejected, model.TicketStatusApproved},
 			{model.TicketStatusCancelled, model.TicketStatusSubmitted},
+			// Once the statement is running, canceling it is not something the
+			// platform can honor.
 			{model.TicketStatusExecuting, model.TicketStatusCancelled},
 		}
 
@@ -609,10 +617,17 @@ func TestStateMachine(t *testing.T) {
 	t.Run("terminal states have no outgoing transitions", func(t *testing.T) {
 		terminals := []model.TicketStatus{
 			model.TicketStatusDone,
+			model.TicketStatusFailed,
 			model.TicketStatusCancelled,
 		}
 		for _, terminal := range terminals {
-			transitions := validTransitions[terminal]
+			transitions, declared := validTransitions[terminal]
+			// Declared explicitly, not merely absent: a missing key and an empty
+			// list read the same to CanTransition but not to a reader, and FAILED
+			// used to have no key at all.
+			if !declared {
+				t.Errorf("terminal state %s is not declared in the table", terminal)
+			}
 			if len(transitions) != 0 {
 				t.Errorf("terminal state %s should have no transitions, got %v", terminal, transitions)
 			}

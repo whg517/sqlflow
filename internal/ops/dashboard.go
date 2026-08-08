@@ -95,7 +95,7 @@ func NewDashboardService(database *db.DB) *DashboardService {
 // to agree on what "pending" means; they were four separate literals, and a
 // status added to one of them would have quietly changed only part of the
 // dashboard.
-var openTicketStatuses = []string{"SUBMITTED", "AI_REVIEWED", "PENDING_APPROVAL"}
+var openTicketStatuses = []string{"SUBMITTED", "PENDING_APPROVAL"}
 
 // pendingTickets counts tickets awaiting a decision.
 func (s *DashboardService) pendingTickets() *ent.TicketQuery {

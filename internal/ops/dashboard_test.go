@@ -77,7 +77,7 @@ func TestDashboardService_GetStats_WithData(t *testing.T) {
 	)
 
 	// Seed tickets in various statuses
-	pendingStatuses := []string{"SUBMITTED", "AI_REVIEWED", "PENDING_APPROVAL"}
+	pendingStatuses := []string{"SUBMITTED", "PENDING_APPROVAL"}
 	for _, s := range pendingStatuses {
 		testDB.ExecContext(ctx,
 			`INSERT INTO tickets (submitter_id, datasource_id, sql_content, status) VALUES (1, 1, 'ALTER TABLE t ADD COLUMN c INT', $1)`,
@@ -103,8 +103,8 @@ func TestDashboardService_GetStats_WithData(t *testing.T) {
 	if stats.RecentQueries7d != 1 {
 		t.Errorf("RecentQueries7d = %d, want 1", stats.RecentQueries7d)
 	}
-	if stats.PendingTickets != 3 {
-		t.Errorf("PendingTickets = %d, want 3", stats.PendingTickets)
+	if stats.PendingTickets != 2 {
+		t.Errorf("PendingTickets = %d, want 2", stats.PendingTickets)
 	}
 }
 

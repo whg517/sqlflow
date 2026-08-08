@@ -559,7 +559,7 @@ func (s *ReportService) GetTicketReport(ctx context.Context, params ReportParams
 	for _, r := range byStatus {
 		stats.TotalTickets += r.Count
 		switch r.Status {
-		case "SUBMITTED", "AI_REVIEWED", "PENDING_APPROVAL":
+		case "SUBMITTED", "PENDING_APPROVAL":
 			stats.PendingCount += r.Count
 		case "APPROVED":
 			stats.ApprovedCount = r.Count

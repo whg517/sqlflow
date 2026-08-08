@@ -136,7 +136,13 @@ func (s *Scheduler) executeScheduledTicket(ctx context.Context, ticketID int64) 
 
 	// operatorID=0 marks a system execution; permission checks are the
 	// responsibility of whoever scheduled the ticket.
-	if _, err := s.ticketSvc.executeTicket(ctx, t, 0); err != nil {
+	//
+	// executableByScheduler, not executableByOperator: the scheduler may only run
+	// a ticket that is still SCHEDULED. The wider set accepts APPROVED, which is
+	// exactly where canceling a schedule puts a ticket — so with it, a cancel
+	// landing between the read above and the swap below would be reported as
+	// successful while this run went ahead anyway.
+	if _, err := s.ticketSvc.executeTicket(ctx, t, 0, executableByScheduler); err != nil {
 		if errors.Is(err, ErrTicketNotExecutable) {
 			// Another actor won the CAS between GetTicket and executeTicket.
 			return nil

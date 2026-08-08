@@ -76,8 +76,13 @@ type QueryHistory struct {
 type TicketStatus string
 
 const (
-	TicketStatusSubmitted       TicketStatus = "SUBMITTED"
-	TicketStatusAIReviewed      TicketStatus = "AI_REVIEWED"
+	TicketStatusSubmitted TicketStatus = "SUBMITTED"
+	// AI_REVIEWED used to sit here, between SUBMITTED and PENDING_APPROVAL. No
+	// code path ever wrote it: AI review is advisory (ADR-0004) and runs from the
+	// query workbench, not from the ticket lifecycle, so a ticket goes straight
+	// from SUBMITTED to whatever the approval policy decides. It was removed
+	// rather than given a writer, because inventing a lifecycle stage to justify
+	// a constant is the wrong direction.
 	TicketStatusPendingApproval TicketStatus = "PENDING_APPROVAL"
 	TicketStatusApproved        TicketStatus = "APPROVED"
 	TicketStatusScheduled       TicketStatus = "SCHEDULED"

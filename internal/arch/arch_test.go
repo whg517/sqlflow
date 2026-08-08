@@ -658,3 +658,93 @@ func TestNoWriteOnlyFields(t *testing.T) {
 			len(offenders), strings.Join(offenders, "\n  "))
 	}
 }
+
+// TestTicketStatusHasOneWriter keeps the ticket state machine enforceable.
+//
+// internal/ticket declares a state machine and a compare-and-swap helper that
+// consults it, but for a long time neither was binding: the table had no
+// production caller at all, and five lifecycle writes reached for a bare
+// UpdateOneID instead. That is how a cancel could report success while the
+// statement it cancelled went on running, and how a decided ticket could be
+// walked forward again — each site re-derived the guard, and five of them got
+// it wrong.
+//
+// A deep module only helps if callers cannot step around it, and in Go nothing
+// in the type system says "this column has an owner". This test says it: a
+// ticket update that writes status may appear only in the file that owns the
+// transition. Updates that touch other columns — the SLA deadline, say — are
+// untouched, because they are not state changes.
+func TestTicketStatusHasOneWriter(t *testing.T) {
+	const owner = "transition.go"
+
+	dir := filepath.Join(repoRoot(t), "internal", "ticket")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read internal/ticket: %v", err)
+	}
+
+	fset := token.NewFileSet()
+	var offenders []string
+
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") ||
+			strings.HasSuffix(name, "_test.go") || name == owner {
+			continue
+		}
+
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "SetStatus" {
+				return true
+			}
+			// Walk back down the method chain. A ticket *update* that writes
+			// status is the thing being banned; Ticket.Create() sets the status
+			// a row is born with, and TicketRevision/ExecutionResult are other
+			// tables entirely.
+			chain := selectorChain(sel.X)
+			if chain["Ticket"] && (chain["Update"] || chain["UpdateOneID"]) {
+				offenders = append(offenders, fmt.Sprintf("%s:%d",
+					name, fset.Position(call.Pos()).Line))
+			}
+			return true
+		})
+	}
+
+	if len(offenders) > 0 {
+		sort.Strings(offenders)
+		t.Errorf("%d ticket status write(s) bypass %s:\n  %s\n"+
+			"  状态迁移必须走 applyTransition：它校验状态机声明、以 CAS 落库，"+
+			"并能在同一条谓词里守住审批阶段。",
+			len(offenders), owner, strings.Join(offenders, "\n  "))
+	}
+}
+
+// selectorChain collects every identifier and selector name in a method chain,
+// so a caller can ask what a fluent builder was rooted at.
+func selectorChain(e ast.Expr) map[string]bool {
+	names := map[string]bool{}
+	for {
+		switch v := e.(type) {
+		case *ast.CallExpr:
+			e = v.Fun
+		case *ast.SelectorExpr:
+			names[v.Sel.Name] = true
+			e = v.X
+		case *ast.Ident:
+			names[v.Name] = true
+			return names
+		default:
+			return names
+		}
+	}
+}

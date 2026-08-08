@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -80,20 +81,12 @@ var (
 	ErrTicketNotScheduled = errors.New("工单未设置定时执行")
 	// ErrTicketNotResubmittable indicates the ticket is not in REJECTED status.
 	ErrTicketNotResubmittable = errors.New("只有被驳回的工单可以重提")
+	// ErrApprovalEngineUnavailable means a ticket carries an approval chain but
+	// the engine that walks it was never wired, so no one can decide it. Failing
+	// is the only honest answer: approving without the engine would skip the
+	// chain, which is the defect this route was changed to close.
+	ErrApprovalEngineUnavailable = errors.New("审批引擎不可用，无法处理分阶段审批")
 )
-
-// validTransitions defines the allowed state transitions for the ticket state machine.
-var validTransitions = map[model.TicketStatus][]model.TicketStatus{
-	model.TicketStatusSubmitted:       {model.TicketStatusAIReviewed, model.TicketStatusCancelled},
-	model.TicketStatusAIReviewed:      {model.TicketStatusPendingApproval, model.TicketStatusCancelled},
-	model.TicketStatusPendingApproval: {model.TicketStatusApproved, model.TicketStatusRejected, model.TicketStatusCancelled},
-	model.TicketStatusApproved:        {model.TicketStatusExecuting, model.TicketStatusScheduled, model.TicketStatusCancelled},
-	model.TicketStatusScheduled:       {model.TicketStatusExecuting, model.TicketStatusCancelled},
-	model.TicketStatusExecuting:       {model.TicketStatusDone, model.TicketStatusFailed},
-	model.TicketStatusRejected:        {model.TicketStatusSubmitted},
-	model.TicketStatusDone:            {},
-	model.TicketStatusCancelled:       {},
-}
 
 // Deps are the collaborators a ticket Service needs.
 //
@@ -197,56 +190,15 @@ func entTicketToModel(t *ent.Ticket) *model.Ticket {
 		Revision:       t.Revision,
 		CreatedAt:      t.CreatedAt,
 		UpdatedAt:      t.UpdatedAt,
-	}
-}
 
-// casTicketStatus atomically moves a ticket from `from` to `to` and reports
-// whether a row matched. `extra` adds column assignments to the same statement.
-//
-// Every approval-side transition must go through a compare-and-swap.
-// Read-then-write leaves a window where two approvers both observe
-// PENDING_APPROVAL and both write, producing two decisions for one ticket.
-//
-// ent's predicate-based Update() returns the affected row count, which is the
-// compare and the swap in one statement — UpdateOneID cannot express this.
-func casTicketStatus(
-	ctx context.Context,
-	tickets *ent.TicketClient,
-	ticketID int64,
-	from, to model.TicketStatus,
-	now time.Time,
-	extra func(*ent.TicketUpdate) *ent.TicketUpdate,
-) (bool, error) {
-	return casTicketStatusFrom(ctx, tickets, ticketID, []model.TicketStatus{from}, to, now, extra)
-}
-
-// casTicketStatusFrom is casTicketStatus for transitions with more than one
-// acceptable starting state — execution accepts both APPROVED and SCHEDULED.
-func casTicketStatusFrom(
-	ctx context.Context,
-	tickets *ent.TicketClient,
-	ticketID int64,
-	from []model.TicketStatus,
-	to model.TicketStatus,
-	now time.Time,
-	extra func(*ent.TicketUpdate) *ent.TicketUpdate,
-) (bool, error) {
-	statuses := make([]string, len(from))
-	for i, st := range from {
-		statuses[i] = string(st)
+		// The approval chain's position. These were declared on the model and
+		// on the wire but never filled in, so every read reported stage 0 of 0
+		// no matter what the row said — which is precisely why ApproveTicket
+		// could not tell a two-stage ticket from an unstaged one.
+		CurrentStage: t.CurrentStage,
+		TotalStages:  t.TotalStages,
+		PolicyID:     derefInt64(t.PolicyID),
 	}
-	upd := tickets.Update().
-		Where(entTicket.IDEQ(int(ticketID)), entTicket.StatusIn(statuses...)).
-		SetStatus(string(to)).
-		SetUpdatedAt(now)
-	if extra != nil {
-		upd = extra(upd)
-	}
-	affected, err := upd.Save(ctx)
-	if err != nil {
-		return false, err
-	}
-	return affected > 0, nil
 }
 
 // populateTicketNames fills in user names for submitter and reviewer.
@@ -494,7 +446,6 @@ func (s *Service) ListTickets(ctx context.Context, page, pageSize int, status, d
 	if scope == "pending" {
 		preds = append(preds, entTicket.StatusIn(
 			string(model.TicketStatusSubmitted),
-			string(model.TicketStatusAIReviewed),
 			string(model.TicketStatusPendingApproval),
 		))
 	}
@@ -547,16 +498,30 @@ func (s *Service) ApproveTicket(ctx context.Context, ticketID, reviewerID int64,
 		return nil, ErrInvalidStatusTransition
 	}
 
+	// A ticket governed by an approval chain is decided one stage at a time, and
+	// this route does not get to shortcut it.
+	//
+	// It used to: this function names neither CurrentStage nor TotalStages, so a
+	// dba facing the chain [security, dba] finalized it in a single call and
+	// stage 1 never happened — while the chain view went on rendering two stages
+	// as though both had been walked. This is the route the production approve
+	// button calls, and RequireScope is a no-op for JWT sessions, so the role
+	// check above was the only thing in front of it.
+	if t.TotalStages > 0 {
+		return s.approveThroughChain(ctx, t, reviewerID, reviewerRole, comment)
+	}
+
 	now := time.Now()
 	// Pin the SQL body that is being approved, so executeTicket can refuse a
 	// ticket whose statement changed afterwards.
 	sqlHash := sha256Hash(t.SQLContent)
-	swapped, err := casTicketStatus(ctx, s.client.Ticket, ticketID,
-		model.TicketStatusPendingApproval, model.TicketStatusApproved, now,
-		func(u *ent.TicketUpdate) *ent.TicketUpdate {
+	swapped, err := applyTransition(ctx, s.client.Ticket, ticketID, now, transition{
+		From: []model.TicketStatus{model.TicketStatusPendingApproval},
+		To:   model.TicketStatusApproved,
+		Extra: func(u *ent.TicketUpdate) *ent.TicketUpdate {
 			return u.SetReviewerID(reviewerID).SetReviewComment(comment).SetSQLHash(sqlHash)
 		},
-	)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("审批工单失败: %w", err)
 	}
@@ -593,6 +558,46 @@ func (s *Service) ApproveTicket(ctx context.Context, ticketID, reviewerID int64,
 	return t, nil
 }
 
+// approveThroughChain records one stage's approval through the engine.
+//
+// The engine is the only path that knows which role the current stage expects
+// and that guards on the stage the approver actually saw, so the decision is
+// entirely its own. What stays here is what the engine has no collaborator for:
+// the audit trail, and releasing the SLA clock once the chain is finished.
+func (s *Service) approveThroughChain(ctx context.Context, t *model.Ticket, reviewerID int64, reviewerRole, comment string) (*model.Ticket, error) {
+	if s.approvalEngine == nil {
+		return nil, ErrApprovalEngineUnavailable
+	}
+
+	if _, err := s.approvalEngine.ProcessApproval(ctx, t.ID, reviewerID, reviewerRole, "approved", comment); err != nil {
+		return nil, err
+	}
+
+	updated, err := s.GetTicket(ctx, t.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	s.auditSvc.Write(ctx, auditlog.Record{
+		UserID:     reviewerID,
+		Action:     "ticket_approve",
+		SQLContent: updated.SQLContent,
+		SQLSummary: updated.SQLSummary,
+		TicketID:   updated.ID,
+	})
+
+	// Only the final stage finishes the approval. An intermediate one leaves the
+	// ticket waiting, and its deadline has to keep running with it. The engine
+	// has already notified for whichever of the two happened.
+	if updated.Status == model.TicketStatusApproved && s.slaSvc != nil {
+		if err := s.slaSvc.ClearTicketSLA(ctx, updated.ID); err != nil {
+			log.Printf("ticket: clear SLA on approve failed: %v", err)
+		}
+	}
+
+	return updated, nil
+}
+
 // RejectTicket rejects a ticket. Only dba/admin can reject.
 func (s *Service) RejectTicket(ctx context.Context, ticketID, reviewerID int64, reviewerRole, reason string) (*model.Ticket, error) {
 	if strings.TrimSpace(reason) == "" {
@@ -613,12 +618,17 @@ func (s *Service) RejectTicket(ctx context.Context, ticketID, reviewerID int64, 
 	}
 
 	now := time.Now()
-	swapped, err := casTicketStatus(ctx, s.client.Ticket, ticketID,
-		model.TicketStatusPendingApproval, model.TicketStatusRejected, now,
-		func(u *ent.TicketUpdate) *ent.TicketUpdate {
-			return u.SetReviewerID(reviewerID).SetReviewComment(reason)
+	swapped, err := applyTransition(ctx, s.client.Ticket, ticketID, now, transition{
+		From: []model.TicketStatus{model.TicketStatusPendingApproval},
+		To:   model.TicketStatusRejected,
+		Extra: func(u *ent.TicketUpdate) *ent.TicketUpdate {
+			// Clearing the stage counters is what stops a decided ticket being
+			// walked forward again: the staged route guards on current_stage,
+			// and a rejected ticket that kept stage 1 still matched it.
+			return u.SetReviewerID(reviewerID).SetReviewComment(reason).
+				SetCurrentStage(0).SetTotalStages(0)
 		},
-	)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("驳回工单失败: %w", err)
 	}
@@ -655,6 +665,18 @@ func (s *Service) RejectTicket(ctx context.Context, ticketID, reviewerID int64, 
 	return t, nil
 }
 
+// cancellableStatuses are the states a ticket may be cancelled from.
+//
+// It is a slice rather than a set because it is used twice — once to reject the
+// request with a useful error, and once as the compare-and-swap predicate that
+// actually enforces it. Two lists would be two things to keep in step.
+var cancellableStatuses = []model.TicketStatus{
+	model.TicketStatusSubmitted,
+	model.TicketStatusPendingApproval,
+	model.TicketStatusApproved,
+	model.TicketStatusScheduled,
+}
+
 // CancelTicket cancels a ticket. Submitter or dba/admin can cancel.
 func (s *Service) CancelTicket(ctx context.Context, ticketID, operatorID int64, operatorRole, reason string) (*model.Ticket, error) {
 	if strings.TrimSpace(reason) == "" {
@@ -671,27 +693,32 @@ func (s *Service) CancelTicket(ctx context.Context, ticketID, operatorID int64, 
 		return nil, ErrNoPermission
 	}
 
-	// Can cancel only from these states
-	cancellable := map[model.TicketStatus]bool{
-		model.TicketStatusSubmitted:       true,
-		model.TicketStatusAIReviewed:      true,
-		model.TicketStatusPendingApproval: true,
-		model.TicketStatusApproved:        true,
-		model.TicketStatusScheduled:       true,
-	}
-	if !cancellable[t.Status] {
+	if !slices.Contains(cancellableStatuses, t.Status) {
 		return nil, ErrTicketNotCancellable
 	}
 
+	// The same set guards the write, not just the read.
+	//
+	// This was a bare UpdateOneID: the status was checked against a value read
+	// several round-trips earlier and then overwritten unconditionally. A cancel
+	// racing an execute therefore returned 200 and wrote a ticket_cancel audit
+	// record while the statement ran, and the row flipped back to DONE when the
+	// execution finished — so the cancel was not merely late, it was lost, and
+	// the user was told it had worked.
 	now := time.Now()
-	_, err = s.client.Ticket.UpdateOneID(int(ticketID)).
-		SetStatus(string(model.TicketStatusCancelled)).
-		SetReviewComment(reason).
-		ClearScheduledAt().
-		SetUpdatedAt(now).
-		Save(ctx)
+	swapped, err := applyTransition(ctx, s.client.Ticket, ticketID, now, transition{
+		From: cancellableStatuses,
+		To:   model.TicketStatusCancelled,
+		Extra: func(u *ent.TicketUpdate) *ent.TicketUpdate {
+			return u.SetReviewComment(reason).ClearScheduledAt().
+				SetCurrentStage(0).SetTotalStages(0)
+		},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("取消工单失败: %w", err)
+	}
+	if !swapped {
+		return nil, ErrTicketNotCancellable
 	}
 
 	s.auditSvc.Write(ctx, auditlog.Record{
@@ -725,23 +752,27 @@ func (s *Service) ExecuteTicket(ctx context.Context, ticketID, operatorID int64,
 		return nil, ErrNoPermission
 	}
 
-	return s.executeTicket(ctx, t, operatorID)
+	return s.executeTicket(ctx, t, operatorID, executableByOperator)
 }
 
 // executeTicket performs the actual SQL execution with hash verification,
 // timeout control, and idempotent status transition.
-func (s *Service) executeTicket(ctx context.Context, t *model.Ticket, operatorID int64) (*model.Ticket, error) {
+//
+// `from` is the set of states this caller may execute out of, and it differs by
+// caller — see executableByOperator and executableByScheduler.
+func (s *Service) executeTicket(ctx context.Context, t *model.Ticket, operatorID int64, from []model.TicketStatus) (*model.Ticket, error) {
 	if s.dsSvc == nil || s.poolMgr == nil {
 		return nil, ErrTicketExecUnavailable
 	}
 
-	// Idempotent: APPROVED/SCHEDULED → EXECUTING, by compare-and-swap. Two
-	// schedulers reaching the same due ticket both arrive here; the predicate is
-	// what makes exactly one of them execute it.
+	// Idempotent: → EXECUTING, by compare-and-swap. Two schedulers reaching the
+	// same due ticket both arrive here; the predicate is what makes exactly one
+	// of them execute it.
 	now := time.Now()
-	applied, err := casTicketStatusFrom(ctx, s.client.Ticket, t.ID,
-		[]model.TicketStatus{model.TicketStatusApproved, model.TicketStatusScheduled},
-		model.TicketStatusExecuting, now, nil)
+	applied, err := applyTransition(ctx, s.client.Ticket, t.ID, now, transition{
+		From: from,
+		To:   model.TicketStatusExecuting,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("状态更新失败: %w", err)
 	}
@@ -779,15 +810,18 @@ func (s *Service) executeTicket(ctx context.Context, t *model.Ticket, operatorID
 		return nil, s.failTicket(ctx, t, operatorID, sanitizeErrMsg(execErr.Error()))
 	}
 
-	// Success: EXECUTING → DONE
+	// Success: EXECUTING → DONE.
+	//
+	// Guarded like every other move. As a bare write it would clobber whatever
+	// the row said, which is how a cancel that landed mid-execution disappeared.
 	now = time.Now()
-	_, err = s.client.Ticket.UpdateOneID(int(t.ID)).
-		SetStatus(string(model.TicketStatusDone)).
-		SetExecutedAt(now).
-		ClearScheduledAt().
-		SetUpdatedAt(now).
-		Save(ctx)
-	if err != nil {
+	if _, err = applyTransition(ctx, s.client.Ticket, t.ID, now, transition{
+		From: []model.TicketStatus{model.TicketStatusExecuting},
+		To:   model.TicketStatusDone,
+		Extra: func(u *ent.TicketUpdate) *ent.TicketUpdate {
+			return u.SetExecutedAt(now).ClearScheduledAt()
+		},
+	}); err != nil {
 		return nil, fmt.Errorf("更新工单状态失败: %w", err)
 	}
 
@@ -824,11 +858,10 @@ func (s *Service) executeTicket(ctx context.Context, t *model.Ticket, operatorID
 // failTicket transitions a ticket to FAILED status and writes audit log.
 func (s *Service) failTicket(ctx context.Context, t *model.Ticket, operatorID int64, errMsg string) error {
 	now := time.Now()
-	_, err := s.client.Ticket.UpdateOneID(int(t.ID)).
-		SetStatus(string(model.TicketStatusFailed)).
-		SetUpdatedAt(now).
-		Save(ctx)
-	if err != nil {
+	if _, err := applyTransition(ctx, s.client.Ticket, t.ID, now, transition{
+		From: []model.TicketStatus{model.TicketStatusExecuting},
+		To:   model.TicketStatusFailed,
+	}); err != nil {
 		return fmt.Errorf("设置失败状态失败: %w (原始错误: %s)", err, errMsg)
 	}
 
@@ -881,13 +914,18 @@ func (s *Service) ScheduleTicket(ctx context.Context, ticketID, operatorID int64
 	}
 
 	now := time.Now()
-	_, err = s.client.Ticket.UpdateOneID(int(ticketID)).
-		SetStatus(string(model.TicketStatusScheduled)).
-		SetScheduledAt(scheduledAt).
-		SetUpdatedAt(now).
-		Save(ctx)
+	swapped, err := applyTransition(ctx, s.client.Ticket, ticketID, now, transition{
+		From: []model.TicketStatus{model.TicketStatusApproved},
+		To:   model.TicketStatusScheduled,
+		Extra: func(u *ent.TicketUpdate) *ent.TicketUpdate {
+			return u.SetScheduledAt(scheduledAt)
+		},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("设置定时执行失败: %w", err)
+	}
+	if !swapped {
+		return nil, ErrTicketNotSchedulable
 	}
 
 	s.auditSvc.Write(ctx, auditlog.Record{
@@ -926,13 +964,20 @@ func (s *Service) CancelSchedule(ctx context.Context, ticketID, operatorID int64
 	}
 
 	now := time.Now()
-	_, err = s.client.Ticket.UpdateOneID(int(ticketID)).
-		SetStatus(string(model.TicketStatusApproved)).
-		ClearScheduledAt().
-		SetUpdatedAt(now).
-		Save(ctx)
+	swapped, err := applyTransition(ctx, s.client.Ticket, ticketID, now, transition{
+		From: []model.TicketStatus{model.TicketStatusScheduled},
+		To:   model.TicketStatusApproved,
+		Extra: func(u *ent.TicketUpdate) *ent.TicketUpdate {
+			return u.ClearScheduledAt()
+		},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("取消定时执行失败: %w", err)
+	}
+	if !swapped {
+		// The scheduler picked it up between the read and the write. Saying the
+		// schedule was cancelled would be a lie: the run is already under way.
+		return nil, ErrTicketNotScheduled
 	}
 
 	s.auditSvc.Write(ctx, auditlog.Record{
@@ -948,20 +993,6 @@ func (s *Service) CancelSchedule(ctx context.Context, ticketID, operatorID int64
 	s.populateTicketNames(ctx, t)
 
 	return t, nil
-}
-
-// CanTransition checks if a transition from one status to another is valid.
-func CanTransition(from, to model.TicketStatus) bool {
-	allowed, ok := validTransitions[from]
-	if !ok {
-		return false
-	}
-	for _, s := range allowed {
-		if s == to {
-			return true
-		}
-	}
-	return false
 }
 
 // ---------------------------------------------------------------------------

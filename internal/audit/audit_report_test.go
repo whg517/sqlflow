@@ -340,7 +340,7 @@ func TestTicketReport_StatusCountsMapCorrectly(t *testing.T) {
 
 	// Distinct counts per status so a swapped mapping cannot pass.
 	seed := map[string]int{
-		"SUBMITTED": 1, "AI_REVIEWED": 2, "PENDING_APPROVAL": 3,
+		"SUBMITTED": 1, "PENDING_APPROVAL": 3,
 		"APPROVED": 4, "REJECTED": 5, "DONE": 6, "CANCELLED": 7,
 	}
 	for status, n := range seed {
@@ -365,8 +365,8 @@ func TestTicketReport_StatusCountsMapCorrectly(t *testing.T) {
 		got  int64
 		want int64
 	}{
-		{"TotalTickets", stats.TotalTickets, 28},
-		{"PendingCount", stats.PendingCount, 6}, // SUBMITTED + AI_REVIEWED + PENDING_APPROVAL
+		{"TotalTickets", stats.TotalTickets, 26},
+		{"PendingCount", stats.PendingCount, 4}, // SUBMITTED + PENDING_APPROVAL
 		{"ApprovedCount", stats.ApprovedCount, 4},
 		{"RejectedCount", stats.RejectedCount, 5},
 		{"DoneCount", stats.DoneCount, 6},
@@ -380,7 +380,7 @@ func TestTicketReport_StatusCountsMapCorrectly(t *testing.T) {
 	if len(stats.RiskDistribution) != 1 || stats.RiskDistribution[0].RiskLevel != "low" {
 		t.Errorf("RiskDistribution = %+v, want one entry for low", stats.RiskDistribution)
 	}
-	if stats.RiskDistribution[0].Count != 28 {
-		t.Errorf("RiskDistribution count = %d, want 28", stats.RiskDistribution[0].Count)
+	if stats.RiskDistribution[0].Count != 26 {
+		t.Errorf("RiskDistribution count = %d, want 26", stats.RiskDistribution[0].Count)
 	}
 }

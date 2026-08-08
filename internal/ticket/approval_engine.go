@@ -13,7 +13,6 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent"
 	entApprovalPolicy "github.com/whg517/sqlflow/internal/db/ent/approvalpolicy"
 	entApprovalRecord "github.com/whg517/sqlflow/internal/db/ent/approvalrecord"
-	entTicket "github.com/whg517/sqlflow/internal/db/ent/ticket"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/notify"
 )
@@ -264,16 +263,18 @@ func (e *ApprovalEngine) ApplyPolicy(ctx context.Context, ticketID int64, policy
 		// an approval record and both claim to have approved. Invariant 2 exists
 		// because that shape once let four concurrent approvals through.
 		now := time.Now()
-		moved, err := casTicketStatus(ctx, e.client.Ticket, ticketID,
-			model.TicketStatusSubmitted, model.TicketStatusApproved, now,
-			func(u *ent.TicketUpdate) *ent.TicketUpdate {
+		moved, err := applyTransition(ctx, e.client.Ticket, ticketID, now, transition{
+			From: []model.TicketStatus{model.TicketStatusSubmitted},
+			To:   model.TicketStatusApproved,
+			Extra: func(u *ent.TicketUpdate) *ent.TicketUpdate {
 				return u.SetPolicyID(policy.ID).
 					SetCurrentStage(0).
 					SetTotalStages(0).
 					SetAutoApproved(true).
 					SetAutoApproveReason(result.AutoReason).
 					SetSQLHash(sqlHash)
-			})
+			},
+		})
 		if err != nil {
 			return nil, fmt.Errorf("更新工单自动审批状态失败: %w", err)
 		}
@@ -307,14 +308,16 @@ func (e *ApprovalEngine) ApplyPolicy(ctx context.Context, ticketID int64, policy
 
 	// Not auto-approved: set up multi-stage approval, guarded the same way.
 	now := time.Now()
-	moved, err := casTicketStatus(ctx, e.client.Ticket, ticketID,
-		model.TicketStatusSubmitted, model.TicketStatusPendingApproval, now,
-		func(u *ent.TicketUpdate) *ent.TicketUpdate {
+	moved, err := applyTransition(ctx, e.client.Ticket, ticketID, now, transition{
+		From: []model.TicketStatus{model.TicketStatusSubmitted},
+		To:   model.TicketStatusPendingApproval,
+		Extra: func(u *ent.TicketUpdate) *ent.TicketUpdate {
 			return u.SetPolicyID(policy.ID).
 				SetCurrentStage(1).
 				SetTotalStages(len(chain)).
 				SetAutoApproved(false)
-		})
+		},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("更新工单审批阶段失败: %w", err)
 	}
@@ -395,15 +398,27 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 	now := time.Now()
 	nextStage := currentStage + 1
 
-	// Move the ticket first, guarding on the stage this approver actually saw.
-	// Two approvers acting on the same stage would otherwise both write a
-	// record and both advance the chain, turning one decision into two.
-	var mutate func(*ent.TicketUpdate) *ent.TicketUpdate
+	// Move the ticket first, guarding on both the state it is leaving and the
+	// stage this approver actually saw.
+	//
+	// Two approvers acting on the same stage would otherwise both write a record
+	// and both advance the chain, turning one decision into two. The stage half
+	// was already here; the status half was not, and its absence was the larger
+	// hole — the predicate never mentioned status while the mutation wrote it,
+	// and nothing reset current_stage when a ticket was cancelled or rejected.
+	// A decided ticket therefore kept stage 1 and still matched, so it could be
+	// walked to APPROVED after the fact. The approve branch writes a fresh
+	// sql_hash too, so a ticket revived that way also passed the integrity check
+	// the executor performs before it runs anything.
+	tr := transition{
+		From:    []model.TicketStatus{model.TicketStatusPendingApproval},
+		AtStage: atStage(currentStage),
+	}
 	switch {
 	case action == "rejected":
-		mutate = func(u *ent.TicketUpdate) *ent.TicketUpdate {
-			return u.SetStatus("REJECTED").
-				SetCurrentStage(0).
+		tr.To = model.TicketStatusRejected
+		tr.Extra = func(u *ent.TicketUpdate) *ent.TicketUpdate {
+			return u.SetCurrentStage(0).
 				SetTotalStages(0).
 				SetReviewerID(approverID).
 				SetReviewComment(comment)
@@ -411,28 +426,28 @@ func (e *ApprovalEngine) ProcessApproval(ctx context.Context, ticketID, approver
 	case nextStage > totalStages:
 		// All stages done — approved. Pin the SQL body being approved so the
 		// executor can refuse a statement that changed afterwards.
-		mutate = func(u *ent.TicketUpdate) *ent.TicketUpdate {
-			return u.SetStatus("APPROVED").
-				SetCurrentStage(nextStage).
+		tr.To = model.TicketStatusApproved
+		tr.Extra = func(u *ent.TicketUpdate) *ent.TicketUpdate {
+			return u.SetCurrentStage(nextStage).
 				SetTotalStages(totalStages).
 				SetReviewerID(approverID).
 				SetReviewComment(comment).
 				SetSQLHash(sha256Hash(tk.SQLContent))
 		}
 	default:
-		mutate = func(u *ent.TicketUpdate) *ent.TicketUpdate {
+		// An intermediate stage: the ticket stays PENDING_APPROVAL and only its
+		// position in the chain moves.
+		tr.To = model.TicketStatusPendingApproval
+		tr.Extra = func(u *ent.TicketUpdate) *ent.TicketUpdate {
 			return u.SetCurrentStage(nextStage)
 		}
 	}
 
-	affected, err := mutate(e.client.Ticket.Update().
-		Where(entTicket.IDEQ(int(ticketID)), entTicket.CurrentStageEQ(currentStage))).
-		SetUpdatedAt(now).
-		Save(ctx)
+	applied, err := applyTransition(ctx, e.client.Ticket, ticketID, now, tr)
 	if err != nil {
 		return nil, fmt.Errorf("更新工单审批状态失败: %w", err)
 	}
-	if affected == 0 {
+	if !applied {
 		return nil, ErrApprovalStageConflict
 	}
 

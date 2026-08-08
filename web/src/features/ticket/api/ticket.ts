@@ -3,14 +3,22 @@ import type { GitLink } from "@/features/ops/api/git";
 
 // --- Types ---
 
+// The statuses the server can actually write.
+//
+// AI_REVIEWED was here and is gone: no backend path has ever written it, because
+// AI review is advisory and runs from the query workbench rather than from the
+// ticket lifecycle. SCHEDULED and FAILED were missing and are real — a scheduled
+// or failed ticket used to fall through to the raw status code and the grey
+// fallback colour, because neither map had an entry for it.
 export type TicketStatus =
   | "SUBMITTED"
-  | "AI_REVIEWED"
   | "PENDING_APPROVAL"
   | "APPROVED"
+  | "SCHEDULED"
   | "REJECTED"
   | "EXECUTING"
   | "DONE"
+  | "FAILED"
   | "CANCELLED";
 
 export interface Ticket {
@@ -187,23 +195,25 @@ export async function batchRejectTickets(
 
 const statusLabelMap: Record<TicketStatus, string> = {
   SUBMITTED: "已提交",
-  AI_REVIEWED: "AI 已评审",
   PENDING_APPROVAL: "待审批",
   APPROVED: "已通过",
+  SCHEDULED: "待定时执行",
   REJECTED: "已拒绝",
   EXECUTING: "执行中",
   DONE: "已完成",
+  FAILED: "执行失败",
   CANCELLED: "已取消",
 };
 
 const statusColorMap: Record<TicketStatus, string> = {
   SUBMITTED: "bg-slate-500/20 text-slate-400",
-  AI_REVIEWED: "bg-violet-500/20 text-violet-400",
   PENDING_APPROVAL: "bg-blue-500/20 text-blue-400",
   APPROVED: "bg-green-500/20 text-green-400",
+  SCHEDULED: "bg-violet-500/20 text-violet-400",
   REJECTED: "bg-red-500/20 text-red-400",
   EXECUTING: "bg-yellow-500/20 text-yellow-400",
   DONE: "bg-emerald-500/20 text-emerald-400",
+  FAILED: "bg-rose-500/20 text-rose-400",
   CANCELLED: "bg-gray-500/20 text-gray-400",
 };
 

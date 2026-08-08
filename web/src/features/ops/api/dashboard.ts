@@ -119,7 +119,8 @@ const STATUS_LABELS: Record<string, string> = {
   EXECUTING: "执行中",
   CANCELLED: "已取消",
   SUBMITTED: "已提交",
-  AI_REVIEWED: "AI 已评审",
+  SCHEDULED: "待定时执行",
+  FAILED: "执行失败",
 };
 
 export async function getDashboardOverview(

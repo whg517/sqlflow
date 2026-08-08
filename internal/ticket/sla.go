@@ -499,11 +499,16 @@ func (s *SLAService) autoRejectTicket(ctx context.Context, t slaTicketRow, cfg *
 	// scheduler running this twice, but it does not stop a human approving the
 	// ticket in the same moment — only the status predicate does.
 	comment := fmt.Sprintf("审批超时自动拒绝 (SLA: %s, 超时 %d 分钟)", cfg.Priority, cfg.TimeoutMinutes)
-	applied, err := casTicketStatus(ctx, s.client.Ticket, t.ID,
-		model.TicketStatusPendingApproval, model.TicketStatusRejected, now,
-		func(u *ent.TicketUpdate) *ent.TicketUpdate {
-			return u.SetReviewerID(0).SetReviewComment(comment)
-		})
+	applied, err := applyTransition(ctx, s.client.Ticket, t.ID, now, transition{
+		From: []model.TicketStatus{model.TicketStatusPendingApproval},
+		To:   model.TicketStatusRejected,
+		Extra: func(u *ent.TicketUpdate) *ent.TicketUpdate {
+			// Clear the chain position along with the decision, so the staged
+			// route cannot walk an auto-rejected ticket forward again.
+			return u.SetReviewerID(0).SetReviewComment(comment).
+				SetCurrentStage(0).SetTotalStages(0)
+		},
+	})
 	if err != nil {
 		log.Printf("sla: auto-reject ticket #%d failed: %v", t.ID, err)
 		return
