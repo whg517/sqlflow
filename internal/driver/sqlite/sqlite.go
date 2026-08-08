@@ -7,15 +7,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/whg517/sqlflow/internal/driver"
+	"github.com/whg517/sqlflow/internal/driver/sqlrows"
 	"github.com/whg517/sqlflow/internal/platform/sqlparser"
 	_ "modernc.org/sqlite"
 )
-
-// queryTimeout bounds a single read, matching the other drivers.
-const queryTimeout = 30 * time.Second
 
 func init() {
 	driver.Register("sqlite", func() driver.Driver { return &Driver{} })
@@ -195,64 +192,16 @@ func (d *Driver) ExecuteQueryWithArgs(ctx context.Context, query string, args []
 	return d.executeQuery(ctx, query, args, limit)
 }
 
+// executeQuery reads rows through the shared reader.
+//
+// It used to be fifty-nine lines that reimplemented sqlrows.Query: same nil
+// guard, same 1000 default, same 30-second cap, same []byte-to-string coercion,
+// same rows.Err() check, same result assembly. The only differences were three
+// error strings — which is the definition of a duplicate rather than a
+// variation, and it is why the missing timeout had to be fixed here separately
+// after the shared reader already had one.
 func (d *Driver) executeQuery(ctx context.Context, query string, args []interface{}, limit int) (*driver.QueryResult, error) {
-	if d.db == nil {
-		return nil, fmt.Errorf("sqlite: not connected")
-	}
-	if limit <= 0 {
-		limit = 1000
-	}
-
-	// Every other driver caps a read at 30 seconds here, and this one capped
-	// nothing. The DSN's busy_timeout is lock contention, not query duration, so
-	// a full scan of a large table held the request goroutine until the caller
-	// gave up — which for a scheduled job is never.
-	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
-	defer cancel()
-
-	start := time.Now()
-	rows, err := d.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("查询超时")
-		}
-		return nil, fmt.Errorf("执行 SQLite 查询失败: %w", err)
-	}
-	defer rows.Close()
-
-	columnNames, err := rows.Columns()
-	if err != nil {
-		return nil, fmt.Errorf("获取 SQLite 列信息失败: %w", err)
-	}
-	resultRows := make([]map[string]interface{}, 0, limit)
-	for rows.Next() && len(resultRows) < limit {
-		values := make([]interface{}, len(columnNames))
-		pointers := make([]interface{}, len(columnNames))
-		for i := range values {
-			pointers[i] = &values[i]
-		}
-		if err := rows.Scan(pointers...); err != nil {
-			return nil, fmt.Errorf("读取 SQLite 数据失败: %w", err)
-		}
-		row := make(map[string]interface{}, len(columnNames))
-		for i, name := range columnNames {
-			if bytes, ok := values[i].([]byte); ok {
-				row[name] = string(bytes)
-			} else {
-				row[name] = values[i]
-			}
-		}
-		resultRows = append(resultRows, row)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("遍历 SQLite 结果失败: %w", err)
-	}
-	return &driver.QueryResult{
-		Columns:       columnNames,
-		Rows:          resultRows,
-		Total:         int64(len(resultRows)),
-		ExecutionTime: time.Since(start).Milliseconds(),
-	}, nil
+	return sqlrows.Query(ctx, d.db, "sqlite", query, args, limit)
 }
 
 // SQLite implements no StatementExecutor: it is read-only here, and the two
