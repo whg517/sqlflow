@@ -19,9 +19,9 @@ import (
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
 	"github.com/whg517/sqlflow/internal/db/ent/sharedresult"
+	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
-	"github.com/whg517/sqlflow/internal/platform/mask"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -295,14 +295,18 @@ func (s *ShareService) maskForAnonymousReader(ctx context.Context, sr *ent.Share
 		return ErrShareUnmaskable
 	}
 
-	rules, err := loadMaskRules(ctx, s.client, sr.DatasourceID, sr.Database, targets)
+	// The same decision every other reader crosses, entered with an actor that
+	// holds nothing — which is the honest description of an anonymous holder of
+	// a link, and is why the share path no longer needs its own copy of the
+	// application loop. A refusal is a refusal here too: a shape that cannot be
+	// masked must not be published.
+	decision, err := releaseRows(ctx, s.client, nil, releaseActor{},
+		sr.DatasourceID, sr.Database, targets, driver.ShapeTable, rows)
 	if err != nil {
 		return err
 	}
-	for _, table := range targets {
-		if tableRules := mask.MatchRules(rules, table); len(tableRules) > 0 {
-			mask.ApplyToMongoRows(rows, tableRules)
-		}
+	if decision.Verdict == releaseRefuse {
+		return decision.Reason
 	}
 	return nil
 }

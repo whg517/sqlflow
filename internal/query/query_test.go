@@ -512,9 +512,9 @@ func TestApplyDesensitization_NoRules(t *testing.T) {
 		Total: 1,
 	}
 
-	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", 1, "testdb", []string{"users"})
+	desensitized, maskedFields, maskErr := applyRelease(t, qs, ctx, testActorID, "developer", 1, result, []string{"users"})
 	if maskErr != nil {
-		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+		t.Fatalf("release decision: %v", maskErr)
 	}
 	if desensitized {
 		t.Error("should not be desensitized when no mask rules exist")
@@ -550,9 +550,9 @@ func TestApplyDesensitization_WithRules(t *testing.T) {
 		Total: 2,
 	}
 
-	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"users"})
+	desensitized, maskedFields, maskErr := applyRelease(t, qs, ctx, testActorID, "developer", dsID, result, []string{"users"})
 	if maskErr != nil {
-		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+		t.Fatalf("release decision: %v", maskErr)
 	}
 	if !desensitized {
 		t.Error("expected desensitized=true when mask rules match")
@@ -600,9 +600,9 @@ func TestApplyDesensitization_BypassPermission(t *testing.T) {
 		Total: 1,
 	}
 
-	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "admin", dsID, "testdb", []string{"users"})
+	desensitized, maskedFields, maskErr := applyRelease(t, qs, ctx, testActorID, "admin", dsID, result, []string{"users"})
 	if maskErr != nil {
-		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+		t.Fatalf("release decision: %v", maskErr)
 	}
 	if desensitized {
 		t.Error("admin with desensitize:bypass should not be masked")
@@ -664,9 +664,9 @@ func TestApplyDesensitization_MultipleMaskTypes(t *testing.T) {
 		Total: 1,
 	}
 
-	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"users"})
+	desensitized, maskedFields, maskErr := applyRelease(t, qs, ctx, testActorID, "developer", dsID, result, []string{"users"})
 	if maskErr != nil {
-		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+		t.Fatalf("release decision: %v", maskErr)
 	}
 	if !desensitized {
 		t.Error("expected desensitized=true")
@@ -723,9 +723,9 @@ func TestApplyDesensitization_WildcardTableRule(t *testing.T) {
 		Total: 1,
 	}
 
-	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"orders"})
+	desensitized, maskedFields, maskErr := applyRelease(t, qs, ctx, testActorID, "developer", dsID, result, []string{"orders"})
 	if maskErr != nil {
-		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+		t.Fatalf("release decision: %v", maskErr)
 	}
 	if !desensitized {
 		t.Error("wildcard rule should match any table")
@@ -763,9 +763,9 @@ func TestApplyDesensitization_NoMatchTable(t *testing.T) {
 		Total: 1,
 	}
 
-	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"orders"})
+	desensitized, maskedFields, maskErr := applyRelease(t, qs, ctx, testActorID, "developer", dsID, result, []string{"orders"})
 	if maskErr != nil {
-		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+		t.Fatalf("release decision: %v", maskErr)
 	}
 	if desensitized {
 		t.Error("should not desensitize when table doesn't match rule")
@@ -786,9 +786,9 @@ func TestApplyDesensitization_EmptyTables(t *testing.T) {
 	}
 
 	// Empty tables list — no rules should match
-	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", 1, "testdb", []string{})
+	desensitized, maskedFields, maskErr := applyRelease(t, qs, ctx, testActorID, "developer", 1, result, []string{})
 	if maskErr != nil {
-		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+		t.Fatalf("release decision: %v", maskErr)
 	}
 	if desensitized {
 		t.Error("should not desensitize with empty tables list")
@@ -808,9 +808,9 @@ func TestApplyDesensitization_NilRows(t *testing.T) {
 		Total:   0,
 	}
 
-	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", 1, "testdb", []string{"users"})
+	desensitized, maskedFields, maskErr := applyRelease(t, qs, ctx, testActorID, "developer", 1, result, []string{"users"})
 	if maskErr != nil {
-		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+		t.Fatalf("release decision: %v", maskErr)
 	}
 	if desensitized {
 		t.Error("should not desensitize with nil rows")
@@ -846,9 +846,9 @@ func TestApplyDesensitization_FieldNotInRow(t *testing.T) {
 		Total: 1,
 	}
 
-	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"users"})
+	desensitized, maskedFields, maskErr := applyRelease(t, qs, ctx, testActorID, "developer", dsID, result, []string{"users"})
 	if maskErr != nil {
-		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+		t.Fatalf("release decision: %v", maskErr)
 	}
 	if desensitized {
 		t.Error("should not desensitize when field doesn't exist in rows")
@@ -1132,4 +1132,20 @@ func TestExecuteQuery_CancelledContext(t *testing.T) {
 	if err == nil {
 		t.Error("expected error with cancelled context, got nil")
 	}
+}
+
+// applyRelease runs the release decision over a result and reports it the way
+// the old applyDesensitizationForActor did, so these assertions keep their
+// shape while crossing the seam that now owns the answer.
+func applyRelease(t *testing.T, qs *Service, ctx context.Context, userID int64, role string, dsID int64, result *QueryResult, tables []string) (bool, []string, error) {
+	t.Helper()
+	d, err := releaseRows(ctx, qs.client, qs.permSvc, releaseActor{UserID: userID, Role: role},
+		dsID, "testdb", tables, result.Shape, result.Rows)
+	if err != nil {
+		return false, nil, err
+	}
+	if d.Verdict == releaseRefuse {
+		return false, nil, d.Reason
+	}
+	return d.Verdict == releaseMasked, d.MaskedFields, nil
 }

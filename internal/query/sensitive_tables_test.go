@@ -59,7 +59,7 @@ func TestSensitiveTables(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := svc.sensitiveTables(t.Context(), tt.tables, tt.datasourceID)
+			got, err := svc.sensitiveTables(t.Context(), tt.tables, tt.datasourceID, "testdb")
 			if err != nil {
 				t.Fatalf("sensitiveTables: %v", err)
 			}
@@ -86,7 +86,7 @@ func TestSensitiveTablesDedupes(t *testing.T) {
 	seedAIMaskRule(t, svc, 1, "users", "phone")
 	seedAIMaskRule(t, svc, 1, "users", "email")
 
-	got, err := svc.sensitiveTables(t.Context(), []string{"users"}, 1)
+	got, err := svc.sensitiveTables(t.Context(), []string{"users"}, 1, "testdb")
 	if err != nil {
 		t.Fatalf("sensitiveTables: %v", err)
 	}

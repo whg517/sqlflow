@@ -17,7 +17,6 @@ import (
 
 	"github.com/whg517/sqlflow/internal/db"
 	"github.com/whg517/sqlflow/internal/db/ent"
-	entmaskrule "github.com/whg517/sqlflow/internal/db/ent/maskrule"
 	"github.com/whg517/sqlflow/internal/driver"
 	"github.com/whg517/sqlflow/internal/platform/auditlog"
 )
@@ -229,7 +228,7 @@ func (s *AIReviewService) applyStaticRules(ctx context.Context, req *AIReviewReq
 	result.Warnings = append(result.Warnings, pr.Warnings...)
 
 	// Check sensitive tables
-	sensitiveTables, err := s.sensitiveTables(ctx, req.Tables, req.DatasourceID)
+	sensitiveTables, err := s.sensitiveTables(ctx, req.Tables, req.DatasourceID, req.Database)
 	if err != nil {
 		// The risk grade falls back to "not sensitive" rather than failing the
 		// review; the ticket still goes through approval, which is where a
@@ -868,20 +867,23 @@ func defaultBaseURLForProvider(provider string) string {
 // to run it — the last reason a domain still held one. A parser that reads the
 // platform's own tables is not a parser; the lookup belongs to the domain that
 // asks the question.
-func (s *AIReviewService) sensitiveTables(ctx context.Context, tables []string, datasourceID int64) ([]string, error) {
+func (s *AIReviewService) sensitiveTables(ctx context.Context, tables []string, datasourceID int64, database string) ([]string, error) {
 	if len(tables) == 0 || s.entClient == nil {
 		return nil, nil
 	}
-	names, err := s.entClient.MaskRule.Query().
-		Where(
-			entmaskrule.TableNameIn(tables...),
-			entmaskrule.DatasourceIDEQ(datasourceID),
-		).
-		Unique(true).
-		Select(entmaskrule.FieldTableName).
-		Strings(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("query sensitive tables: %w", err)
+	// Which rules bear on a target is loadMaskRules' question, and asking it any
+	// other way is how the two answers diverged: this predicate omitted the "*"
+	// wildcard and the database scope, so a datasource-wide rule masked the rows
+	// and reported the table as not sensitive to the reviewer.
+	var names []string
+	for _, table := range tables {
+		protected, err := anyRuleProtects(ctx, s.entClient, datasourceID, database, []string{table})
+		if err != nil {
+			return nil, fmt.Errorf("query sensitive tables: %w", err)
+		}
+		if protected {
+			names = append(names, table)
+		}
 	}
 	// Ordered because the result reaches the user as a warning list, and an
 	// unordered DISTINCT renders the same query's tables differently between

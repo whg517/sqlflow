@@ -69,37 +69,21 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 		return nil, ErrExportRowLimit
 	}
 
-	// Export is a second entrance to the same data, so it consults the same
-	// decision about shapes the masker cannot process. Without this an
-	// aggregation exported over a protected target would ship unmasked.
-	if err := s.refuseUnmaskableShape(ctx, result.Shape, userID, role, datasourceID, scope, grant.Targets); err != nil {
-		s.auditSvc.Write(ctx, auditlog.Record{
-			UserID:       userID,
-			Action:       "export_failed",
-			DatasourceID: datasourceID,
-			Database:     scope,
-			SQLContent:   sqlContent,
-			SQLSummary:   auditlog.Summarize(sqlContent),
-			ErrorMessage: err.Error(),
-		})
-		return nil, err
+	// Export is a second entrance to the same data, so it crosses the same
+	// release seam. Without it an aggregation exported over a protected target
+	// would ship unmasked — the condition this path was once missing.
+	decision, relErr := releaseRows(ctx, s.client, s.permSvc,
+		releaseActor{UserID: userID, Role: role},
+		datasourceID, scope, grant.Targets, result.Shape, result.Rows)
+	if relErr == nil && decision.Verdict == releaseRefuse {
+		relErr = decision.Reason
 	}
-
-	// Apply desensitization
-	desensitized, maskedFields, err := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, scope, grant.Targets)
-	if err != nil {
-		s.auditSvc.Write(ctx, auditlog.Record{
-			UserID:       userID,
-			Action:       "export_failed",
-			DatasourceID: datasourceID,
-			Database:     scope,
-			SQLContent:   sqlContent,
-			SQLSummary:   auditlog.Summarize(sqlContent),
-			ErrorMessage: err.Error(),
-		})
-		return nil, err
+	if relErr != nil {
+		s.auditReadFailure(ctx, "export_failed", req, scope, relErr)
+		return nil, relErr
 	}
-	result.Desensitized = desensitized
+	maskedFields := decision.MaskedFields
+	result.Desensitized = decision.Verdict == releaseMasked
 	result.DesensitizedFields = maskedFields
 
 	// Write audit log

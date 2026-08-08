@@ -20,7 +20,7 @@ func TestMaskingApplies_WithMatchingRule(t *testing.T) {
 	dsID := seedQueryDatasource(t, qs.dsSvc, ctx)
 	seedMaskRule(t, testDB, dsID, "testdb", "orders", "email", "partial")
 
-	if applies, err := qs.maskingApplies(ctx, 1, "developer", dsID, "testdb", []string{"orders"}); err != nil {
+	if applies, err := maskingWouldApply(t, qs, ctx, 1, "developer", dsID, []string{"orders"}); err != nil {
 		t.Fatalf("maskingApplies: %v", err)
 	} else if !applies {
 		t.Error("masking should apply: developer has no unmask grant and a rule matches")
@@ -34,7 +34,7 @@ func TestMaskingApplies_NoRule(t *testing.T) {
 	ctx := context.Background()
 	dsID := seedQueryDatasource(t, qs.dsSvc, ctx)
 
-	if applies, err := qs.maskingApplies(ctx, 1, "developer", dsID, "testdb", []string{"orders"}); err != nil {
+	if applies, err := maskingWouldApply(t, qs, ctx, 1, "developer", dsID, []string{"orders"}); err != nil {
 		t.Fatalf("maskingApplies: %v", err)
 	} else if applies {
 		t.Error("masking must not apply when no rule matches the target")
@@ -50,7 +50,7 @@ func TestMaskingApplies_BypassGrant(t *testing.T) {
 	seedMaskRule(t, testDB, dsID, "testdb", "orders", "email", "partial")
 
 	// The seeded policy grants dba desensitize:bypass on every object.
-	if applies, err := qs.maskingApplies(ctx, 2, "dba", dsID, "testdb", []string{"orders"}); err != nil {
+	if applies, err := maskingWouldApply(t, qs, ctx, 2, "dba", dsID, []string{"orders"}); err != nil {
 		t.Fatalf("maskingApplies: %v", err)
 	} else if applies {
 		t.Error("masking must not apply for a role holding a bypass grant")
@@ -65,7 +65,7 @@ func TestMaskingApplies_UnrelatedTable(t *testing.T) {
 	dsID := seedQueryDatasource(t, qs.dsSvc, ctx)
 	seedMaskRule(t, testDB, dsID, "testdb", "customers", "email", "partial")
 
-	if applies, err := qs.maskingApplies(ctx, 1, "developer", dsID, "testdb", []string{"orders"}); err != nil {
+	if applies, err := maskingWouldApply(t, qs, ctx, 1, "developer", dsID, []string{"orders"}); err != nil {
 		t.Fatalf("maskingApplies: %v", err)
 	} else if applies {
 		t.Error("a rule on customers must not mark orders as masked")
@@ -100,7 +100,7 @@ func TestRefuseUnmaskableShape_CoversBothPaths(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := qs.refuseUnmaskableShape(ctx, tt.shape, 1, "developer", dsID, "testdb", []string{"orders"})
+			err := releaseVerdictFor(t, qs, ctx, 1, "developer", dsID, tt.shape, []string{"orders"})
 			if tt.reject && !errors.Is(err, ErrAggregationMaskingUnsupported) {
 				t.Errorf("error = %v, want ErrAggregationMaskingUnsupported", err)
 			}
@@ -118,8 +118,39 @@ func TestRefuseUnmaskableShape_NoRuleAllowsAggregation(t *testing.T) {
 	ctx := context.Background()
 	dsID := seedQueryDatasource(t, qs.dsSvc, ctx)
 
-	if err := qs.refuseUnmaskableShape(ctx, driver.ShapeAggregation,
-		1, "developer", dsID, "testdb", []string{"orders"}); err != nil {
+	if err := releaseVerdictFor(t, qs, ctx, 1, "developer", dsID,
+		driver.ShapeAggregation, []string{"orders"}); err != nil {
 		t.Errorf("aggregation with no matching rule was refused: %v", err)
 	}
+}
+
+// maskingWouldApply reports whether masking bears on these targets for this
+// actor — the question the aggregation refusal turns on.
+//
+// Deliberately not "were any rows rewritten": a rule can protect a column this
+// particular result did not select, and the aggregation refusal still has to
+// fire, because the payload it cannot walk may expose that column through a
+// bucket key. releaseRows makes the same distinction internally; this composes
+// the two pieces it uses so the test asserts the same thing the decision does.
+func maskingWouldApply(t *testing.T, qs *Service, ctx context.Context, userID int64, role string, dsID int64, tables []string) (bool, error) {
+	t.Helper()
+	if mayUnmask(ctx, qs.permSvc, releaseActor{UserID: userID, Role: role}, dsID, tables) {
+		return false, nil
+	}
+	return anyRuleProtects(ctx, qs.client, dsID, "testdb", tables)
+}
+
+// releaseVerdictFor returns the refusal a shape produces, or nil.
+func releaseVerdictFor(t *testing.T, qs *Service, ctx context.Context, userID int64, role string, dsID int64, shape driver.ResultShape, tables []string) error {
+	t.Helper()
+	rows := []map[string]interface{}{{"email": "a@b.c"}}
+	d, err := releaseRows(ctx, qs.client, qs.permSvc, releaseActor{UserID: userID, Role: role},
+		dsID, "testdb", tables, shape, rows)
+	if err != nil {
+		return err
+	}
+	if d.Verdict == releaseRefuse {
+		return d.Reason
+	}
+	return nil
 }

@@ -176,19 +176,20 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 		return nil, err
 	}
 
-	if err := s.refuseUnmaskableShape(ctx, result.Shape, userID, role, datasourceID, scope, grant.Targets); err != nil {
-		s.auditRelease(ctx, userID, datasourceID, scope, sqlContent, err)
-		return nil, err
-	}
-
-	// Apply desensitization
-	desensitized, maskedFields, err := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, scope, grant.Targets)
+	decision, err := releaseRows(ctx, s.client, s.permSvc,
+		releaseActor{UserID: userID, Role: role},
+		datasourceID, scope, grant.Targets, result.Shape, result.Rows)
 	if err != nil {
 		s.auditRelease(ctx, userID, datasourceID, scope, sqlContent, err)
 		return nil, err
 	}
-	result.Desensitized = desensitized
-	result.DesensitizedFields = maskedFields
+	if decision.Verdict == releaseRefuse {
+		s.auditRelease(ctx, userID, datasourceID, scope, sqlContent, decision.Reason)
+		return nil, decision.Reason
+	}
+	result.Desensitized = decision.Verdict == releaseMasked
+	result.DesensitizedFields = decision.MaskedFields
+	maskedFields := decision.MaskedFields
 
 	// Write query history (async, best-effort)
 	summary := auditlog.Summarize(sqlContent)
@@ -229,126 +230,6 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 	})
 
 	return result, nil
-}
-
-// actorMayUnmask reports whether this actor holds a grant that lets protected
-// fields through in the clear.
-//
-// The sweep was written out twice, verbatim — once here and once in
-// maskingApplies — which is two chances for an authorization decision to drift.
-// A third copy in internal/security already had drifted: HasDesensitizeBypass
-// calls Enforce rather than EnforceActor, so it cannot see individual user
-// grants at all.
-//
-// An enforcer that cannot answer has granted nothing, so masking stays on. That
-// is the safe direction and is what both hand-written copies did by discarding
-// the error.
-func (s *Service) actorMayUnmask(ctx context.Context, userID int64, role string, datasourceID int64, tables []string) bool {
-	if s.permSvc == nil {
-		return false
-	}
-
-	// The canonical action is "unmask"; "desensitize:bypass" is kept so existing
-	// installations do not silently lose access.
-	granted := func(object string) bool {
-		for _, action := range []string{"unmask", "desensitize:bypass"} {
-			ok, err := s.permSvc.EnforceActor(ctx, userID, role,
-				authz.DatasourceDomain(datasourceID), object, action)
-			if err == nil && ok {
-				return true
-			}
-		}
-		return false
-	}
-
-	for _, table := range tables {
-		if table == "" {
-			continue
-		}
-		if granted(table) {
-			return true
-		}
-	}
-	return granted("*")
-}
-
-func (s *Service) applyDesensitizationForActor(ctx context.Context, result *QueryResult, userID int64, role string, datasourceID int64, database string, tables []string) (bool, []string, error) {
-	if s.actorMayUnmask(ctx, userID, role, datasourceID, tables) {
-		return false, nil, nil
-	}
-
-	rules, err := loadMaskRules(ctx, s.client, datasourceID, database, tables)
-	if err != nil {
-		return false, nil, err
-	}
-	if len(rules) == 0 {
-		return false, nil, nil
-	}
-
-	// Apply masking to all rows for all matching tables
-	var allMaskedFields []string
-	for _, table := range tables {
-		tableRules := mask.MatchRules(rules, table)
-		if len(tableRules) == 0 {
-			continue
-		}
-		// Use ApplyToMongoRows which supports dot-notation paths for nested documents.
-		// For flat SQL results, behaves identically to ApplyToRows.
-		masked := mask.ApplyToMongoRows(result.Rows, tableRules)
-		allMaskedFields = append(allMaskedFields, masked...)
-	}
-
-	if len(allMaskedFields) == 0 {
-		return false, nil, nil
-	}
-	return true, allMaskedFields, nil
-}
-
-// refuseUnmaskableShape rejects a result whose shape the masker cannot process
-// when masking rules apply to the actor.
-//
-// Aggregation payloads are driver-native and arbitrarily nested, so the
-// row-oriented masker cannot reach inside them — applyDesensitizationForActor
-// only ever walks result.Rows. Returning one unmasked turns an aggregation into
-// a way to read protected fields through bucket keys and aggregate values.
-//
-// Every entrance that returns query results must call this. It is one function
-// rather than a condition repeated per caller because the export path was
-// missing that condition: a user refused a protected field at the query
-// entrance could obtain it by exporting an aggregation over the same target.
-func (s *Service) refuseUnmaskableShape(ctx context.Context, shape driver.ResultShape, userID int64, role string, datasourceID int64, database string, tables []string) error {
-	if shape != driver.ShapeAggregation {
-		return nil
-	}
-	applies, err := s.maskingApplies(ctx, userID, role, datasourceID, database, tables)
-	if err != nil {
-		return err
-	}
-	if applies {
-		return ErrAggregationMaskingUnsupported
-	}
-	return nil
-}
-
-// maskingApplies reports whether masking would alter a result for this actor:
-// the actor lacks an unmask grant and at least one rule matches the targets.
-//
-// It is the precondition check for result shapes the row masker cannot process.
-func (s *Service) maskingApplies(ctx context.Context, userID int64, role string, datasourceID int64, database string, tables []string) (bool, error) {
-	if s.actorMayUnmask(ctx, userID, role, datasourceID, tables) {
-		return false, nil
-	}
-
-	rules, err := loadMaskRules(ctx, s.client, datasourceID, database, tables)
-	if err != nil {
-		return false, err
-	}
-	for _, table := range tables {
-		if len(mask.MatchRules(rules, table)) > 0 {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // loadMaskRules loads the rules protecting these targets.
