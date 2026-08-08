@@ -581,13 +581,19 @@ export default function QueryPage() {
             <div className="flex h-full flex-col">
               <div className="flex items-center justify-between border-b border-[var(--border-default)] px-2 py-1">
                 <div className="flex items-center gap-1">
-                  {activeTab?.result && activeTab.result.rows.length > 0 && (
-                    <ShareButton
-                      columns={activeTab.result.columns}
-                      rows={activeTab.result.rows}
-                      sqlSummary={currentSql.trim().substring(0, 200)}
-                    />
-                  )}
+                  {/* The datasource is part of what gets published now: the
+                      server looks up mask rules by it, so a result with no
+                      datasource has nothing to share. */}
+                  {activeTab?.result &&
+                    activeTab.result.rows.length > 0 &&
+                    activeTab.datasourceId !== null && (
+                      <ShareButton
+                        columns={activeTab.result.columns}
+                        rows={activeTab.result.rows}
+                        datasourceId={activeTab.datasourceId}
+                        sql={currentSql}
+                      />
+                    )}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button

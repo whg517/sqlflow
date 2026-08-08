@@ -30,8 +30,13 @@ type createShareRequest struct {
 	Rows           []map[string]interface{} `json:"rows"`
 	ExpiresInHours int                      `json:"expires_in_hours"` // default 24, max 168
 	Password       string                   `json:"password,omitempty"`
-	SQLSummary     string                   `json:"sql_summary,omitempty"`
-	DatasourceName string                   `json:"datasource_name,omitempty"`
+
+	// The scope of the result being published. It replaces the sql_summary and
+	// datasource_name the client used to send: the summary was the raw statement
+	// and was served to anyone holding the link, and the name was a free string
+	// that identified nothing the server could look mask rules up by.
+	DatasourceID int64  `json:"datasource_id"`
+	SQL          string `json:"sql"`
 }
 
 type verifyPasswordRequest struct {
@@ -70,6 +75,9 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 	if len(req.Columns) == 0 {
 		return resp.BadRequest(c, "列数据不能为空")
 	}
+	if req.DatasourceID == 0 || strings.TrimSpace(req.SQL) == "" {
+		return resp.BadRequest(c, "共享结果必须携带数据源与查询语句")
+	}
 
 	userID := httpx.UserID(c)
 	username := httpx.Username(c)
@@ -81,14 +89,15 @@ func (h *ShareHandler) CreateShare(c echo.Context) error {
 	expiresAt := time.Now().Add(time.Duration(expiresInHours) * time.Hour)
 
 	shareReq := &CreateShareRequest{
-		UserID:         userID,
-		Username:       username,
-		Columns:        req.Columns,
-		Rows:           req.Rows,
-		ExpiresAt:      expiresAt,
-		Password:       req.Password,
-		SQLSummary:     req.SQLSummary,
-		DatasourceName: req.DatasourceName,
+		UserID:       userID,
+		Username:     username,
+		Role:         httpx.Role(c),
+		Columns:      req.Columns,
+		Rows:         req.Rows,
+		ExpiresAt:    expiresAt,
+		Password:     req.Password,
+		DatasourceID: req.DatasourceID,
+		SQLContent:   req.SQL,
 	}
 
 	result, err := h.shareSvc.CreateShare(c.Request().Context(), shareReq)

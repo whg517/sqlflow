@@ -26,8 +26,8 @@ import { createShare, type SharedResultResponse } from "@/features/query/api/sha
 interface ShareButtonProps {
   columns: string[];
   rows: Record<string, unknown>[];
-  sqlSummary?: string;
-  datasourceName?: string;
+  datasourceId: number;
+  sql: string;
 }
 
 const EXPIRY_OPTIONS = [
@@ -41,8 +41,8 @@ const EXPIRY_OPTIONS = [
 export default function ShareButton({
   columns,
   rows,
-  sqlSummary,
-  datasourceName,
+  datasourceId,
+  sql,
 }: ShareButtonProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -60,8 +60,8 @@ export default function ShareButton({
         rows,
         expires_in_hours: parseInt(expiresInHours),
         password: enablePassword ? password : undefined,
-        sql_summary: sqlSummary,
-        datasource_name: datasourceName,
+        datasource_id: datasourceId,
+        sql,
       });
       setCreatedShare(result);
     } catch (err) {

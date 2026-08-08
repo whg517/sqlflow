@@ -99,9 +99,19 @@ func SQLSummary(v string) predicate.SharedResult {
 	return predicate.SharedResult(sql.FieldEQ(FieldSQLSummary, v))
 }
 
-// DatasourceName applies equality check predicate on the "datasource_name" field. It's identical to DatasourceNameEQ.
-func DatasourceName(v string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldEQ(FieldDatasourceName, v))
+// DatasourceID applies equality check predicate on the "datasource_id" field. It's identical to DatasourceIDEQ.
+func DatasourceID(v int64) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldEQ(FieldDatasourceID, v))
+}
+
+// Database applies equality check predicate on the "database" field. It's identical to DatabaseEQ.
+func Database(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldEQ(FieldDatabase, v))
+}
+
+// TargetsJSON applies equality check predicate on the "targets_json" field. It's identical to TargetsJSONEQ.
+func TargetsJSON(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldEQ(FieldTargetsJSON, v))
 }
 
 // Revoked applies equality check predicate on the "revoked" field. It's identical to RevokedEQ.
@@ -629,69 +639,174 @@ func SQLSummaryContainsFold(v string) predicate.SharedResult {
 	return predicate.SharedResult(sql.FieldContainsFold(FieldSQLSummary, v))
 }
 
-// DatasourceNameEQ applies the EQ predicate on the "datasource_name" field.
-func DatasourceNameEQ(v string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldEQ(FieldDatasourceName, v))
+// DatasourceIDEQ applies the EQ predicate on the "datasource_id" field.
+func DatasourceIDEQ(v int64) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldEQ(FieldDatasourceID, v))
 }
 
-// DatasourceNameNEQ applies the NEQ predicate on the "datasource_name" field.
-func DatasourceNameNEQ(v string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldNEQ(FieldDatasourceName, v))
+// DatasourceIDNEQ applies the NEQ predicate on the "datasource_id" field.
+func DatasourceIDNEQ(v int64) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldNEQ(FieldDatasourceID, v))
 }
 
-// DatasourceNameIn applies the In predicate on the "datasource_name" field.
-func DatasourceNameIn(vs ...string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldIn(FieldDatasourceName, vs...))
+// DatasourceIDIn applies the In predicate on the "datasource_id" field.
+func DatasourceIDIn(vs ...int64) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldIn(FieldDatasourceID, vs...))
 }
 
-// DatasourceNameNotIn applies the NotIn predicate on the "datasource_name" field.
-func DatasourceNameNotIn(vs ...string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldNotIn(FieldDatasourceName, vs...))
+// DatasourceIDNotIn applies the NotIn predicate on the "datasource_id" field.
+func DatasourceIDNotIn(vs ...int64) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldNotIn(FieldDatasourceID, vs...))
 }
 
-// DatasourceNameGT applies the GT predicate on the "datasource_name" field.
-func DatasourceNameGT(v string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldGT(FieldDatasourceName, v))
+// DatasourceIDGT applies the GT predicate on the "datasource_id" field.
+func DatasourceIDGT(v int64) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldGT(FieldDatasourceID, v))
 }
 
-// DatasourceNameGTE applies the GTE predicate on the "datasource_name" field.
-func DatasourceNameGTE(v string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldGTE(FieldDatasourceName, v))
+// DatasourceIDGTE applies the GTE predicate on the "datasource_id" field.
+func DatasourceIDGTE(v int64) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldGTE(FieldDatasourceID, v))
 }
 
-// DatasourceNameLT applies the LT predicate on the "datasource_name" field.
-func DatasourceNameLT(v string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldLT(FieldDatasourceName, v))
+// DatasourceIDLT applies the LT predicate on the "datasource_id" field.
+func DatasourceIDLT(v int64) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldLT(FieldDatasourceID, v))
 }
 
-// DatasourceNameLTE applies the LTE predicate on the "datasource_name" field.
-func DatasourceNameLTE(v string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldLTE(FieldDatasourceName, v))
+// DatasourceIDLTE applies the LTE predicate on the "datasource_id" field.
+func DatasourceIDLTE(v int64) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldLTE(FieldDatasourceID, v))
 }
 
-// DatasourceNameContains applies the Contains predicate on the "datasource_name" field.
-func DatasourceNameContains(v string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldContains(FieldDatasourceName, v))
+// DatabaseEQ applies the EQ predicate on the "database" field.
+func DatabaseEQ(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldEQ(FieldDatabase, v))
 }
 
-// DatasourceNameHasPrefix applies the HasPrefix predicate on the "datasource_name" field.
-func DatasourceNameHasPrefix(v string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldHasPrefix(FieldDatasourceName, v))
+// DatabaseNEQ applies the NEQ predicate on the "database" field.
+func DatabaseNEQ(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldNEQ(FieldDatabase, v))
 }
 
-// DatasourceNameHasSuffix applies the HasSuffix predicate on the "datasource_name" field.
-func DatasourceNameHasSuffix(v string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldHasSuffix(FieldDatasourceName, v))
+// DatabaseIn applies the In predicate on the "database" field.
+func DatabaseIn(vs ...string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldIn(FieldDatabase, vs...))
 }
 
-// DatasourceNameEqualFold applies the EqualFold predicate on the "datasource_name" field.
-func DatasourceNameEqualFold(v string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldEqualFold(FieldDatasourceName, v))
+// DatabaseNotIn applies the NotIn predicate on the "database" field.
+func DatabaseNotIn(vs ...string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldNotIn(FieldDatabase, vs...))
 }
 
-// DatasourceNameContainsFold applies the ContainsFold predicate on the "datasource_name" field.
-func DatasourceNameContainsFold(v string) predicate.SharedResult {
-	return predicate.SharedResult(sql.FieldContainsFold(FieldDatasourceName, v))
+// DatabaseGT applies the GT predicate on the "database" field.
+func DatabaseGT(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldGT(FieldDatabase, v))
+}
+
+// DatabaseGTE applies the GTE predicate on the "database" field.
+func DatabaseGTE(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldGTE(FieldDatabase, v))
+}
+
+// DatabaseLT applies the LT predicate on the "database" field.
+func DatabaseLT(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldLT(FieldDatabase, v))
+}
+
+// DatabaseLTE applies the LTE predicate on the "database" field.
+func DatabaseLTE(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldLTE(FieldDatabase, v))
+}
+
+// DatabaseContains applies the Contains predicate on the "database" field.
+func DatabaseContains(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldContains(FieldDatabase, v))
+}
+
+// DatabaseHasPrefix applies the HasPrefix predicate on the "database" field.
+func DatabaseHasPrefix(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldHasPrefix(FieldDatabase, v))
+}
+
+// DatabaseHasSuffix applies the HasSuffix predicate on the "database" field.
+func DatabaseHasSuffix(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldHasSuffix(FieldDatabase, v))
+}
+
+// DatabaseEqualFold applies the EqualFold predicate on the "database" field.
+func DatabaseEqualFold(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldEqualFold(FieldDatabase, v))
+}
+
+// DatabaseContainsFold applies the ContainsFold predicate on the "database" field.
+func DatabaseContainsFold(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldContainsFold(FieldDatabase, v))
+}
+
+// TargetsJSONEQ applies the EQ predicate on the "targets_json" field.
+func TargetsJSONEQ(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldEQ(FieldTargetsJSON, v))
+}
+
+// TargetsJSONNEQ applies the NEQ predicate on the "targets_json" field.
+func TargetsJSONNEQ(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldNEQ(FieldTargetsJSON, v))
+}
+
+// TargetsJSONIn applies the In predicate on the "targets_json" field.
+func TargetsJSONIn(vs ...string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldIn(FieldTargetsJSON, vs...))
+}
+
+// TargetsJSONNotIn applies the NotIn predicate on the "targets_json" field.
+func TargetsJSONNotIn(vs ...string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldNotIn(FieldTargetsJSON, vs...))
+}
+
+// TargetsJSONGT applies the GT predicate on the "targets_json" field.
+func TargetsJSONGT(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldGT(FieldTargetsJSON, v))
+}
+
+// TargetsJSONGTE applies the GTE predicate on the "targets_json" field.
+func TargetsJSONGTE(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldGTE(FieldTargetsJSON, v))
+}
+
+// TargetsJSONLT applies the LT predicate on the "targets_json" field.
+func TargetsJSONLT(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldLT(FieldTargetsJSON, v))
+}
+
+// TargetsJSONLTE applies the LTE predicate on the "targets_json" field.
+func TargetsJSONLTE(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldLTE(FieldTargetsJSON, v))
+}
+
+// TargetsJSONContains applies the Contains predicate on the "targets_json" field.
+func TargetsJSONContains(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldContains(FieldTargetsJSON, v))
+}
+
+// TargetsJSONHasPrefix applies the HasPrefix predicate on the "targets_json" field.
+func TargetsJSONHasPrefix(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldHasPrefix(FieldTargetsJSON, v))
+}
+
+// TargetsJSONHasSuffix applies the HasSuffix predicate on the "targets_json" field.
+func TargetsJSONHasSuffix(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldHasSuffix(FieldTargetsJSON, v))
+}
+
+// TargetsJSONEqualFold applies the EqualFold predicate on the "targets_json" field.
+func TargetsJSONEqualFold(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldEqualFold(FieldTargetsJSON, v))
+}
+
+// TargetsJSONContainsFold applies the ContainsFold predicate on the "targets_json" field.
+func TargetsJSONContainsFold(v string) predicate.SharedResult {
+	return predicate.SharedResult(sql.FieldContainsFold(FieldTargetsJSON, v))
 }
 
 // RevokedEQ applies the EQ predicate on the "revoked" field.

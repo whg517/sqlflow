@@ -372,34 +372,34 @@ type PermissionRequest struct {
 
 // SharedResult represents a shared query result link.
 type SharedResult struct {
-	ID             int64      `json:"id"`
-	UserID         int64      `json:"user_id"`
-	Username       string     `json:"username,omitempty"`
-	Token          string     `json:"token"`
-	ColumnsJSON    string     `json:"-"`
-	RowsJSON       string     `json:"-"`
-	RowCount       int64      `json:"row_count"`
-	ExpiresAt      time.Time  `json:"expires_at"`
-	PasswordHash   string     `json:"-"`
-	SQLSummary     string     `json:"sql_summary,omitempty"`
-	DatasourceName string     `json:"datasource_name,omitempty"`
-	Revoked        bool       `json:"revoked"`
-	RevokedAt      *time.Time `json:"revoked_at,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
+	ID           int64      `json:"id"`
+	UserID       int64      `json:"user_id"`
+	Username     string     `json:"username,omitempty"`
+	Token        string     `json:"token"`
+	ColumnsJSON  string     `json:"-"`
+	RowsJSON     string     `json:"-"`
+	RowCount     int64      `json:"row_count"`
+	ExpiresAt    time.Time  `json:"expires_at"`
+	PasswordHash string     `json:"-"`
+	SQLSummary   string     `json:"sql_summary,omitempty"`
+	DatasourceID int64      `json:"datasource_id,omitempty"`
+	Database     string     `json:"database,omitempty"`
+	Revoked      bool       `json:"revoked"`
+	RevokedAt    *time.Time `json:"revoked_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 // SharedResultPublic is the public view of a shared result (no sensitive fields).
 type SharedResultPublic struct {
-	ID             int64                    `json:"id"`
-	Columns        []string                 `json:"columns"`
-	Rows           []map[string]interface{} `json:"rows"`
-	RowCount       int64                    `json:"row_count"`
-	SQLSummary     string                   `json:"sql_summary,omitempty"`
-	DatasourceName string                   `json:"datasource_name,omitempty"`
-	ExpiresAt      string                   `json:"expires_at"`
-	HasPassword    bool                     `json:"has_password"`
-	AccessGranted  bool                     `json:"access_granted"`
-	CreatedAt      string                   `json:"created_at"`
+	ID            int64                    `json:"id"`
+	Columns       []string                 `json:"columns"`
+	Rows          []map[string]interface{} `json:"rows"`
+	RowCount      int64                    `json:"row_count"`
+	SQLSummary    string                   `json:"sql_summary,omitempty"`
+	ExpiresAt     string                   `json:"expires_at"`
+	HasPassword   bool                     `json:"has_password"`
+	AccessGranted bool                     `json:"access_granted"`
+	CreatedAt     string                   `json:"created_at"`
 }
 
 // WebVital represents a Core Web Vitals metric record.

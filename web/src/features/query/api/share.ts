@@ -34,8 +34,11 @@ interface CreateShareRequest {
   rows: Record<string, unknown>[];
   expires_in_hours: number;
   password?: string;
-  sql_summary?: string;
-  datasource_name?: string;
+  // The scope of what is being published. The server derives the summary and
+  // the mask rules from these; it no longer accepts a summary from the client,
+  // which used to be the raw statement and was served to anyone with the link.
+  datasource_id: number;
+  sql: string;
 }
 
 // --- API ---

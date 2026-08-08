@@ -180,7 +180,19 @@ func (s *Service) ExportQuery(ctx context.Context, userID int64, username, role 
 	}
 
 	// Apply desensitization
-	desensitized, maskedFields := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, scope, parseResult.Targets)
+	desensitized, maskedFields, err := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, scope, parseResult.Targets)
+	if err != nil {
+		s.auditSvc.Write(ctx, auditlog.Record{
+			UserID:       userID,
+			Action:       "export_failed",
+			DatasourceID: datasourceID,
+			Database:     scope,
+			SQLContent:   sqlContent,
+			SQLSummary:   auditlog.Summarize(sqlContent),
+			ErrorMessage: err.Error(),
+		})
+		return nil, err
+	}
 	result.Desensitized = desensitized
 	result.DesensitizedFields = maskedFields
 

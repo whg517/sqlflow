@@ -867,16 +867,24 @@ func init() {
 	sharedresultDescSQLSummary := sharedresultFields[8].Descriptor()
 	// sharedresult.DefaultSQLSummary holds the default value on creation for the sql_summary field.
 	sharedresult.DefaultSQLSummary = sharedresultDescSQLSummary.Default.(string)
-	// sharedresultDescDatasourceName is the schema descriptor for datasource_name field.
-	sharedresultDescDatasourceName := sharedresultFields[9].Descriptor()
-	// sharedresult.DefaultDatasourceName holds the default value on creation for the datasource_name field.
-	sharedresult.DefaultDatasourceName = sharedresultDescDatasourceName.Default.(string)
+	// sharedresultDescDatasourceID is the schema descriptor for datasource_id field.
+	sharedresultDescDatasourceID := sharedresultFields[9].Descriptor()
+	// sharedresult.DefaultDatasourceID holds the default value on creation for the datasource_id field.
+	sharedresult.DefaultDatasourceID = sharedresultDescDatasourceID.Default.(int64)
+	// sharedresultDescDatabase is the schema descriptor for database field.
+	sharedresultDescDatabase := sharedresultFields[10].Descriptor()
+	// sharedresult.DefaultDatabase holds the default value on creation for the database field.
+	sharedresult.DefaultDatabase = sharedresultDescDatabase.Default.(string)
+	// sharedresultDescTargetsJSON is the schema descriptor for targets_json field.
+	sharedresultDescTargetsJSON := sharedresultFields[11].Descriptor()
+	// sharedresult.DefaultTargetsJSON holds the default value on creation for the targets_json field.
+	sharedresult.DefaultTargetsJSON = sharedresultDescTargetsJSON.Default.(string)
 	// sharedresultDescRevoked is the schema descriptor for revoked field.
-	sharedresultDescRevoked := sharedresultFields[10].Descriptor()
+	sharedresultDescRevoked := sharedresultFields[12].Descriptor()
 	// sharedresult.DefaultRevoked holds the default value on creation for the revoked field.
 	sharedresult.DefaultRevoked = sharedresultDescRevoked.Default.(bool)
 	// sharedresultDescCreatedAt is the schema descriptor for created_at field.
-	sharedresultDescCreatedAt := sharedresultFields[12].Descriptor()
+	sharedresultDescCreatedAt := sharedresultFields[14].Descriptor()
 	// sharedresult.DefaultCreatedAt holds the default value on creation for the created_at field.
 	sharedresult.DefaultCreatedAt = sharedresultDescCreatedAt.Default.(func() time.Time)
 	temppolicyFields := schema.TempPolicy{}.Fields()

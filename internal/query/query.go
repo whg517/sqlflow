@@ -38,6 +38,10 @@ var (
 	ErrEmptySQL               = errors.New("SQL 不能为空")
 	ErrQueryParamsUnsupported = errors.New("当前数据源不支持参数化查询")
 	ErrInternalDatasourceOnly = errors.New("SQLFlow 元数据库仅允许管理员访问")
+	// ErrMaskRulesUnavailable means the rules protecting a result could not be
+	// read, so nothing can be said about what the result exposes. Refusing is the
+	// only answer that does not risk serving protected values in the clear.
+	ErrMaskRulesUnavailable = errors.New("无法读取脱敏规则，结果已拒绝返回")
 	// ErrQueryUnavailable indicates the service was built without a connection
 	// pool, so no datasource can be reached. This is a wiring fault, not a user
 	// error — app.Container always provides one.
@@ -262,11 +266,16 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 	}
 
 	if err := s.refuseUnmaskableShape(ctx, result.Shape, userID, role, datasourceID, scope, parseResult.Targets); err != nil {
+		s.auditRelease(ctx, userID, datasourceID, scope, sqlContent, err)
 		return nil, err
 	}
 
 	// Apply desensitization
-	desensitized, maskedFields := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, scope, parseResult.Targets)
+	desensitized, maskedFields, err := s.applyDesensitizationForActor(ctx, result, userID, role, datasourceID, scope, parseResult.Targets)
+	if err != nil {
+		s.auditRelease(ctx, userID, datasourceID, scope, sqlContent, err)
+		return nil, err
+	}
 	result.Desensitized = desensitized
 	result.DesensitizedFields = maskedFields
 	result.Warnings = parseResult.Warnings
@@ -312,34 +321,58 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 	return result, nil
 }
 
-func (s *Service) applyDesensitizationForActor(ctx context.Context, result *QueryResult, userID int64, role string, datasourceID int64, database string, tables []string) (bool, []string) {
-	// Check the canonical unmask permission, retaining the legacy action during
-	// migration so existing installations do not unexpectedly lose access.
+// actorMayUnmask reports whether this actor holds a grant that lets protected
+// fields through in the clear.
+//
+// The sweep was written out twice, verbatim — once here and once in
+// maskingApplies — which is two chances for an authorization decision to drift.
+// A third copy in internal/security already had drifted: HasDesensitizeBypass
+// calls Enforce rather than EnforceActor, so it cannot see individual user
+// grants at all.
+//
+// An enforcer that cannot answer has granted nothing, so masking stays on. That
+// is the safe direction and is what both hand-written copies did by discarding
+// the error.
+func (s *Service) actorMayUnmask(ctx context.Context, userID int64, role string, datasourceID int64, tables []string) bool {
+	if s.permSvc == nil {
+		return false
+	}
+
+	// The canonical action is "unmask"; "desensitize:bypass" is kept so existing
+	// installations do not silently lose access.
+	granted := func(object string) bool {
+		for _, action := range []string{"unmask", "desensitize:bypass"} {
+			ok, err := s.permSvc.EnforceActor(ctx, userID, role,
+				authz.DatasourceDomain(datasourceID), object, action)
+			if err == nil && ok {
+				return true
+			}
+		}
+		return false
+	}
+
 	for _, table := range tables {
 		if table == "" {
 			continue
 		}
-		bypass, err := s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "unmask")
-		if err == nil && !bypass {
-			bypass, err = s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "desensitize:bypass")
-		}
-		if err == nil && bypass {
-			return false, nil
+		if granted(table) {
+			return true
 		}
 	}
-	// Also check wildcard
-	bypass, _ := s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), "*", "unmask")
-	if !bypass {
-		bypass, _ = s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), "*", "desensitize:bypass")
-	}
-	if bypass {
-		return false, nil
+	return granted("*")
+}
+
+func (s *Service) applyDesensitizationForActor(ctx context.Context, result *QueryResult, userID int64, role string, datasourceID int64, database string, tables []string) (bool, []string, error) {
+	if s.actorMayUnmask(ctx, userID, role, datasourceID, tables) {
+		return false, nil, nil
 	}
 
-	// Load mask rules for this datasource/database/tables
-	rules := s.loadMaskRules(ctx, datasourceID, database, tables)
+	rules, err := loadMaskRules(ctx, s.client, datasourceID, database, tables)
+	if err != nil {
+		return false, nil, err
+	}
 	if len(rules) == 0 {
-		return false, nil
+		return false, nil, nil
 	}
 
 	// Apply masking to all rows for all matching tables
@@ -356,9 +389,9 @@ func (s *Service) applyDesensitizationForActor(ctx context.Context, result *Quer
 	}
 
 	if len(allMaskedFields) == 0 {
-		return false, nil
+		return false, nil, nil
 	}
-	return true, allMaskedFields
+	return true, allMaskedFields, nil
 }
 
 // refuseUnmaskableShape rejects a result whose shape the masker cannot process
@@ -377,7 +410,11 @@ func (s *Service) refuseUnmaskableShape(ctx context.Context, shape driver.Result
 	if shape != driver.ShapeAggregation {
 		return nil
 	}
-	if s.maskingApplies(ctx, userID, role, datasourceID, database, tables) {
+	applies, err := s.maskingApplies(ctx, userID, role, datasourceID, database, tables)
+	if err != nil {
+		return err
+	}
+	if applies {
 		return ErrAggregationMaskingUnsupported
 	}
 	return nil
@@ -387,42 +424,39 @@ func (s *Service) refuseUnmaskableShape(ctx context.Context, shape driver.Result
 // the actor lacks an unmask grant and at least one rule matches the targets.
 //
 // It is the precondition check for result shapes the row masker cannot process.
-func (s *Service) maskingApplies(ctx context.Context, userID int64, role string, datasourceID int64, database string, tables []string) bool {
-	if s.permSvc == nil {
-		return false
-	}
-	for _, table := range tables {
-		if table == "" {
-			continue
-		}
-		bypass, err := s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "unmask")
-		if err == nil && !bypass {
-			bypass, err = s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), table, "desensitize:bypass")
-		}
-		if err == nil && bypass {
-			return false
-		}
-	}
-	bypass, _ := s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), "*", "unmask")
-	if !bypass {
-		bypass, _ = s.permSvc.EnforceActor(ctx, userID, role, authz.DatasourceDomain(datasourceID), "*", "desensitize:bypass")
-	}
-	if bypass {
-		return false
+func (s *Service) maskingApplies(ctx context.Context, userID int64, role string, datasourceID int64, database string, tables []string) (bool, error) {
+	if s.actorMayUnmask(ctx, userID, role, datasourceID, tables) {
+		return false, nil
 	}
 
-	rules := s.loadMaskRules(ctx, datasourceID, database, tables)
+	rules, err := loadMaskRules(ctx, s.client, datasourceID, database, tables)
+	if err != nil {
+		return false, err
+	}
 	for _, table := range tables {
 		if len(mask.MatchRules(rules, table)) > 0 {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
-// loadMaskRules loads mask rules from the database for the given context.
-func (s *Service) loadMaskRules(ctx context.Context, datasourceID int64, database string, tables []string) []mask.Rule {
-	q := s.client.MaskRule.Query().Where(entmaskrule.DatasourceIDEQ(datasourceID))
+// loadMaskRules loads the rules protecting these targets.
+//
+// It is a package-level function taking the client rather than a method,
+// because the share path needs the same rules and has no query Service: a
+// published result is read by an anonymous party, so every matching rule
+// applies to it unconditionally.
+//
+// It fails closed. The signature used to be `[]mask.Rule` with no error and it
+// answered nil when the read failed — and the comment sitting where this one is
+// conceded the consequence, because both callers treat an empty rule set as
+// "nothing to protect". One failed read therefore served the rows in the clear
+// and, on an aggregation, also stopped the refusal that exists because the
+// masker cannot reach inside a driver-native payload. Invariant 4 has no
+// availability exception: a result that cannot be shown to be safe is refused.
+func loadMaskRules(ctx context.Context, client *ent.Client, datasourceID int64, database string, tables []string) ([]mask.Rule, error) {
+	q := client.MaskRule.Query().Where(entmaskrule.DatasourceIDEQ(datasourceID))
 
 	// An empty database or table on a rule means "any": a rule scoped to the
 	// datasource applies wherever it is not overridden by a narrower one.
@@ -441,11 +475,7 @@ func (s *Service) loadMaskRules(ctx context.Context, datasourceID int64, databas
 
 	found, err := q.All(ctx)
 	if err != nil {
-		// Returning nil rules would silently unmask. Callers treat an empty rule
-		// set as "nothing to protect", so a failure here must be loud in the log
-		// even though it cannot be returned.
-		log.Printf("load mask rules: %v", err)
-		return nil
+		return nil, fmt.Errorf("%w: %v", ErrMaskRulesUnavailable, err)
 	}
 
 	rules := make([]mask.Rule, 0, len(found))
@@ -460,7 +490,72 @@ func (s *Service) loadMaskRules(ctx context.Context, datasourceID int64, databas
 			CustomTemplate: r.CustomTemplate,
 		})
 	}
-	return rules
+	return rules, nil
+}
+
+// ResolveShareScope answers where a result the caller wants to publish came
+// from, and refuses if they may not read it.
+//
+// It satisfies ShareScopeResolver. The scope has to be derived rather than
+// accepted for the same reason the risk level is: a client that named its own
+// targets would publish rows no mask rule could match, which is the difference
+// between masking being applied and masking being unrepresentable.
+//
+// The permission sweep is deliberately repeated here rather than assumed from
+// the query that produced the rows. Publishing is its own entrance and grants
+// can have been withdrawn since; invariant 1 gives it no exemption.
+func (s *Service) ResolveShareScope(ctx context.Context, userID int64, role string, datasourceID int64, sqlContent string) (ShareScope, error) {
+	if strings.TrimSpace(sqlContent) == "" {
+		return ShareScope{}, ErrEmptySQL
+	}
+
+	ds, err := s.dsSvc.GetDataSource(ctx, datasourceID)
+	if err != nil {
+		return ShareScope{}, fmt.Errorf("获取数据源失败: %w", err)
+	}
+	if datasource.IsInternal(ds) && role != "admin" {
+		return ShareScope{}, ErrInternalDatasourceOnly
+	}
+
+	parseResult, err := driver.ParseFor(ds.Type, sqlContent)
+	if err != nil {
+		return ShareScope{}, fmt.Errorf("SQL解析失败: %w", err)
+	}
+	for _, table := range parseResult.Targets {
+		allowed, err := s.permSvc.EnforceActor(ctx, userID, role,
+			authz.DatasourceDomain(datasourceID), table, "select")
+		if err != nil {
+			return ShareScope{}, fmt.Errorf("权限校验失败: %w", err)
+		}
+		if !allowed {
+			return ShareScope{}, fmt.Errorf("没有表 %s 的查询权限", table)
+		}
+	}
+
+	// The scope is the datasource's, exactly as it is for a query.
+	scope, err := datasource.ResolveQueryScope(ds.Database, "")
+	if err != nil {
+		return ShareScope{}, err
+	}
+	return ShareScope{Database: scope, Targets: parseResult.Targets}, nil
+}
+
+// auditRelease records a result that was produced but refused on the way out.
+//
+// Invariant 3: the queries that never reached the caller are exactly the ones an
+// operator needs evidence of. A refusal here means the target database was read
+// and the rows were then withheld, which is a different event from a query that
+// failed to run, and it would otherwise leave no trace at all.
+func (s *Service) auditRelease(ctx context.Context, userID, datasourceID int64, scope, sqlContent string, cause error) {
+	s.auditSvc.Write(ctx, auditlog.Record{
+		UserID:       userID,
+		Action:       "query_failed",
+		DatasourceID: datasourceID,
+		Database:     scope,
+		SQLContent:   sqlContent,
+		SQLSummary:   auditlog.Summarize(sqlContent),
+		ErrorMessage: cause.Error(),
+	})
 }
 
 // parseMongoBody parses the MongoDB command body into a map.
@@ -543,6 +638,13 @@ func (s *Service) ExplainQuery(ctx context.Context, userID int64, role string, d
 	}
 	if ds.Status == "disabled" {
 		return nil, datasource.ErrDatasourceDisabled
+	}
+	// The same gate ExecuteQuery and ExportQuery apply, which this entrance did
+	// not. The shipped seed policy grants `developer` select on every object, so
+	// the Casbin loop below denies nothing and this was the only thing standing
+	// between a non-admin and the platform's own metadata store.
+	if datasource.IsInternal(ds) && role != "admin" {
+		return nil, ErrInternalDatasourceOnly
 	}
 
 	secrets, err := datasource.DecryptSecrets(ds, s.encryptionKey)

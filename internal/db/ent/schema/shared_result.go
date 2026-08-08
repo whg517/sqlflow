@@ -40,8 +40,23 @@ func (SharedResult) Fields() []ent.Field {
 			StructTag(`json:"-"`),
 		field.String("sql_summary").
 			Default(""),
-		field.String("datasource_name").
+
+		// Where the published rows came from.
+		//
+		// None of this used to be recorded, and its absence was the whole
+		// problem: masking could not be applied to a share because loadMaskRules
+		// needs a datasource, a database and a target list, and the record
+		// carried none of them. Masking was not omitted here, it was
+		// unrepresentable. What the record did carry was datasource_name — a free
+		// string the browser supplied, which the Query page never even sent, so
+		// it was the empty string on every share ever created.
+		field.Int64("datasource_id").
+			Default(0),
+		field.String("database").
 			Default(""),
+		field.String("targets_json").
+			Default("[]"),
+
 		field.Bool("revoked").
 			Default(false),
 		field.Time("revoked_at").

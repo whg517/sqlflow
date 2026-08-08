@@ -1,10 +1,12 @@
 package query
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 	"time"
 
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
@@ -17,7 +19,7 @@ func setupShareTestDB(t *testing.T) *sql.DB {
 
 func TestShareService_CreateAndGet(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret)
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
 
 	req := &CreateShareRequest{
 		UserID:   1,
@@ -27,9 +29,9 @@ func TestShareService_CreateAndGet(t *testing.T) {
 			{"id": 1, "name": "Alice", "status": "active"},
 			{"id": 2, "name": "Bob", "status": "inactive"},
 		},
-		ExpiresAt:      time.Now().Add(24 * time.Hour),
-		SQLSummary:     "SELECT * FROM users",
-		DatasourceName: "test-db",
+		ExpiresAt:    time.Now().Add(24 * time.Hour),
+		DatasourceID: 1,
+		SQLContent:   "SELECT * FROM users",
 	}
 
 	result, err := svc.CreateShare(t.Context(), req)
@@ -66,7 +68,7 @@ func TestShareService_CreateAndGet(t *testing.T) {
 
 func TestShareService_ExpiredShare(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret)
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
 
 	req := &CreateShareRequest{
 		UserID:   1,
@@ -75,7 +77,9 @@ func TestShareService_ExpiredShare(t *testing.T) {
 		Rows: []map[string]interface{}{
 			{"id": 1},
 		},
-		ExpiresAt: time.Now().Add(-1 * time.Hour),
+		ExpiresAt:    time.Now().Add(-1 * time.Hour),
+		DatasourceID: 1,
+		SQLContent:   "SELECT id FROM users",
 	}
 
 	result, err := svc.CreateShare(t.Context(), req)
@@ -91,15 +95,17 @@ func TestShareService_ExpiredShare(t *testing.T) {
 
 func TestShareService_PasswordProtection(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret)
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
 
 	req := &CreateShareRequest{
-		UserID:    1,
-		Username:  "testuser",
-		Columns:   []string{"id"},
-		Rows:      []map[string]interface{}{{"id": 1}},
-		ExpiresAt: time.Now().Add(24 * time.Hour),
-		Password:  "secret123",
+		UserID:       1,
+		Username:     "testuser",
+		Columns:      []string{"id"},
+		Rows:         []map[string]interface{}{{"id": 1}},
+		ExpiresAt:    time.Now().Add(24 * time.Hour),
+		DatasourceID: 1,
+		SQLContent:   "SELECT id FROM users",
+		Password:     "secret123",
 	}
 
 	result, err := svc.CreateShare(t.Context(), req)
@@ -121,7 +127,7 @@ func TestShareService_PasswordProtection(t *testing.T) {
 	if len(pub.Columns) != 0 || len(pub.Rows) != 0 {
 		t.Fatal("password-protected share leaked result data before verification")
 	}
-	if pub.ID != 0 || pub.RowCount != 0 || pub.SQLSummary != "" || pub.DatasourceName != "" {
+	if pub.ID != 0 || pub.RowCount != 0 || pub.SQLSummary != "" {
 		t.Fatal("password-protected share leaked sensitive metadata before verification")
 	}
 
@@ -171,12 +177,14 @@ func TestShareService_PasswordProtection(t *testing.T) {
 
 	t.Run("proof cannot be reused for another share", func(t *testing.T) {
 		other, createErr := svc.CreateShare(t.Context(), &CreateShareRequest{
-			UserID:    1,
-			Username:  "testuser",
-			Columns:   []string{"secret"},
-			Rows:      []map[string]interface{}{{"secret": "other"}},
-			ExpiresAt: time.Now().Add(time.Hour),
-			Password:  "secret123",
+			UserID:       1,
+			Username:     "testuser",
+			Columns:      []string{"secret"},
+			Rows:         []map[string]interface{}{{"secret": "other"}},
+			ExpiresAt:    time.Now().Add(time.Hour),
+			DatasourceID: 1,
+			SQLContent:   "SELECT id FROM users",
+			Password:     "secret123",
 		})
 		if createErr != nil {
 			t.Fatalf("CreateShare other: %v", createErr)
@@ -194,14 +202,16 @@ func TestShareService_PasswordProtection(t *testing.T) {
 
 func TestShareService_Revoke(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret)
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
 
 	req := &CreateShareRequest{
-		UserID:    1,
-		Username:  "testuser",
-		Columns:   []string{"id"},
-		Rows:      []map[string]interface{}{{"id": 1}},
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+		UserID:       1,
+		Username:     "testuser",
+		Columns:      []string{"id"},
+		Rows:         []map[string]interface{}{{"id": 1}},
+		ExpiresAt:    time.Now().Add(24 * time.Hour),
+		DatasourceID: 1,
+		SQLContent:   "SELECT id FROM users",
 	}
 
 	result, err := svc.CreateShare(t.Context(), req)
@@ -228,15 +238,17 @@ func TestShareService_Revoke(t *testing.T) {
 
 func TestShareService_VerifyRejectsExpiredAndRevokedShares(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret)
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
 
 	expired, err := svc.CreateShare(t.Context(), &CreateShareRequest{
-		UserID:    1,
-		Username:  "testuser",
-		Columns:   []string{"id"},
-		Rows:      []map[string]interface{}{{"id": 1}},
-		ExpiresAt: time.Now().Add(-time.Hour),
-		Password:  "secret123",
+		UserID:       1,
+		Username:     "testuser",
+		Columns:      []string{"id"},
+		Rows:         []map[string]interface{}{{"id": 1}},
+		ExpiresAt:    time.Now().Add(-time.Hour),
+		DatasourceID: 1,
+		SQLContent:   "SELECT id FROM users",
+		Password:     "secret123",
 	})
 	if err != nil {
 		t.Fatalf("CreateShare expired: %v", err)
@@ -246,12 +258,14 @@ func TestShareService_VerifyRejectsExpiredAndRevokedShares(t *testing.T) {
 	}
 
 	revoked, err := svc.CreateShare(t.Context(), &CreateShareRequest{
-		UserID:    1,
-		Username:  "testuser",
-		Columns:   []string{"id"},
-		Rows:      []map[string]interface{}{{"id": 1}},
-		ExpiresAt: time.Now().Add(time.Hour),
-		Password:  "secret123",
+		UserID:       1,
+		Username:     "testuser",
+		Columns:      []string{"id"},
+		Rows:         []map[string]interface{}{{"id": 1}},
+		ExpiresAt:    time.Now().Add(time.Hour),
+		DatasourceID: 1,
+		SQLContent:   "SELECT id FROM users",
+		Password:     "secret123",
 	})
 	if err != nil {
 		t.Fatalf("CreateShare revoked: %v", err)
@@ -266,7 +280,7 @@ func TestShareService_VerifyRejectsExpiredAndRevokedShares(t *testing.T) {
 
 func TestShareService_RowLimit(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret)
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
 
 	rows := make([]map[string]interface{}, shareMaxRows+1)
 	for i := range rows {
@@ -274,11 +288,13 @@ func TestShareService_RowLimit(t *testing.T) {
 	}
 
 	req := &CreateShareRequest{
-		UserID:    1,
-		Username:  "testuser",
-		Columns:   []string{"id"},
-		Rows:      rows,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+		UserID:       1,
+		Username:     "testuser",
+		Columns:      []string{"id"},
+		Rows:         rows,
+		ExpiresAt:    time.Now().Add(24 * time.Hour),
+		DatasourceID: 1,
+		SQLContent:   "SELECT id FROM users",
 	}
 
 	_, err := svc.CreateShare(t.Context(), req)
@@ -289,14 +305,16 @@ func TestShareService_RowLimit(t *testing.T) {
 
 func TestShareService_TokenUniqueness(t *testing.T) {
 	dbConn := setupShareTestDB(t)
-	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret)
+	svc := NewShareService(testutil.WrapSQL(t, dbConn), shareTestAccessSecret, stubShareScope{}, auditlog.Discard)
 
 	req := &CreateShareRequest{
-		UserID:    1,
-		Username:  "testuser",
-		Columns:   []string{"id"},
-		Rows:      []map[string]interface{}{{"id": 1}},
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+		UserID:       1,
+		Username:     "testuser",
+		Columns:      []string{"id"},
+		Rows:         []map[string]interface{}{{"id": 1}},
+		ExpiresAt:    time.Now().Add(24 * time.Hour),
+		DatasourceID: 1,
+		SQLContent:   "SELECT id FROM users",
 	}
 
 	r1, _ := svc.CreateShare(t.Context(), req)
@@ -309,4 +327,26 @@ func TestShareService_TokenUniqueness(t *testing.T) {
 	if len(r1.Token) != 32 {
 		t.Errorf("expected 32-char token, got %d", len(r1.Token))
 	}
+}
+
+// stubShareScope stands in for the query service in share tests.
+//
+// The real resolver reads a datasource, parses the statement and re-checks the
+// caller's table permissions; none of that is what these tests are about, and
+// wiring it would drag a driver and a Casbin enforcer into every one of them.
+// Tests that care about the scope — that a share is masked on read, and that a
+// caller who may not read a table may not publish it — use the real one.
+type stubShareScope struct {
+	scope ShareScope
+	err   error
+}
+
+func (s stubShareScope) ResolveShareScope(context.Context, int64, string, int64, string) (ShareScope, error) {
+	if s.err != nil {
+		return ShareScope{}, s.err
+	}
+	if len(s.scope.Targets) == 0 {
+		return ShareScope{Database: "testdb", Targets: []string{"users"}}, nil
+	}
+	return s.scope, nil
 }

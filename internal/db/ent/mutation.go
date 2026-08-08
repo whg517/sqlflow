@@ -20508,28 +20508,31 @@ func (m *SensitiveTableMutation) ResetEdge(name string) error {
 // SharedResultMutation represents an operation that mutates the SharedResult nodes in the graph.
 type SharedResultMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *int
-	user_id         *int64
-	adduser_id      *int64
-	username        *string
-	token           *string
-	columns_json    *string
-	rows_json       *string
-	row_count       *int64
-	addrow_count    *int64
-	expires_at      *time.Time
-	password_hash   *string
-	sql_summary     *string
-	datasource_name *string
-	revoked         *bool
-	revoked_at      *time.Time
-	created_at      *time.Time
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*SharedResult, error)
-	predicates      []predicate.SharedResult
+	op               Op
+	typ              string
+	id               *int
+	user_id          *int64
+	adduser_id       *int64
+	username         *string
+	token            *string
+	columns_json     *string
+	rows_json        *string
+	row_count        *int64
+	addrow_count     *int64
+	expires_at       *time.Time
+	password_hash    *string
+	sql_summary      *string
+	datasource_id    *int64
+	adddatasource_id *int64
+	database         *string
+	targets_json     *string
+	revoked          *bool
+	revoked_at       *time.Time
+	created_at       *time.Time
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*SharedResult, error)
+	predicates       []predicate.SharedResult
 }
 
 var _ ent.Mutation = (*SharedResultMutation)(nil)
@@ -20994,40 +20997,132 @@ func (m *SharedResultMutation) ResetSQLSummary() {
 	m.sql_summary = nil
 }
 
-// SetDatasourceName sets the "datasource_name" field.
-func (m *SharedResultMutation) SetDatasourceName(s string) {
-	m.datasource_name = &s
+// SetDatasourceID sets the "datasource_id" field.
+func (m *SharedResultMutation) SetDatasourceID(i int64) {
+	m.datasource_id = &i
+	m.adddatasource_id = nil
 }
 
-// DatasourceName returns the value of the "datasource_name" field in the mutation.
-func (m *SharedResultMutation) DatasourceName() (r string, exists bool) {
-	v := m.datasource_name
+// DatasourceID returns the value of the "datasource_id" field in the mutation.
+func (m *SharedResultMutation) DatasourceID() (r int64, exists bool) {
+	v := m.datasource_id
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldDatasourceName returns the old "datasource_name" field's value of the SharedResult entity.
+// OldDatasourceID returns the old "datasource_id" field's value of the SharedResult entity.
 // If the SharedResult object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SharedResultMutation) OldDatasourceName(ctx context.Context) (v string, err error) {
+func (m *SharedResultMutation) OldDatasourceID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDatasourceName is only allowed on UpdateOne operations")
+		return v, errors.New("OldDatasourceID is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDatasourceName requires an ID field in the mutation")
+		return v, errors.New("OldDatasourceID requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDatasourceName: %w", err)
+		return v, fmt.Errorf("querying old value for OldDatasourceID: %w", err)
 	}
-	return oldValue.DatasourceName, nil
+	return oldValue.DatasourceID, nil
 }
 
-// ResetDatasourceName resets all changes to the "datasource_name" field.
-func (m *SharedResultMutation) ResetDatasourceName() {
-	m.datasource_name = nil
+// AddDatasourceID adds i to the "datasource_id" field.
+func (m *SharedResultMutation) AddDatasourceID(i int64) {
+	if m.adddatasource_id != nil {
+		*m.adddatasource_id += i
+	} else {
+		m.adddatasource_id = &i
+	}
+}
+
+// AddedDatasourceID returns the value that was added to the "datasource_id" field in this mutation.
+func (m *SharedResultMutation) AddedDatasourceID() (r int64, exists bool) {
+	v := m.adddatasource_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDatasourceID resets all changes to the "datasource_id" field.
+func (m *SharedResultMutation) ResetDatasourceID() {
+	m.datasource_id = nil
+	m.adddatasource_id = nil
+}
+
+// SetDatabase sets the "database" field.
+func (m *SharedResultMutation) SetDatabase(s string) {
+	m.database = &s
+}
+
+// Database returns the value of the "database" field in the mutation.
+func (m *SharedResultMutation) Database() (r string, exists bool) {
+	v := m.database
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDatabase returns the old "database" field's value of the SharedResult entity.
+// If the SharedResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SharedResultMutation) OldDatabase(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDatabase is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDatabase requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDatabase: %w", err)
+	}
+	return oldValue.Database, nil
+}
+
+// ResetDatabase resets all changes to the "database" field.
+func (m *SharedResultMutation) ResetDatabase() {
+	m.database = nil
+}
+
+// SetTargetsJSON sets the "targets_json" field.
+func (m *SharedResultMutation) SetTargetsJSON(s string) {
+	m.targets_json = &s
+}
+
+// TargetsJSON returns the value of the "targets_json" field in the mutation.
+func (m *SharedResultMutation) TargetsJSON() (r string, exists bool) {
+	v := m.targets_json
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetsJSON returns the old "targets_json" field's value of the SharedResult entity.
+// If the SharedResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SharedResultMutation) OldTargetsJSON(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetsJSON is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetsJSON requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetsJSON: %w", err)
+	}
+	return oldValue.TargetsJSON, nil
+}
+
+// ResetTargetsJSON resets all changes to the "targets_json" field.
+func (m *SharedResultMutation) ResetTargetsJSON() {
+	m.targets_json = nil
 }
 
 // SetRevoked sets the "revoked" field.
@@ -21185,7 +21280,7 @@ func (m *SharedResultMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SharedResultMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 15)
 	if m.user_id != nil {
 		fields = append(fields, sharedresult.FieldUserID)
 	}
@@ -21213,8 +21308,14 @@ func (m *SharedResultMutation) Fields() []string {
 	if m.sql_summary != nil {
 		fields = append(fields, sharedresult.FieldSQLSummary)
 	}
-	if m.datasource_name != nil {
-		fields = append(fields, sharedresult.FieldDatasourceName)
+	if m.datasource_id != nil {
+		fields = append(fields, sharedresult.FieldDatasourceID)
+	}
+	if m.database != nil {
+		fields = append(fields, sharedresult.FieldDatabase)
+	}
+	if m.targets_json != nil {
+		fields = append(fields, sharedresult.FieldTargetsJSON)
 	}
 	if m.revoked != nil {
 		fields = append(fields, sharedresult.FieldRevoked)
@@ -21251,8 +21352,12 @@ func (m *SharedResultMutation) Field(name string) (ent.Value, bool) {
 		return m.PasswordHash()
 	case sharedresult.FieldSQLSummary:
 		return m.SQLSummary()
-	case sharedresult.FieldDatasourceName:
-		return m.DatasourceName()
+	case sharedresult.FieldDatasourceID:
+		return m.DatasourceID()
+	case sharedresult.FieldDatabase:
+		return m.Database()
+	case sharedresult.FieldTargetsJSON:
+		return m.TargetsJSON()
 	case sharedresult.FieldRevoked:
 		return m.Revoked()
 	case sharedresult.FieldRevokedAt:
@@ -21286,8 +21391,12 @@ func (m *SharedResultMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldPasswordHash(ctx)
 	case sharedresult.FieldSQLSummary:
 		return m.OldSQLSummary(ctx)
-	case sharedresult.FieldDatasourceName:
-		return m.OldDatasourceName(ctx)
+	case sharedresult.FieldDatasourceID:
+		return m.OldDatasourceID(ctx)
+	case sharedresult.FieldDatabase:
+		return m.OldDatabase(ctx)
+	case sharedresult.FieldTargetsJSON:
+		return m.OldTargetsJSON(ctx)
 	case sharedresult.FieldRevoked:
 		return m.OldRevoked(ctx)
 	case sharedresult.FieldRevokedAt:
@@ -21366,12 +21475,26 @@ func (m *SharedResultMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSQLSummary(v)
 		return nil
-	case sharedresult.FieldDatasourceName:
+	case sharedresult.FieldDatasourceID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDatasourceID(v)
+		return nil
+	case sharedresult.FieldDatabase:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetDatasourceName(v)
+		m.SetDatabase(v)
+		return nil
+	case sharedresult.FieldTargetsJSON:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetsJSON(v)
 		return nil
 	case sharedresult.FieldRevoked:
 		v, ok := value.(bool)
@@ -21408,6 +21531,9 @@ func (m *SharedResultMutation) AddedFields() []string {
 	if m.addrow_count != nil {
 		fields = append(fields, sharedresult.FieldRowCount)
 	}
+	if m.adddatasource_id != nil {
+		fields = append(fields, sharedresult.FieldDatasourceID)
+	}
 	return fields
 }
 
@@ -21420,6 +21546,8 @@ func (m *SharedResultMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedUserID()
 	case sharedresult.FieldRowCount:
 		return m.AddedRowCount()
+	case sharedresult.FieldDatasourceID:
+		return m.AddedDatasourceID()
 	}
 	return nil, false
 }
@@ -21442,6 +21570,13 @@ func (m *SharedResultMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddRowCount(v)
+		return nil
+	case sharedresult.FieldDatasourceID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDatasourceID(v)
 		return nil
 	}
 	return fmt.Errorf("unknown SharedResult numeric field %s", name)
@@ -21506,8 +21641,14 @@ func (m *SharedResultMutation) ResetField(name string) error {
 	case sharedresult.FieldSQLSummary:
 		m.ResetSQLSummary()
 		return nil
-	case sharedresult.FieldDatasourceName:
-		m.ResetDatasourceName()
+	case sharedresult.FieldDatasourceID:
+		m.ResetDatasourceID()
+		return nil
+	case sharedresult.FieldDatabase:
+		m.ResetDatabase()
+		return nil
+	case sharedresult.FieldTargetsJSON:
+		m.ResetTargetsJSON()
 		return nil
 	case sharedresult.FieldRevoked:
 		m.ResetRevoked()

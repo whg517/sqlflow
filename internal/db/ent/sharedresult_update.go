@@ -169,16 +169,51 @@ func (_u *SharedResultUpdate) SetNillableSQLSummary(v *string) *SharedResultUpda
 	return _u
 }
 
-// SetDatasourceName sets the "datasource_name" field.
-func (_u *SharedResultUpdate) SetDatasourceName(v string) *SharedResultUpdate {
-	_u.mutation.SetDatasourceName(v)
+// SetDatasourceID sets the "datasource_id" field.
+func (_u *SharedResultUpdate) SetDatasourceID(v int64) *SharedResultUpdate {
+	_u.mutation.ResetDatasourceID()
+	_u.mutation.SetDatasourceID(v)
 	return _u
 }
 
-// SetNillableDatasourceName sets the "datasource_name" field if the given value is not nil.
-func (_u *SharedResultUpdate) SetNillableDatasourceName(v *string) *SharedResultUpdate {
+// SetNillableDatasourceID sets the "datasource_id" field if the given value is not nil.
+func (_u *SharedResultUpdate) SetNillableDatasourceID(v *int64) *SharedResultUpdate {
 	if v != nil {
-		_u.SetDatasourceName(*v)
+		_u.SetDatasourceID(*v)
+	}
+	return _u
+}
+
+// AddDatasourceID adds value to the "datasource_id" field.
+func (_u *SharedResultUpdate) AddDatasourceID(v int64) *SharedResultUpdate {
+	_u.mutation.AddDatasourceID(v)
+	return _u
+}
+
+// SetDatabase sets the "database" field.
+func (_u *SharedResultUpdate) SetDatabase(v string) *SharedResultUpdate {
+	_u.mutation.SetDatabase(v)
+	return _u
+}
+
+// SetNillableDatabase sets the "database" field if the given value is not nil.
+func (_u *SharedResultUpdate) SetNillableDatabase(v *string) *SharedResultUpdate {
+	if v != nil {
+		_u.SetDatabase(*v)
+	}
+	return _u
+}
+
+// SetTargetsJSON sets the "targets_json" field.
+func (_u *SharedResultUpdate) SetTargetsJSON(v string) *SharedResultUpdate {
+	_u.mutation.SetTargetsJSON(v)
+	return _u
+}
+
+// SetNillableTargetsJSON sets the "targets_json" field if the given value is not nil.
+func (_u *SharedResultUpdate) SetNillableTargetsJSON(v *string) *SharedResultUpdate {
+	if v != nil {
+		_u.SetTargetsJSON(*v)
 	}
 	return _u
 }
@@ -324,8 +359,17 @@ func (_u *SharedResultUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.SQLSummary(); ok {
 		_spec.SetField(sharedresult.FieldSQLSummary, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.DatasourceName(); ok {
-		_spec.SetField(sharedresult.FieldDatasourceName, field.TypeString, value)
+	if value, ok := _u.mutation.DatasourceID(); ok {
+		_spec.SetField(sharedresult.FieldDatasourceID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedDatasourceID(); ok {
+		_spec.AddField(sharedresult.FieldDatasourceID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.Database(); ok {
+		_spec.SetField(sharedresult.FieldDatabase, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TargetsJSON(); ok {
+		_spec.SetField(sharedresult.FieldTargetsJSON, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Revoked(); ok {
 		_spec.SetField(sharedresult.FieldRevoked, field.TypeBool, value)
@@ -501,16 +545,51 @@ func (_u *SharedResultUpdateOne) SetNillableSQLSummary(v *string) *SharedResultU
 	return _u
 }
 
-// SetDatasourceName sets the "datasource_name" field.
-func (_u *SharedResultUpdateOne) SetDatasourceName(v string) *SharedResultUpdateOne {
-	_u.mutation.SetDatasourceName(v)
+// SetDatasourceID sets the "datasource_id" field.
+func (_u *SharedResultUpdateOne) SetDatasourceID(v int64) *SharedResultUpdateOne {
+	_u.mutation.ResetDatasourceID()
+	_u.mutation.SetDatasourceID(v)
 	return _u
 }
 
-// SetNillableDatasourceName sets the "datasource_name" field if the given value is not nil.
-func (_u *SharedResultUpdateOne) SetNillableDatasourceName(v *string) *SharedResultUpdateOne {
+// SetNillableDatasourceID sets the "datasource_id" field if the given value is not nil.
+func (_u *SharedResultUpdateOne) SetNillableDatasourceID(v *int64) *SharedResultUpdateOne {
 	if v != nil {
-		_u.SetDatasourceName(*v)
+		_u.SetDatasourceID(*v)
+	}
+	return _u
+}
+
+// AddDatasourceID adds value to the "datasource_id" field.
+func (_u *SharedResultUpdateOne) AddDatasourceID(v int64) *SharedResultUpdateOne {
+	_u.mutation.AddDatasourceID(v)
+	return _u
+}
+
+// SetDatabase sets the "database" field.
+func (_u *SharedResultUpdateOne) SetDatabase(v string) *SharedResultUpdateOne {
+	_u.mutation.SetDatabase(v)
+	return _u
+}
+
+// SetNillableDatabase sets the "database" field if the given value is not nil.
+func (_u *SharedResultUpdateOne) SetNillableDatabase(v *string) *SharedResultUpdateOne {
+	if v != nil {
+		_u.SetDatabase(*v)
+	}
+	return _u
+}
+
+// SetTargetsJSON sets the "targets_json" field.
+func (_u *SharedResultUpdateOne) SetTargetsJSON(v string) *SharedResultUpdateOne {
+	_u.mutation.SetTargetsJSON(v)
+	return _u
+}
+
+// SetNillableTargetsJSON sets the "targets_json" field if the given value is not nil.
+func (_u *SharedResultUpdateOne) SetNillableTargetsJSON(v *string) *SharedResultUpdateOne {
+	if v != nil {
+		_u.SetTargetsJSON(*v)
 	}
 	return _u
 }
@@ -686,8 +765,17 @@ func (_u *SharedResultUpdateOne) sqlSave(ctx context.Context) (_node *SharedResu
 	if value, ok := _u.mutation.SQLSummary(); ok {
 		_spec.SetField(sharedresult.FieldSQLSummary, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.DatasourceName(); ok {
-		_spec.SetField(sharedresult.FieldDatasourceName, field.TypeString, value)
+	if value, ok := _u.mutation.DatasourceID(); ok {
+		_spec.SetField(sharedresult.FieldDatasourceID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedDatasourceID(); ok {
+		_spec.AddField(sharedresult.FieldDatasourceID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.Database(); ok {
+		_spec.SetField(sharedresult.FieldDatabase, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TargetsJSON(); ok {
+		_spec.SetField(sharedresult.FieldTargetsJSON, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Revoked(); ok {
 		_spec.SetField(sharedresult.FieldRevoked, field.TypeBool, value)

@@ -31,8 +31,12 @@ const (
 	FieldPasswordHash = "password_hash"
 	// FieldSQLSummary holds the string denoting the sql_summary field in the database.
 	FieldSQLSummary = "sql_summary"
-	// FieldDatasourceName holds the string denoting the datasource_name field in the database.
-	FieldDatasourceName = "datasource_name"
+	// FieldDatasourceID holds the string denoting the datasource_id field in the database.
+	FieldDatasourceID = "datasource_id"
+	// FieldDatabase holds the string denoting the database field in the database.
+	FieldDatabase = "database"
+	// FieldTargetsJSON holds the string denoting the targets_json field in the database.
+	FieldTargetsJSON = "targets_json"
 	// FieldRevoked holds the string denoting the revoked field in the database.
 	FieldRevoked = "revoked"
 	// FieldRevokedAt holds the string denoting the revoked_at field in the database.
@@ -55,7 +59,9 @@ var Columns = []string{
 	FieldExpiresAt,
 	FieldPasswordHash,
 	FieldSQLSummary,
-	FieldDatasourceName,
+	FieldDatasourceID,
+	FieldDatabase,
+	FieldTargetsJSON,
 	FieldRevoked,
 	FieldRevokedAt,
 	FieldCreatedAt,
@@ -86,8 +92,12 @@ var (
 	DefaultPasswordHash string
 	// DefaultSQLSummary holds the default value on creation for the "sql_summary" field.
 	DefaultSQLSummary string
-	// DefaultDatasourceName holds the default value on creation for the "datasource_name" field.
-	DefaultDatasourceName string
+	// DefaultDatasourceID holds the default value on creation for the "datasource_id" field.
+	DefaultDatasourceID int64
+	// DefaultDatabase holds the default value on creation for the "database" field.
+	DefaultDatabase string
+	// DefaultTargetsJSON holds the default value on creation for the "targets_json" field.
+	DefaultTargetsJSON string
 	// DefaultRevoked holds the default value on creation for the "revoked" field.
 	DefaultRevoked bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -147,9 +157,19 @@ func BySQLSummary(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSQLSummary, opts...).ToFunc()
 }
 
-// ByDatasourceName orders the results by the datasource_name field.
-func ByDatasourceName(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDatasourceName, opts...).ToFunc()
+// ByDatasourceID orders the results by the datasource_id field.
+func ByDatasourceID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDatasourceID, opts...).ToFunc()
+}
+
+// ByDatabase orders the results by the database field.
+func ByDatabase(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDatabase, opts...).ToFunc()
+}
+
+// ByTargetsJSON orders the results by the targets_json field.
+func ByTargetsJSON(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTargetsJSON, opts...).ToFunc()
 }
 
 // ByRevoked orders the results by the revoked field.

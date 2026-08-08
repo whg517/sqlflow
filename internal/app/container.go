@@ -165,7 +165,10 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	// API Token / SQL Template / Share / WebVitals
 	tokenSvc := iam.NewTokenService(database)
 	templateSvc := query.NewTemplateService(database)
-	shareSvc := query.NewShareService(database, cfg.JWT.Secret)
+	// The query service resolves which datasource, database and tables a
+	// published result came from, so the share path can look up the same mask
+	// rules the query path applied.
+	shareSvc := query.NewShareService(database, cfg.JWT.Secret, querySvc, auditSvc)
 	vitalsSvc := ops.NewWebVitalsService(database)
 
 	// OIDC（依赖 auth）

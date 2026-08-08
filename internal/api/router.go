@@ -120,9 +120,13 @@ func NewRouter(c *app.Container) *echo.Echo {
 	authGroup.DELETE("/api/query/history", queryHandler.ClearHistory, middleware.RequireScope("execute:query"))
 
 	// Shared query results (authenticated users)
-	authGroup.POST("/api/query/share", shareHandler.CreateShare)
-	authGroup.GET("/api/query/share", shareHandler.ListMyShares)
-	authGroup.DELETE("/api/query/share/:id", shareHandler.RevokeShare)
+	//
+	// Creating a share publishes rows at an unauthenticated URL, and it was the
+	// only route under /api/query with no scope at all — a token minted for
+	// read-only history could publish a result set.
+	authGroup.POST("/api/query/share", shareHandler.CreateShare, middleware.RequireScope("execute:query"))
+	authGroup.GET("/api/query/share", shareHandler.ListMyShares, middleware.RequireScope("read:query"))
+	authGroup.DELETE("/api/query/share/:id", shareHandler.RevokeShare, middleware.RequireScope("execute:query"))
 
 	// Performance analysis (authenticated users)
 	authGroup.GET("/api/query/performance/slow", performanceHandler.ListSlowQueries)

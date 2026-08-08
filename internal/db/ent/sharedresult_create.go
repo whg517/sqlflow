@@ -124,16 +124,44 @@ func (_c *SharedResultCreate) SetNillableSQLSummary(v *string) *SharedResultCrea
 	return _c
 }
 
-// SetDatasourceName sets the "datasource_name" field.
-func (_c *SharedResultCreate) SetDatasourceName(v string) *SharedResultCreate {
-	_c.mutation.SetDatasourceName(v)
+// SetDatasourceID sets the "datasource_id" field.
+func (_c *SharedResultCreate) SetDatasourceID(v int64) *SharedResultCreate {
+	_c.mutation.SetDatasourceID(v)
 	return _c
 }
 
-// SetNillableDatasourceName sets the "datasource_name" field if the given value is not nil.
-func (_c *SharedResultCreate) SetNillableDatasourceName(v *string) *SharedResultCreate {
+// SetNillableDatasourceID sets the "datasource_id" field if the given value is not nil.
+func (_c *SharedResultCreate) SetNillableDatasourceID(v *int64) *SharedResultCreate {
 	if v != nil {
-		_c.SetDatasourceName(*v)
+		_c.SetDatasourceID(*v)
+	}
+	return _c
+}
+
+// SetDatabase sets the "database" field.
+func (_c *SharedResultCreate) SetDatabase(v string) *SharedResultCreate {
+	_c.mutation.SetDatabase(v)
+	return _c
+}
+
+// SetNillableDatabase sets the "database" field if the given value is not nil.
+func (_c *SharedResultCreate) SetNillableDatabase(v *string) *SharedResultCreate {
+	if v != nil {
+		_c.SetDatabase(*v)
+	}
+	return _c
+}
+
+// SetTargetsJSON sets the "targets_json" field.
+func (_c *SharedResultCreate) SetTargetsJSON(v string) *SharedResultCreate {
+	_c.mutation.SetTargetsJSON(v)
+	return _c
+}
+
+// SetNillableTargetsJSON sets the "targets_json" field if the given value is not nil.
+func (_c *SharedResultCreate) SetNillableTargetsJSON(v *string) *SharedResultCreate {
+	if v != nil {
+		_c.SetTargetsJSON(*v)
 	}
 	return _c
 }
@@ -239,9 +267,17 @@ func (_c *SharedResultCreate) defaults() {
 		v := sharedresult.DefaultSQLSummary
 		_c.mutation.SetSQLSummary(v)
 	}
-	if _, ok := _c.mutation.DatasourceName(); !ok {
-		v := sharedresult.DefaultDatasourceName
-		_c.mutation.SetDatasourceName(v)
+	if _, ok := _c.mutation.DatasourceID(); !ok {
+		v := sharedresult.DefaultDatasourceID
+		_c.mutation.SetDatasourceID(v)
+	}
+	if _, ok := _c.mutation.Database(); !ok {
+		v := sharedresult.DefaultDatabase
+		_c.mutation.SetDatabase(v)
+	}
+	if _, ok := _c.mutation.TargetsJSON(); !ok {
+		v := sharedresult.DefaultTargetsJSON
+		_c.mutation.SetTargetsJSON(v)
 	}
 	if _, ok := _c.mutation.Revoked(); !ok {
 		v := sharedresult.DefaultRevoked
@@ -287,8 +323,14 @@ func (_c *SharedResultCreate) check() error {
 	if _, ok := _c.mutation.SQLSummary(); !ok {
 		return &ValidationError{Name: "sql_summary", err: errors.New(`ent: missing required field "SharedResult.sql_summary"`)}
 	}
-	if _, ok := _c.mutation.DatasourceName(); !ok {
-		return &ValidationError{Name: "datasource_name", err: errors.New(`ent: missing required field "SharedResult.datasource_name"`)}
+	if _, ok := _c.mutation.DatasourceID(); !ok {
+		return &ValidationError{Name: "datasource_id", err: errors.New(`ent: missing required field "SharedResult.datasource_id"`)}
+	}
+	if _, ok := _c.mutation.Database(); !ok {
+		return &ValidationError{Name: "database", err: errors.New(`ent: missing required field "SharedResult.database"`)}
+	}
+	if _, ok := _c.mutation.TargetsJSON(); !ok {
+		return &ValidationError{Name: "targets_json", err: errors.New(`ent: missing required field "SharedResult.targets_json"`)}
 	}
 	if _, ok := _c.mutation.Revoked(); !ok {
 		return &ValidationError{Name: "revoked", err: errors.New(`ent: missing required field "SharedResult.revoked"`)}
@@ -356,9 +398,17 @@ func (_c *SharedResultCreate) createSpec() (*SharedResult, *sqlgraph.CreateSpec)
 		_spec.SetField(sharedresult.FieldSQLSummary, field.TypeString, value)
 		_node.SQLSummary = value
 	}
-	if value, ok := _c.mutation.DatasourceName(); ok {
-		_spec.SetField(sharedresult.FieldDatasourceName, field.TypeString, value)
-		_node.DatasourceName = value
+	if value, ok := _c.mutation.DatasourceID(); ok {
+		_spec.SetField(sharedresult.FieldDatasourceID, field.TypeInt64, value)
+		_node.DatasourceID = value
+	}
+	if value, ok := _c.mutation.Database(); ok {
+		_spec.SetField(sharedresult.FieldDatabase, field.TypeString, value)
+		_node.Database = value
+	}
+	if value, ok := _c.mutation.TargetsJSON(); ok {
+		_spec.SetField(sharedresult.FieldTargetsJSON, field.TypeString, value)
+		_node.TargetsJSON = value
 	}
 	if value, ok := _c.mutation.Revoked(); ok {
 		_spec.SetField(sharedresult.FieldRevoked, field.TypeBool, value)
@@ -544,15 +594,45 @@ func (u *SharedResultUpsert) UpdateSQLSummary() *SharedResultUpsert {
 	return u
 }
 
-// SetDatasourceName sets the "datasource_name" field.
-func (u *SharedResultUpsert) SetDatasourceName(v string) *SharedResultUpsert {
-	u.Set(sharedresult.FieldDatasourceName, v)
+// SetDatasourceID sets the "datasource_id" field.
+func (u *SharedResultUpsert) SetDatasourceID(v int64) *SharedResultUpsert {
+	u.Set(sharedresult.FieldDatasourceID, v)
 	return u
 }
 
-// UpdateDatasourceName sets the "datasource_name" field to the value that was provided on create.
-func (u *SharedResultUpsert) UpdateDatasourceName() *SharedResultUpsert {
-	u.SetExcluded(sharedresult.FieldDatasourceName)
+// UpdateDatasourceID sets the "datasource_id" field to the value that was provided on create.
+func (u *SharedResultUpsert) UpdateDatasourceID() *SharedResultUpsert {
+	u.SetExcluded(sharedresult.FieldDatasourceID)
+	return u
+}
+
+// AddDatasourceID adds v to the "datasource_id" field.
+func (u *SharedResultUpsert) AddDatasourceID(v int64) *SharedResultUpsert {
+	u.Add(sharedresult.FieldDatasourceID, v)
+	return u
+}
+
+// SetDatabase sets the "database" field.
+func (u *SharedResultUpsert) SetDatabase(v string) *SharedResultUpsert {
+	u.Set(sharedresult.FieldDatabase, v)
+	return u
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *SharedResultUpsert) UpdateDatabase() *SharedResultUpsert {
+	u.SetExcluded(sharedresult.FieldDatabase)
+	return u
+}
+
+// SetTargetsJSON sets the "targets_json" field.
+func (u *SharedResultUpsert) SetTargetsJSON(v string) *SharedResultUpsert {
+	u.Set(sharedresult.FieldTargetsJSON, v)
+	return u
+}
+
+// UpdateTargetsJSON sets the "targets_json" field to the value that was provided on create.
+func (u *SharedResultUpsert) UpdateTargetsJSON() *SharedResultUpsert {
+	u.SetExcluded(sharedresult.FieldTargetsJSON)
 	return u
 }
 
@@ -778,17 +858,52 @@ func (u *SharedResultUpsertOne) UpdateSQLSummary() *SharedResultUpsertOne {
 	})
 }
 
-// SetDatasourceName sets the "datasource_name" field.
-func (u *SharedResultUpsertOne) SetDatasourceName(v string) *SharedResultUpsertOne {
+// SetDatasourceID sets the "datasource_id" field.
+func (u *SharedResultUpsertOne) SetDatasourceID(v int64) *SharedResultUpsertOne {
 	return u.Update(func(s *SharedResultUpsert) {
-		s.SetDatasourceName(v)
+		s.SetDatasourceID(v)
 	})
 }
 
-// UpdateDatasourceName sets the "datasource_name" field to the value that was provided on create.
-func (u *SharedResultUpsertOne) UpdateDatasourceName() *SharedResultUpsertOne {
+// AddDatasourceID adds v to the "datasource_id" field.
+func (u *SharedResultUpsertOne) AddDatasourceID(v int64) *SharedResultUpsertOne {
 	return u.Update(func(s *SharedResultUpsert) {
-		s.UpdateDatasourceName()
+		s.AddDatasourceID(v)
+	})
+}
+
+// UpdateDatasourceID sets the "datasource_id" field to the value that was provided on create.
+func (u *SharedResultUpsertOne) UpdateDatasourceID() *SharedResultUpsertOne {
+	return u.Update(func(s *SharedResultUpsert) {
+		s.UpdateDatasourceID()
+	})
+}
+
+// SetDatabase sets the "database" field.
+func (u *SharedResultUpsertOne) SetDatabase(v string) *SharedResultUpsertOne {
+	return u.Update(func(s *SharedResultUpsert) {
+		s.SetDatabase(v)
+	})
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *SharedResultUpsertOne) UpdateDatabase() *SharedResultUpsertOne {
+	return u.Update(func(s *SharedResultUpsert) {
+		s.UpdateDatabase()
+	})
+}
+
+// SetTargetsJSON sets the "targets_json" field.
+func (u *SharedResultUpsertOne) SetTargetsJSON(v string) *SharedResultUpsertOne {
+	return u.Update(func(s *SharedResultUpsert) {
+		s.SetTargetsJSON(v)
+	})
+}
+
+// UpdateTargetsJSON sets the "targets_json" field to the value that was provided on create.
+func (u *SharedResultUpsertOne) UpdateTargetsJSON() *SharedResultUpsertOne {
+	return u.Update(func(s *SharedResultUpsert) {
+		s.UpdateTargetsJSON()
 	})
 }
 
@@ -1185,17 +1300,52 @@ func (u *SharedResultUpsertBulk) UpdateSQLSummary() *SharedResultUpsertBulk {
 	})
 }
 
-// SetDatasourceName sets the "datasource_name" field.
-func (u *SharedResultUpsertBulk) SetDatasourceName(v string) *SharedResultUpsertBulk {
+// SetDatasourceID sets the "datasource_id" field.
+func (u *SharedResultUpsertBulk) SetDatasourceID(v int64) *SharedResultUpsertBulk {
 	return u.Update(func(s *SharedResultUpsert) {
-		s.SetDatasourceName(v)
+		s.SetDatasourceID(v)
 	})
 }
 
-// UpdateDatasourceName sets the "datasource_name" field to the value that was provided on create.
-func (u *SharedResultUpsertBulk) UpdateDatasourceName() *SharedResultUpsertBulk {
+// AddDatasourceID adds v to the "datasource_id" field.
+func (u *SharedResultUpsertBulk) AddDatasourceID(v int64) *SharedResultUpsertBulk {
 	return u.Update(func(s *SharedResultUpsert) {
-		s.UpdateDatasourceName()
+		s.AddDatasourceID(v)
+	})
+}
+
+// UpdateDatasourceID sets the "datasource_id" field to the value that was provided on create.
+func (u *SharedResultUpsertBulk) UpdateDatasourceID() *SharedResultUpsertBulk {
+	return u.Update(func(s *SharedResultUpsert) {
+		s.UpdateDatasourceID()
+	})
+}
+
+// SetDatabase sets the "database" field.
+func (u *SharedResultUpsertBulk) SetDatabase(v string) *SharedResultUpsertBulk {
+	return u.Update(func(s *SharedResultUpsert) {
+		s.SetDatabase(v)
+	})
+}
+
+// UpdateDatabase sets the "database" field to the value that was provided on create.
+func (u *SharedResultUpsertBulk) UpdateDatabase() *SharedResultUpsertBulk {
+	return u.Update(func(s *SharedResultUpsert) {
+		s.UpdateDatabase()
+	})
+}
+
+// SetTargetsJSON sets the "targets_json" field.
+func (u *SharedResultUpsertBulk) SetTargetsJSON(v string) *SharedResultUpsertBulk {
+	return u.Update(func(s *SharedResultUpsert) {
+		s.SetTargetsJSON(v)
+	})
+}
+
+// UpdateTargetsJSON sets the "targets_json" field to the value that was provided on create.
+func (u *SharedResultUpsertBulk) UpdateTargetsJSON() *SharedResultUpsertBulk {
+	return u.Update(func(s *SharedResultUpsert) {
+		s.UpdateTargetsJSON()
 	})
 }
 

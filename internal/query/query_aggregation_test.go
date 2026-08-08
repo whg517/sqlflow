@@ -20,7 +20,9 @@ func TestMaskingApplies_WithMatchingRule(t *testing.T) {
 	dsID := seedQueryDatasource(t, qs.dsSvc, ctx)
 	seedMaskRule(t, testDB, dsID, "testdb", "orders", "email", "partial")
 
-	if !qs.maskingApplies(ctx, 1, "developer", dsID, "testdb", []string{"orders"}) {
+	if applies, err := qs.maskingApplies(ctx, 1, "developer", dsID, "testdb", []string{"orders"}); err != nil {
+		t.Fatalf("maskingApplies: %v", err)
+	} else if !applies {
 		t.Error("masking should apply: developer has no unmask grant and a rule matches")
 	}
 }
@@ -32,7 +34,9 @@ func TestMaskingApplies_NoRule(t *testing.T) {
 	ctx := context.Background()
 	dsID := seedQueryDatasource(t, qs.dsSvc, ctx)
 
-	if qs.maskingApplies(ctx, 1, "developer", dsID, "testdb", []string{"orders"}) {
+	if applies, err := qs.maskingApplies(ctx, 1, "developer", dsID, "testdb", []string{"orders"}); err != nil {
+		t.Fatalf("maskingApplies: %v", err)
+	} else if applies {
 		t.Error("masking must not apply when no rule matches the target")
 	}
 }
@@ -46,7 +50,9 @@ func TestMaskingApplies_BypassGrant(t *testing.T) {
 	seedMaskRule(t, testDB, dsID, "testdb", "orders", "email", "partial")
 
 	// The seeded policy grants dba desensitize:bypass on every object.
-	if qs.maskingApplies(ctx, 2, "dba", dsID, "testdb", []string{"orders"}) {
+	if applies, err := qs.maskingApplies(ctx, 2, "dba", dsID, "testdb", []string{"orders"}); err != nil {
+		t.Fatalf("maskingApplies: %v", err)
+	} else if applies {
 		t.Error("masking must not apply for a role holding a bypass grant")
 	}
 }
@@ -59,7 +65,9 @@ func TestMaskingApplies_UnrelatedTable(t *testing.T) {
 	dsID := seedQueryDatasource(t, qs.dsSvc, ctx)
 	seedMaskRule(t, testDB, dsID, "testdb", "customers", "email", "partial")
 
-	if qs.maskingApplies(ctx, 1, "developer", dsID, "testdb", []string{"orders"}) {
+	if applies, err := qs.maskingApplies(ctx, 1, "developer", dsID, "testdb", []string{"orders"}); err != nil {
+		t.Fatalf("maskingApplies: %v", err)
+	} else if applies {
 		t.Error("a rule on customers must not mark orders as masked")
 	}
 }

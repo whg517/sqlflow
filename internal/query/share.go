@@ -20,6 +20,8 @@ import (
 	"github.com/whg517/sqlflow/internal/db/ent"
 	"github.com/whg517/sqlflow/internal/db/ent/sharedresult"
 	"github.com/whg517/sqlflow/internal/model"
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
+	"github.com/whg517/sqlflow/internal/platform/mask"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -30,6 +32,9 @@ var (
 	ErrSharePassword      = errors.New("密码错误")
 	ErrShareRowLimit      = errors.New("共享数据超过 10000 行上限")
 	ErrShareExpiryTooLong = errors.New("过期时间不能超过 7 天")
+	// ErrShareUnmaskable means a stored share has no scope to look rules up by,
+	// so nothing can be said about what its rows expose.
+	ErrShareUnmaskable = errors.New("共享结果缺少脱敏所需的来源信息，已拒绝返回")
 )
 
 const (
@@ -39,19 +44,41 @@ const (
 	shareAccessTokenType = "v1"
 )
 
+// ShareScope is where a published result came from.
+type ShareScope struct {
+	Database string
+	Targets  []string
+}
+
+// ShareScopeResolver derives the scope a result belongs to, and refuses to
+// derive one the actor may not read.
+//
+// Declared here at the point of use rather than by taking the whole query
+// Service: publishing needs one answer — which database and which tables — and
+// naming just that keeps the two from tangling. It is also why the scope cannot
+// come from the request: a client that named no targets would publish rows no
+// rule could ever match.
+type ShareScopeResolver interface {
+	ResolveShareScope(ctx context.Context, userID int64, role string, datasourceID int64, sqlContent string) (ShareScope, error)
+}
+
 // ShareService handles shared query results.
 type ShareService struct {
 	database     *db.DB
 	client       *ent.Client
 	accessSecret []byte
+	scope        ShareScopeResolver
+	auditSvc     auditlog.Writer
 }
 
 // NewShareService creates a new ShareService.
-func NewShareService(database *db.DB, accessSecret string) *ShareService {
+func NewShareService(database *db.DB, accessSecret string, scope ShareScopeResolver, auditSvc auditlog.Writer) *ShareService {
 	return &ShareService{
 		database:     database,
 		client:       database.Client(),
 		accessSecret: []byte(accessSecret),
+		scope:        scope,
+		auditSvc:     auditlog.OrDiscard(auditSvc),
 	}
 }
 
@@ -74,6 +101,32 @@ func (s *ShareService) CreateShare(ctx context.Context, req *CreateShareRequest)
 	if req.ExpiresAt.After(maxExpiry) {
 		return nil, ErrShareExpiryTooLong
 	}
+
+	// Record where the rows came from, so GetShare can protect them. The actor
+	// is re-authorized here rather than trusted: publishing is a second entrance
+	// to the same data and invariant 1 gives it no exemption.
+	scope, err := s.scope.ResolveShareScope(ctx, req.UserID, req.Role, req.DatasourceID, req.SQLContent)
+	if err != nil {
+		s.auditSvc.Write(ctx, auditlog.Record{
+			UserID:       req.UserID,
+			Action:       "query_share_rejected",
+			DatasourceID: req.DatasourceID,
+			SQLContent:   req.SQLContent,
+			SQLSummary:   auditlog.Summarize(req.SQLContent),
+			ErrorMessage: err.Error(),
+		})
+		return nil, err
+	}
+	targetsJSON, err := json.Marshal(scope.Targets)
+	if err != nil {
+		return nil, fmt.Errorf("marshal targets: %w", err)
+	}
+
+	// The summary is derived, never accepted. The client used to send
+	// `currentSql.trim().substring(0, 200)` — the raw statement, verbatim — and
+	// it was handed to anyone holding the link, while the server had Summarize
+	// all along and this path simply never called it.
+	summary := auditlog.Summarize(req.SQLContent)
 
 	token, err := generateToken()
 	if err != nil {
@@ -108,8 +161,10 @@ func (s *ShareService) CreateShare(ctx context.Context, req *CreateShareRequest)
 		SetRowCount(int64(len(req.Rows))).
 		SetExpiresAt(req.ExpiresAt).
 		SetPasswordHash(passwordHash).
-		SetSQLSummary(req.SQLSummary).
-		SetDatasourceName(req.DatasourceName).
+		SetSQLSummary(summary).
+		SetDatasourceID(req.DatasourceID).
+		SetDatabase(scope.Database).
+		SetTargetsJSON(string(targetsJSON)).
 		SetRevoked(false).
 		Save(ctx)
 	if err != nil {
@@ -117,20 +172,33 @@ func (s *ShareService) CreateShare(ctx context.Context, req *CreateShareRequest)
 		return nil, fmt.Errorf("创建共享链接失败")
 	}
 
+	// Publishing rows at an unauthenticated URL is the most consequential thing
+	// this package does and it left no trace at all.
+	s.auditSvc.Write(ctx, auditlog.Record{
+		UserID:       req.UserID,
+		Action:       "query_share",
+		DatasourceID: req.DatasourceID,
+		Database:     scope.Database,
+		SQLContent:   req.SQLContent,
+		SQLSummary:   summary,
+		ResultRows:   int64(len(req.Rows)),
+	})
+
 	result := &model.SharedResult{
-		ID:             int64(saved.ID),
-		UserID:         req.UserID,
-		Username:       req.Username,
-		Token:          token,
-		ColumnsJSON:    string(columnsJSON),
-		RowsJSON:       string(rowsJSON),
-		RowCount:       int64(len(req.Rows)),
-		ExpiresAt:      req.ExpiresAt,
-		PasswordHash:   passwordHash,
-		SQLSummary:     req.SQLSummary,
-		DatasourceName: req.DatasourceName,
-		Revoked:        false,
-		CreatedAt:      saved.CreatedAt,
+		ID:           int64(saved.ID),
+		UserID:       req.UserID,
+		Username:     req.Username,
+		Token:        token,
+		ColumnsJSON:  string(columnsJSON),
+		RowsJSON:     string(rowsJSON),
+		RowCount:     int64(len(req.Rows)),
+		ExpiresAt:    req.ExpiresAt,
+		PasswordHash: passwordHash,
+		SQLSummary:   summary,
+		DatasourceID: req.DatasourceID,
+		Database:     scope.Database,
+		Revoked:      false,
+		CreatedAt:    saved.CreatedAt,
 	}
 
 	return result, nil
@@ -185,18 +253,57 @@ func (s *ShareService) GetShare(ctx context.Context, token, accessProof string) 
 		return nil, fmt.Errorf("解析行数据失败")
 	}
 
+	if err := s.maskForAnonymousReader(ctx, sr, rows); err != nil {
+		return nil, err
+	}
+
 	return &model.SharedResultPublic{
-		ID:             int64(sr.ID),
-		Columns:        columns,
-		Rows:           rows,
-		RowCount:       sr.RowCount,
-		SQLSummary:     sr.SQLSummary,
-		DatasourceName: sr.DatasourceName,
-		ExpiresAt:      sr.ExpiresAt.Format(time.RFC3339),
-		HasPassword:    hasPassword,
-		AccessGranted:  true,
-		CreatedAt:      sr.CreatedAt.Format(time.RFC3339),
+		ID:            int64(sr.ID),
+		Columns:       columns,
+		Rows:          rows,
+		RowCount:      sr.RowCount,
+		SQLSummary:    sr.SQLSummary,
+		ExpiresAt:     sr.ExpiresAt.Format(time.RFC3339),
+		HasPassword:   hasPassword,
+		AccessGranted: true,
+		CreatedAt:     sr.CreatedAt.Format(time.RFC3339),
 	}, nil
+}
+
+// maskForAnonymousReader applies the current rules to the stored rows, in place.
+//
+// The rules are consulted on every read rather than baked in at creation, and
+// that difference is the point. The reader of /s/:token is anonymous and holds
+// no grant, so every rule matching the recorded targets applies — including one
+// created after the link was published, and including the case the old design
+// could not address at all: a publisher who held an unmask grant stored raw
+// values, and those values went to the public URL exactly as they were.
+//
+// CLAUDE.md says query, export and share share one rule set. Until the record
+// carried a datasource, a database and a target list, share consulted none.
+func (s *ShareService) maskForAnonymousReader(ctx context.Context, sr *ent.SharedResult, rows []map[string]interface{}) error {
+	var targets []string
+	if err := json.Unmarshal([]byte(sr.TargetsJSON), &targets); err != nil {
+		return fmt.Errorf("解析共享目标失败")
+	}
+	if sr.DatasourceID == 0 || len(targets) == 0 {
+		// Nothing to look rules up by. A share is only created through
+		// CreateShare, which always records both, so this is unreachable from the
+		// live path — but serving rows we cannot reason about is the failure this
+		// whole change exists to remove.
+		return ErrShareUnmaskable
+	}
+
+	rules, err := loadMaskRules(ctx, s.client, sr.DatasourceID, sr.Database, targets)
+	if err != nil {
+		return err
+	}
+	for _, table := range targets {
+		if tableRules := mask.MatchRules(rules, table); len(tableRules) > 0 {
+			mask.ApplyToMongoRows(rows, tableRules)
+		}
+	}
+	return nil
 }
 
 // VerifyPassword checks if the provided password matches the shared result and
@@ -285,17 +392,18 @@ func (s *ShareService) ListMyShares(ctx context.Context, userID int64) ([]model.
 	var out []model.SharedResult
 	for _, sr := range results {
 		out = append(out, model.SharedResult{
-			ID:             int64(sr.ID),
-			UserID:         sr.UserID,
-			Username:       sr.Username,
-			Token:          sr.Token,
-			RowCount:       sr.RowCount,
-			ExpiresAt:      sr.ExpiresAt,
-			SQLSummary:     sr.SQLSummary,
-			DatasourceName: sr.DatasourceName,
-			Revoked:        sr.Revoked,
-			RevokedAt:      sr.RevokedAt,
-			CreatedAt:      sr.CreatedAt,
+			ID:           int64(sr.ID),
+			UserID:       sr.UserID,
+			Username:     sr.Username,
+			Token:        sr.Token,
+			RowCount:     sr.RowCount,
+			ExpiresAt:    sr.ExpiresAt,
+			SQLSummary:   sr.SQLSummary,
+			DatasourceID: sr.DatasourceID,
+			Database:     sr.Database,
+			Revoked:      sr.Revoked,
+			RevokedAt:    sr.RevokedAt,
+			CreatedAt:    sr.CreatedAt,
 		})
 	}
 
@@ -327,12 +435,19 @@ func (s *ShareService) RevokeShare(ctx context.Context, id, userID int64) error 
 
 // CreateShareRequest is the input for creating a shared result.
 type CreateShareRequest struct {
-	UserID         int64
-	Username       string
-	Columns        []string
-	Rows           []map[string]interface{}
-	ExpiresAt      time.Time
-	Password       string
-	SQLSummary     string
-	DatasourceName string
+	UserID   int64
+	Username string
+	// Role is what the scope resolver re-authorizes against.
+	Role      string
+	Columns   []string
+	Rows      []map[string]interface{}
+	ExpiresAt time.Time
+	Password  string
+
+	// DatasourceID and SQLContent are what the scope is derived from. Neither a
+	// summary nor a datasource name is accepted from the caller any more: the
+	// summary is produced by auditlog.Summarize here, and the datasource is
+	// identified by id so mask rules can actually be found.
+	DatasourceID int64
+	SQLContent   string
 }

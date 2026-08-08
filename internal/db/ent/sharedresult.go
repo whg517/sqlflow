@@ -35,8 +35,12 @@ type SharedResult struct {
 	PasswordHash string `json:"-"`
 	// SQLSummary holds the value of the "sql_summary" field.
 	SQLSummary string `json:"sql_summary,omitempty"`
-	// DatasourceName holds the value of the "datasource_name" field.
-	DatasourceName string `json:"datasource_name,omitempty"`
+	// DatasourceID holds the value of the "datasource_id" field.
+	DatasourceID int64 `json:"datasource_id,omitempty"`
+	// Database holds the value of the "database" field.
+	Database string `json:"database,omitempty"`
+	// TargetsJSON holds the value of the "targets_json" field.
+	TargetsJSON string `json:"targets_json,omitempty"`
 	// Revoked holds the value of the "revoked" field.
 	Revoked bool `json:"revoked,omitempty"`
 	// RevokedAt holds the value of the "revoked_at" field.
@@ -53,9 +57,9 @@ func (*SharedResult) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case sharedresult.FieldRevoked:
 			values[i] = new(sql.NullBool)
-		case sharedresult.FieldID, sharedresult.FieldUserID, sharedresult.FieldRowCount:
+		case sharedresult.FieldID, sharedresult.FieldUserID, sharedresult.FieldRowCount, sharedresult.FieldDatasourceID:
 			values[i] = new(sql.NullInt64)
-		case sharedresult.FieldUsername, sharedresult.FieldToken, sharedresult.FieldColumnsJSON, sharedresult.FieldRowsJSON, sharedresult.FieldPasswordHash, sharedresult.FieldSQLSummary, sharedresult.FieldDatasourceName:
+		case sharedresult.FieldUsername, sharedresult.FieldToken, sharedresult.FieldColumnsJSON, sharedresult.FieldRowsJSON, sharedresult.FieldPasswordHash, sharedresult.FieldSQLSummary, sharedresult.FieldDatabase, sharedresult.FieldTargetsJSON:
 			values[i] = new(sql.NullString)
 		case sharedresult.FieldExpiresAt, sharedresult.FieldRevokedAt, sharedresult.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -134,11 +138,23 @@ func (_m *SharedResult) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SQLSummary = value.String
 			}
-		case sharedresult.FieldDatasourceName:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field datasource_name", values[i])
+		case sharedresult.FieldDatasourceID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field datasource_id", values[i])
 			} else if value.Valid {
-				_m.DatasourceName = value.String
+				_m.DatasourceID = value.Int64
+			}
+		case sharedresult.FieldDatabase:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field database", values[i])
+			} else if value.Valid {
+				_m.Database = value.String
+			}
+		case sharedresult.FieldTargetsJSON:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field targets_json", values[i])
+			} else if value.Valid {
+				_m.TargetsJSON = value.String
 			}
 		case sharedresult.FieldRevoked:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -222,8 +238,14 @@ func (_m *SharedResult) String() string {
 	builder.WriteString("sql_summary=")
 	builder.WriteString(_m.SQLSummary)
 	builder.WriteString(", ")
-	builder.WriteString("datasource_name=")
-	builder.WriteString(_m.DatasourceName)
+	builder.WriteString("datasource_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DatasourceID))
+	builder.WriteString(", ")
+	builder.WriteString("database=")
+	builder.WriteString(_m.Database)
+	builder.WriteString(", ")
+	builder.WriteString("targets_json=")
+	builder.WriteString(_m.TargetsJSON)
 	builder.WriteString(", ")
 	builder.WriteString("revoked=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Revoked))

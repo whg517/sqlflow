@@ -357,7 +357,12 @@ CREATE TABLE IF NOT EXISTS shared_results (
     expires_at             TIMESTAMPTZ NOT NULL,
     password_hash          TEXT    NOT NULL DEFAULT '',
     sql_summary            TEXT    NOT NULL DEFAULT '',
-    datasource_name        TEXT    NOT NULL DEFAULT '',
+    -- Where the rows came from. Masking needs all three: without them
+    -- loadMaskRules cannot be called at all, so a published result could not be
+    -- protected even in principle.
+    datasource_id          BIGINT  NOT NULL DEFAULT 0,
+    database               TEXT    NOT NULL DEFAULT '',
+    targets_json           TEXT    NOT NULL DEFAULT '[]',
     revoked                BOOLEAN NOT NULL DEFAULT FALSE,
     revoked_at             TIMESTAMPTZ,
     created_at             TIMESTAMPTZ NOT NULL DEFAULT (now())

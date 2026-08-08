@@ -494,7 +494,10 @@ func TestApplyDesensitization_NoRules(t *testing.T) {
 		Total: 1,
 	}
 
-	desensitized, maskedFields := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", 1, "testdb", []string{"users"})
+	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", 1, "testdb", []string{"users"})
+	if maskErr != nil {
+		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+	}
 	if desensitized {
 		t.Error("should not be desensitized when no mask rules exist")
 	}
@@ -529,7 +532,10 @@ func TestApplyDesensitization_WithRules(t *testing.T) {
 		Total: 2,
 	}
 
-	desensitized, maskedFields := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"users"})
+	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"users"})
+	if maskErr != nil {
+		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+	}
 	if !desensitized {
 		t.Error("expected desensitized=true when mask rules match")
 	}
@@ -576,7 +582,10 @@ func TestApplyDesensitization_BypassPermission(t *testing.T) {
 		Total: 1,
 	}
 
-	desensitized, maskedFields := qs.applyDesensitizationForActor(ctx, result, testActorID, "admin", dsID, "testdb", []string{"users"})
+	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "admin", dsID, "testdb", []string{"users"})
+	if maskErr != nil {
+		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+	}
 	if desensitized {
 		t.Error("admin with desensitize:bypass should not be masked")
 	}
@@ -637,7 +646,10 @@ func TestApplyDesensitization_MultipleMaskTypes(t *testing.T) {
 		Total: 1,
 	}
 
-	desensitized, maskedFields := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"users"})
+	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"users"})
+	if maskErr != nil {
+		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+	}
 	if !desensitized {
 		t.Error("expected desensitized=true")
 	}
@@ -693,7 +705,10 @@ func TestApplyDesensitization_WildcardTableRule(t *testing.T) {
 		Total: 1,
 	}
 
-	desensitized, maskedFields := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"orders"})
+	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"orders"})
+	if maskErr != nil {
+		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+	}
 	if !desensitized {
 		t.Error("wildcard rule should match any table")
 	}
@@ -730,7 +745,10 @@ func TestApplyDesensitization_NoMatchTable(t *testing.T) {
 		Total: 1,
 	}
 
-	desensitized, maskedFields := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"orders"})
+	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"orders"})
+	if maskErr != nil {
+		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+	}
 	if desensitized {
 		t.Error("should not desensitize when table doesn't match rule")
 	}
@@ -750,7 +768,10 @@ func TestApplyDesensitization_EmptyTables(t *testing.T) {
 	}
 
 	// Empty tables list — no rules should match
-	desensitized, maskedFields := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", 1, "testdb", []string{})
+	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", 1, "testdb", []string{})
+	if maskErr != nil {
+		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+	}
 	if desensitized {
 		t.Error("should not desensitize with empty tables list")
 	}
@@ -769,7 +790,10 @@ func TestApplyDesensitization_NilRows(t *testing.T) {
 		Total:   0,
 	}
 
-	desensitized, maskedFields := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", 1, "testdb", []string{"users"})
+	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", 1, "testdb", []string{"users"})
+	if maskErr != nil {
+		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+	}
 	if desensitized {
 		t.Error("should not desensitize with nil rows")
 	}
@@ -804,7 +828,10 @@ func TestApplyDesensitization_FieldNotInRow(t *testing.T) {
 		Total: 1,
 	}
 
-	desensitized, maskedFields := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"users"})
+	desensitized, maskedFields, maskErr := qs.applyDesensitizationForActor(ctx, result, testActorID, "developer", dsID, "testdb", []string{"users"})
+	if maskErr != nil {
+		t.Fatalf("applyDesensitizationForActor: %v", maskErr)
+	}
 	if desensitized {
 		t.Error("should not desensitize when field doesn't exist in rows")
 	}
@@ -836,7 +863,10 @@ func TestLoadMaskRules(t *testing.T) {
 	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
 	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager())
 
-	rules := qs.loadMaskRules(ctx, dsID, "testdb", []string{"users"})
+	rules, err := loadMaskRules(ctx, qs.client, dsID, "testdb", []string{"users"})
+	if err != nil {
+		t.Fatalf("loadMaskRules: %v", err)
+	}
 	if len(rules) < 2 {
 		t.Errorf("expected at least 2 rules for 'users', got %d", len(rules))
 	}
@@ -865,7 +895,10 @@ func TestLoadMaskRules_EmptyResult(t *testing.T) {
 	qs, _ := setupQueryService(t)
 	ctx := context.Background()
 
-	rules := qs.loadMaskRules(ctx, 99999, "nonexistent", []string{"foo"})
+	rules, err := loadMaskRules(ctx, qs.client, 99999, "nonexistent", []string{"foo"})
+	if err != nil {
+		t.Fatalf("loadMaskRules: %v", err)
+	}
 	if len(rules) != 0 {
 		t.Errorf("expected 0 rules for nonexistent datasource, got %d", len(rules))
 	}

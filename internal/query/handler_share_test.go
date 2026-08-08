@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/whg517/sqlflow/internal/platform/auditlog"
 	"github.com/whg517/sqlflow/internal/testutil"
 )
 
@@ -21,7 +22,7 @@ func setupShareTest(t *testing.T) (*echo.Echo, *ShareService, *ShareHandler, int
 	t.Helper()
 	d := testutil.NewDB(t)
 
-	shareSvc := NewShareService(d, "handler-share-test-secret-at-least-32-bytes")
+	shareSvc := NewShareService(d, "handler-share-test-secret-at-least-32-bytes", stubShareScope{}, auditlog.Discard)
 	h := NewShareHandler(shareSvc)
 	e := echo.New()
 
@@ -47,7 +48,7 @@ func newShareContext(e *echo.Echo, method, path, body string, userID int64) (ech
 func TestShareHandler_CreateShare_Success(t *testing.T) {
 	e, _, h, userID := setupShareTest(t)
 
-	body := `{"columns":["id","name"],"rows":[{"id":1,"name":"a"}],"sql_summary":"SELECT 1","datasource_name":"prod"}`
+	body := `{"columns":["id","name"],"rows":[{"id":1,"name":"a"}],"datasource_id":1,"sql":"SELECT id, name FROM users"}`
 	c, rec := newShareContext(e, http.MethodPost, "/api/query/share", body, userID)
 	c.SetPath("/api/query/share")
 
@@ -108,7 +109,7 @@ func TestShareHandler_CreateShare_ServiceLimits(t *testing.T) {
 
 	t.Run("expiry too long (>7d)", func(t *testing.T) {
 		// expires_in_hours=168 is exactly 7 days (allowed), so use 200 to exceed.
-		body := `{"columns":["id"],"rows":[{"id":1}],"expires_in_hours":200}`
+		body := `{"columns":["id"],"rows":[{"id":1}],"expires_in_hours":200,"datasource_id":1,"sql":"SELECT id FROM users"}`
 		c, rec := newShareContext(e, http.MethodPost, "/api/query/share", body, userID)
 		c.SetPath("/api/query/share")
 		if err := h.CreateShare(c); err != nil {
@@ -132,7 +133,7 @@ func TestShareHandler_CreateShare_ServiceLimits(t *testing.T) {
 			b.WriteByte('0' + byte(i%10))
 			b.WriteByte('}')
 		}
-		b.WriteString(`]}`)
+		b.WriteString(`],"datasource_id":1,"sql":"SELECT id FROM users"}`)
 		c, rec := newShareContext(e, http.MethodPost, "/api/query/share", b.String(), userID)
 		c.SetPath("/api/query/share")
 		if err := h.CreateShare(c); err != nil {
@@ -191,7 +192,7 @@ func TestShareHandler_GetShare_EmptyToken(t *testing.T) {
 func TestShareHandler_GetShare_Success_RoundTrip(t *testing.T) {
 	e, _, h, userID := setupShareTest(t)
 
-	body := `{"columns":["id","name"],"rows":[{"id":1,"name":"alice"}]}`
+	body := `{"columns":["id","name"],"rows":[{"id":1,"name":"alice"}],"datasource_id":1,"sql":"SELECT id, name FROM users"}`
 	c1, rec1 := newShareContext(e, http.MethodPost, "/api/query/share", body, userID)
 	c1.SetPath("/api/query/share")
 	if err := h.CreateShare(c1); err != nil {
@@ -241,7 +242,7 @@ func TestShareHandler_GetShare_Success_RoundTrip(t *testing.T) {
 func TestShareHandler_VerifyPassword(t *testing.T) {
 	e, _, h, userID := setupShareTest(t)
 
-	body := `{"columns":["id"],"rows":[{"id":1}],"password":"s3cret","sql_summary":"SELECT secret","datasource_name":"prod"}`
+	body := `{"columns":["id"],"rows":[{"id":1}],"password":"s3cret","datasource_id":1,"sql":"SELECT secret FROM users"}`
 	c1, rec1 := newShareContext(e, http.MethodPost, "/api/query/share", body, userID)
 	c1.SetPath("/api/query/share")
 	if err := h.CreateShare(c1); err != nil {
@@ -284,7 +285,7 @@ func TestShareHandler_VerifyPassword(t *testing.T) {
 		if columns, _ := data["columns"].([]interface{}); len(columns) != 0 {
 			t.Fatal("direct read leaked columns")
 		}
-		if data["sql_summary"] != nil || data["datasource_name"] != nil {
+		if data["sql_summary"] != nil {
 			t.Fatal("direct read leaked protected metadata")
 		}
 		if cacheControl := rec.Header().Get("Cache-Control"); cacheControl != "no-store" {
@@ -382,24 +383,28 @@ func TestShareHandler_GetShare_ExpiredAndRevoked(t *testing.T) {
 	e, shareSvc, h, userID := setupShareTest(t)
 
 	expired, err := shareSvc.CreateShare(t.Context(), &CreateShareRequest{
-		UserID:    userID,
-		Username:  "sharer",
-		Columns:   []string{"id"},
-		Rows:      []map[string]interface{}{{"id": 1}},
-		ExpiresAt: time.Now().Add(-time.Hour),
-		Password:  "secret",
+		UserID:       userID,
+		Username:     "sharer",
+		Columns:      []string{"id"},
+		Rows:         []map[string]interface{}{{"id": 1}},
+		ExpiresAt:    time.Now().Add(-time.Hour),
+		DatasourceID: 1,
+		SQLContent:   "SELECT id FROM users",
+		Password:     "secret",
 	})
 	if err != nil {
 		t.Fatalf("create expired share: %v", err)
 	}
 
 	revoked, err := shareSvc.CreateShare(t.Context(), &CreateShareRequest{
-		UserID:    userID,
-		Username:  "sharer",
-		Columns:   []string{"id"},
-		Rows:      []map[string]interface{}{{"id": 1}},
-		ExpiresAt: time.Now().Add(time.Hour),
-		Password:  "secret",
+		UserID:       userID,
+		Username:     "sharer",
+		Columns:      []string{"id"},
+		Rows:         []map[string]interface{}{{"id": 1}},
+		ExpiresAt:    time.Now().Add(time.Hour),
+		DatasourceID: 1,
+		SQLContent:   "SELECT id FROM users",
+		Password:     "secret",
 	})
 	if err != nil {
 		t.Fatalf("create revoked share: %v", err)
@@ -437,7 +442,7 @@ func TestShareHandler_GetShare_ExpiredAndRevoked(t *testing.T) {
 func TestShareHandler_ListMyShares_ReturnsCreated(t *testing.T) {
 	e, _, h, userID := setupShareTest(t)
 
-	body := `{"columns":["id"],"rows":[{"id":1}]}`
+	body := `{"columns":["id"],"rows":[{"id":1}],"datasource_id":1,"sql":"SELECT id FROM users"}`
 	c1, rec1 := newShareContext(e, http.MethodPost, "/api/query/share", body, userID)
 	c1.SetPath("/api/query/share")
 	if err := h.CreateShare(c1); err != nil {
@@ -521,7 +526,7 @@ func TestShareHandler_RevokeShare(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		// Seed a share to revoke.
-		body := `{"columns":["id"],"rows":[{"id":1}]}`
+		body := `{"columns":["id"],"rows":[{"id":1}],"datasource_id":1,"sql":"SELECT id FROM users"}`
 		c1, rec1 := newShareContext(e, http.MethodPost, "/api/query/share", body, userID)
 		c1.SetPath("/api/query/share")
 		if err := h.CreateShare(c1); err != nil {
