@@ -37,7 +37,35 @@ type Service struct {
 	entClient        *ent.Client
 	client           *http.Client
 	feishuWebhookSvc *FeishuService // multi-webhook DB-backed service
-	mu               sync.RWMutex
+
+	// prefSvc and subSvc are consulted by the dispatcher. Both were fully
+	// implemented and unreachable before there was one event identity to key
+	// on: preferences could not match the sender's spelling, and outbound
+	// webhooks had no event source at all.
+	prefSvc *PreferenceService
+	subSvc  *WebhookSubscriptionService
+
+	// transportsForTest replaces the real adapter set. Tests need to observe
+	// what the decision side produced, and the alternative — asserting on
+	// outbound HTTP — is what forced the old suite to race goroutines with a
+	// request recorder.
+	transportsForTest []transport
+
+	mu sync.RWMutex
+}
+
+// SetPreferences wires per-channel event preferences.
+func (s *Service) SetPreferences(p *PreferenceService) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.prefSvc = p
+}
+
+// SetSubscriptions wires outbound webhook delivery.
+func (s *Service) SetSubscriptions(w *WebhookSubscriptionService) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.subSvc = w
 }
 
 // Deps are the collaborators and initial configuration of a notify Service.
@@ -203,304 +231,177 @@ func (s *Service) recordNotification(ctx context.Context, ticketID int64, eventT
 	}
 }
 
-// notifyWithDedup wraps a notification send with idempotency check and logging.
-func (s *Service) notifyWithDedup(ctx context.Context, ticketID int64, eventType string, sendFn func()) {
-	if s.shouldNotify(ctx, ticketID, eventType) {
-		sendFn()
-		s.recordNotification(ctx, ticketID, eventType)
-	}
-}
+// The ticket lifecycle notifications.
+//
+// Each one decides WHAT happened and says nothing about how it is sent. That is
+// the whole change: these used to be hand-written fan-outs that also chose the
+// channels, rendered twice, and launched their own goroutines — and five of
+// them silently reached only one of the two transports, because whoever added
+// them copied one `if` block and not the other.
 
 // NotifyTicketCreated sends a notification when a ticket is created.
 func (s *Service) NotifyTicketCreated(ctx context.Context, t *model.Ticket) {
-	s.notifyWithDedup(ctx, t.ID, "created", func() {
-		if s.isEnabled() {
-			title := "📋 工单提交通知"
-			text := fmt.Sprintf(
-				"**工单 #%d 已提交**\n\n"+
-					"- **提交人**: %s\n"+
-					"- **数据源ID**: %d\n"+
-					"- **数据库**: %s\n"+
-					"- **SQL摘要**: %s\n"+
-					"- **风险等级**: %s\n"+
-					"- **提交时间**: %s",
-				t.ID, t.SubmitterName, t.DatasourceID, t.Database,
-				t.SQLSummary, riskLabel(t.RiskLevel),
-				t.CreatedAt.Format("2006-01-02 15:04:05"),
-			)
-			go s.sendMarkdown(title, text)
-		}
-
-		if s.isFeishuEnabled() {
-			go s.sendFeishuCard(
-				"📋 工单提交通知",
-				fmt.Sprintf("**工单 #%d 已提交**", t.ID),
-				[]feishuCardElement{
-					feishuCardField("提交人", t.SubmitterName),
-					feishuCardField("数据库", t.Database),
-					feishuCardField("SQL摘要", t.SQLSummary),
-					feishuCardField("风险等级", riskLabel(t.RiskLevel)),
-					feishuCardField("提交时间", t.CreatedAt.Format("2006-01-02 15:04:05")),
-				},
-			)
-		}
+	s.dispatch(ctx, Notification{
+		Event:    EventTicketCreated,
+		TicketID: t.ID,
+		Title:    "📋 工单提交通知",
+		Summary:  fmt.Sprintf("**工单 #%d 已提交**", t.ID),
+		Fields: []Field{
+			{"提交人", t.SubmitterName},
+			{"数据库", t.Database},
+			{"SQL摘要", t.SQLSummary},
+			{"风险等级", riskLabel(t.RiskLevel)},
+			{"提交时间", t.CreatedAt.Format("2006-01-02 15:04:05")},
+		},
 	})
 }
 
-// NotifyTicketPendingApproval sends a notification to approvers when a ticket enters the approval queue.
+// NotifyTicketPendingApproval tells approvers a ticket is waiting for them.
 func (s *Service) NotifyTicketPendingApproval(ctx context.Context, t *model.Ticket) {
-	s.notifyWithDedup(ctx, t.ID, "pending_approval", func() {
-		if s.isEnabled() {
-			title := "📝 待审批工单提醒"
-			text := fmt.Sprintf(
-				"**工单 #%d 进入审批队列**\n\n"+
-					"- **提交人**: %s\n"+
-					"- **数据库**: %s\n"+
-					"- **SQL摘要**: %s\n"+
-					"- **风险等级**: %s\n"+
-					"- **提交时间**: %s\n\n"+
-					"请及时审批。",
-				t.ID, t.SubmitterName, t.Database,
-				t.SQLSummary, riskLabel(t.RiskLevel),
-				t.CreatedAt.Format("2006-01-02 15:04:05"),
-			)
-			go s.sendMarkdown(title, text)
-		}
-
-		if s.isFeishuEnabled() {
-			go s.sendFeishuCard(
-				"📝 待审批工单提醒",
-				fmt.Sprintf("**工单 #%d 进入审批队列，请及时处理**", t.ID),
-				[]feishuCardElement{
-					feishuCardField("提交人", t.SubmitterName),
-					feishuCardField("数据库", t.Database),
-					feishuCardField("SQL摘要", t.SQLSummary),
-					feishuCardField("风险等级", riskLabel(t.RiskLevel)),
-					feishuCardField("提交时间", t.CreatedAt.Format("2006-01-02 15:04:05")),
-				},
-			)
-		}
+	s.dispatch(ctx, Notification{
+		Event:    EventTicketPendingApproval,
+		TicketID: t.ID,
+		Title:    "📝 待审批工单提醒",
+		Summary:  fmt.Sprintf("**工单 #%d 等待审批**", t.ID),
+		Fields: []Field{
+			{"提交人", t.SubmitterName},
+			{"数据库", t.Database},
+			{"SQL摘要", t.SQLSummary},
+			{"风险等级", riskLabel(t.RiskLevel)},
+		},
 	})
 }
 
-// NotifyTicketApproved sends a notification when a ticket is approved.
+// NotifyTicketApproved reports an approval.
 func (s *Service) NotifyTicketApproved(ctx context.Context, t *model.Ticket) {
-	s.notifyWithDedup(ctx, t.ID, "approved", func() {
-		if s.isEnabled() {
-			title := "✅ 工单审批通过通知"
-			text := fmt.Sprintf(
-				"**工单 #%d 已审批通过**\n\n"+
-					"- **提交人**: %s\n"+
-					"- **审批人**: %s\n"+
-					"- **SQL摘要**: %s\n"+
-					"- **风险等级**: %s\n"+
-					"- **审批时间**: %s",
-				t.ID, t.SubmitterName, t.ReviewerName,
-				t.SQLSummary, riskLabel(t.RiskLevel),
-				t.UpdatedAt.Format("2006-01-02 15:04:05"),
-			)
-			go s.sendMarkdown(title, text)
-		}
-
-		if s.isFeishuEnabled() {
-			go s.sendFeishuCard(
-				"✅ 工单审批通过通知",
-				fmt.Sprintf("**工单 #%d 已审批通过**", t.ID),
-				[]feishuCardElement{
-					feishuCardField("提交人", t.SubmitterName),
-					feishuCardField("审批人", t.ReviewerName),
-					feishuCardField("SQL摘要", t.SQLSummary),
-					feishuCardField("风险等级", riskLabel(t.RiskLevel)),
-					feishuCardField("审批时间", t.UpdatedAt.Format("2006-01-02 15:04:05")),
-				},
-			)
-		}
+	s.dispatch(ctx, Notification{
+		Event:    EventTicketApproved,
+		TicketID: t.ID,
+		Title:    "✅ 工单审批通过通知",
+		Summary:  fmt.Sprintf("**工单 #%d 已通过审批**", t.ID),
+		Fields: []Field{
+			{"提交人", t.SubmitterName},
+			{"审批人", t.ReviewerName},
+			{"数据库", t.Database},
+			{"SQL摘要", t.SQLSummary},
+			{"审批意见", t.ReviewComment},
+		},
 	})
 }
 
-// NotifyTicketRejected sends a notification when a ticket is rejected.
+// NotifyTicketRejected reports a rejection.
 func (s *Service) NotifyTicketRejected(ctx context.Context, t *model.Ticket) {
-	s.notifyWithDedup(ctx, t.ID, "rejected", func() {
-		if s.isEnabled() {
-			title := "❌ 工单驳回通知"
-			text := fmt.Sprintf(
-				"**工单 #%d 已驳回**\n\n"+
-					"- **提交人**: %s\n"+
-					"- **审批人**: %s\n"+
-					"- **SQL摘要**: %s\n"+
-					"- **驳回原因**: %s\n"+
-					"- **驳回时间**: %s",
-				t.ID, t.SubmitterName, t.ReviewerName,
-				t.SQLSummary, t.ReviewComment,
-				t.UpdatedAt.Format("2006-01-02 15:04:05"),
-			)
-			go s.sendMarkdown(title, text)
-		}
-
-		if s.isFeishuEnabled() {
-			go s.sendFeishuCard(
-				"❌ 工单驳回通知",
-				fmt.Sprintf("**工单 #%d 已驳回**", t.ID),
-				[]feishuCardElement{
-					feishuCardField("提交人", t.SubmitterName),
-					feishuCardField("审批人", t.ReviewerName),
-					feishuCardField("SQL摘要", t.SQLSummary),
-					feishuCardField("驳回原因", t.ReviewComment),
-					feishuCardField("驳回时间", t.UpdatedAt.Format("2006-01-02 15:04:05")),
-				},
-			)
-		}
+	s.dispatch(ctx, Notification{
+		Event:    EventTicketRejected,
+		TicketID: t.ID,
+		Title:    "❌ 工单驳回通知",
+		Summary:  fmt.Sprintf("**工单 #%d 已被驳回**", t.ID),
+		Fields: []Field{
+			{"提交人", t.SubmitterName},
+			{"审批人", t.ReviewerName},
+			{"数据库", t.Database},
+			{"SQL摘要", t.SQLSummary},
+			{"驳回原因", t.ReviewComment},
+		},
 	})
 }
 
-// NotifyTicketScheduled sends a notification when a ticket is scheduled for execution.
+// NotifyTicketScheduled reports that execution has been scheduled.
 func (s *Service) NotifyTicketScheduled(ctx context.Context, t *model.Ticket) {
-	s.notifyWithDedup(ctx, t.ID, "scheduled", func() {
-		var scheduledTime string
-		if t.ScheduledAt != nil {
-			scheduledTime = t.ScheduledAt.Format("2006-01-02 15:04:05")
-		} else {
-			scheduledTime = "未指定"
-		}
-
-		if s.isEnabled() {
-			title := "⏰ 工单定时执行通知"
-			text := fmt.Sprintf(
-				"**工单 #%d 已设置定时执行**\n\n"+
-					"- **提交人**: %s\n"+
-					"- **SQL摘要**: %s\n"+
-					"- **风险等级**: %s\n"+
-					"- **计划执行时间**: %s",
-				t.ID, t.SubmitterName,
-				t.SQLSummary, riskLabel(t.RiskLevel),
-				scheduledTime,
-			)
-			go s.sendMarkdown(title, text)
-		}
-
-		if s.isFeishuEnabled() {
-			go s.sendFeishuCard(
-				"⏰ 工单定时执行通知",
-				fmt.Sprintf("**工单 #%d 已设置定时执行**", t.ID),
-				[]feishuCardElement{
-					feishuCardField("提交人", t.SubmitterName),
-					feishuCardField("SQL摘要", t.SQLSummary),
-					feishuCardField("风险等级", riskLabel(t.RiskLevel)),
-					feishuCardField("计划执行时间", scheduledTime),
-				},
-			)
-		}
+	scheduled := ""
+	if t.ScheduledAt != nil {
+		scheduled = t.ScheduledAt.Format("2006-01-02 15:04:05")
+	}
+	s.dispatch(ctx, Notification{
+		Event:    EventTicketScheduled,
+		TicketID: t.ID,
+		Title:    "⏰ 工单定时执行通知",
+		Summary:  fmt.Sprintf("**工单 #%d 已安排定时执行**", t.ID),
+		Fields: []Field{
+			{"提交人", t.SubmitterName},
+			{"数据库", t.Database},
+			{"SQL摘要", t.SQLSummary},
+			{"计划执行时间", scheduled},
+		},
 	})
 }
 
-// NotifyTicketExecuted sends a notification when a ticket SQL is executed successfully.
+// NotifyTicketExecuted reports a successful execution.
 func (s *Service) NotifyTicketExecuted(ctx context.Context, t *model.Ticket) {
-	s.notifyWithDedup(ctx, t.ID, "executed", func() {
-		if s.isEnabled() {
-			title := "🔧 工单执行完成通知"
-			text := fmt.Sprintf(
-				"**工单 #%d 已执行完成**\n\n"+
-					"- **提交人**: %s\n"+
-					"- **SQL摘要**: %s\n"+
-					"- **执行时间**: %s",
-				t.ID, t.SubmitterName,
-				t.SQLSummary,
-				t.UpdatedAt.Format("2006-01-02 15:04:05"),
-			)
-			go s.sendMarkdown(title, text)
-		}
-
-		if s.isFeishuEnabled() {
-			go s.sendFeishuCard(
-				"🔧 工单执行完成通知",
-				fmt.Sprintf("**工单 #%d 已执行完成**", t.ID),
-				[]feishuCardElement{
-					feishuCardField("提交人", t.SubmitterName),
-					feishuCardField("SQL摘要", t.SQLSummary),
-					feishuCardField("执行时间", t.UpdatedAt.Format("2006-01-02 15:04:05")),
-				},
-			)
-		}
+	executed := ""
+	if t.ExecutedAt != nil {
+		executed = t.ExecutedAt.Format("2006-01-02 15:04:05")
+	}
+	s.dispatch(ctx, Notification{
+		Event:    EventTicketExecuted,
+		TicketID: t.ID,
+		Title:    "🔧 工单执行完成通知",
+		Summary:  fmt.Sprintf("**工单 #%d 已执行**", t.ID),
+		Fields: []Field{
+			{"提交人", t.SubmitterName},
+			{"数据库", t.Database},
+			{"SQL摘要", t.SQLSummary},
+			{"执行时间", executed},
+		},
 	})
 }
 
-// NotifyTicketFailed sends a notification when a ticket execution fails.
+// NotifyTicketFailed reports a failed execution.
 func (s *Service) NotifyTicketFailed(ctx context.Context, t *model.Ticket, errMsg string) {
-	s.notifyWithDedup(ctx, t.ID, "failed", func() {
-		// Truncate error message for display
-		displayErr := errMsg
-		if len(displayErr) > 200 {
-			displayErr = displayErr[:200] + "..."
-		}
+	// A driver error can carry the whole failed statement; the message is a
+	// notification, not a log.
+	displayErr := errMsg
+	if len(displayErr) > 200 {
+		displayErr = displayErr[:200] + "..."
+	}
 
-		if s.isEnabled() {
-			title := "🚨 工单执行失败通知"
-			text := fmt.Sprintf(
-				"**工单 #%d 执行失败**\n\n"+
-					"- **提交人**: %s\n"+
-					"- **SQL摘要**: %s\n"+
-					"- **错误信息**: %s\n"+
-					"- **失败时间**: %s",
-				t.ID, t.SubmitterName,
-				t.SQLSummary, displayErr,
-				t.UpdatedAt.Format("2006-01-02 15:04:05"),
-			)
-			go s.sendMarkdown(title, text)
-		}
-
-		if s.isFeishuEnabled() {
-			go s.sendFeishuCard(
-				"🚨 工单执行失败通知",
-				fmt.Sprintf("**工单 #%d 执行失败**", t.ID),
-				[]feishuCardElement{
-					feishuCardField("提交人", t.SubmitterName),
-					feishuCardField("SQL摘要", t.SQLSummary),
-					feishuCardField("错误信息", displayErr),
-					feishuCardField("失败时间", t.UpdatedAt.Format("2006-01-02 15:04:05")),
-				},
-			)
-		}
+	s.dispatch(ctx, Notification{
+		Event:    EventTicketFailed,
+		TicketID: t.ID,
+		Title:    "🚨 工单执行失败通知",
+		Summary:  fmt.Sprintf("**工单 #%d 执行失败**", t.ID),
+		Fields: []Field{
+			{"提交人", t.SubmitterName},
+			{"数据库", t.Database},
+			{"SQL摘要", t.SQLSummary},
+			{"错误信息", displayErr},
+			{"失败时间", t.UpdatedAt.Format("2006-01-02 15:04:05")},
+		},
 	})
 }
 
-// NotifyRiskAlert sends a real-time alert for medium/high risk operations.
+// NotifyRiskAlert reports a high-risk statement.
+//
+// No TicketID: this is not about a ticket, so it is not deduplicated by one.
 func (s *Service) NotifyRiskAlert(username, sqlSummary, riskLevel string, datasourceID int64, database string) {
-	if !s.isEnabled() {
-		return
-	}
-
-	title := "⚠️ 风险操作告警"
-	text := fmt.Sprintf(
-		"**检测到%s操作**\n\n"+
-			"- **操作人**: %s\n"+
-			"- **数据源ID**: %d\n"+
-			"- **数据库**: %s\n"+
-			"- **SQL摘要**: %s\n"+
-			"- **风险等级**: %s\n"+
-			"- **告警时间**: %s",
-		riskLabel(riskLevel), username, datasourceID, database,
-		sqlSummary, riskLabel(riskLevel),
-		time.Now().Format("2006-01-02 15:04:05"),
-	)
-
-	go s.sendMarkdown(title, text)
+	s.dispatch(context.Background(), Notification{
+		Event:   EventRiskAlert,
+		Title:   "⚠️ 风险操作告警",
+		Summary: "**检测到高风险操作**",
+		Fields: []Field{
+			{"用户", username},
+			{"数据源ID", fmt.Sprintf("%d", datasourceID)},
+			{"数据库", database},
+			{"SQL摘要", sqlSummary},
+			{"风险等级", riskLabel(riskLevel)},
+		},
+	})
 }
 
-// SendTestMessage sends a test message to verify the DingTalk configuration.
+// SendTestMessage lets an operator confirm the channels are wired.
+//
+// It now reaches every configured transport rather than only DingTalk, which
+// matters most for exactly this event: a test that cannot fail on the channel
+// you are testing is not a test.
 func (s *Service) SendTestMessage() {
-	if !s.isEnabled() {
-		return
-	}
-
-	title := "🔔 SQLFlow 测试通知"
-	text := fmt.Sprintf(
-		"**SQLFlow 钉钉通知测试**\n\n"+
-			"- **发送时间**: %s\n"+
-			"- **状态**: 配置成功",
-		time.Now().Format("2006-01-02 15:04:05"),
-	)
-
-	go s.sendMarkdown(title, text)
+	s.dispatch(context.Background(), Notification{
+		Event:   EventTest,
+		Title:   "🔔 SQLFlow 测试通知",
+		Summary: "**这是一条测试消息**",
+		Fields: []Field{
+			{"说明", "如果你看到这条消息，说明通知渠道配置正确"},
+		},
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -529,7 +430,6 @@ type dingTalkResponse struct {
 	ErrMsg  string `json:"errmsg"`
 }
 
-// sendMarkdown sends a markdown message to DingTalk.
 func (s *Service) sendMarkdown(title, text string) {
 	reqBody := &dingTalkRequest{
 		MsgType: "markdown",
@@ -621,62 +521,50 @@ func (s *Service) isEnabled() bool {
 	return s.enabled
 }
 
-// NotifySLAReminderRaw sends an SLA reminder notification using minimal fields.
-// This decouples Service from the Ticket model — SLAService only provides
-// what's needed for the notification, not a full Ticket struct.
+// NotifySLAReminderRaw warns that an approval is running out of time.
+//
+// Every SLA notification reached DingTalk only, because each was written as a
+// bare isEnabled + sendMarkdown rather than as a fan-out someone would have had
+// to extend. A Feishu-only deployment therefore lost every reminder,
+// escalation and auto-rejection — the three events an approver most needs.
 func (s *Service) NotifySLAReminderRaw(ticketID int64, elapsedHours, slaHours, approverName string, percent float64) {
-	if !s.isEnabled() {
-		return
-	}
-
-	title := "\u23f0 [SQLFlow] 工单审批提醒"
-	text := fmt.Sprintf(
-		"**工单 #%d 审批提醒**\n\n"+
-			"- **已等待**: %sh / 时限 %sh（%.0f%%）\n"+
-			"- **审批人**: %s\n\n"+
-			"请及时处理该工单。",
-		ticketID, elapsedHours, slaHours, percent, approverName,
-	)
-
-	go s.sendMarkdown(title, text)
+	s.dispatch(context.Background(), Notification{
+		Event:   EventSLAWarning,
+		Title:   "⏰ [SQLFlow] 工单审批提醒",
+		Summary: fmt.Sprintf("**工单 #%d 审批提醒**，请及时处理。", ticketID),
+		Fields: []Field{
+			{"已等待", fmt.Sprintf("%sh / 时限 %sh（%.0f%%）", elapsedHours, slaHours, percent)},
+			{"审批人", approverName},
+		},
+	})
 }
 
-// NotifySLAEscalateRaw sends an SLA escalation notification using minimal fields.
+// NotifySLAEscalateRaw reports an approval that has blown its deadline.
 func (s *Service) NotifySLAEscalateRaw(ticketID int64, slaHours, approverName string) {
-	if !s.isEnabled() {
-		return
-	}
-
-	title := "\U0001f6a8 [SQLFlow] 工单审批超时升级"
-	text := fmt.Sprintf(
-		"**工单 #%d 审批超时升级**\n\n"+
-			"- **超时时限**: %sh\n"+
-			"- **审批人**: %s（已提醒未处理）\n\n"+
-			"请立即处理该工单。",
-		ticketID, slaHours, approverName,
-	)
-
-	go s.sendMarkdown(title, text)
+	s.dispatch(context.Background(), Notification{
+		Event:   EventSLABreached,
+		Title:   "🚨 [SQLFlow] 工单审批超时升级",
+		Summary: fmt.Sprintf("**工单 #%d 审批已超时**", ticketID),
+		Fields: []Field{
+			{"时限", fmt.Sprintf("%sh", slaHours)},
+			{"审批人", approverName},
+		},
+	})
 }
 
-// NotifySLAAutoReject sends a notification to the submitter when their ticket
-// is automatically rejected due to SLA timeout.
+// NotifySLAAutoReject reports a ticket auto-rejected for running out of time.
 func (s *Service) NotifySLAAutoReject(ticketID int64, priority string, timeoutMinutes int, submitterName, sqlSummary string) {
-	if !s.isEnabled() {
-		return
-	}
-
-	title := "\U0001f6ab [SQLFlow] 工单审批超时自动拒绝"
-	text := fmt.Sprintf(
-		"**工单 #%d 已因审批超时被自动拒绝**\n\n"+
-			"- **优先级**: %s\n"+
-			"- **超时阈值**: %d 分钟\n"+
-			"- **SQL 摘要**: %s\n\n"+
-			"如有疑问请联系审批人或管理员。",
-		ticketID, priority, timeoutMinutes, sqlSummary,
-	)
-
-	go s.sendMarkdown(title, text)
+	s.dispatch(context.Background(), Notification{
+		Event:   EventSLAAutoRejected,
+		Title:   "🚫 [SQLFlow] 工单审批超时自动拒绝",
+		Summary: fmt.Sprintf("**工单 #%d 已因审批超时被自动拒绝**", ticketID),
+		Fields: []Field{
+			{"提交人", submitterName},
+			{"优先级", priority},
+			{"超时阈值", fmt.Sprintf("%d 分钟", timeoutMinutes)},
+			{"SQL 摘要", sqlSummary},
+		},
+	})
 }
 func riskLabel(level string) string {
 	switch strings.ToLower(level) {

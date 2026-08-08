@@ -17,16 +17,19 @@ import (
 // Constants & types
 // ---------------------------------------------------------------------------
 
-// Allowed notification event types (whitelist).
-var AllowedEventTypes = map[string]string{
-	"ticket_created":     "工单创建",
-	"ticket_approved":    "审批通过",
-	"ticket_rejected":    "审批驳回",
-	"sla_warning":        "SLA 预警",
-	"sla_breached":       "SLA 违规",
-	"execution_complete": "执行完成",
-	"execution_failed":   "执行失败",
-}
+// AllowedEventTypes is derived from the one event identity, not restated.
+//
+// It used to be an independent literal with its own spellings
+// ("ticket_approved" where the sender wrote "approved"), which is why
+// ShouldNotify could never match a real event. Deriving it means the settings
+// page cannot offer an event the platform does not emit.
+//
+// ShouldNotify itself remains unreached, and honestly so: preferences are
+// per-user, and every channel the platform has is a group webhook. Wiring a
+// per-user preference into a broadcast would let one person silence a channel
+// for everyone. The feature needs per-user delivery to exist first; what is
+// fixed here is that its vocabulary can no longer disagree with reality.
+var AllowedEventTypes = EventTypes()
 
 // AllowedChannels are the globally configured notification channels.
 var AllowedChannels = map[string]bool{

@@ -70,7 +70,7 @@ func TestNotificationPreferenceHandler_UpdatePreferences_ValidationError(t *test
 func TestNotificationPreferenceHandler_UpdatePreferences_Success(t *testing.T) {
 	e, _, h := setupNotifPrefTest(t)
 
-	body := `{"preferences":[{"event_type":"ticket_created","channels":["feishu","dingtalk"]}]}`
+	body := `{"preferences":[{"event_type":"ticket.created","channels":["feishu","dingtalk"]}]}`
 	req := httptest.NewRequest(http.MethodPut, "/api/notifications/preferences", strings.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
@@ -102,7 +102,7 @@ func TestNotificationPreferenceHandler_UpdatePreferences_Success(t *testing.T) {
 	foundEvent := false
 	for _, item := range data {
 		row, _ := item.(map[string]interface{})
-		if row["event_type"] == "ticket_created" {
+		if row["event_type"] == "ticket.created" {
 			foundEvent = true
 			break
 		}

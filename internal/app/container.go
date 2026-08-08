@@ -230,6 +230,13 @@ func NewContainer(database *db.DB, cfg *config.Config) (*Container, error) {
 	// router 内部曾各自 new 的 service（提到 Container，消除重复实例）
 	notifPrefSvc := notify.NewPreferenceService(database)
 	webhookSubSvc := notify.NewWebhookSubscriptionService(database, cfg.EncryptionKey)
+
+	// Outbound webhooks become a third transport rather than a feature with no
+	// event source. DeliverEvent had zero production callers — fully built,
+	// HMAC-signed, retrying, auto-disabling after ten failures, and unreachable
+	// because the subscription vocabulary could not match the sender's.
+	notifySvc.SetSubscriptions(webhookSubSvc)
+	notifySvc.SetPreferences(notifPrefSvc)
 	// slaSvc 已在上面构造，复用同一个实例（修复原 router.go 重复 new 的隐患）
 
 	// --- admin seed ---

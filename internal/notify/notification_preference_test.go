@@ -43,8 +43,8 @@ func TestUpdatePreferences(t *testing.T) {
 			EventType string   `json:"event_type"`
 			Channels  []string `json:"channels"`
 		}{
-			{EventType: "ticket_created", Channels: []string{"feishu"}},
-			{EventType: "sla_warning", Channels: []string{}}, // disabled
+			{EventType: "ticket.created", Channels: []string{"feishu"}},
+			{EventType: "sla.warning", Channels: []string{}}, // disabled
 		},
 	})
 	if err != nil {
@@ -57,15 +57,15 @@ func TestUpdatePreferences(t *testing.T) {
 		prefMap[p.EventType] = p
 	}
 
-	if len(prefMap["ticket_created"].Channels) != 1 || prefMap["ticket_created"].Channels[0] != "feishu" {
-		t.Errorf("ticket_created channels: %v", prefMap["ticket_created"].Channels)
+	if len(prefMap["ticket.created"].Channels) != 1 || prefMap["ticket.created"].Channels[0] != "feishu" {
+		t.Errorf("ticket_created channels: %v", prefMap["ticket.created"].Channels)
 	}
-	if len(prefMap["sla_warning"].Channels) != 0 {
-		t.Errorf("sla_warning should be disabled, got: %v", prefMap["sla_warning"].Channels)
+	if len(prefMap["sla.warning"].Channels) != 0 {
+		t.Errorf("sla_warning should be disabled, got: %v", prefMap["sla.warning"].Channels)
 	}
 	// Other event types should still have defaults
-	if len(prefMap["execution_complete"].Channels) != 2 {
-		t.Errorf("execution_complete should default to 2 channels, got: %v", prefMap["execution_complete"].Channels)
+	if len(prefMap["ticket.executed"].Channels) != 2 {
+		t.Errorf("execution_complete should default to 2 channels, got: %v", prefMap["ticket.executed"].Channels)
 	}
 }
 
@@ -97,7 +97,7 @@ func TestUpdatePreferences_InvalidChannel(t *testing.T) {
 			EventType string   `json:"event_type"`
 			Channels  []string `json:"channels"`
 		}{
-			{EventType: "ticket_created", Channels: []string{"sms"}},
+			{EventType: "ticket.created", Channels: []string{"sms"}},
 		},
 	})
 	if err == nil {
@@ -111,7 +111,7 @@ func TestShouldNotify(t *testing.T) {
 	ctx := context.Background()
 
 	// Default: should notify all
-	if !svc.ShouldNotify(ctx, 1, "ticket_created", "dingtalk") {
+	if !svc.ShouldNotify(ctx, 1, "ticket.created", "dingtalk") {
 		t.Error("default should notify")
 	}
 
@@ -121,7 +121,7 @@ func TestShouldNotify(t *testing.T) {
 			EventType string   `json:"event_type"`
 			Channels  []string `json:"channels"`
 		}{
-			{EventType: "ticket_created", Channels: []string{"feishu"}},
+			{EventType: "ticket.created", Channels: []string{"feishu"}},
 		},
 	})
 
@@ -129,11 +129,11 @@ func TestShouldNotify(t *testing.T) {
 	svc.invalidateCache()
 
 	// dingtalk should be blocked
-	if svc.ShouldNotify(ctx, 1, "ticket_created", "dingtalk") {
+	if svc.ShouldNotify(ctx, 1, "ticket.created", "dingtalk") {
 		t.Error("dingtalk should be blocked after update")
 	}
 	// feishu should pass
-	if !svc.ShouldNotify(ctx, 1, "ticket_created", "feishu") {
+	if !svc.ShouldNotify(ctx, 1, "ticket.created", "feishu") {
 		t.Error("feishu should pass")
 	}
 
@@ -143,17 +143,17 @@ func TestShouldNotify(t *testing.T) {
 			EventType string   `json:"event_type"`
 			Channels  []string `json:"channels"`
 		}{
-			{EventType: "sla_warning", Channels: []string{}},
+			{EventType: "sla.warning", Channels: []string{}},
 		},
 	})
 	svc.invalidateCache()
-	if svc.ShouldNotify(ctx, 1, "sla_warning", "dingtalk") {
+	if svc.ShouldNotify(ctx, 1, "sla.warning", "dingtalk") {
 		t.Error("disabled event should not notify")
 	}
 }
 
 func TestValidateEventType(t *testing.T) {
-	if err := ValidateEventType("ticket_created"); err != nil {
+	if err := ValidateEventType("ticket.created"); err != nil {
 		t.Errorf("valid type rejected: %v", err)
 	}
 	if err := ValidateEventType("invalid"); err == nil {
