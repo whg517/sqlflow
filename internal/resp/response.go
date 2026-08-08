@@ -100,6 +100,29 @@ func NotFound(c echo.Context, msg string) error {
 	})
 }
 
+// Conflict returns a 409 error response.
+//
+// For a request that is well-formed and authorized but arrives when the thing
+// it names is in a state that does not admit it — another actor decided first,
+// or the ticket has already moved on.
+func Conflict(c echo.Context, msg string) error {
+	return c.JSON(http.StatusConflict, ErrorResponse{
+		Code:    409,
+		Message: msg,
+	})
+}
+
+// ServiceUnavailable returns a 503 error response.
+//
+// For a capability this deployment has not wired — the request is fine and may
+// succeed on an instance that has it.
+func ServiceUnavailable(c echo.Context, msg string) error {
+	return c.JSON(http.StatusServiceUnavailable, ErrorResponse{
+		Code:    503,
+		Message: msg,
+	})
+}
+
 // InternalError returns a 500 error response.
 func InternalError(c echo.Context, msg string) error {
 	return c.JSON(http.StatusInternalServerError, ErrorResponse{

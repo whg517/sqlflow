@@ -48,19 +48,7 @@ func (h *Handler) ResubmitTicket(c echo.Context) error {
 
 	ticket, err := h.ticketSvc.ResubmitTicket(c.Request().Context(), id, userID, httpx.Role(c), req.SQLContent, req.ChangeReason)
 	if err != nil {
-		switch err {
-		case ErrTicketNotFound:
-			return resp.NotFound(c, err.Error())
-		case ErrNoPermission:
-			return resp.Forbidden(c, err.Error())
-		case ErrTicketNotResubmittable:
-			return resp.BadRequest(c, err.Error())
-		case ErrTicketSQLRequired:
-			return resp.BadRequest(c, err.Error())
-		default:
-			log.Printf("ResubmitTicket failed: %v", err)
-			return resp.InternalError(c, "重提工单失败")
-		}
+		return respondError(c, "ResubmitTicket", err, "重提工单失败")
 	}
 
 	return resp.OK(c, ticket)
@@ -89,15 +77,7 @@ func (h *Handler) ListRevisions(c echo.Context) error {
 		c.Request().Context(), id, httpx.UserID(c), httpx.Role(c),
 	)
 	if err != nil {
-		switch err {
-		case ErrNoPermission:
-			return resp.Forbidden(c, err.Error())
-		case ErrTicketNotFound:
-			return resp.NotFound(c, err.Error())
-		default:
-			log.Printf("ListRevisions: GetTicket failed: %v", err)
-			return resp.InternalError(c, "获取工单失败")
-		}
+		return respondError(c, "ListRevisions: GetTicket", err, "获取工单失败")
 	}
 
 	revisions, err := h.ticketSvc.ListRevisions(c.Request().Context(), id)

@@ -1,14 +1,12 @@
 package ticket
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"strconv"
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/platform/httpx"
 	"github.com/whg517/sqlflow/internal/resp"
 )
@@ -73,23 +71,7 @@ func (h *Handler) CreateTicket(c echo.Context) error {
 		req.ChangeReason,
 	)
 	if err != nil {
-		// The scope mismatch is matched with errors.Is because it is wrapped:
-		// the message names the database the datasource is actually connected
-		// to, which is the whole answer the submitter needs.
-		if errors.Is(err, datasource.ErrDatabaseScopeMismatch) {
-			return resp.BadRequest(c, err.Error())
-		}
-		switch err {
-		case ErrTicketSQLRequired:
-			return resp.BadRequest(c, err.Error())
-		case ErrTicketDatasourceRequired:
-			return resp.BadRequest(c, err.Error())
-		case ErrTicketDatasourceNotFound:
-			return resp.BadRequest(c, err.Error())
-		default:
-			log.Printf("CreateTicket failed: %v", err)
-			return resp.InternalError(c, "创建工单失败")
-		}
+		return respondError(c, "CreateTicket", err, "创建工单失败")
 	}
 
 	return resp.Created(c, ticket)
@@ -117,15 +99,7 @@ func (h *Handler) GetTicket(c echo.Context) error {
 		c.Request().Context(), id, httpx.UserID(c), httpx.Role(c),
 	)
 	if err != nil {
-		switch err {
-		case ErrNoPermission:
-			return resp.Forbidden(c, err.Error())
-		case ErrTicketNotFound:
-			return resp.NotFound(c, err.Error())
-		default:
-			log.Printf("GetTicket failed: %v", err)
-			return resp.InternalError(c, "获取工单失败")
-		}
+		return respondError(c, "GetTicket", err, "获取工单失败")
 	}
 
 	return resp.OK(c, ticket)
@@ -215,17 +189,7 @@ func (h *Handler) ApproveTicket(c echo.Context) error {
 
 	ticket, err := h.ticketSvc.ApproveTicket(c.Request().Context(), id, userID, role, req.Comment)
 	if err != nil {
-		switch err {
-		case ErrNoPermission:
-			return resp.Forbidden(c, err.Error())
-		case ErrTicketNotFound:
-			return resp.NotFound(c, err.Error())
-		case ErrInvalidStatusTransition:
-			return resp.BadRequest(c, err.Error())
-		default:
-			log.Printf("ApproveTicket failed: %v", err)
-			return resp.InternalError(c, "审批工单失败")
-		}
+		return respondError(c, "ApproveTicket", err, "审批工单失败")
 	}
 
 	return resp.OK(c, ticket)
@@ -270,19 +234,7 @@ func (h *Handler) RejectTicket(c echo.Context) error {
 
 	ticket, err := h.ticketSvc.RejectTicket(c.Request().Context(), id, userID, role, req.Reason)
 	if err != nil {
-		switch err {
-		case ErrNoPermission:
-			return resp.Forbidden(c, err.Error())
-		case ErrTicketNotFound:
-			return resp.NotFound(c, err.Error())
-		case ErrInvalidStatusTransition:
-			return resp.BadRequest(c, err.Error())
-		case ErrRejectReasonRequired:
-			return resp.BadRequest(c, err.Error())
-		default:
-			log.Printf("RejectTicket failed: %v", err)
-			return resp.InternalError(c, "驳回工单失败")
-		}
+		return respondError(c, "RejectTicket", err, "驳回工单失败")
 	}
 
 	return resp.OK(c, ticket)
@@ -327,19 +279,7 @@ func (h *Handler) CancelTicket(c echo.Context) error {
 
 	ticket, err := h.ticketSvc.CancelTicket(c.Request().Context(), id, userID, role, req.Reason)
 	if err != nil {
-		switch err {
-		case ErrNoPermission:
-			return resp.Forbidden(c, err.Error())
-		case ErrTicketNotFound:
-			return resp.NotFound(c, err.Error())
-		case ErrTicketNotCancellable:
-			return resp.BadRequest(c, err.Error())
-		case ErrCancelReasonRequired:
-			return resp.BadRequest(c, err.Error())
-		default:
-			log.Printf("CancelTicket failed: %v", err)
-			return resp.InternalError(c, "取消工单失败")
-		}
+		return respondError(c, "CancelTicket", err, "取消工单失败")
 	}
 
 	return resp.OK(c, ticket)
@@ -370,17 +310,7 @@ func (h *Handler) ExecuteTicket(c echo.Context) error {
 
 	ticket, err := h.ticketSvc.ExecuteTicket(c.Request().Context(), id, userID, role, username)
 	if err != nil {
-		switch err {
-		case ErrNoPermission:
-			return resp.Forbidden(c, err.Error())
-		case ErrTicketNotFound:
-			return resp.NotFound(c, err.Error())
-		case ErrTicketNotExecutable:
-			return resp.BadRequest(c, err.Error())
-		default:
-			log.Printf("ExecuteTicket failed: %v", err)
-			return resp.InternalError(c, "执行工单失败")
-		}
+		return respondError(c, "ExecuteTicket", err, "执行工单失败")
 	}
 
 	return resp.OK(c, ticket)
@@ -430,21 +360,7 @@ func (h *Handler) ScheduleTicket(c echo.Context) error {
 
 	ticket, err := h.ticketSvc.ScheduleTicket(c.Request().Context(), id, userID, role, scheduledAt)
 	if err != nil {
-		switch err {
-		case ErrNoPermission:
-			return resp.Forbidden(c, err.Error())
-		case ErrTicketNotFound:
-			return resp.NotFound(c, err.Error())
-		case ErrTicketNotSchedulable:
-			return resp.BadRequest(c, err.Error())
-		case ErrScheduleTimeRequired:
-			return resp.BadRequest(c, err.Error())
-		case ErrScheduleTimeInPast:
-			return resp.BadRequest(c, err.Error())
-		default:
-			log.Printf("ScheduleTicket failed: %v", err)
-			return resp.InternalError(c, "设置定时执行失败")
-		}
+		return respondError(c, "ScheduleTicket", err, "设置定时执行失败")
 	}
 
 	return resp.OK(c, ticket)
@@ -474,17 +390,7 @@ func (h *Handler) CancelSchedule(c echo.Context) error {
 
 	ticket, err := h.ticketSvc.CancelSchedule(c.Request().Context(), id, userID, role)
 	if err != nil {
-		switch err {
-		case ErrNoPermission:
-			return resp.Forbidden(c, err.Error())
-		case ErrTicketNotFound:
-			return resp.NotFound(c, err.Error())
-		case ErrTicketNotScheduled:
-			return resp.BadRequest(c, err.Error())
-		default:
-			log.Printf("CancelSchedule failed: %v", err)
-			return resp.InternalError(c, "取消定时执行失败")
-		}
+		return respondError(c, "CancelSchedule", err, "取消定时执行失败")
 	}
 
 	return resp.OK(c, ticket)
@@ -533,13 +439,7 @@ func (h *Handler) BatchApprove(c echo.Context) error {
 
 	result, err := h.ticketSvc.BatchApprove(c.Request().Context(), req.TicketIDs, userID, role, req.Reason)
 	if err != nil {
-		switch err {
-		case ErrNoPermission:
-			return resp.Forbidden(c, err.Error())
-		default:
-			log.Printf("BatchApprove failed: %v", err)
-			return resp.InternalError(c, "批量审批失败")
-		}
+		return respondError(c, "BatchApprove", err, "批量审批失败")
 	}
 
 	return resp.OK(c, result)
@@ -581,15 +481,7 @@ func (h *Handler) BatchReject(c echo.Context) error {
 
 	result, err := h.ticketSvc.BatchReject(c.Request().Context(), req.TicketIDs, userID, role, req.Reason)
 	if err != nil {
-		switch err {
-		case ErrNoPermission:
-			return resp.Forbidden(c, err.Error())
-		case ErrRejectReasonRequired:
-			return resp.BadRequest(c, err.Error())
-		default:
-			log.Printf("BatchReject failed: %v", err)
-			return resp.InternalError(c, "批量驳回失败")
-		}
+		return respondError(c, "BatchReject", err, "批量驳回失败")
 	}
 
 	return resp.OK(c, result)
@@ -618,15 +510,7 @@ func (h *Handler) GetExecutionResults(c echo.Context) error {
 		c.Request().Context(), id, httpx.UserID(c), httpx.Role(c),
 	)
 	if err != nil {
-		switch err {
-		case ErrNoPermission:
-			return resp.Forbidden(c, err.Error())
-		case ErrTicketNotFound:
-			return resp.NotFound(c, err.Error())
-		default:
-			log.Printf("GetExecutionResults: GetTicket failed: %v", err)
-			return resp.InternalError(c, "获取工单失败")
-		}
+		return respondError(c, "GetExecutionResults: GetTicket", err, "获取工单失败")
 	}
 
 	results, err := h.ticketSvc.GetExecutionResults(c.Request().Context(), id)

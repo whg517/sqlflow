@@ -84,17 +84,7 @@ func (h *CommentHandler) CreateComment(c echo.Context) error {
 
 	comment, err := h.commentSvc.CreateComment(c.Request().Context(), orderID, userID, req.Content, req.ParentID)
 	if err != nil {
-		switch err {
-		case ErrCommentContentEmpty:
-			return resp.BadRequest(c, err.Error())
-		case ErrOrderNotFound:
-			return resp.NotFound(c, err.Error())
-		case ErrCommentNotFound:
-			return resp.BadRequest(c, "回复的评论不存在")
-		default:
-			log.Printf("CreateComment failed: %v", err)
-			return resp.InternalError(c, "创建评论失败")
-		}
+		return respondError(c, "CreateComment", err, "创建评论失败")
 	}
 
 	return resp.Created(c, comment)
@@ -124,15 +114,7 @@ func (h *CommentHandler) DeleteComment(c echo.Context) error {
 
 	err = h.commentSvc.DeleteComment(c.Request().Context(), commentID, userID, userRole)
 	if err != nil {
-		switch err {
-		case ErrCommentNotFound:
-			return resp.NotFound(c, err.Error())
-		case ErrCommentNotOwner:
-			return resp.Forbidden(c, err.Error())
-		default:
-			log.Printf("DeleteComment failed: %v", err)
-			return resp.InternalError(c, "删除评论失败")
-		}
+		return respondError(c, "DeleteComment", err, "删除评论失败")
 	}
 
 	return resp.OKWithMessage(c, "评论已删除", nil)
