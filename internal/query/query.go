@@ -64,6 +64,12 @@ type QueryResult struct {
 	Warnings           []string                 `json:"warnings,omitempty"`
 	HistoryID          int64                    `json:"history_id,omitempty"`
 
+	// Truncated is true when the row limit cut the result short. The caller
+	// must be able to tell that what it received is not the complete answer —
+	// a silent truncation is the most dangerous kind, because no one goes to
+	// check whether they only saw part of the data.
+	Truncated bool `json:"truncated,omitempty"`
+
 	// Aggregations carries a driver-native aggregation payload verbatim when
 	// Shape is ShapeAggregation.
 	Aggregations json.RawMessage `json:"aggregations,omitempty"`
@@ -150,6 +156,7 @@ func (s *Service) ExecuteQuery(ctx context.Context, userID int64, username, role
 			ExecutionTime: drvResult.ExecutionTime,
 			AffectedRows:  drvResult.AffectedRows,
 			Aggregations:  drvResult.Aggregations,
+			Truncated:     drvResult.Truncated,
 		}
 	}
 

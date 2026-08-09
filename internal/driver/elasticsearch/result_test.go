@@ -100,8 +100,12 @@ func TestExecuteQuery_AggregationIsPreserved(t *testing.T) {
 	if aggs.ByStatus.Buckets[0].Key != "open" || aggs.ByStatus.Buckets[0].DocCount != 7 {
 		t.Errorf("first bucket = %+v, want {open 7}", aggs.ByStatus.Buckets[0])
 	}
-	if res.Total != 42 {
-		t.Errorf("Total = %d, want 42 (hit count is still meaningful)", res.Total)
+	// Total is the number of rows this result carries, not the ES cluster hit
+	// count. An aggregation sets size:0, so there are no hits — the answer
+	// lives in Aggregations. Reporting 42 (the cluster total) here would make
+	// audit logs and history record 42 rows for a result with zero rows.
+	if res.Total != 0 {
+		t.Errorf("Total = %d, want 0 (aggregation carries no rows)", res.Total)
 	}
 }
 

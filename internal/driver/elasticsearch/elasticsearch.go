@@ -585,7 +585,7 @@ func (d *ESDriver) executeSearch(ctx context.Context, index string, bodyJSON []b
 			Shape:         driver.ShapeAggregation,
 			Columns:       []string{},
 			Rows:          []map[string]interface{}{},
-			Total:         esResp.Hits.Total.Value,
+			Total:         int64(len(esResp.Hits.Hits)),
 			ExecutionTime: elapsed,
 			Aggregations:  esResp.Aggregations,
 		}, nil
@@ -631,12 +631,22 @@ func (d *ESDriver) executeSearch(ctx context.Context, index string, bodyJSON []b
 	sort.Strings(source)
 	columns := append([]string{"_id", "_index", "_score"}, source...)
 
+	// Total is the number of rows this result actually carries, NOT the ES
+	// cluster's hit count. The old code reported esResp.Hits.Total.Value — the
+	// total matching documents across the cluster — which could be 10000 for a
+	// query that returned 10 rows. Audit logs and query history then recorded
+	// 10000 as the result size, distorting every metric derived from them.
+	// Truncated is true when the cluster had more hits than the limit allowed
+	// through, so the caller can tell it is not seeing the full picture.
+	truncated := limit > 0 && esResp.Hits.Total.Value > int64(limit)
+
 	return &driver.QueryResult{
 		Shape:         driver.ShapeDocuments,
 		Columns:       columns,
 		Rows:          resultRows,
-		Total:         esResp.Hits.Total.Value,
+		Total:         int64(len(resultRows)),
 		ExecutionTime: elapsed,
+		Truncated:     truncated,
 	}, nil
 }
 

@@ -62,8 +62,10 @@ func Query(ctx context.Context, db *sql.DB, name, query string, args []interface
 	}
 
 	resultRows := make([]map[string]interface{}, 0, limit)
+	truncated := false
 	for rows.Next() {
 		if len(resultRows) >= limit {
+			truncated = true
 			break
 		}
 
@@ -97,5 +99,6 @@ func Query(ctx context.Context, db *sql.DB, name, query string, args []interface
 		Rows:          resultRows,
 		Total:         int64(len(resultRows)),
 		ExecutionTime: time.Since(start).Milliseconds(),
+		Truncated:     truncated,
 	}, nil
 }

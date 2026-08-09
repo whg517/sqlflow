@@ -53,6 +53,11 @@ type QueryResult struct {
 	ExecutionTime int64                    `json:"execution_time_ms"`
 	AffectedRows  int64                    `json:"affected_rows"`
 
+	// Truncated is true when the row limit cut the result short. A caller that
+	// does not see this field still gets a usable result — it just does not know
+	// it is incomplete, which is exactly what this field exists to prevent.
+	Truncated bool `json:"truncated,omitempty"`
+
 	// Aggregations carries the driver-native aggregation payload for
 	// ShapeAggregation results. It is passed through untouched because its
 	// structure is driver-defined and arbitrarily nested.
