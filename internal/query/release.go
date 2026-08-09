@@ -48,14 +48,20 @@ type releaseDecision struct {
 // drift". Callers paid for it twice per query, because the shape refusal and
 // the masking each ran the sweep and the rule read again.
 //
-// One sweep, one rule read, one shape verdict, in that order:
+// One rule read, one shape verdict, in that order:
 //
-//   - an actor holding unmask sees everything, and nothing else needs asking;
 //   - rules that cannot be read are a refusal, never an empty set (invariant 4
 //     has no availability exception);
 //   - a shape the row masker cannot walk — a driver-native aggregation payload —
 //     is refused when any rule matches, because masking it is not possible
 //     rather than merely skipped.
+//
+// Unmask authorization is per-table, not per-result-set. An actor granted
+// unmask on `orders` but not on `customers` must still see `customers.phone`
+// masked in a JOIN of both. The old code short-circuited at the result-set
+// level — the first table with a grant flipped the entire result to
+// releaseAsIs — which meant a grant on one table was a grant on every table
+// in the query.
 func releaseRows(
 	ctx context.Context,
 	client *ent.Client,
@@ -67,20 +73,19 @@ func releaseRows(
 	shape driver.ResultShape,
 	rows []map[string]interface{},
 ) (releaseDecision, error) {
-	if mayUnmask(ctx, enforcer, actor, datasourceID, tables) {
-		return releaseDecision{Verdict: releaseAsIs}, nil
-	}
-
 	rules, err := loadMaskRules(ctx, client, datasourceID, database, tables)
 	if err != nil {
 		return releaseDecision{}, err
 	}
 
-	// Which rules actually bear on these targets, computed once and used by both
-	// the shape verdict and the rewrite.
+	// Which rules actually bear on these targets, skipping tables the actor
+	// is authorized to unmask.
 	matched := make(map[string][]mask.Rule, len(tables))
 	any := false
 	for _, table := range tables {
+		if table != "" && mayUnmaskTable(ctx, enforcer, actor, datasourceID, table) {
+			continue
+		}
 		if r := mask.MatchRules(rules, table); len(r) > 0 {
 			matched[table] = r
 			any = true
@@ -120,39 +125,35 @@ func releaseRows(
 	return releaseDecision{Verdict: releaseMasked, MaskedFields: maskedFields}, nil
 }
 
-// mayUnmask reports whether this actor holds a grant that lets protected fields
-// through in the clear.
+// mayUnmaskTable reports whether this actor holds a grant that lets protected
+// fields through in the clear for the named table.
 //
 // An enforcer that cannot answer has granted nothing, so masking stays on. That
 // is the safe direction, and it is what the two hand-written copies did by
 // discarding the error.
-func mayUnmask(ctx context.Context, enforcer ActorEnforcer, actor releaseActor, datasourceID int64, tables []string) bool {
-	if enforcer == nil {
+func mayUnmaskTable(ctx context.Context, enforcer ActorEnforcer, actor releaseActor, datasourceID int64, table string) bool {
+	if enforcer == nil || table == "" {
 		return false
 	}
 
 	// The canonical action is "unmask"; "desensitize:bypass" is kept so existing
 	// installations do not silently lose access.
-	granted := func(object string) bool {
-		for _, action := range []string{"unmask", "desensitize:bypass"} {
-			ok, err := enforcer.EnforceActor(ctx, actor.UserID, actor.Role,
-				authz.DatasourceDomain(datasourceID), object, action)
-			if err == nil && ok {
-				return true
-			}
-		}
-		return false
-	}
-
-	for _, table := range tables {
-		if table == "" {
-			continue
-		}
-		if granted(table) {
+	for _, action := range []string{"unmask", "desensitize:bypass"} {
+		ok, err := enforcer.EnforceActor(ctx, actor.UserID, actor.Role,
+			authz.DatasourceDomain(datasourceID), table, action)
+		if err == nil && ok {
 			return true
 		}
 	}
-	return granted("*")
+	// A wildcard grant covers any table.
+	ok, err := enforcer.EnforceActor(ctx, actor.UserID, actor.Role,
+		authz.DatasourceDomain(datasourceID), "*", "unmask")
+	if err == nil && ok {
+		return true
+	}
+	ok, err = enforcer.EnforceActor(ctx, actor.UserID, actor.Role,
+		authz.DatasourceDomain(datasourceID), "*", "desensitize:bypass")
+	return err == nil && ok
 }
 
 // anyRuleProtects reports whether any rule bears on these targets, for callers

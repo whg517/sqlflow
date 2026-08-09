@@ -1122,6 +1122,73 @@ func TestExecuteQuery_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestUnmaskGrantIsPerTableNotPerResultSet verifies that an unmask grant on
+// one table does NOT lift masking for other tables in the same result set.
+//
+// A user authorized to unmask `orders` writes a JOIN to `customers` and reads
+// `customers.phone`. The old code short-circuited at the result-set level —
+// the first table with a grant flipped the entire result to releaseAsIs. The
+// correct behaviour is per-table: rules for `orders` are skipped (the actor
+// is authorised there), rules for `customers` are still applied.
+func TestUnmaskGrantIsPerTableNotPerResultSet(t *testing.T) {
+	testDB := setupQueryTestDB(t)
+	ctx := context.Background()
+
+	dsSvc := datasource.NewService(testutil.WrapSQL(t, testDB), testutil.EncryptionKey, nil, auditlog.Discard)
+	ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	dsID := seedQueryDatasource(t, dsSvc, ctx2)
+
+	// Both tables have protected fields.
+	seedMaskRule(t, testDB, dsID, "testdb", "orders", "credit_card", "bank_card")
+	seedMaskRule(t, testDB, dsID, "testdb", "customers", "phone", "phone")
+
+	permSvc, _ := security.NewService(testutil.WrapSQL(t, testDB))
+	// Grant unmask on orders only — customers is NOT covered.
+	seedPolicy(t, testDB, permSvc, "developer", fmt.Sprintf("ds_%d", dsID), "orders", "desensitize:bypass")
+
+	historySvc := NewHistoryService(testutil.WrapSQL(t, testDB))
+	auditSvc := audit.NewService(testutil.WrapSQL(t, testDB), 0, 0)
+	qs := NewService(testutil.WrapSQL(t, testDB), dsSvc, historySvc, permSvc, auditSvc, testutil.EncryptionKey, driver.NewPoolManager(), Limits{})
+
+	result := &QueryResult{
+		Columns: []string{"id", "credit_card", "phone"},
+		Rows: []map[string]interface{}{
+			{
+				"id":           1,
+				"credit_card":  "6222021234567890123",
+				"phone":        "13812345678",
+			},
+		},
+		Total: 1,
+	}
+
+	desensitized, maskedFields, maskErr := applyRelease(t, qs, ctx, testActorID, "developer", dsID, result, []string{"orders", "customers"})
+	if maskErr != nil {
+		t.Fatalf("release decision: %v", maskErr)
+	}
+
+	// Result must be partially masked: customers.phone masked, orders.credit_card unmasked.
+	if !desensitized {
+		t.Error("expected desensitized=true — customers.phone must still be masked")
+	}
+
+	// phone must be masked (no unmask grant on customers).
+	phone := result.Rows[0]["phone"].(string)
+	if phone == "13812345678" {
+		t.Error("customers.phone should be MASKED — the unmask grant is on orders, not customers")
+	}
+
+	// credit_card must be unmasked (actor IS authorized on orders).
+	cc := result.Rows[0]["credit_card"].(string)
+	if cc != "6222021234567890123" {
+		t.Errorf("orders.credit_card should be UNMASKED (actor has unmask grant on orders), got %q", cc)
+	}
+
+	// maskedFields should contain phone but NOT credit_card.
+	_ = maskedFields // documented for completeness; the value assertions above are the real gate
+}
+
 // applyRelease runs the release decision over a result and reports it the way
 // the old applyDesensitizationForActor did, so these assertions keep their
 // shape while crossing the seam that now owns the answer.

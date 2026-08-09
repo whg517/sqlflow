@@ -134,7 +134,15 @@ func TestRefuseUnmaskableShape_NoRuleAllowsAggregation(t *testing.T) {
 // the two pieces it uses so the test asserts the same thing the decision does.
 func maskingWouldApply(t *testing.T, qs *Service, ctx context.Context, userID int64, role string, dsID int64, tables []string) (bool, error) {
 	t.Helper()
-	if mayUnmask(ctx, qs.permSvc, releaseActor{UserID: userID, Role: role}, dsID, tables) {
+	// If the actor can unmask every table in the query, masking never applies.
+	allUnmasked := true
+	for _, table := range tables {
+		if !mayUnmaskTable(ctx, qs.permSvc, releaseActor{UserID: userID, Role: role}, dsID, table) {
+			allUnmasked = false
+			break
+		}
+	}
+	if allUnmasked {
 		return false, nil
 	}
 	return anyRuleProtects(ctx, qs.client, dsID, "testdb", tables)
