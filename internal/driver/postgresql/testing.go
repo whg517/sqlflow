@@ -12,5 +12,5 @@ import (
 // mock database instead of a live server. Production code must go through
 // Connect: this constructor bypasses configuration validation and pool setup.
 func NewWithDB(db *sql.DB) driver.Driver {
-	return &PostgreSQLDriver{db: db}
+	return &PostgreSQLDriver{db: db, schema: "public"}
 }

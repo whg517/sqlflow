@@ -22,7 +22,8 @@ func init() {
 
 // PostgreSQLDriver implements driver.Driver for PostgreSQL.
 type PostgreSQLDriver struct {
-	db *sql.DB
+	db     *sql.DB
+	schema string // resolved at Connect time; ListTables/GetColumns read this, not a caller-supplied string
 }
 
 // Compile-time proof of the contracts this driver claims.
@@ -113,6 +114,19 @@ func (d *PostgreSQLDriver) Connect(ctx context.Context, cfg *driver.Config) erro
 		return fmt.Errorf("ping postgresql: %w", err)
 	}
 
+	// The schema is resolved once, here, because the DSN has already pinned the
+	// database and Config.SchemaName has already been populated from the
+	// datasource row. ListTables and GetColumns read d.schema rather than
+	// trusting a caller-supplied string — the service layer passes ds.Database
+	// (a database name like "qa_pg"), which is NOT a PostgreSQL schema name.
+	// Using it would always filter against table_schema='qa_pg' and return
+	// nothing, since PostgreSQL stores user tables under schema names like
+	// "public", not under the database name.
+	d.schema = cfg.SchemaName
+	if d.schema == "" {
+		d.schema = "public"
+	}
+
 	d.db = db
 	return nil
 }
@@ -157,22 +171,20 @@ func (d *PostgreSQLDriver) ListDatabases(ctx context.Context) ([]string, error) 
 	return dbs, rows.Err()
 }
 
-// ListTables returns all tables in the given database/schema.
-func (d *PostgreSQLDriver) ListTables(ctx context.Context, database string) ([]driver.TableInfo, error) {
+// ListTables returns all tables in the connected schema.
+//
+// The database parameter is ignored: the DSN pinned the database at Connect
+// time, and the schema was resolved from Config.SchemaName (defaulting to
+// "public"). The service layer passes ds.Database here — a database name —
+// which is not a PostgreSQL schema name; treating it as one returned an empty
+// list for every PostgreSQL datasource.
+func (d *PostgreSQLDriver) ListTables(ctx context.Context, _ string) ([]driver.TableInfo, error) {
 	if d.db == nil {
 		return nil, fmt.Errorf("postgresql: not connected")
 	}
 
-	schema := "public"
-	if cfgSchema := database; cfgSchema != "" {
-		// If a specific schema is provided (via Config.SchemaName or Extra["schema"]), use it.
-		// The "database" parameter here is overloaded: when called from service layer
-		// with a schema context, it represents the schema name.
-		schema = cfgSchema
-	}
-
 	query := "SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE' ORDER BY table_name"
-	rows, err := d.db.QueryContext(ctx, query, schema)
+	rows, err := d.db.QueryContext(ctx, query, d.schema)
 	if err != nil {
 		return nil, fmt.Errorf("list tables: %w", err)
 	}
@@ -189,15 +201,13 @@ func (d *PostgreSQLDriver) ListTables(ctx context.Context, database string) ([]d
 	return tables, rows.Err()
 }
 
-// GetColumns returns column metadata for a specific table.
-func (d *PostgreSQLDriver) GetColumns(ctx context.Context, database, table string) ([]driver.ColumnInfo, error) {
+// GetColumns returns column metadata for a specific table in the connected schema.
+//
+// As with ListTables, the database parameter is ignored — the schema is
+// resolved at Connect time, not per-call.
+func (d *PostgreSQLDriver) GetColumns(ctx context.Context, _ string, table string) ([]driver.ColumnInfo, error) {
 	if d.db == nil {
 		return nil, fmt.Errorf("postgresql: not connected")
-	}
-
-	schema := "public"
-	if database != "" {
-		schema = database
 	}
 
 	query := `
@@ -210,7 +220,7 @@ func (d *PostgreSQLDriver) GetColumns(ctx context.Context, database, table strin
 		WHERE table_schema = $1 AND table_name = $2
 		ORDER BY ordinal_position`
 
-	rows, err := d.db.QueryContext(ctx, query, schema, table)
+	rows, err := d.db.QueryContext(ctx, query, d.schema, table)
 	if err != nil {
 		return nil, fmt.Errorf("get columns: %w", err)
 	}

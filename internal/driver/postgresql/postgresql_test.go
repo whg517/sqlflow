@@ -2,8 +2,13 @@ package postgresql
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
+	"os"
 	"regexp"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/whg517/sqlflow/internal/driver"
@@ -134,7 +139,7 @@ func TestPostgreSQLDriver_ExecuteQueryWithArgs(t *testing.T) {
 		WithArgs("42").
 		WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("Alice"))
 
-	d := &PostgreSQLDriver{db: database}
+	d := &PostgreSQLDriver{db: database, schema: "public"}
 	result, err := d.ExecuteQueryWithArgs(context.Background(), query, []interface{}{"42"}, 10)
 	if err != nil {
 		t.Fatalf("ExecuteQueryWithArgs: %v", err)
@@ -144,5 +149,66 @@ func TestPostgreSQLDriver_ExecuteQueryWithArgs(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("expectations: %v", err)
+	}
+}
+
+// TestPostgreSQLMetadata_IgnoresDatabaseParameter verifies that ListTables and
+// GetColumns use the schema resolved at Connect time, not the caller-supplied
+// "database" parameter (which is actually a database name from the service
+// layer, not a PostgreSQL schema name).
+//
+// Before the fix, the driver used the database parameter as table_schema,
+// so every PostgreSQL datasource returned an empty table list.
+func TestPostgreSQLMetadata_IgnoresDatabaseParameter(t *testing.T) {
+	dsn := os.Getenv("SQLFLOW_TEST_DSN")
+	if dsn == "" {
+		t.Skip("SQLFLOW_TEST_DSN not set")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	// Create a throwaway table in the public schema of the test database.
+	tableName := "pg_meta_test_" + strconv.FormatInt(time.Now().UnixNano()%100000, 10)
+	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE TABLE %s (id serial PRIMARY KEY, phone text)", tableName))
+	if err != nil {
+		t.Fatalf("create test table: %v", err)
+	}
+	defer func() { _, _ = db.ExecContext(context.Background(), "DROP TABLE "+tableName) }()
+
+	// Build a driver connected to the real PG instance with schema="public".
+	// The service layer passes ds.Database (a database NAME, e.g. "sqlflow")
+	// as the database parameter. The driver must NOT use it as a schema filter.
+	pgDrv := &PostgreSQLDriver{db: db, schema: "public"}
+
+	tables, err := pgDrv.ListTables(ctx, "sqlflow")
+	if err != nil {
+		t.Fatalf("ListTables: %v", err)
+	}
+
+	found := false
+	for _, tbl := range tables {
+		if tbl.Name == tableName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("ListTables did not include %s — the database parameter 'sqlflow' was wrongly used as a schema filter (total tables: %d)", tableName, len(tables))
+	}
+
+	// GetColumns must also work regardless of the database parameter.
+	cols, err := pgDrv.GetColumns(ctx, "sqlflow", tableName)
+	if err != nil {
+		t.Fatalf("GetColumns: %v", err)
+	}
+	if len(cols) < 2 {
+		t.Errorf("GetColumns returned %d columns for %s, want >= 2", len(cols), tableName)
 	}
 }
