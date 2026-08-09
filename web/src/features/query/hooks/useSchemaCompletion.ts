@@ -6,8 +6,15 @@ import { api } from "@/shared/api/client";
 
 export interface SchemaData {
   tables: string[];
-  columns: Map<string, string[]>;
+  columns: Map<string, ColumnInfo[]>;
   fetchedAt: number;
+}
+
+/** Column metadata returned by GET /api/datasources/:id/tables/:name/columns */
+export interface ColumnInfo {
+  name: string;
+  type: string;
+  comment: string;
 }
 
 type SchemaCache = Map<number, SchemaData>;
@@ -62,9 +69,9 @@ export function useSchemaCompletion() {
     [isCacheValid],
   );
 
-  /** Fetch columns for a specific table. Currently best-effort (returns cached or empty). */
+  /** Fetch columns for a specific table. Returns ColumnInfo[] (name, type, comment). */
   const fetchColumns = useCallback(
-    async (datasourceId: number, tableName: string): Promise<string[]> => {
+    async (datasourceId: number, tableName: string): Promise<ColumnInfo[]> => {
       const schema = cacheRef.current.get(datasourceId);
       if (!schema) return [];
 
@@ -72,10 +79,10 @@ export function useSchemaCompletion() {
       const cached = schema.columns.get(tableName.toLowerCase());
       if (cached) return cached;
 
-      // Try to fetch from backend: GET /api/datasources/:id/tables/:name/columns
-      // If the endpoint doesn't exist (404), we gracefully return empty array
+      // Fetch from backend: GET /api/datasources/:id/tables/:name/columns
+      // The API returns { code, data: [{name, type, comment}] }
       try {
-        const res = await api.get<{ code: number; data: string[] }>(
+        const res = await api.get<{ code: number; data: ColumnInfo[] }>(
           `/datasources/${datasourceId}/tables/${encodeURIComponent(tableName)}/columns`,
         );
         const cols = res.data ?? [];

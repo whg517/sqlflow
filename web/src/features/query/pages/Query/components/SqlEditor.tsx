@@ -25,7 +25,7 @@ import {
   type CompletionSource,
   completionKeymap,
 } from "@codemirror/autocomplete";
-import type { SchemaData } from "@/features/query/hooks/useSchemaCompletion";
+import type { SchemaData, ColumnInfo } from "@/features/query/hooks/useSchemaCompletion";
 import {
   getFrequentQueries,
   type FrequentQuery,
@@ -38,7 +38,7 @@ interface SqlEditorProps {
   onExecute: () => void;
   readonly?: boolean;
   schemaData?: SchemaData | null;
-  onFetchColumns?: (tableName: string) => Promise<string[]>;
+  onFetchColumns?: (tableName: string) => Promise<ColumnInfo[]>;
 }
 
 // ==========================================
@@ -498,8 +498,8 @@ function findCommonColumns(
 ): string[] {
   const sourceCols = schemaData.columns.get(sourceTable.toLowerCase()) ?? [];
   const targetCols = schemaData.columns.get(targetTable.toLowerCase()) ?? [];
-  const targetSet = new Set(targetCols.map((c) => c.toLowerCase()));
-  return sourceCols.filter((c) => targetSet.has(c.toLowerCase()));
+  const targetSet = new Set(targetCols.map((c) => c.name.toLowerCase()));
+  return sourceCols.filter((c) => targetSet.has(c.name.toLowerCase())).map((c) => c.name);
 }
 
 /**
@@ -578,7 +578,7 @@ function generateJoinSuggestions(
  */
 function createSqlCompletionSource(
   schemaRef: React.MutableRefObject<SchemaData | null | undefined>,
-  fetchColumnsFn: () => ((tableName: string) => Promise<string[]>) | undefined,
+  fetchColumnsFn: () => ((tableName: string) => Promise<ColumnInfo[]>) | undefined,
 ): CompletionSource {
   return function sqlCompletions(
     context: CompletionContext,
@@ -603,9 +603,9 @@ function createSqlCompletionSource(
         if (columns && columns.length > 0) {
           for (const col of columns) {
             options.push({
-              label: col,
+              label: col.name,
               type: "property",
-              detail: "column",
+              detail: col.type || "column",
               boost: 5,
             });
           }
@@ -651,9 +651,9 @@ function createSqlCompletionSource(
       for (const [table, cols] of schemaData.columns.entries()) {
         for (const col of cols) {
           columnCompletions.push({
-            label: col,
+            label: col.name,
             type: "property",
-            detail: `${table}`,
+            detail: `${table} · ${col.type}`.trim(),
             boost: 4,
           });
         }

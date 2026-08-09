@@ -15,7 +15,7 @@ vi.mock("@/shared/api/client", () => ({
 
 import { fetchDatasourceTables } from "@/features/security/api/maskRule";
 import { api } from "@/shared/api/client";
-import { useSchemaCompletion } from "../useSchemaCompletion";
+import { useSchemaCompletion, type ColumnInfo } from "../useSchemaCompletion";
 
 const mockedFetchTables = vi.mocked(fetchDatasourceTables);
 const mockedApiGet = vi.mocked(api.get);
@@ -80,7 +80,13 @@ describe("useSchemaCompletion", () => {
       data: ["users"],
     } as any);
 
-    const columns = ["id", "name", "email", "created_at"];
+    // API returns ColumnInfo[] ({name, type, comment}), not string[]
+    const columns = [
+      { name: "id", type: "integer", comment: "" },
+      { name: "name", type: "text", comment: "" },
+      { name: "email", type: "text", comment: "" },
+      { name: "created_at", type: "timestamp", comment: "" },
+    ];
     mockedApiGet.mockResolvedValueOnce({
       code: 0,
       data: columns,
@@ -94,7 +100,7 @@ describe("useSchemaCompletion", () => {
     });
 
     // Then fetchColumns
-    let cols: string[] = [];
+    let cols: ColumnInfo[] = [];
     await act(async () => {
       cols = await result.current.fetchColumns(1, "users");
     });
@@ -109,7 +115,7 @@ describe("useSchemaCompletion", () => {
   it("fetchColumns 在没有 schema 缓存时返回空数组", async () => {
     const { result } = renderHook(() => useSchemaCompletion());
 
-    let cols: string[] = [];
+    let cols: ColumnInfo[] = [];
     await act(async () => {
       cols = await result.current.fetchColumns(99, "nonexistent");
     });
@@ -278,7 +284,7 @@ describe("useSchemaCompletion", () => {
     });
 
     // fetchColumns fails — should return empty and cache the failure
-    let cols: string[] = [];
+    let cols: ColumnInfo[] = [];
     await act(async () => {
       cols = await result.current.fetchColumns(1, "users");
     });
