@@ -144,7 +144,6 @@ func (e *ApprovalEngine) GetApprovers(ctx context.Context) ([]ApproverInfo, erro
 type ApprovalStageDetail struct {
 	Stage        int    `json:"stage"`
 	Role         string `json:"role"`
-	AutoSkipSame bool   `json:"auto_skip_same_submitter"`
 	Status       string `json:"status"` // "pending", "approved", "rejected", "skipped", "auto_approved"
 	ApproverID   int64  `json:"approver_id,omitempty"`
 	ApproverName string `json:"approver_name,omitempty"`
@@ -210,10 +209,9 @@ func (e *ApprovalEngine) GetApprovalChainDetail(ctx context.Context, ticketID, u
 	stages := make([]ApprovalStageDetail, 0, len(chain))
 	for i, stage := range chain {
 		sd := ApprovalStageDetail{
-			Stage:        i + 1,
-			Role:         stage.Role,
-			AutoSkipSame: stage.AutoSkipSameSubmitter,
-			Status:       "pending",
+			Stage:  i + 1,
+			Role:   stage.Role,
+			Status: "pending",
 		}
 
 		// Find matching record

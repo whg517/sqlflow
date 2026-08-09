@@ -19,26 +19,26 @@ func TestValidateApprovalChainJSON_Empty(t *testing.T) {
 }
 
 func TestValidateApprovalChainJSON_Valid(t *testing.T) {
-	chain := `[{"role":"dba","auto_skip_same_submitter":true}]`
+	chain := `[{"role":"dba"}]`
 	if err := validateApprovalChainJSON(chain); err != nil {
 		t.Errorf("valid chain failed: %v", err)
 	}
 
-	chain = `[{"role":"team_lead","auto_skip_same_submitter":false},{"role":"dba","auto_skip_same_submitter":true}]`
+	chain = `[{"role":"team_lead"},{"role":"dba"}]`
 	if err := validateApprovalChainJSON(chain); err != nil {
 		t.Errorf("multi-stage chain failed: %v", err)
 	}
 }
 
 func TestValidateApprovalChainJSON_InvalidRole(t *testing.T) {
-	chain := `[{"role":"Super User!","auto_skip_same_submitter":true}]`
+	chain := `[{"role":"Super User!"}]`
 	if err := validateApprovalChainJSON(chain); err == nil {
 		t.Error("expected error for invalid role")
 	}
 }
 
 func TestValidateApprovalChainJSON_EmptyRole(t *testing.T) {
-	chain := `[{"role":"","auto_skip_same_submitter":true}]`
+	chain := `[{"role":""}]`
 	if err := validateApprovalChainJSON(chain); err == nil {
 		t.Error("expected error for empty role")
 	}

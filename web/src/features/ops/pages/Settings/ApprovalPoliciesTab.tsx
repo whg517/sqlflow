@@ -336,7 +336,7 @@ function StageEditor({
   }
 
   function addStage() {
-    updateStages([...stages, { role: "dba", auto_skip_same_submitter: false }]);
+    updateStages([...stages, { role: "dba" }]);
   }
 
   function removeStage(idx: number) {
@@ -377,18 +377,6 @@ function StageEditor({
               <SelectItem value="admin">管理员</SelectItem>
             </SelectContent>
           </Select>
-
-          <label className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-            <input
-              type="checkbox"
-              checked={stage.auto_skip_same_submitter ?? false}
-              onChange={(e) =>
-                updateStage(idx, "auto_skip_same_submitter", e.target.checked)
-              }
-              className="rounded border-zinc-600"
-            />
-            提交人=审批人时跳过
-          </label>
 
           <Button
             variant="ghost"

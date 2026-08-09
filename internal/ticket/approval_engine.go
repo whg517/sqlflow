@@ -47,9 +47,14 @@ func NewApprovalEngine(database *db.DB, notifySvc *notify.Service) *ApprovalEngi
 }
 
 // ApprovalChainStage defines a single stage in the approval chain.
+//
+// AutoSkipSameSubmitter used to live here and on the frontend toggle. It was
+// never read — ApplyPolicy advanced to stage 1 unconditionally, and
+// ProcessApproval checked self-approval at the door instead. A toggle the
+// admin can see and set but that never takes effect is worse than no toggle;
+// removed rather than wired because the feature has zero production callers.
 type ApprovalChainStage struct {
-	Role                  string `json:"role"`
-	AutoSkipSameSubmitter bool   `json:"auto_skip_same_submitter"`
+	Role string `json:"role"`
 }
 
 // --- security.Policy CRUD ---
@@ -592,7 +597,7 @@ func (e *ApprovalEngine) EnsureDefaultPolicy(ctx context.Context) error {
 
 	// Create default policy: all tickets require dba approval
 	defaultConditions := `{}`
-	defaultChain := `[{"role":"dba","auto_skip_same_submitter":true}]`
+	defaultChain := `[{"role":"dba"}]`
 	_, err = e.CreatePolicy(ctx, "默认审批策略", "所有工单需 DBA 审批", defaultConditions, defaultChain, false, "", true, 0)
 	return err
 }

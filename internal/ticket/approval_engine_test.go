@@ -65,7 +65,7 @@ func TestApprovalPolicyConditions(t *testing.T) {
 }
 
 func TestApprovalChainParsing(t *testing.T) {
-	chain := `[{"role":"team_lead","auto_skip_same_submitter":false},{"role":"dba","auto_skip_same_submitter":true}]`
+	chain := `[{"role":"team_lead"},{"role":"dba"}]`
 
 	var stages []ApprovalChainStage
 	err := json.Unmarshal([]byte(chain), &stages)
@@ -80,8 +80,5 @@ func TestApprovalChainParsing(t *testing.T) {
 	}
 	if stages[1].Role != "dba" {
 		t.Errorf("stage 1 role = %q, want dba", stages[1].Role)
-	}
-	if !stages[1].AutoSkipSameSubmitter {
-		t.Error("stage 1 auto_skip should be true")
 	}
 }

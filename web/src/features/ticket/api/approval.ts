@@ -9,7 +9,7 @@ export interface ApprovalPolicy {
   enabled: boolean;
   priority: number;
   conditions: string; // JSON
-  approval_chain: string; // JSON array of { role, auto_skip_same_submitter? }
+  approval_chain: string; // JSON array of { role }
   auto_approve_enabled: boolean;
   auto_approve_reason: string;
   is_default: boolean;
@@ -50,7 +50,7 @@ export interface TicketRevision {
 
 export interface ApprovalStage {
   role: string;
-  auto_skip_same_submitter?: boolean;
+  auto_skip_same_submitter?: boolean; // deprecated, ignored by backend — kept for JSON tolerance
 }
 
 // Parsed condition for condition builder
