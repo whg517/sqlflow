@@ -2,6 +2,7 @@ package ops
 
 import (
 	"log"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -11,12 +12,18 @@ import (
 	"github.com/whg517/sqlflow/internal/resp"
 )
 
+// maxWebVitalsBody caps the request body size. A real Web Vitals payload is a
+// few hundred bytes of JSON; anything larger is either broken or hostile.
+const maxWebVitalsBody = 4 << 10 // 4 KiB
+
 // perIPLimiter provides a simple in-memory rate limiter keyed by IP.
 type perIPLimiter struct {
 	mu       sync.Mutex
 	requests map[string][]time.Time
 	maxRate  int           // max requests
 	window   time.Duration // sliding window
+	lastGC   time.Time     // last garbage-collection sweep
+	gcEvery  time.Duration // how often to evict stale keys
 }
 
 func newPerIPLimiter(maxRate int, window time.Duration) *perIPLimiter {
@@ -24,6 +31,8 @@ func newPerIPLimiter(maxRate int, window time.Duration) *perIPLimiter {
 		requests: make(map[string][]time.Time),
 		maxRate:  maxRate,
 		window:   window,
+		gcEvery:  5 * time.Minute,
+		lastGC:   time.Now(),
 	}
 }
 
@@ -49,7 +58,45 @@ func (l *perIPLimiter) allow(ip string) bool {
 	}
 
 	l.requests[ip] = append(filtered, now)
+
+	// Periodically evict keys whose entries have all expired, so the map
+	// does not grow without bound when an attacker rotates through forged
+	// source IPs. This is bounded by gcEvery, not by request volume.
+	if now.Sub(l.lastGC) > l.gcEvery {
+		l.gcLocked(now, cutoff)
+		l.lastGC = now
+	}
+
 	return true
+}
+
+// gcLocked removes entries whose timestamps have all fallen outside the
+// window. Caller must hold l.mu.
+func (l *perIPLimiter) gcLocked(now, cutoff time.Time) {
+	for ip, times := range l.requests {
+		stillValid := false
+		for _, t := range times {
+			if t.After(cutoff) {
+				stillValid = true
+				break
+			}
+		}
+		if !stillValid {
+			delete(l.requests, ip)
+		}
+	}
+}
+
+// clientIP returns the remote address from the actual TCP connection, NOT
+// from X-Forwarded-For. A caller behind no trusted proxy can forge that
+// header at will, which would make per-IP rate limiting meaningless and the
+// limiter's key space unbounded (every forged header is a new key).
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // WebVitalsHandler handles Core Web Vitals metric ingestion.
@@ -88,8 +135,12 @@ type webVitalPayload struct {
 // @Failure 429 {object} resp.ErrorResponse "请求过于频繁"
 // @Router /metrics/web-vitals [post]
 func (h *WebVitalsHandler) RecordVitals(c echo.Context) error {
-	// Rate limit by IP
-	ip := c.RealIP()
+	// Bound the body before reading it — a hostile or buggy client can stream
+	// gigabytes into c.Bind, which would consume server memory until OOM.
+	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, maxWebVitalsBody)
+
+	// Rate limit by the actual TCP source, not a forgeable header.
+	ip := clientIP(c.Request())
 	if !h.limiter.allow(ip) {
 		return c.JSON(http.StatusTooManyRequests, map[string]interface{}{
 			"code":    429,
