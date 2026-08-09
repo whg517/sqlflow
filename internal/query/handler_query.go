@@ -96,33 +96,7 @@ func (h *Handler) ExecuteQuery(c echo.Context) error {
 
 	result, err := h.querySvc.ExecuteQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, req.Params...)
 	if err != nil {
-		switch {
-		case errors.Is(err, datasource.ErrDatasourceNotFound):
-			return resp.BadRequest(c, "数据源不存在")
-		case errors.Is(err, datasource.ErrDatasourceDisabled):
-			return resp.BadRequest(c, "数据源已禁用")
-		case errors.Is(err, datasource.ErrDatabaseScopeMismatch):
-			// The message names both databases, so it is passed through rather
-			// than replaced: the caller has to know which one is reachable.
-			return resp.BadRequest(c, err.Error())
-		case errors.Is(err, ErrSQLOperationForbidden):
-			return resp.Forbidden(c, "该操作需要提交工单，仅允许 SELECT 查询")
-		case errors.Is(err, ErrSQLHighRisk):
-			return resp.Forbidden(c, "高风险操作被拦截，请提交工单")
-		case errors.Is(err, ErrSQLBlocked):
-			return resp.BadRequest(c, "SQL操作被拦截")
-		case errors.Is(err, ErrSQLTimeout):
-			return resp.BadRequest(c, "查询超时（30秒），请优化查询或缩小范围")
-		case errors.Is(err, ErrEmptySQL):
-			return resp.BadRequest(c, "SQL不能为空")
-		case errors.Is(err, ErrQueryParamsUnsupported):
-			return resp.BadRequest(c, err.Error())
-		case errors.Is(err, ErrInternalDatasourceOnly):
-			return resp.Forbidden(c, err.Error())
-		default:
-			log.Printf("ExecuteQuery failed: %v", err)
-			return resp.InternalError(c, "查询执行失败")
-		}
+		return respondQueryError(c, "ExecuteQuery", err, "查询执行失败")
 	}
 
 	return resp.OK(c, result)
@@ -150,33 +124,7 @@ func (h *Handler) ExplainQuery(c echo.Context) error {
 
 	result, err := h.querySvc.ExplainQuery(c.Request().Context(), userID, role, req.DatasourceID, req.Database, req.SQL, req.Params...)
 	if err != nil {
-		switch {
-		case errors.Is(err, ErrExplainNonSelect):
-			return resp.BadRequest(c, ErrExplainNonSelect.Error())
-		case errors.Is(err, ErrExplainNotSupported):
-			// Not "MySQL only" — PostgreSQL implements QueryExplainer too, and
-			// naming one engine sends the user looking for the wrong cause.
-			return resp.BadRequest(c, ErrExplainNotSupported.Error())
-		case errors.Is(err, ErrSQLBlocked):
-			return resp.BadRequest(c, err.Error())
-		case errors.Is(err, ErrSQLHighRisk):
-			return resp.BadRequest(c, err.Error())
-		case errors.Is(err, ErrInternalDatasourceOnly):
-			return resp.Forbidden(c, err.Error())
-		case errors.Is(err, datasource.ErrDatasourceDisabled):
-			return resp.BadRequest(c, err.Error())
-		case errors.Is(err, datasource.ErrDatabaseScopeMismatch):
-			return resp.BadRequest(c, err.Error())
-		case errors.Is(err, ErrSQLTimeout):
-			return resp.BadRequest(c, err.Error())
-		case errors.Is(err, ErrQueryUnavailable):
-			return resp.InternalError(c, err.Error())
-		case errors.Is(err, ErrEmptySQL):
-			return resp.BadRequest(c, "SQL不能为空")
-		default:
-			log.Printf("ExplainQuery failed: %v", err)
-			return resp.InternalError(c, "获取执行计划失败")
-		}
+		return respondQueryError(c, "ExplainQuery", err, "获取执行计划失败")
 	}
 
 	return resp.OK(c, result)
