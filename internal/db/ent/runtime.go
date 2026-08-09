@@ -1089,6 +1089,12 @@ func init() {
 	user.DefaultUpdatedAt = userDescUpdatedAt.Default.(func() time.Time)
 	// user.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	user.UpdateDefaultUpdatedAt = userDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// userDescPasswordChangedAt is the schema descriptor for password_changed_at field.
+	userDescPasswordChangedAt := userFields[9].Descriptor()
+	// user.DefaultPasswordChangedAt holds the default value on creation for the password_changed_at field.
+	user.DefaultPasswordChangedAt = userDescPasswordChangedAt.Default.(func() time.Time)
+	// user.UpdateDefaultPasswordChangedAt holds the default value on update for the password_changed_at field.
+	user.UpdateDefaultPasswordChangedAt = userDescPasswordChangedAt.UpdateDefault.(func() time.Time)
 	webvitalFields := schema.WebVital{}.Fields()
 	_ = webvitalFields
 	// webvitalDescMetricName is the schema descriptor for metric_name field.

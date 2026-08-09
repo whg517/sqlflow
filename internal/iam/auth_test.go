@@ -623,3 +623,53 @@ func TestAuthService_ParseToken(t *testing.T) {
 		}
 	})
 }
+
+// TestResetPassword_StampsPasswordChangedAt verifies that ResetPassword
+// advances the user's password_changed_at timestamp. The JWT middleware uses
+// this column to reject access tokens issued before the most recent reset —
+// without it, "reset password" is cosmetic for anyone already holding a token.
+func TestResetPassword_StampsPasswordChangedAt(t *testing.T) {
+	svc, _ := newTestAuthService(t)
+	ctx := context.Background()
+
+	user, err := svc.CreateUser(ctx, "stampuser", "oldpass12", "developer")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	// Record the initial password_changed_at (set at user creation).
+	beforeReset := user.PasswordChangedAt
+
+	// Sleep briefly so the timestamp is distinguishable.
+	time.Sleep(10 * time.Millisecond)
+
+	if err := svc.ResetPassword(ctx, user.ID, "newpass12"); err != nil {
+		t.Fatalf("ResetPassword: %v", err)
+	}
+
+	after, err := svc.GetUserByID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+
+	if !after.PasswordChangedAt.After(beforeReset) {
+		t.Errorf("password_changed_at not advanced: before=%v after=%v", beforeReset, after.PasswordChangedAt)
+	}
+
+	// A token issued now should have iat AFTER the reset, so it survives.
+	// JWT iat is truncated to whole seconds (golang-jwt TimePrecision default),
+	// while PostgreSQL timestamps carry microsecond precision, so we must cross
+	// a full second boundary for the comparison to be unambiguous.
+	time.Sleep(1100 * time.Millisecond)
+	token, _, _, err := svc.Authenticate(ctx, "stampuser", "newpass12")
+	if err != nil {
+		t.Fatalf("Authenticate after reset: %v", err)
+	}
+	claims, err := svc.ParseToken(token)
+	if err != nil {
+		t.Fatalf("ParseToken: %v", err)
+	}
+	if claims.IssuedAt != nil && after.PasswordChangedAt.After(claims.IssuedAt.Time) {
+		t.Error("a token issued AFTER the reset should not be older than password_changed_at")
+	}
+}

@@ -75,6 +75,16 @@ func Auth(authSvc *iam.Service, tokenSvc *iam.TokenService) echo.MiddlewareFunc 
 					"error": "用户角色已变更或停用，请重新登录",
 				})
 			}
+			// Reject tokens issued before the most recent password reset.
+			// JWT is stateless, so without this check an admin-initiated password
+			// reset leaves the user's old access tokens alive until they expire —
+			// and a reset is almost always done precisely because the old
+			// credential may have leaked.
+			if claims.IssuedAt != nil && user.PasswordChangedAt.After(claims.IssuedAt.Time) {
+				return c.JSON(http.StatusUnauthorized, map[string]string{
+					"error": "密码已被重置，请重新登录",
+				})
+			}
 			c.Set(httpx.ContextKeyUserID, user.ID)
 			c.Set(httpx.ContextKeyUsername, user.Username)
 			c.Set(httpx.ContextKeyRole, user.Role)

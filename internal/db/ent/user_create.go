@@ -132,6 +132,20 @@ func (_c *UserCreate) SetNillableUpdatedAt(v *time.Time) *UserCreate {
 	return _c
 }
 
+// SetPasswordChangedAt sets the "password_changed_at" field.
+func (_c *UserCreate) SetPasswordChangedAt(v time.Time) *UserCreate {
+	_c.mutation.SetPasswordChangedAt(v)
+	return _c
+}
+
+// SetNillablePasswordChangedAt sets the "password_changed_at" field if the given value is not nil.
+func (_c *UserCreate) SetNillablePasswordChangedAt(v *time.Time) *UserCreate {
+	if v != nil {
+		_c.SetPasswordChangedAt(*v)
+	}
+	return _c
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_c *UserCreate) Mutation() *UserMutation {
 	return _c.mutation
@@ -194,6 +208,10 @@ func (_c *UserCreate) defaults() {
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := user.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
+	}
+	if _, ok := _c.mutation.PasswordChangedAt(); !ok {
+		v := user.DefaultPasswordChangedAt()
+		_c.mutation.SetPasswordChangedAt(v)
 	}
 }
 
@@ -286,6 +304,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
+	}
+	if value, ok := _c.mutation.PasswordChangedAt(); ok {
+		_spec.SetField(user.FieldPasswordChangedAt, field.TypeTime, value)
+		_node.PasswordChangedAt = value
 	}
 	return _node, _spec
 }
@@ -456,6 +478,18 @@ func (u *UserUpsert) SetUpdatedAt(v time.Time) *UserUpsert {
 // UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
 func (u *UserUpsert) UpdateUpdatedAt() *UserUpsert {
 	u.SetExcluded(user.FieldUpdatedAt)
+	return u
+}
+
+// SetPasswordChangedAt sets the "password_changed_at" field.
+func (u *UserUpsert) SetPasswordChangedAt(v time.Time) *UserUpsert {
+	u.Set(user.FieldPasswordChangedAt, v)
+	return u
+}
+
+// UpdatePasswordChangedAt sets the "password_changed_at" field to the value that was provided on create.
+func (u *UserUpsert) UpdatePasswordChangedAt() *UserUpsert {
+	u.SetExcluded(user.FieldPasswordChangedAt)
 	return u
 }
 
@@ -636,6 +670,20 @@ func (u *UserUpsertOne) SetUpdatedAt(v time.Time) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateUpdatedAt() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateUpdatedAt()
+	})
+}
+
+// SetPasswordChangedAt sets the "password_changed_at" field.
+func (u *UserUpsertOne) SetPasswordChangedAt(v time.Time) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetPasswordChangedAt(v)
+	})
+}
+
+// UpdatePasswordChangedAt sets the "password_changed_at" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdatePasswordChangedAt() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdatePasswordChangedAt()
 	})
 }
 
@@ -980,6 +1028,20 @@ func (u *UserUpsertBulk) SetUpdatedAt(v time.Time) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateUpdatedAt() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateUpdatedAt()
+	})
+}
+
+// SetPasswordChangedAt sets the "password_changed_at" field.
+func (u *UserUpsertBulk) SetPasswordChangedAt(v time.Time) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetPasswordChangedAt(v)
+	})
+}
+
+// UpdatePasswordChangedAt sets the "password_changed_at" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdatePasswordChangedAt() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdatePasswordChangedAt()
 	})
 }
 

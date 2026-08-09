@@ -894,6 +894,7 @@ var (
 		{Name: "oidc_provider", Type: field.TypeString, Default: ""},
 		{Name: "created_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 		{Name: "updated_at", Type: field.TypeTime, Default: schema.Expr("now()")},
+		{Name: "password_changed_at", Type: field.TypeTime, Default: schema.Expr("now()")},
 	}
 	// UsersTable holds the schema information for the "users" table.
 	UsersTable = &schema.Table{

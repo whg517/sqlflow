@@ -159,6 +159,12 @@ func (_u *UserUpdate) SetUpdatedAt(v time.Time) *UserUpdate {
 	return _u
 }
 
+// SetPasswordChangedAt sets the "password_changed_at" field.
+func (_u *UserUpdate) SetPasswordChangedAt(v time.Time) *UserUpdate {
+	_u.mutation.SetPasswordChangedAt(v)
+	return _u
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
@@ -197,6 +203,10 @@ func (_u *UserUpdate) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := user.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
+	}
+	if _, ok := _u.mutation.PasswordChangedAt(); !ok {
+		v := user.UpdateDefaultPasswordChangedAt()
+		_u.mutation.SetPasswordChangedAt(v)
 	}
 }
 
@@ -265,6 +275,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.PasswordChangedAt(); ok {
+		_spec.SetField(user.FieldPasswordChangedAt, field.TypeTime, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -418,6 +431,12 @@ func (_u *UserUpdateOne) SetUpdatedAt(v time.Time) *UserUpdateOne {
 	return _u
 }
 
+// SetPasswordChangedAt sets the "password_changed_at" field.
+func (_u *UserUpdateOne) SetPasswordChangedAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetPasswordChangedAt(v)
+	return _u
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
@@ -469,6 +488,10 @@ func (_u *UserUpdateOne) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := user.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
+	}
+	if _, ok := _u.mutation.PasswordChangedAt(); !ok {
+		v := user.UpdateDefaultPasswordChangedAt()
+		_u.mutation.SetPasswordChangedAt(v)
 	}
 }
 
@@ -554,6 +577,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.PasswordChangedAt(); ok {
+		_spec.SetField(user.FieldPasswordChangedAt, field.TypeTime, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &User{config: _u.config}

@@ -45,14 +45,15 @@ type ExportTaskSlim struct {
 
 // User represents a user in the system.
 type User struct {
-	ID           int64     `json:"id"`
-	Username     string    `json:"username"`
-	PasswordHash string    `json:"-"`
-	Role         string    `json:"role"`
-	OIDCSubject  string    `json:"oidc_subject,omitempty"`
-	OIDCProvider string    `json:"oidc_provider,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID                int64     `json:"id"`
+	Username          string    `json:"username"`
+	PasswordHash      string    `json:"-"`
+	Role              string    `json:"role"`
+	OIDCSubject       string    `json:"oidc_subject,omitempty"`
+	OIDCProvider      string    `json:"oidc_provider,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	PasswordChangedAt time.Time `json:"-"`
 }
 
 // QueryHistory represents a user's query execution history record.

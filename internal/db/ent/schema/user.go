@@ -50,6 +50,17 @@ func (User) Fields() []ent.Field {
 		field.Time("updated_at").
 			Default(timeNow).
 			UpdateDefault(timeNow).Annotations(entsql.DefaultExpr("now()")),
+		// password_changed_at is the timestamp of the most recent password
+		// reset. The JWT middleware compares a token's iat against it: a
+		// token issued before this moment is rejected, so resetting a
+		// user's password immediately invalidates any access tokens they
+		// already hold — which is the entire point of an admin-initiated
+		// reset, since it is almost always done because the old credential
+		// may have leaked.
+		field.Time("password_changed_at").
+			Default(timeNow).
+			UpdateDefault(timeNow).
+			Annotations(entsql.DefaultExpr("now()")),
 	}
 }
 

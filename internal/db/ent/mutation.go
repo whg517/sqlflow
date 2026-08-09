@@ -25992,22 +25992,23 @@ func (m *TicketRevisionMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op                Op
-	typ               string
-	id                *int
-	username          *string
-	password_hash     *string
-	role              *string
-	dingtalk_user_id  *string
-	dingtalk_union_id *string
-	oidc_subject      *string
-	oidc_provider     *string
-	created_at        *time.Time
-	updated_at        *time.Time
-	clearedFields     map[string]struct{}
-	done              bool
-	oldValue          func(context.Context) (*User, error)
-	predicates        []predicate.User
+	op                  Op
+	typ                 string
+	id                  *int
+	username            *string
+	password_hash       *string
+	role                *string
+	dingtalk_user_id    *string
+	dingtalk_union_id   *string
+	oidc_subject        *string
+	oidc_provider       *string
+	created_at          *time.Time
+	updated_at          *time.Time
+	password_changed_at *time.Time
+	clearedFields       map[string]struct{}
+	done                bool
+	oldValue            func(context.Context) (*User, error)
+	predicates          []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -26458,6 +26459,42 @@ func (m *UserMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
+// SetPasswordChangedAt sets the "password_changed_at" field.
+func (m *UserMutation) SetPasswordChangedAt(t time.Time) {
+	m.password_changed_at = &t
+}
+
+// PasswordChangedAt returns the value of the "password_changed_at" field in the mutation.
+func (m *UserMutation) PasswordChangedAt() (r time.Time, exists bool) {
+	v := m.password_changed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPasswordChangedAt returns the old "password_changed_at" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldPasswordChangedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPasswordChangedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPasswordChangedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPasswordChangedAt: %w", err)
+	}
+	return oldValue.PasswordChangedAt, nil
+}
+
+// ResetPasswordChangedAt resets all changes to the "password_changed_at" field.
+func (m *UserMutation) ResetPasswordChangedAt() {
+	m.password_changed_at = nil
+}
+
 // Where appends a list predicates to the UserMutation builder.
 func (m *UserMutation) Where(ps ...predicate.User) {
 	m.predicates = append(m.predicates, ps...)
@@ -26492,7 +26529,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.username != nil {
 		fields = append(fields, user.FieldUsername)
 	}
@@ -26520,6 +26557,9 @@ func (m *UserMutation) Fields() []string {
 	if m.updated_at != nil {
 		fields = append(fields, user.FieldUpdatedAt)
 	}
+	if m.password_changed_at != nil {
+		fields = append(fields, user.FieldPasswordChangedAt)
+	}
 	return fields
 }
 
@@ -26546,6 +26586,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case user.FieldUpdatedAt:
 		return m.UpdatedAt()
+	case user.FieldPasswordChangedAt:
+		return m.PasswordChangedAt()
 	}
 	return nil, false
 }
@@ -26573,6 +26615,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldCreatedAt(ctx)
 	case user.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
+	case user.FieldPasswordChangedAt:
+		return m.OldPasswordChangedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown User field %s", name)
 }
@@ -26644,6 +26688,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetUpdatedAt(v)
+		return nil
+	case user.FieldPasswordChangedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPasswordChangedAt(v)
 		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
@@ -26735,6 +26786,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldUpdatedAt:
 		m.ResetUpdatedAt()
+		return nil
+	case user.FieldPasswordChangedAt:
+		m.ResetPasswordChangedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)

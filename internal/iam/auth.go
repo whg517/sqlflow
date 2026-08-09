@@ -255,14 +255,17 @@ func (s *Service) AdminCount(ctx context.Context) (int64, error) {
 }
 
 // ResetPassword resets a user's password (admin operation, no old password check).
-// It also revokes all existing refresh tokens for the user.
+// It also revokes all existing refresh tokens and stamps password_changed_at so
+// that access tokens issued before this moment are rejected by the JWT middleware.
 func (s *Service) ResetPassword(ctx context.Context, userID int64, newPassword string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
+	now := time.Now()
 	_, err = s.client.User.UpdateOneID(int(userID)).
 		SetPasswordHash(string(hash)).
+		SetPasswordChangedAt(now).
 		Save(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -326,13 +329,14 @@ func (s *Service) ParseToken(tokenStr string) (*Claims, error) {
 // entUserToModel converts an ent User entity to a model.User.
 func entUserToModel(u *ent.User) *model.User {
 	return &model.User{
-		ID:           int64(u.ID),
-		Username:     u.Username,
-		PasswordHash: u.PasswordHash,
-		Role:         u.Role,
-		OIDCSubject:  u.OidcSubject,
-		OIDCProvider: u.OidcProvider,
-		CreatedAt:    u.CreatedAt,
-		UpdatedAt:    u.UpdatedAt,
+		ID:                int64(u.ID),
+		Username:          u.Username,
+		PasswordHash:      u.PasswordHash,
+		Role:              u.Role,
+		OIDCSubject:       u.OidcSubject,
+		OIDCProvider:      u.OidcProvider,
+		CreatedAt:         u.CreatedAt,
+		UpdatedAt:         u.UpdatedAt,
+		PasswordChangedAt: u.PasswordChangedAt,
 	}
 }
