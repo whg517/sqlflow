@@ -897,7 +897,7 @@ func TestWriteCSV(t *testing.T) {
 		},
 	}
 
-	if err := writeCSV(c, result); err != nil {
+	if err := writeCSV(c, result, "testuser"); err != nil {
 		t.Fatalf("writeCSV error: %v", err)
 	}
 
@@ -919,8 +919,12 @@ func TestWriteCSV(t *testing.T) {
 
 	body := rec.Body.String()
 	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
-	if len(lines) != 3 {
-		t.Fatalf("expected 3 lines (header + 2 data), got %d; body=%s", len(lines), body)
+	// 3 data lines (header + 2 rows) + 1 blank + 1 watermark = 5
+	if len(lines) != 5 {
+		t.Fatalf("expected 5 lines (header + 2 data + watermark), got %d; body=%s", len(lines), body)
+	}
+	if !strings.Contains(body, "导出水印:") {
+		t.Error("expected watermark in CSV output")
 	}
 
 	// Header row
@@ -950,14 +954,15 @@ func TestWriteCSV_EmptyResult(t *testing.T) {
 		Rows:    []map[string]interface{}{},
 	}
 
-	if err := writeCSV(c, result); err != nil {
+	if err := writeCSV(c, result, "testuser"); err != nil {
 		t.Fatalf("writeCSV error: %v", err)
 	}
 
 	body := rec.Body.String()
 	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
-	if len(lines) != 1 {
-		t.Errorf("expected 1 line (header only), got %d; body=%s", len(lines), body)
+	// header + blank + watermark = 3
+	if len(lines) != 3 {
+		t.Errorf("expected 3 lines (header + watermark), got %d; body=%s", len(lines), body)
 	}
 	if lines[0] != "id,name" {
 		t.Errorf("header = %q, want %q", lines[0], "id,name")
@@ -978,14 +983,15 @@ func TestWriteCSV_NilValues(t *testing.T) {
 		},
 	}
 
-	if err := writeCSV(c, result); err != nil {
+	if err := writeCSV(c, result, "testuser"); err != nil {
 		t.Fatalf("writeCSV error: %v", err)
 	}
 
 	body := rec.Body.String()
 	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
-	if len(lines) != 3 {
-		t.Fatalf("expected 3 lines, got %d; body=%s", len(lines), body)
+	// header + 2 data + blank + watermark = 5
+	if len(lines) != 5 {
+		t.Fatalf("expected 5 lines (header + 2 data + watermark), got %d; body=%s", len(lines), body)
 	}
 	if lines[1] != "1," {
 		t.Errorf("row with nil = %q, want %q", lines[1], "1,")
@@ -1009,7 +1015,7 @@ func TestWriteExportJSON(t *testing.T) {
 		},
 	}
 
-	if err := writeExportJSON(c, result); err != nil {
+	if err := writeExportJSON(c, result, "testuser"); err != nil {
 		t.Fatalf("writeExportJSON error: %v", err)
 	}
 
@@ -1025,6 +1031,12 @@ func TestWriteExportJSON(t *testing.T) {
 	cd := rec.Header().Get("Content-Disposition")
 	if cd != "attachment; filename=export.json" {
 		t.Errorf("Content-Disposition = %q, want %q", cd, "attachment; filename=export.json")
+	}
+
+	// writeExportJSON carries the watermark in the X-Export-Watermark response
+	// header (JSON does not permit comments, so the body stays a bare array).
+	if wm := rec.Header().Get("X-Export-Watermark"); !strings.Contains(wm, "导出人=") {
+		t.Errorf("X-Export-Watermark = %q, want it to contain the watermark", wm)
 	}
 
 	var rows []map[string]interface{}
@@ -1134,8 +1146,14 @@ func TestWriteExportJSON_EmptyResult(t *testing.T) {
 		Rows:    []map[string]interface{}{},
 	}
 
-	if err := writeExportJSON(c, result); err != nil {
+	if err := writeExportJSON(c, result, "testuser"); err != nil {
 		t.Fatalf("writeExportJSON error: %v", err)
+	}
+
+	// writeExportJSON carries the watermark in the X-Export-Watermark response
+	// header (JSON does not permit comments, so the body stays a bare array).
+	if wm := rec.Header().Get("X-Export-Watermark"); !strings.Contains(wm, "导出人=") {
+		t.Errorf("X-Export-Watermark = %q, want it to contain the watermark", wm)
 	}
 
 	var rows []map[string]interface{}

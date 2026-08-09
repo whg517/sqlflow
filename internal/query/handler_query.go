@@ -2,15 +2,14 @@ package query
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/whg517/sqlflow/internal/datasource"
 	"github.com/whg517/sqlflow/internal/model"
 	"github.com/whg517/sqlflow/internal/platform/httpx"
 	"github.com/whg517/sqlflow/internal/resp"
@@ -263,42 +262,14 @@ func (h *Handler) ExportQuery(c echo.Context) error {
 
 	result, err := h.querySvc.ExportQuery(c.Request().Context(), userID, username, role, req.DatasourceID, req.Database, req.SQL, req.Params...)
 	if err != nil {
-		switch {
-		case errors.Is(err, datasource.ErrDatasourceNotFound):
-			return resp.BadRequest(c, "数据源不存在")
-		case errors.Is(err, datasource.ErrDatasourceDisabled):
-			return resp.BadRequest(c, "数据源已禁用")
-		case errors.Is(err, datasource.ErrDatabaseScopeMismatch):
-			// The message names both databases, so it is passed through rather
-			// than replaced: the caller has to know which one is reachable.
-			return resp.BadRequest(c, err.Error())
-		case errors.Is(err, ErrSQLOperationForbidden):
-			return resp.Forbidden(c, "该操作需要提交工单，仅允许 SELECT 查询")
-		case errors.Is(err, ErrSQLHighRisk):
-			return resp.Forbidden(c, "高风险操作被拦截，请提交工单")
-		case errors.Is(err, ErrSQLBlocked):
-			return resp.BadRequest(c, "SQL操作被拦截")
-		case errors.Is(err, ErrSQLTimeout):
-			return resp.BadRequest(c, "查询超时（30秒），请优化查询或缩小范围")
-		case errors.Is(err, ErrEmptySQL):
-			return resp.BadRequest(c, "SQL不能为空")
-		case errors.Is(err, ErrExportRowLimit):
-			return resp.BadRequest(c, "导出数据超过10000行上限，请添加 LIMIT 条件缩小范围")
-		case errors.Is(err, ErrQueryParamsUnsupported):
-			return resp.BadRequest(c, err.Error())
-		case errors.Is(err, ErrInternalDatasourceOnly):
-			return resp.Forbidden(c, err.Error())
-		default:
-			log.Printf("ExportQuery failed: %v", err)
-			return resp.InternalError(c, "导出失败")
-		}
+		return respondQueryError(c, "ExportQuery", err, "导出失败")
 	}
 
 	switch req.Format {
 	case "csv":
-		return writeCSV(c, result)
+		return writeCSV(c, result, username)
 	case "json":
-		return writeExportJSON(c, result)
+		return writeExportJSON(c, result, username)
 	default:
 		return resp.BadRequest(c, "不支持的导出格式")
 	}
@@ -324,7 +295,12 @@ func csvEscape(s string) string {
 }
 
 // writeCSV writes the query result as a CSV file download.
-func writeCSV(c echo.Context, result *QueryResult) error {
+//
+// The watermark is appended as a final commented line, naming who exported it
+// and when. This is the export path that carries actual target-database PII —
+// the audit/ticket exports only contain platform metadata — so it is the one
+// that most needs an attributable trail.
+func writeCSV(c echo.Context, result *QueryResult, username string) error {
 	c.Response().Header().Set(echo.HeaderContentType, "text/csv; charset=utf-8")
 	c.Response().Header().Set(echo.HeaderContentDisposition, "attachment; filename=export.csv")
 	c.Response().WriteHeader(http.StatusOK)
@@ -355,13 +331,27 @@ func writeCSV(c echo.Context, result *QueryResult) error {
 		_, _ = w.Write([]byte{'\n'})
 	}
 
+	// Watermark — the only export carrying target-database rows, so it must
+	// carry who let them out.
+	_, _ = fmt.Fprintf(w, "\n# 导出水印: 导出人=%s | 导出时间=%s | 仅限内部使用\n",
+		username, time.Now().Format("2006-01-02 15:04:05"))
+
 	return nil
 }
 
 // writeExportJSON writes the query result as a JSON file download.
-func writeExportJSON(c echo.Context, result *QueryResult) error {
+//
+// The watermark is carried in a response header (X-Export-Watermark) rather
+// than prepended to the body, because JSON does not permit comments and a
+// leading // line breaks every standard parser the way it broke the test that
+// unmarshals the body. The header preserves attribution without corrupting
+// the payload format.
+func writeExportJSON(c echo.Context, result *QueryResult, username string) error {
 	c.Response().Header().Set(echo.HeaderContentType, "application/json")
 	c.Response().Header().Set(echo.HeaderContentDisposition, "attachment; filename=export.json")
+	c.Response().Header().Set("X-Export-Watermark",
+		fmt.Sprintf("导出人=%s | 导出时间=%s | 仅限内部使用",
+			username, time.Now().Format("2006-01-02 15:04:05")))
 	c.Response().WriteHeader(http.StatusOK)
 
 	return json.NewEncoder(c.Response().Writer).Encode(result.Rows)

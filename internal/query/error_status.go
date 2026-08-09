@@ -31,6 +31,7 @@ var queryErrorStatuses = []struct {
 	{ErrSQLBlocked, http.StatusBadRequest},
 	{ErrSQLTimeout, http.StatusBadRequest},
 	{ErrQueryParamsUnsupported, http.StatusBadRequest},
+	{ErrExportRowLimit, http.StatusBadRequest},
 	{datasource.ErrDatasourceNotFound, http.StatusBadRequest},
 	{datasource.ErrDatasourceDisabled, http.StatusBadRequest},
 	{datasource.ErrDatabaseScopeMismatch, http.StatusBadRequest},

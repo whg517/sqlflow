@@ -36,7 +36,7 @@ func TestWriteCSV_NeutralizesFormulas(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	c := echo.New().NewContext(httptest.NewRequest("GET", "/", nil), rec)
-	if err := writeCSV(c, &QueryResult{Columns: []string{"note"}, Rows: rows}); err != nil {
+	if err := writeCSV(c, &QueryResult{Columns: []string{"note"}, Rows: rows}, "testuser"); err != nil {
 		t.Fatalf("writeCSV: %v", err)
 	}
 
@@ -49,17 +49,20 @@ func TestWriteCSV_NeutralizesFormulas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse csv: %v", err)
 	}
-	if len(records) != len(dangerous)+1 {
-		t.Fatalf("records = %d, want %d", len(records), len(dangerous)+1)
+	// +1 for the header, +1 for the trailing watermark comment line that
+	// writeCSV appends (a blank line before it is skipped by the CSV reader).
+	if len(records) != len(dangerous)+2 {
+		t.Fatalf("records = %d, want %d", len(records), len(dangerous)+2)
 	}
 
-	for _, record := range records[1:] {
+	// Only inspect the data rows (skip header and trailing watermark).
+	for _, record := range records[1 : 1+len(dangerous)] {
 		cell := record[0]
 		if cell == "" {
 			t.Fatal("a cell was dropped instead of neutralized")
 		}
 		switch cell[0] {
-		case '=', '+', '-', '@', '\t', '\r':
+		case '=', '+', '-', '@', '	', '\r':
 			t.Errorf("cell %q still opens with a formula trigger", cell)
 		}
 	}
@@ -67,6 +70,10 @@ func TestWriteCSV_NeutralizesFormulas(t *testing.T) {
 	// The value itself must survive — neutralized, not dropped.
 	if !strings.Contains(rec.Body.String(), "calc") {
 		t.Error("the cell contents were lost rather than neutralized")
+	}
+	// The watermark must be present on every export carrying target rows.
+	if !strings.Contains(rec.Body.String(), "导出水印:") {
+		t.Error("export watermark is missing from CSV body")
 	}
 }
 
@@ -77,7 +84,7 @@ func TestWriteCSV_LeavesOrdinaryValuesAlone(t *testing.T) {
 	if err := writeCSV(c, &QueryResult{
 		Columns: []string{"name"},
 		Rows:    []map[string]interface{}{{"name": "alice"}, {"name": "13812345678"}},
-	}); err != nil {
+	}, "testuser"); err != nil {
 		t.Fatalf("writeCSV: %v", err)
 	}
 
