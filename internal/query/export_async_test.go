@@ -360,3 +360,53 @@ func TestExportAsyncService_CleanupExpiredFiles(t *testing.T) {
 		t.Errorf("expected failed status after cleanup, got %q", retrieved.Status)
 	}
 }
+
+// TestExportAsyncService_QuotaRejectsExcessTasks verifies that a user is
+// capped at maxConcurrentExportTasks concurrent in-flight tasks. Without this,
+// a single user can spawn unlimited goroutines and files — each holding a
+// database cursor and disk space.
+func TestExportAsyncService_QuotaRejectsExcessTasks(t *testing.T) {
+	db, dataDir := newExportAsyncTestDB(t)
+	auditSvc := audit.NewService(testutil.WrapSQL(t, db), 0, 0)
+	exportSvc := newExportServiceForTest(t, testutil.WrapSQL(t, db), auditSvc)
+	asyncSvc, err := NewAsyncExportService(testutil.WrapSQL(t, db), exportSvc, auditSvc, dataDir)
+	if err != nil {
+		t.Fatalf("NewAsyncExportService: %v", err)
+	}
+	defer asyncSvc.Close()
+
+	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('admin', 'hash', 'admin')")
+	_, _ = db.Exec("INSERT INTO users (username, password_hash, role) VALUES ('other', 'hash', 'admin')")
+
+	// Seed enough audit data for the export goroutines to find something to
+	// export (otherwise they complete too fast to count as "active").
+	auditSvc.Write(context.Background(), auditlog.Record{
+		UserID: 1, Action: "query_execute", SQLContent: "SELECT 1", SQLSummary: "SELECT 1",
+	})
+
+	actor := ExportActor{UserID: 1, Username: "admin", Role: "admin"}
+
+	// Create maxConcurrentExportTasks tasks — all should succeed
+	for i := 0; i < maxConcurrentExportTasks; i++ {
+		_, err := asyncSvc.CreateAsyncExport(context.Background(), actor,
+			"audit", `{"page_size":10}`, "csv", nil)
+		if err != nil {
+			t.Fatalf("task %d should succeed within quota, got: %v", i+1, err)
+		}
+	}
+
+	// The next one should be rejected
+	_, err = asyncSvc.CreateAsyncExport(context.Background(), actor,
+		"audit", `{"page_size":10}`, "csv", nil)
+	if err != ErrTooManyExportTasks {
+		t.Errorf("expected ErrTooManyExportTasks after %d active tasks, got: %v", maxConcurrentExportTasks, err)
+	}
+
+	// A different user should NOT be affected by user 1's quota
+	actor2 := ExportActor{UserID: 2, Username: "other", Role: "admin"}
+	_, err = asyncSvc.CreateAsyncExport(context.Background(), actor2,
+		"audit", `{"page_size":10}`, "csv", nil)
+	if err != nil {
+		t.Errorf("user 2 should not be affected by user 1's quota, got: %v", err)
+	}
+}

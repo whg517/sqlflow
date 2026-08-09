@@ -39,7 +39,16 @@ var (
 	ErrExportNotReady = errors.New("导出任务尚未完成")
 	// ErrExportFileGone indicates the export file has been cleaned up.
 	ErrExportFileGone = errors.New("导出文件已过期或已清理")
+	// ErrTooManyExportTasks indicates the user has too many concurrent export
+	// tasks in flight. A user could otherwise launch unlimited goroutines and
+	// files, each holding a database cursor and disk space.
+	ErrTooManyExportTasks = errors.New("导出任务数过多，请等待已有任务完成后再试")
 )
+
+// maxConcurrentExportTasks bounds how many pending or processing export tasks
+// a single user may have at once. Three is enough for a user who exports
+// multiple things in parallel, but stops a script from spawning hundreds.
+const maxConcurrentExportTasks = 3
 
 // AsyncExportService handles asynchronous export task lifecycle.
 type AsyncExportService struct {
@@ -114,6 +123,21 @@ func (s *AsyncExportService) Close() {
 func (s *AsyncExportService) CreateAsyncExport(ctx context.Context, actor ExportActor, exportType string, filtersJSON string, fileFormat string, columns map[string]int) (*model.ExportTask, error) {
 	if err := s.exportSvc.authorizeExportRequest(ctx, actor, ExportType(exportType)); err != nil {
 		return nil, err
+	}
+
+	// Quota: a user may not have more than maxConcurrentExportTasks tasks in
+	// flight. Without this, a single user can spawn unlimited goroutines and
+	// files, each holding a database cursor and disk space — a resource
+	// exhaustion path with no natural backpressure.
+	active, err := s.client.ExportTask.Query().
+		Where(entexporttask.UserID(actor.UserID),
+			entexporttask.StatusIn(string(model.ExportTaskStatusPending), string(model.ExportTaskStatusProcessing))).
+		Count(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("count active export tasks: %w", err)
+	}
+	if active >= maxConcurrentExportTasks {
+		return nil, ErrTooManyExportTasks
 	}
 
 	filename := generateExportFilename(exportType, fileFormat)

@@ -2,6 +2,7 @@ package query
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -324,9 +325,14 @@ func (h *ExportHandler) createAsyncExport(c echo.Context, actor ExportActor, exp
 
 	task, err := h.exportAsyncSvc.CreateAsyncExport(c.Request().Context(), actor, exportType, string(filtersJSON), string(exportFormat), columns)
 	if err != nil {
-		switch err {
-		case ErrExportNoPermission:
+		switch {
+		case errors.Is(err, ErrExportNoPermission):
 			return resp.Forbidden(c, "没有导出权限")
+		case errors.Is(err, ErrTooManyExportTasks):
+			return c.JSON(http.StatusTooManyRequests, map[string]interface{}{
+				"code":    429,
+				"message": err.Error(),
+			})
 		default:
 			log.Printf("createAsyncExport failed: %v", err)
 			return resp.InternalError(c, "创建异步导出任务失败")
