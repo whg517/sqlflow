@@ -73,3 +73,7 @@ HEARTBEAT.md
 # Release packages
 release/
 scripts/__pycache__/
+
+# Local build artifact and agent session state
+sqlflow-server
+.zcode/
