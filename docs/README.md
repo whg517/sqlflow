@@ -72,7 +72,7 @@ docs/
 
 ## 当前已知边界
 
-- 平台元数据使用 SQLite；MySQL、PostgreSQL、MongoDB 和 Elasticsearch 是受治理的目标数据源，不是平台元数据库。
+- 平台元数据使用 PostgreSQL（ADR-0009）；MySQL、PostgreSQL、MongoDB 和 Elasticsearch 是受治理的目标数据源，不是平台元数据库。
 - `internal/connpool` 仅剩一处用途：Elasticsearch 索引与字段浏览需要原生客户端做分页 `_cat/indices` 和 mapping 调用，`Driver` 接口尚未建模该能力。查询、导出、工单执行、元数据与连接测试均已走 `internal/driver`。
 - Ent Schema 与 SQL migration 双轨并存，当前仍由 `golang-migrate` 执行 DDL。
 - 2026-07-26 评审确认当前版本仅达到隔离开发验证等级；在路线图阶段 0 完成前，不应连接高价值生产数据源或开放公开分享。

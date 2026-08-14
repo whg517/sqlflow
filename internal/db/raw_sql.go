@@ -38,16 +38,9 @@ package db
 //    Owner:  internal/service/dashboard.go
 //    Fallback: ent.Client.QueryContext() → raw SQL
 //
-// 4. FTS5 full-text search (audit_logs_fts)
-//    Reason: SQLite FTS5 virtual table + triggers are not supported by ent
-//    Owner:  internal/service/audit.go
-//    Fallback: Must remain raw SQL. FTS5 is SQLite-specific.
-//    Note:   audit_logs_fts is a VIRTUAL TABLE, not managed by ent.
-//
-// 5. Backup operations
-//    Reason: SQLite-specific VACUUM INTO / .backup commands
-//    Owner:  internal/service/backup.go
-//    Fallback: Must remain raw SQL.
+// Note: ADR-0009 removed the SQLite-specific items that used to live here.
+// Full-text search now uses PostgreSQL tsvector + pg_trgm, and backups are
+// produced by pg_dump in internal/ops/backup.go — neither is raw SQL anymore.
 
 // ========================================================================
 // RAW SQL USAGE RULES

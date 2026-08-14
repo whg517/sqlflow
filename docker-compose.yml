@@ -11,6 +11,7 @@
 #
 # Services:
 #   - sqlflow:    SQLFlow application (Go + embedded React SPA)
+#   - postgres:   PostgreSQL 17 for platform metadata (ADR-0009)
 #   - mysql:      MySQL 8.0 database for query execution
 #
 # Includes:
@@ -48,8 +49,9 @@ services:
       # Admin account (set via env, not config file)
       SQLFLOW_ADMIN_USERNAME: ${SQLFLOW_ADMIN_USERNAME:-admin}
       SQLFLOW_ADMIN_PASSWORD: ${SQLFLOW_ADMIN_PASSWORD:?SQLFLOW_ADMIN_PASSWORD is required}
-      # SQLite database path (inside container volume)
-      SQLFLOW_DB_PATH: /app/data/sqlflow.db
+      # Platform metadata store (PostgreSQL, ADR-0009). Points at the postgres
+      # service below. Override SQLFLOW_DB_PASSWORD to rotate credentials.
+      SQLFLOW_DB_DSN: postgres://sqlflow:${SQLFLOW_DB_PASSWORD:-sqlflow}@postgres:5432/sqlflow?sslmode=disable
       # Encryption key for sensitive data
       SQLFLOW_ENCRYPTION_KEY: ${SQLFLOW_ENCRYPTION_KEY:?SQLFLOW_ENCRYPTION_KEY is required}
       # AI review provider
@@ -78,6 +80,8 @@ services:
       SQLFLOW_METRICS_ENABLED: ${SQLFLOW_METRICS_ENABLED:-false}
       SQLFLOW_QUERY_HISTORY_MAX: ${SQLFLOW_QUERY_HISTORY_MAX:-200}
     depends_on:
+      postgres:
+        condition: service_healthy
       mysql:
         condition: service_healthy
     healthcheck:
@@ -85,6 +89,36 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    networks:
+      - sqlflow-net
+
+  # ----- Platform Metadata Store (ADR-0009) -----
+  postgres:
+    image: postgres:17-alpine
+    container_name: sqlflow-pg
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: sqlflow
+      POSTGRES_PASSWORD: ${SQLFLOW_DB_PASSWORD:-sqlflow}
+      POSTGRES_DB: sqlflow
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "sqlflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
       start_period: 10s
     restart: unless-stopped
     deploy:
@@ -135,6 +169,9 @@ services:
 volumes:
   sqlflow-data:
     name: sqlflow-app-data
+    driver: local
+  pg-data:
+    name: sqlflow-pg-data
     driver: local
   mysql-data:
     name: sqlflow-mysql-data

@@ -26,6 +26,24 @@ jobs:
   test-backend:
     name: Test (Go)
     runs-on: ubuntu-latest
+    # The platform store is PostgreSQL (ADR-0009); the Go test suite needs a
+    # live instance. testutil connects to SQLFLOW_TEST_DSN.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: sqlflow
+          POSTGRES_PASSWORD: sqlflow
+          POSTGRES_DB: sqlflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sqlflow"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SQLFLOW_TEST_DSN: postgres://sqlflow:sqlflow@localhost:5432/sqlflow?sslmode=disable
     steps:
       - uses: actions/checkout@v4
 
@@ -34,13 +52,17 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      # pg_dump is needed by backup tests (internal/ops). The version from the
+      # PostgreSQL APT repo must be >= the server major (17) to dump it.
+      - name: Install PostgreSQL client (pg_dump)
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-17
+
       - name: Run Go tests
-        # Only a single subtest is skipped: TestUserHandler_DeleteUser/
-        # cannot_delete_only_admin_via_another_admin hits a SQLite single-connection
-        # deadline during refresh-token generation under -race. All other formerly
-        # skipped tests now pass and run normally.
         run: go test -v -race -count=1 -timeout 10m -coverprofile=coverage.out -covermode=atomic ./...
-          -skip 'TestUserHandler_DeleteUser/cannot_delete_only_admin_via_another_admin'
 
       - name: Print coverage summary
         if: always()

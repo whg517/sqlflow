@@ -42,7 +42,7 @@ services:
       SQLFLOW_JWT_EXPIRY: ${SQLFLOW_JWT_EXPIRY:-720h}   # 30 days for dev convenience
       SQLFLOW_ADMIN_USERNAME: ${SQLFLOW_ADMIN_USERNAME:-admin}
       SQLFLOW_ADMIN_PASSWORD: ${SQLFLOW_ADMIN_PASSWORD:-admin123}
-      SQLFLOW_DB_PATH: /app/data/sqlflow.db
+      SQLFLOW_DB_DSN: postgres://sqlflow:sqlflow@postgres:5432/sqlflow?sslmode=disable
       SQLFLOW_ENCRYPTION_KEY: ${SQLFLOW_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef}
       SQLFLOW_AI_PROVIDER: ${SQLFLOW_AI_PROVIDER:-openai}
       SQLFLOW_AI_MODEL: ${SQLFLOW_AI_MODEL:-gpt-4}
@@ -75,4 +75,21 @@ services:
       timeout: 3s
       retries: 10
       start_period: 15s
+    restart: unless-stopped
+
+  # Dev override for the platform metadata store (defined in docker-compose.yml)
+  postgres:
+    container_name: sqlflow-dev-pg
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: sqlflow
+      POSTGRES_PASSWORD: sqlflow
+      POSTGRES_DB: sqlflow
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "sqlflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
     restart: unless-stopped

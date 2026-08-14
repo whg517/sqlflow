@@ -52,7 +52,7 @@
 
 **验收标准**：
 
-- Given 备份目录可写，When 触发备份，Then 生成一致的 SQLite 备份并按配置可选压缩。
+- Given 备份目录可写，When 触发备份，Then 用 `pg_dump` 生成一致的 PostgreSQL 备份并按配置可选压缩。
 - Given 备份数超过保留上限，When 清理任务执行，Then 仅删除超出策略的旧备份。
 - Given 普通用户，When 请求备份下载或删除，Then 操作被拒绝。
 - Then 文档和 UI 明确该备份不包含目标 MySQL/PostgreSQL/MongoDB/Elasticsearch 数据。

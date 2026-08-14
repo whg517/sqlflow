@@ -14,7 +14,9 @@ admin:
   password: ""
 
 db:
-  path: "./data/sqlflow.db"
+  # PostgreSQL 平台元数据库（ADR-0009）。可用 SQLFLOW_DB_DSN 覆盖。
+  dsn: "postgres://sqlflow:sqlflow@localhost:5432/sqlflow?sslmode=disable"
+  data_dir: "./data"  # 导出产物、pg_dump 备份落盘目录
 
 query_history_max: 200
 

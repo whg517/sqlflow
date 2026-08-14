@@ -158,9 +158,9 @@ encryption_key: "0123456789abcdef0123456789abcdef"
 			t.Errorf("Server.Port = %d, want default 8080", cfg.Server.Port)
 		}
 	})
-	t.Run("default_db_path", func(t *testing.T) {
+	t.Run("default_db_dsn", func(t *testing.T) {
 		if cfg.DB.DSN != "postgres://sqlflow:sqlflow@localhost:5432/sqlflow?sslmode=disable" {
-			t.Errorf("DB.Path = %q, want default ./data/sqlflow.db", cfg.DB.DSN)
+			t.Errorf("DB.DSN = %q, want default postgres DSN", cfg.DB.DSN)
 		}
 	})
 	t.Run("default_jwt_expiry", func(t *testing.T) {

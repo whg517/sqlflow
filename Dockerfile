@@ -69,7 +69,8 @@ FROM alpine:${ALPINE_VERSION}
 
 # Install minimal runtime dependencies
 # libc-dev needed for pg_query_go (CGO-linked binary)
-RUN apk add --no-cache ca-certificates tzdata curl libc-dev
+# postgresql17-client provides pg_dump, used by the backup scheduler (ADR-0009)
+RUN apk add --no-cache ca-certificates tzdata curl libc-dev postgresql17-client
 
 # Create non-root user before copying files
 RUN addgroup -S sqlflow && adduser -S -G sqlflow sqlflow
