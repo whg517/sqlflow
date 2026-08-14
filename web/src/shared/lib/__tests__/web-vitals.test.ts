@@ -63,10 +63,15 @@ describe("initWebVitals", () => {
       entries: [],
     });
 
-    expect(mockSendBeacon).toHaveBeenCalledWith(
-      "/api/metrics/web-vitals",
-      expect.stringContaining('"name":"LCP"'),
-    );
+    expect(mockSendBeacon).toHaveBeenCalledTimes(1);
+    const [url, blob] = mockSendBeacon.mock.calls[0];
+    expect(url).toBe("/api/metrics/web-vitals");
+    // A plain string body makes sendBeacon send text/plain, which the API
+    // rejects with 400 — the payload must be wrapped in a JSON-typed Blob.
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe("application/json");
+    const text = await blob.text();
+    expect(text).toContain('"name":"LCP"');
   });
 
   it("falls back to fetch when sendBeacon is not available", async () => {

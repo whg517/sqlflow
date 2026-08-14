@@ -28,9 +28,13 @@ interface WebVitalPayload {
 function reportMetric(payload: WebVitalPayload): void {
   const body = JSON.stringify(payload);
 
-  // Prefer sendBeacon (fire-and-forget, survives page unload)
+  // Prefer sendBeacon (fire-and-forget, survives page unload).
+  // sendBeacon with a plain string sends Content-Type text/plain, which the
+  // API rejects (echo only binds JSON for application/json) — every beacon
+  // came back 400 and the retries tripped the rate limiter. Wrap the body in
+  // a Blob so it is sent as application/json.
   if (navigator.sendBeacon) {
-    navigator.sendBeacon(API_ENDPOINT, body);
+    navigator.sendBeacon(API_ENDPOINT, new Blob([body], { type: "application/json" }));
     return;
   }
 
