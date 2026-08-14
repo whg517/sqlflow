@@ -76,6 +76,44 @@ func TestAuthService_CreateUser(t *testing.T) {
 	})
 }
 
+// TestAuthService_CreateUser_ThenLoginSameSecond is a regression test for the
+// "same-second" token-invalidation bug: a user created and authenticated within
+// the same second was rejected by the auth middleware because
+// password_changed_at (microsecond precision from Postgres) tested as strictly
+// after the JWT iat (truncated to the second). The fix truncates
+// password_changed_at to second precision before comparing.
+func TestAuthService_CreateUser_ThenLoginSameSecond(t *testing.T) {
+	svc, _ := newTestAuthService(t)
+	ctx := context.Background()
+
+	user, err := svc.CreateUser(ctx, "samesec", "password123", "developer")
+	if err != nil {
+		t.Fatalf("CreateUser() error: %v", err)
+	}
+
+	// Authenticate immediately — within the same second as CreateUser.
+	accessToken, _, _, err := svc.Authenticate(ctx, "samesec", "password123")
+	if err != nil {
+		t.Fatalf("Authenticate() error: %v", err)
+	}
+
+	claims, err := svc.ParseToken(accessToken)
+	if err != nil {
+		t.Fatalf("ParseToken() error: %v", err)
+	}
+	if claims.IssuedAt == nil {
+		t.Fatal("claims.IssuedAt is nil")
+	}
+
+	// This is the exact comparison the auth middleware performs. Before the
+	// fix it returned true (rejecting the token) when both timestamps fell in
+	// the same wall-clock second.
+	if user.PasswordChangedAt.Truncate(time.Second).After(claims.IssuedAt.Time) {
+		t.Errorf("password_changed_at (%v) after iat (%v): same-second login would be rejected",
+			user.PasswordChangedAt, claims.IssuedAt.Time)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Authenticate
 // ---------------------------------------------------------------------------

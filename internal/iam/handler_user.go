@@ -336,6 +336,9 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 		if errors.Is(err, ErrInvalidRole) {
 			return resp.BadRequest(c, err.Error())
 		}
+		if errors.Is(err, ErrUsernameExists) {
+			return resp.Conflict(c, err.Error())
+		}
 		return resp.InternalError(c, "创建用户失败")
 	}
 

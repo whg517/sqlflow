@@ -58,6 +58,8 @@ var errorStatuses = []struct {
 	{ErrSelfApproval, http.StatusForbidden},
 	{ErrTicketInternalDatasource, http.StatusForbidden},
 	{ErrCommentNotOwner, http.StatusForbidden},
+	// Tampering with post-approval SQL is an integrity refusal, not a fault.
+	{ErrSQLHashMismatch, http.StatusForbidden},
 
 	{ErrTicketNotFound, http.StatusNotFound},
 	{ErrOrderNotFound, http.StatusNotFound},

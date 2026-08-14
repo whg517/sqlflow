@@ -110,6 +110,7 @@ func declaredDomainErrors(t *testing.T) map[string]error {
 		"ErrScheduleTimeInPast":        ErrScheduleTimeInPast,
 		"ErrScheduleTimeRequired":      ErrScheduleTimeRequired,
 		"ErrSelfApproval":              ErrSelfApproval,
+		"ErrSQLHashMismatch":           ErrSQLHashMismatch,
 		"ErrTicketAlreadyProcessed":    ErrTicketAlreadyProcessed,
 		"ErrTicketDatasourceDisabled":  ErrTicketDatasourceDisabled,
 		"ErrTicketDatasourceNotFound":  ErrTicketDatasourceNotFound,

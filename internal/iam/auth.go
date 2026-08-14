@@ -76,6 +76,9 @@ func (s *Service) CreateUser(ctx context.Context, username, password, role strin
 		SetRole(role).
 		Save(ctx)
 	if err != nil {
+		if ent.IsConstraintError(err) {
+			return nil, ErrUsernameExists
+		}
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
 

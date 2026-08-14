@@ -158,6 +158,14 @@ func (h *ShareHandler) GetShare(c echo.Context) error {
 				"code":    410,
 				"message": "共享链接已被撤销",
 			})
+		case ErrShareUnmaskable:
+			// A mask-safety refusal: the share exists and access was granted,
+			// but the rows cannot be safely masked. This is a deliberate
+			// refusal, not a platform fault — 403, not 500.
+			return c.JSON(http.StatusForbidden, map[string]interface{}{
+				"code":    403,
+				"message": err.Error(),
+			})
 		default:
 			log.Printf("GetShare failed: %v", err)
 			return resp.InternalError(c, "获取共享链接失败")

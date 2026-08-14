@@ -287,12 +287,20 @@ func (s *ShareService) maskForAnonymousReader(ctx context.Context, sr *ent.Share
 	if err := json.Unmarshal([]byte(sr.TargetsJSON), &targets); err != nil {
 		return fmt.Errorf("解析共享目标失败")
 	}
-	if sr.DatasourceID == 0 || len(targets) == 0 {
-		// Nothing to look rules up by. A share is only created through
-		// CreateShare, which always records both, so this is unreachable from the
-		// live path — but serving rows we cannot reason about is the failure this
-		// whole change exists to remove.
+	if sr.DatasourceID == 0 {
+		// No datasource at all means we cannot reason about where the rows came
+		// from. A share is only created through CreateShare, which always records
+		// the datasource, so this is unreachable from the live path — but serving
+		// rows we cannot reason about is the failure this whole change exists to
+		// remove.
 		return ErrShareUnmaskable
+	}
+	if len(targets) == 0 {
+		// The query named no table targets (e.g. `SELECT 1`, `SELECT now()`).
+		// Such a result cannot carry field-level data from any table, so no mask
+		// rule can apply to it — it is safe to publish as-is. Refusing here used
+		// to turn every target-less share into a 500 after the password check.
+		return nil
 	}
 
 	// The same decision every other reader crosses, entered with an actor that

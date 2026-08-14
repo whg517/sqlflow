@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/labstack/echo/v4"
@@ -80,7 +81,14 @@ func Auth(authSvc *iam.Service, tokenSvc *iam.TokenService) echo.MiddlewareFunc 
 			// reset leaves the user's old access tokens alive until they expire —
 			// and a reset is almost always done precisely because the old
 			// credential may have leaked.
-			if claims.IssuedAt != nil && user.PasswordChangedAt.After(claims.IssuedAt.Time) {
+			//
+			// Truncate password_changed_at to second precision before comparing:
+			// JWT iat is serialized at second granularity (jwt.NewNumericDate),
+			// but the DB timestamp carries sub-second precision. Without
+			// truncation, a user created and logged-in within the same second is
+			// falsely rejected because password_changed_at (with microseconds)
+			// tests as strictly after iat (truncated to the second).
+			if claims.IssuedAt != nil && user.PasswordChangedAt.Truncate(time.Second).After(claims.IssuedAt.Time) {
 				return c.JSON(http.StatusUnauthorized, map[string]string{
 					"error": "密码已被重置，请重新登录",
 				})

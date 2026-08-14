@@ -290,7 +290,7 @@ func TestUserHandler_CreateUser(t *testing.T) {
 		})
 	}
 
-	// Verify duplicate username fails
+	// Verify duplicate username returns 409 Conflict, not a 500.
 	t.Run("duplicate_username", func(t *testing.T) {
 		body := `{"username":"newuser","password":"Password123","role":"developer"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/users", strings.NewReader(body))
@@ -302,8 +302,8 @@ func TestUserHandler_CreateUser(t *testing.T) {
 			t.Fatalf("handler error: %v", err)
 		}
 
-		if rec.Code != http.StatusInternalServerError {
-			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+		if rec.Code != http.StatusConflict {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusConflict, rec.Body.String())
 		}
 	})
 }

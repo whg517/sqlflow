@@ -56,6 +56,10 @@ var (
 	ErrTicketExecNotSupported = errors.New("该数据源不支持通过工单执行变更")
 	// ErrTicketNotExecutable indicates the ticket is not in a state that allows execution.
 	ErrTicketNotExecutable = errors.New("工单未审批通过，无法执行")
+	// ErrSQLHashMismatch indicates the SQL was changed after approval. It is a
+	// client-facing integrity refusal (the operator must resubmit), not a
+	// platform fault — mapped to 403, not 500.
+	ErrSQLHashMismatch = errors.New("SQL 内容与审批版本不一致，请重新提交审批")
 	// ErrNoPermission indicates the user lacks permission for this operation.
 	ErrNoPermission = errors.New("没有操作权限")
 	// ErrRejectReasonRequired indicates a reason is required for rejection.
@@ -834,7 +838,12 @@ func (s *Service) executeTicket(ctx context.Context, t *model.Ticket, operatorID
 	if t.SQLHash != "" {
 		currentHash := sha256Hash(t.SQLContent)
 		if currentHash != t.SQLHash {
-			return nil, s.failTicket(ctx, t, operatorID, "SQL 内容与审批版本不一致，请重新提交审批")
+			// failTicket marks the ticket FAILED and writes the audit record;
+			// the sentinel is returned so the handler maps it to 403, not 500.
+			if ferr := s.failTicket(ctx, t, operatorID, ErrSQLHashMismatch.Error()); ferr != nil {
+				return nil, ferr
+			}
+			return nil, ErrSQLHashMismatch
 		}
 	}
 

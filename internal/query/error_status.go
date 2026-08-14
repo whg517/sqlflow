@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/whg517/sqlflow/internal/datasource"
+	"github.com/whg517/sqlflow/internal/platform/sqlparser"
 	"github.com/whg517/sqlflow/internal/resp"
 )
 
@@ -37,6 +38,9 @@ var queryErrorStatuses = []struct {
 	{datasource.ErrDatabaseScopeMismatch, http.StatusBadRequest},
 	{ErrExplainNotSupported, http.StatusBadRequest},
 	{ErrExplainNonSelect, http.StatusBadRequest},
+	// A multi-statement body is an injection-shaped client input, not a
+	// platform fault — 400, not 500.
+	{sqlparser.ErrMultipleStatements, http.StatusBadRequest},
 
 	// The actor may not do this. 403, not 500.
 	{ErrSQLOperationForbidden, http.StatusForbidden},
