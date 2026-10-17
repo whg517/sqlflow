@@ -1,0 +1,82 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+/server
+coverage.out
+coverage.html
+
+# SQLite
+*.db
+*.db-wal
+*.db-shm
+data/
+
+# Node
+node_modules/
+dist/
+.webpack/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.test
+.env.*.local
+config.yaml
+
+# Logs
+*.log
+logs/
+
+# Certificates
+certs/
+*.crt
+*.key
+*.pem
+
+# State (runtime only)
+state/
+.claude/
+
+# OpenClaw
+.openclaw/
+
+# Git worktree
+.worktree/
+
+# Agent persona (workspace only)
+AGENTS.md
+SOUL.md
+IDENTITY.md
+USER.md
+TOOLS.md
+HEARTBEAT.md
+
+# Backups
+*.bak
+
+# Release packages
+release/
+scripts/__pycache__/
+
+# Local build artifact and agent session state
+sqlflow-server
+.zcode/
+
+# Browser-verification scratch output (MCP Playwright page dumps)
+.playwright-mcp/
